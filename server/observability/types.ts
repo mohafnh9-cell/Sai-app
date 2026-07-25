@@ -59,6 +59,14 @@ export const METRIC_COUNTERS = [
   "duplicate_scans_prevented_total",
   "notification_failures_total",
   "stuck_jobs_total",
+  "reviews_started_total",
+  "reviews_completed_total",
+  "safe_fix_generated_total",
+  "verification_completed_total",
+  "alerts_generated_total",
+  "reports_generated_total",
+  "platform_failures_total",
+  "platform_retries_total",
 ] as const;
 
 export type MetricCounterName = (typeof METRIC_COUNTERS)[number];

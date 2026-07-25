@@ -13,6 +13,7 @@ import {
 import type { ScanRunPayload } from "./types";
 import { isTerminalScanJobStatus } from "./job-transitions";
 import { finalizeWebhookAutomationScan } from "./finalize-webhook-scan";
+import { invalidateProjectCache } from "@/server/cache/read-cache";
 import { finalizeAutomaticReviewJob } from "./finalize-automatic-review-job";
 import { emitOperationalEvent } from "@/server/observability/operational-events";
 
@@ -202,6 +203,7 @@ export async function executeScanRunJob(
     organizationId: payload.organizationId,
     projectId: payload.projectId,
   });
+  invalidateProjectCache(payload.projectId);
 }
 
 async function loadGithubRepo(admin: SupabaseClient, projectId: string): Promise<string> {

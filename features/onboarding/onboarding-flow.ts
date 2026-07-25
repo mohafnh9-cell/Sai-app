@@ -84,9 +84,7 @@ export function resolveProgressIndex(
 ): number {
   if (wizardStep === "cursor") return PROGRESS_STEPS.length;
   if (wizardStep === "finale") {
-    const ready =
-      ctx.latestVerdict?.status === "ready_to_ship" ||
-      ctx.latestVerdict?.status === "ready_with_caution";
+    const ready = ctx.latestVerdict?.status === "ready_to_ship";
     return ready ? 4 : 3;
   }
   if (wizardStep === "review") {

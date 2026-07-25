@@ -4,6 +4,7 @@ import type { McpAuthContext } from "./auth";
 import { McpError } from "./auth";
 import { getMcpTranslator, resolveMcpLocale } from "./i18n";
 import { logMcpCall } from "./observability";
+import { recordOperationDuration } from "@/server/observability/operation-timing";
 import { MCP_PUBLIC_TOOL_NAMES } from "./tool-definitions";
 import { canIDeploy } from "./tools/can-i-deploy";
 import { productionHistory } from "./tools/production-history";
@@ -88,6 +89,10 @@ export async function executeMcpTool(
       projectId: (result as { project?: { id?: string } })?.project?.id ?? null,
       durationMs: Date.now() - startedAt,
       result: "success",
+    });
+    recordOperationDuration("mcp.tool", Date.now() - startedAt, {
+      organizationId: ctx.organizationId,
+      tool: toolName,
     });
     return enriched;
   } catch (error) {

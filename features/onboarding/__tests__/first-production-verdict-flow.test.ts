@@ -149,6 +149,57 @@ describe("Block 6.4 First Production Verdict onboarding flow", () => {
     expect(resolveProgressIndex("cursor", ctx)).toBe(5);
   });
 
+  it("uses canonical verdict statuses for finale progress (ready_to_ship only)", () => {
+    const { verdict: almostReady } = generateProductionVerdict({
+      projectId: PROJECT,
+      repositoryId: PROJECT,
+      scanId: SCAN,
+      commitSha: "abc",
+      branch: "main",
+      scanStatus: "completed",
+      securityScore: 78,
+      filesAnalyzed: 120,
+      filesDiscovered: 150,
+      findings: [
+        {
+          id: "f1",
+          title: "Missing rate limit",
+          severity: "medium",
+          category: "security",
+          rule_id: "rate-limit",
+          file_path: "src/api.ts",
+          recommendation: "Add limiter",
+          confidence: "high",
+        },
+      ],
+      previousScore: null,
+      previousBlockersCount: 0,
+    });
+    expect(almostReady.status).toBe("almost_ready");
+    expect(
+      resolveProgressIndex("finale", baseContext({ githubConnected: true, latestVerdict: almostReady }))
+    ).toBe(3);
+
+    const { verdict: readyToShip } = generateProductionVerdict({
+      projectId: PROJECT,
+      repositoryId: PROJECT,
+      scanId: SCAN,
+      commitSha: "def",
+      branch: "main",
+      scanStatus: "completed",
+      securityScore: 96,
+      filesAnalyzed: 120,
+      filesDiscovered: 150,
+      findings: [],
+      previousScore: null,
+      previousBlockersCount: 0,
+    });
+    expect(readyToShip.status).toBe("ready_to_ship");
+    expect(
+      resolveProgressIndex("finale", baseContext({ githubConnected: true, latestVerdict: readyToShip }))
+    ).toBe(4);
+  });
+
   it("mobile and desktop layouts expose progress tracker steps", () => {
     expect(PROGRESS_STEPS).toHaveLength(5);
     expect(PROGRESS_STEPS[0].labelKey).toBe("progress.github");

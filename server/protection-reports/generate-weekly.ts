@@ -7,8 +7,21 @@ import { loadReportSourceData, weekBoundsUtc } from "./report-data";
 import { persistProtectionReport } from "./storage";
 import { buildTimelineEntries, persistTimelineEntries } from "./timeline";
 import type { StoredProtectionReport } from "./types";
+import { incrementMetricCounter } from "@/server/observability/metrics";
+import { withOperationTiming } from "@/server/observability/operation-timing";
+import { invalidateProjectCache } from "@/server/cache/read-cache";
 
 export async function generateWeeklyProtectionReport(
+  admin: SupabaseClient,
+  projectId: string,
+  options?: { regenerate?: boolean; referenceDate?: Date }
+): Promise<StoredProtectionReport | { skipped: true; reason: string }> {
+  return withOperationTiming("report.weekly", () => generateWeeklyProtectionReportInner(admin, projectId, options), {
+    projectId,
+  });
+}
+
+async function generateWeeklyProtectionReportInner(
   admin: SupabaseClient,
   projectId: string,
   options?: { regenerate?: boolean; referenceDate?: Date }
@@ -43,6 +56,8 @@ export async function generateWeeklyProtectionReport(
   const timeline = buildTimelineEntries("weekly", periodKey, reportData, founder, events);
   await persistTimelineEntries(admin, organizationId, projectId, periodKey, report.id, timeline);
 
+  incrementMetricCounter("reports_generated_total");
+  invalidateProjectCache(projectId, "report_summary");
   return report;
 }
 

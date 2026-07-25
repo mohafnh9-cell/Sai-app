@@ -18,6 +18,8 @@ import { persistGeneratedSafeFix, supersedeOpenFixesForRecommendation } from "./
 import { transitionSafeFixState } from "./lifecycle";
 import { appendSafeFixMemoryEvent } from "./memory-bridge";
 import type { SafeFixRecord } from "./types";
+import { incrementMetricCounter } from "@/server/observability/metrics";
+import { withOperationTiming } from "@/server/observability/operation-timing";
 
 export type GenerateSafeFixInput = {
   organizationId: string;
@@ -30,6 +32,21 @@ export type GenerateSafeFixInput = {
 };
 
 export async function generateSafeFix(
+  admin: SupabaseClient,
+  input: GenerateSafeFixInput
+): Promise<
+  | { status: "no_blockers" }
+  | { status: "choose_blocker"; blockers: Array<{ id: string; title: string; severity: string }> }
+  | { status: "ready"; record: SafeFixRecord }
+> {
+  return withOperationTiming(
+    "safe_fix.generate",
+    () => generateSafeFixInner(admin, input),
+    { projectId: input.projectId, organizationId: input.organizationId }
+  );
+}
+
+async function generateSafeFixInner(
   admin: SupabaseClient,
   input: GenerateSafeFixInput
 ): Promise<
@@ -175,6 +192,7 @@ export async function generateSafeFix(
     idempotencyKey: `safe_fix_proposed:${record.id}`,
   });
 
+  incrementMetricCounter("safe_fix_generated_total");
   return { status: "ready", record };
 }
 

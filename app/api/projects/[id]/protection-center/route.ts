@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/server/security-scanner/admin-client";
 import { getProtectionCenterModel } from "@/server/continuous-protection/protection-context";
+import { cachedRead } from "@/server/cache/read-cache";
+import { withOperationTiming } from "@/server/observability/operation-timing";
 
 /** Backend Protection Center model (Sprint 4 — no UI). */
 export async function GET(
@@ -29,7 +31,11 @@ export async function GET(
   }
 
   const admin = createAdminClient();
-  const model = await getProtectionCenterModel(admin, projectId);
+  const model = await withOperationTiming("api.protection_center", () =>
+    cachedRead("protection_center_model", projectId, () =>
+      getProtectionCenterModel(admin, projectId)
+    )
+  );
 
   return NextResponse.json({ projectId, protectionCenter: model });
 }

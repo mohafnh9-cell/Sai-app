@@ -7,6 +7,8 @@ import { getSafeFixById, storeSafeFixHistoryUpdate } from "./history";
 import { transitionSafeFixState } from "./lifecycle";
 import { appendSafeFixMemoryEvent } from "./memory-bridge";
 import type { SafeFixVerificationResult } from "./types";
+import { incrementMetricCounter } from "@/server/observability/metrics";
+import { withOperationTiming } from "@/server/observability/operation-timing";
 
 const STATUS_RANK: Record<string, number> = {
   protected: 0,
@@ -21,6 +23,22 @@ function rank(value: string | null | undefined): number {
 }
 
 export async function verifySafeFix(
+  admin: SupabaseClient,
+  input: {
+    safeFixId: string;
+    organizationId: string;
+    projectId: string;
+    actor?: string;
+  }
+): Promise<SafeFixVerificationResult> {
+  return withOperationTiming(
+    "safe_fix.verify",
+    () => verifySafeFixInner(admin, input),
+    { projectId: input.projectId, safeFixId: input.safeFixId }
+  );
+}
+
+async function verifySafeFixInner(
   admin: SupabaseClient,
   input: {
     safeFixId: string;
@@ -136,6 +154,7 @@ export async function verifySafeFix(
     idempotencyKey: `verify:${record.id}:${outcome}`,
   });
 
+  incrementMetricCounter("verification_completed_total");
   return {
     id: verificationRow.id as string,
     safeFixId: record.id,

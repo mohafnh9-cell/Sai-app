@@ -10,6 +10,8 @@ import {
 import { autoResolveAlertsForProject, deliverAlertCandidate } from "./lifecycle";
 import { passesMaterialGate } from "./noise-policy";
 import { labelFromStorage } from "@/server/continuous-protection/types";
+import { incrementMetricCounter } from "@/server/observability/metrics";
+import { withOperationTiming } from "@/server/observability/operation-timing";
 
 export type EvaluateAlertsResult = {
   candidates: number;
@@ -19,6 +21,13 @@ export type EvaluateAlertsResult = {
 };
 
 export async function evaluateProjectAlerts(
+  admin: SupabaseClient,
+  projectId: string
+): Promise<EvaluateAlertsResult> {
+  return withOperationTiming("alert.evaluate", () => evaluateProjectAlertsInner(admin, projectId), { projectId });
+}
+
+async function evaluateProjectAlertsInner(
   admin: SupabaseClient,
   projectId: string
 ): Promise<EvaluateAlertsResult> {
@@ -80,6 +89,7 @@ export async function evaluateProjectAlerts(
     else suppressed += 1;
   }
 
+  if (delivered > 0) incrementMetricCounter("alerts_generated_total", delivered);
   return { candidates: gated.length, delivered, suppressed, resolved: 0 };
 }
 

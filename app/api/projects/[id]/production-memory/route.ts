@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/server/security-scanner/admin-client";
 import { getProjectMemorySummary } from "@/server/production-memory/get-project-memory-summary";
+import { cachedRead } from "@/server/cache/read-cache";
+import { withOperationTiming } from "@/server/observability/operation-timing";
 
 export async function GET(
   _request: Request,
@@ -28,7 +30,11 @@ export async function GET(
   }
 
   const admin = createAdminClient();
-  const summary = await getProjectMemorySummary(admin, projectId);
+  const summary = await withOperationTiming("api.production_memory", () =>
+    cachedRead("production_memory_summary", projectId, () =>
+      getProjectMemorySummary(admin, projectId)
+    )
+  );
 
   return NextResponse.json({
     projectId,

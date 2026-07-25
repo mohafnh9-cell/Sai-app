@@ -7,6 +7,7 @@ import { incrementMetricCounter } from "./metrics";
 
 const EVENT_TO_METRIC: Partial<Record<OperationalEventType, MetricCounterName>> = {
   job_created: "jobs_created_total",
+  job_started: "reviews_started_total",
   job_completed: "jobs_completed_total",
   job_failed: "jobs_failed_total",
   job_retried: "jobs_retried_total",
@@ -49,6 +50,9 @@ export async function emitOperationalEvent(
 
   const metric = mapEventToMetric(input.eventType);
   if (metric) incrementMetricCounter(metric);
+  if (input.eventType === "job_completed") incrementMetricCounter("reviews_completed_total");
+  if (input.eventType === "job_failed") incrementMetricCounter("platform_failures_total");
+  if (input.eventType === "job_retried") incrementMetricCounter("platform_retries_total");
 
   if (!admin) return;
 
