@@ -5,8 +5,8 @@ import {
 import { guidanceForCategory } from "@/brain/fix-prompt/category-guidance";
 import type { ProductionFixPromptInput } from "@/brain/fix-prompt/types";
 import type { SafeFixAssessment } from "@/brain/fix-prompt/assessment";
-import type { SafeFixDocumentV2 } from "./types";
-import { trustNarrativeForBand, type SafeFixConfidenceBand } from "./confidence";
+import type { SafeFixDocumentV2, SafeFixConfidenceBand } from "./types";
+import { trustNarrativeForBand } from "./confidence";
 
 export function buildSafeFixDocumentV2(input: {
   promptInput: ProductionFixPromptInput;
