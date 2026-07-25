@@ -14,6 +14,7 @@ import {
 } from "@/lib/github/repository-service";
 import { getCurrentProductionVerdict } from "@/server/production-verdict/service";
 import { scheduleScanRun } from "@/server/jobs/schedule-scan";
+import { recoverStaleActiveReviewsForProject } from "@/server/review-recovery/stale-review";
 
 export type ResolveGitHubTokenFn = (
   admin: SupabaseClient,
@@ -212,7 +213,10 @@ export async function triggerProductionReview(
   }
 
   const [hasActiveReview, currentVerdict] = await Promise.all([
-    hasActiveRepositoryReview(admin, input.projectId),
+    (async () => {
+      await recoverStaleActiveReviewsForProject(admin, input.projectId);
+      return hasActiveRepositoryReview(admin, input.projectId);
+    })(),
     getCurrentProductionVerdict(admin, input.projectId),
   ]);
   const activeReviewId = hasActiveReview ? await loadActiveScanId(admin, input.projectId) : null;

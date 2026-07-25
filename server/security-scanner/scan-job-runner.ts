@@ -11,6 +11,14 @@ import {
   parseGitHubRepository,
 } from "@/lib/github/repository-service";
 
+const ACTIVE_SCAN_UPDATE_STATUSES = [
+  "queued",
+  "fetching_repository",
+  "indexing",
+  "scanning",
+  "calculating_score",
+] as const;
+
 type ScanContext = {
   scanId: string;
   repositoryId: string;
@@ -123,12 +131,19 @@ export class InlineScanJobRunner implements ScanJobRunner {
         scanId: context.scanId,
         repositoryId: context.repositoryId,
       });
-      await this.updateScan(context.scanId, {
+      const accepted = await this.updateActiveScan(context.scanId, {
         status: "fetching_repository",
         progress: 5,
         progress_message: "Fetching repository metadata",
         started_at: new Date().toISOString(),
       });
+      if (!accepted) {
+        logScan("info", "scan_superseded", {
+          scanId: context.scanId,
+          repositoryId: context.repositoryId,
+        });
+        return;
+      }
 
       const ref = parseGitHubRepository(context.githubRepo);
       const github = new GitHubRepositoryService(context.providerToken);
@@ -254,7 +269,7 @@ export class InlineScanJobRunner implements ScanJobRunner {
       const completedAt = new Date().toISOString();
       const score = Math.max(0, Math.min(100, Math.round(scoreBreakdown.score)));
       const counts = scoreBreakdown.counts;
-      await this.updateScan(context.scanId, {
+      const completed = await this.updateActiveScan(context.scanId, {
         status: "completed",
         progress: 100,
         progress_message: isIncremental ? "Incremental scan completed" : "Scan completed",
@@ -273,6 +288,13 @@ export class InlineScanJobRunner implements ScanJobRunner {
         info_count: counts.info,
         completed_at: completedAt,
       });
+      if (!completed) {
+        logScan("info", "scan_superseded_before_complete", {
+          scanId: context.scanId,
+          repositoryId: context.repositoryId,
+        });
+        return;
+      }
 
       const reviewOnly = context.persistMode === "review_only";
 
@@ -463,9 +485,24 @@ export class InlineScanJobRunner implements ScanJobRunner {
     }
   }
 
-  private async updateScan(scanId: string, values: Record<string, unknown>) {
-    const { error } = await this.supabase.from("scans").update(values).eq("id", scanId);
+  private async updateActiveScan(scanId: string, values: Record<string, unknown>): Promise<boolean> {
+    const { data, error } = await this.supabase
+      .from("scans")
+      .update(values)
+      .eq("id", scanId)
+      .in("status", [...ACTIVE_SCAN_UPDATE_STATUSES])
+      .select("id")
+      .maybeSingle();
     if (error) throw new Error(`Could not update scan: ${error.message}`);
+    return Boolean(data);
+  }
+
+  private async updateScan(scanId: string, values: Record<string, unknown>) {
+    const updated = await this.updateActiveScan(scanId, values);
+    if (!updated) {
+      logScan("info", "scan_update_superseded", { scanId });
+    }
+    return updated;
   }
 
   private async updateState(context: ScanContext, values: Record<string, unknown>) {

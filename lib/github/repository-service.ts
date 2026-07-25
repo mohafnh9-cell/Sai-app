@@ -20,6 +20,8 @@ export const GITHUB_SCAN_LIMITS = {
 } as const;
 
 export type GitHubRepositoryRef = { owner: string; repo: string };
+export { parseGitHubRepository, type GitHubRepositoryReference } from "./repository-reference";
+import { parseGitHubRepository } from "./repository-reference";
 export type RepositoryFile = { path: string; content: string; size: number; sha: string };
 export type RepositorySnapshot = {
   repositoryId: number;
@@ -54,36 +56,6 @@ export class GitHubServiceError extends Error {
     super(message);
     this.name = "GitHubServiceError";
   }
-}
-
-export function parseGitHubRepository(value: string): GitHubRepositoryRef {
-  const trimmed = value.trim().replace(/\.git$/, "").replace(/\/+$/, "");
-  let path = trimmed;
-
-  if (trimmed.startsWith("git@github.com:")) {
-    path = trimmed.slice("git@github.com:".length);
-  } else if (/^https?:\/\//i.test(trimmed)) {
-    let url: URL;
-    try {
-      url = new URL(trimmed);
-    } catch {
-      throw new Error("Invalid GitHub repository");
-    }
-    if (url.protocol !== "https:" || url.hostname.toLowerCase() !== "github.com") {
-      throw new Error("Repository must be hosted on github.com");
-    }
-    path = url.pathname;
-  }
-
-  const parts = path.split("/").filter(Boolean);
-  if (
-    parts.length !== 2 ||
-    !/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/.test(parts[0]) ||
-    !/^[A-Za-z0-9._-]{1,100}$/.test(parts[1])
-  ) {
-    throw new Error("GitHub repository must be in owner/repository format");
-  }
-  return { owner: parts[0], repo: parts[1] };
 }
 
 type GitHubRepo = {

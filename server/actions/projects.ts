@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getOrganizationByUser } from "@/services/organizations.service";
 import type { ProjectInsert, ProjectUpdate } from "@/types/database";
 import { projectSchema, projectUpdateSchema } from "@/features/projects/schemas/project.schema";
+import { normalizeStoredGitHubRepository } from "@/lib/github/repository-reference";
 
 // ─── Project Server Actions ───────────────────────────────────────────────────
 // These run on the server and can safely access Supabase with the service role.
@@ -35,7 +36,7 @@ export async function createProjectAction(formData: FormData) {
     organization_id: org.id,
     name: parsed.data.name,
     description: parsed.data.description ?? null,
-    github_repo: parsed.data.github_repo ?? null,
+    github_repo: normalizeStoredGitHubRepository(parsed.data.github_repo ?? null),
     production_url: parsed.data.production_url ?? null,
     framework: (parsed.data.framework as ProjectInsert["framework"]) ?? null,
   };
@@ -72,6 +73,7 @@ export async function updateProjectAction(projectId: string, formData: FormData)
 
   const payload: ProjectUpdate = {
     ...parsed.data,
+    github_repo: normalizeStoredGitHubRepository(parsed.data.github_repo ?? null),
     updated_at: new Date().toISOString(),
   };
 

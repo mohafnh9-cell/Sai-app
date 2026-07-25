@@ -3,12 +3,13 @@ import "server-only";
 import type { McpAuthContext } from "./auth";
 import { McpError } from "./auth";
 import type { McpTranslator } from "./i18n";
+import {
+  normalizeStoredGitHubRepository,
+  repositorySelectorMatchesStored,
+} from "@/lib/github/repository-reference";
+import { toResolvedMcpProject, type ResolvedMcpProject } from "./project-display";
 
-export type ResolvedMcpProject = {
-  id: string;
-  name: string;
-  repositoryFullName: string | null;
-};
+export type { ResolvedMcpProject };
 
 export type ProjectSelector = {
   projectId?: string;
@@ -39,21 +40,35 @@ export async function resolveMcpProject(
     if (!project) {
       throw new McpError(404, "project_not_found", t("errors.project_not_found"));
     }
-    return { id: project.id, name: project.name, repositoryFullName: project.github_repo ?? null };
+    return toResolvedMcpProject(project);
   }
 
   if (selector.repositoryFullName?.trim()) {
-    const { data: project } = await ctx.admin
+    const normalizedSelector = normalizeStoredGitHubRepository(selector.repositoryFullName.trim());
+    if (normalizedSelector) {
+      const { data: project } = await ctx.admin
+        .from("projects")
+        .select("id, name, github_repo")
+        .eq("organization_id", ctx.organizationId)
+        .eq("github_repo", normalizedSelector)
+        .maybeSingle();
+      if (project) {
+        return toResolvedMcpProject(project);
+      }
+    }
+
+    const { data: projects } = await ctx.admin
       .from("projects")
       .select("id, name, github_repo")
-      .eq("organization_id", ctx.organizationId)
-      .eq("github_repo", selector.repositoryFullName.trim())
-      .maybeSingle();
+      .eq("organization_id", ctx.organizationId);
 
+    const project = (projects ?? []).find((row) =>
+      repositorySelectorMatchesStored(selector.repositoryFullName!.trim(), row.github_repo as string | null)
+    );
     if (!project) {
       throw new McpError(404, "project_not_found", t("errors.project_not_found"));
     }
-    return { id: project.id, name: project.name, repositoryFullName: project.github_repo ?? null };
+    return toResolvedMcpProject(project);
   }
 
   const { data: projects } = await ctx.admin
@@ -67,15 +82,10 @@ export async function resolveMcpProject(
   }
 
   if (projects.length === 1) {
-    const project = projects[0];
-    return { id: project.id, name: project.name, repositoryFullName: project.github_repo ?? null };
+    return toResolvedMcpProject(projects[0]);
   }
 
   throw new McpError(409, "ambiguous_project", t("errors.ambiguous_project"), {
-    projects: projects.map((project) => ({
-      id: project.id,
-      name: project.name,
-      repositoryFullName: project.github_repo ?? null,
-    })),
+    projects: projects.map((project) => toResolvedMcpProject(project)),
   });
 }

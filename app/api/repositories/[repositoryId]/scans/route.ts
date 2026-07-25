@@ -8,6 +8,7 @@ import { GitHubServiceError, parseGitHubRepository } from "@/lib/github/reposito
 import { createAdminClient, mapDatabaseError } from "@/server/security-scanner/admin-client";
 import { enforceRateLimit } from "@/server/http/rate-limit";
 import { scheduleScanRun } from "@/server/jobs/schedule-scan";
+import { expireStaleActiveReviewsForRepository } from "@/server/review-recovery/stale-review";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -89,31 +90,7 @@ export async function POST(
     parseGitHubRepository(project.github_repo);
     const admin = createAdminClient();
     const now = Date.now();
-    const staleBefore = new Date(now - 10 * 60 * 1000).toISOString();
-    const { data: staleScans } = await admin
-      .from("scans")
-      .update({
-        status: "failed",
-        failed_at: new Date(now).toISOString(),
-        error_code: "SCAN_LEASE_EXPIRED",
-        error_message: "The previous scan exceeded its execution lease",
-      })
-      .eq("repository_id", repositoryId)
-      .in("status", [
-        "queued",
-        "fetching_repository",
-        "indexing",
-        "scanning",
-        "calculating_score",
-      ])
-      .lt("updated_at", staleBefore)
-      .select("id");
-    if ((staleScans?.length ?? 0) > 0) {
-      await admin
-        .from("repository_scan_state")
-        .update({ active_scan_id: null })
-        .eq("repository_id", repositoryId);
-    }
+    await expireStaleActiveReviewsForRepository(admin, repositoryId);
 
     const rateWindow = new Date(now - 60 * 60 * 1000).toISOString();
     const { count: recentScanCount } = await admin

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getGitHubRepoById, type GitHubRepo } from "@/lib/github";
+import { gitHubRepositoryReferenceFromApi } from "@/lib/github/repository-reference";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/server/security-scanner/admin-client";
 import {
@@ -28,10 +29,11 @@ function isMissingColumnError(code?: string) {
 }
 
 function baseProjectFields(repo: GitHubRepo, organizationId: string) {
+  const reference = gitHubRepositoryReferenceFromApi(repo);
   return {
     organization_id: organizationId,
     name: repo.name,
-    github_repo: repo.html_url,
+    github_repo: reference.htmlUrl,
     description: repo.description,
   };
 }
@@ -51,14 +53,26 @@ async function upsertConnectedProject(
   repo: GitHubRepo,
   connectionMeta?: { connectionId: string; connectedByUserId: string }
 ): Promise<string> {
-  const { data: existing } = await supabase
+  const reference = gitHubRepositoryReferenceFromApi(repo);
+  const { data: existingById } = await supabase
     .from("projects")
     .select("id")
     .eq("organization_id", organizationId)
-    .eq("github_repo", repo.html_url)
+    .eq("github_repository_id", repo.id)
     .maybeSingle();
 
-  if (existing) {
+  let existingProjectId = existingById?.id as string | undefined;
+  if (!existingProjectId) {
+    const { data: existingByUrl } = await supabase
+      .from("projects")
+      .select("id")
+      .eq("organization_id", organizationId)
+      .eq("github_repo", reference.htmlUrl)
+      .maybeSingle();
+    existingProjectId = existingByUrl?.id as string | undefined;
+  }
+
+  if (existingProjectId) {
     const extended = {
       name: repo.name,
       description: repo.description,
@@ -72,8 +86,11 @@ async function upsertConnectedProject(
     };
     let { error } = await supabase
       .from("projects")
-      .update(extended)
-      .eq("id", existing.id)
+      .update({
+        ...extended,
+        github_repo: reference.htmlUrl,
+      })
+      .eq("id", existingProjectId)
       .eq("organization_id", organizationId);
 
     if (error && isMissingColumnError(error.code)) {
@@ -83,18 +100,18 @@ async function upsertConnectedProject(
           name: repo.name,
           description: repo.description,
         })
-        .eq("id", existing.id)
+        .eq("id", existingProjectId)
         .eq("organization_id", organizationId));
     }
 
     if (error) {
       console.error("github_connect_project_update_failed", {
         code: error.code,
-        projectId: existing.id,
+        projectId: existingProjectId,
       });
       throw new Error("Could not update the connected repository in Supabase");
     }
-    return existing.id;
+    return existingProjectId;
   }
 
   const fullInsert = {

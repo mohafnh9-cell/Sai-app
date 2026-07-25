@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { projectSchema } from "@/features/projects/schemas/project.schema";
+import { normalizeStoredGitHubRepository } from "@/lib/github/repository-reference";
 import { enforceRateLimit } from "@/server/http/rate-limit";
 
 // ─── GET /api/projects ────────────────────────────────────────────────────────
@@ -87,7 +88,7 @@ export async function POST(request: Request) {
       organization_id: membership.organization_id,
       name: parsed.data.name,
       description: parsed.data.description ?? null,
-      github_repo: parsed.data.github_repo ?? null,
+      github_repo: normalizeStoredGitHubRepository(parsed.data.github_repo ?? null),
       production_url: parsed.data.production_url ?? null,
       framework: parsed.data.framework ?? null,
     })

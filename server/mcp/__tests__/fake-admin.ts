@@ -85,7 +85,6 @@ class FakeQuery
   }
 
   update(values: Row) {
-    // Deferred: filters accumulate via .eq() calls chained after .update().
     const self = this;
     const applied = { done: false };
     const apply = () => {
@@ -95,11 +94,15 @@ class FakeQuery
       for (const row of matched) Object.assign(row, values, { updated_at: new Date().toISOString() });
       self.pendingRows = matched;
     };
-    // Wrap eq/other filter methods once more so the update actually applies
-    // once all filters for this call have been chained.
     const originalEq = this.eq.bind(this);
+    const originalIn = this.in.bind(this);
     this.eq = (col: string, value: unknown) => {
       originalEq(col, value);
+      apply();
+      return this;
+    };
+    this.in = (col: string, value: unknown[]) => {
+      originalIn(col, value);
       apply();
       return this;
     };

@@ -116,6 +116,7 @@ describe("triggerProductionReview", () => {
   });
 
   it("returns processing + duplicate semantics when a review is already active for the repository", async () => {
+    const fresh = new Date().toISOString();
     const tables = baseTables({
       scans: [
         {
@@ -123,7 +124,9 @@ describe("triggerProductionReview", () => {
           repository_id: PROJECT_1,
           organization_id: ORG_A,
           status: "scanning",
-          created_at: "2026-01-01T00:00:00.000Z",
+          created_at: fresh,
+          updated_at: fresh,
+          started_at: fresh,
         },
       ],
     });
@@ -132,7 +135,7 @@ describe("triggerProductionReview", () => {
     const result = await triggerProductionReview(
       admin as never,
       { organizationId: ORG_A, projectId: PROJECT_1, githubRepo: "acme/alpha", githubRepositoryId: 42 },
-      { resolveToken: okToken, resolveCommit: okCommit(), runScan }
+      { resolveToken: okToken, resolveCommit: okCommit(), runScan, scheduleBackground: vi.fn() }
     );
     expect(result).toEqual({ outcome: "processing", reviewId: "scan-active" });
     expect(runScan).not.toHaveBeenCalled();
