@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { ProductionVerdictV1 } from "@/brain/production-verdict/schema";
+import { markOnboardingWizardComplete } from "@/lib/onboarding/mark-onboarding-complete";
 import {
   type OnboardingContext,
   type OnboardingProject,
@@ -17,8 +18,8 @@ import { OnboardingWelcomeStep } from "./OnboardingWelcomeStep";
 import { OnboardingGitHubStep } from "./OnboardingGitHubStep";
 import { OnboardingRepoPicker } from "./OnboardingRepoPicker";
 import { OnboardingReviewStep } from "./OnboardingReviewStep";
-import { OnboardingVerdictReveal } from "./OnboardingVerdictReveal";
-import { OnboardingDashboardEntry } from "./OnboardingDashboardEntry";
+import { OnboardingFinaleStep } from "./OnboardingFinaleStep";
+import { OnboardingCursorStep } from "./OnboardingCursorStep";
 
 type FlowState = {
   projectId: string | null;
@@ -27,18 +28,20 @@ type FlowState = {
   verdict: ProductionVerdictV1 | null;
 };
 
-const WIDE_STEPS = new Set<WizardStep>(["review", "verdict", "dashboard"]);
+const WIDE_STEPS = new Set<WizardStep>(["review", "finale", "cursor"]);
 
 function normalizeStep(
   step: WizardStep,
   context: OnboardingContext,
   projectId: string | null,
+  hasVerdict: boolean,
   explicitStep: WizardStep | null
 ): WizardStep {
   if (step === "github" && shouldSkipGitHubStep(context) && explicitStep !== "github") {
     return "repository";
   }
-  if ((step === "review" || step === "verdict") && !projectId) return "repository";
+  if ((step === "review" || step === "finale") && !projectId) return "repository";
+  if (step === "finale" && !hasVerdict) return "review";
   return step;
 }
 
@@ -81,8 +84,15 @@ export function OnboardingFlow({ initialContext }: { initialContext: OnboardingC
   }));
 
   const step = useMemo(
-    () => normalizeStep(rawStep, context, flow.projectId, explicitStep),
-    [rawStep, context, flow.projectId, explicitStep]
+    () =>
+      normalizeStep(
+        rawStep,
+        context,
+        flow.projectId,
+        Boolean(flow.verdict ?? context.latestVerdict),
+        explicitStep
+      ),
+    [rawStep, context, flow.projectId, flow.verdict, explicitStep]
   );
 
   const progressContext = useMemo(
@@ -121,12 +131,20 @@ export function OnboardingFlow({ initialContext }: { initialContext: OnboardingC
       setRawStep(next);
       const params = new URLSearchParams({ step: next });
       const projectId = options?.projectId ?? flow.projectId;
-      if (projectId && ["review", "verdict"].includes(next)) {
+      if (projectId && ["review", "finale", "cursor"].includes(next)) {
         params.set("projectId", projectId);
       }
       router.replace(`/onboarding?${params.toString()}`, { scroll: false });
     },
     [router, flow.projectId]
+  );
+
+  const finishWizard = useCallback(
+    async (href: string) => {
+      await markOnboardingWizardComplete();
+      router.push(href);
+    },
+    [router]
   );
 
   const handleGitHubConnected = useCallback(() => {
@@ -168,16 +186,23 @@ export function OnboardingFlow({ initialContext }: { initialContext: OnboardingC
     (scanId: string, verdict: ProductionVerdictV1) => {
       setFlow((prev) => ({ ...prev, scanId, verdict }));
       setContext((prev) => ({ ...prev, latestVerdict: verdict }));
-      goTo("verdict");
+      goTo("finale");
     },
     [goTo]
   );
+
+  const activeVerdict = flow.verdict ?? context.latestVerdict;
+  const activeProjectId = flow.projectId ?? context.projects[0]?.id ?? null;
+  const activeProjectName =
+    flow.projectName ??
+    resolveProjectName(activeProjectId, context.projects) ??
+    "Your app";
 
   const containerClass = WIDE_STEPS.has(step) ? "max-w-2xl" : "max-w-xl";
 
   return (
     <div className={`w-full ${containerClass} space-y-8 transition-all duration-500`}>
-      {step !== "dashboard" && (
+      {step !== "welcome" && step !== "cursor" && (
         <OnboardingProgressTracker wizardStep={step} context={progressContext} />
       )}
 
@@ -208,16 +233,30 @@ export function OnboardingFlow({ initialContext }: { initialContext: OnboardingC
         />
       )}
 
-      {step === "verdict" && flow.verdict && (
-        <OnboardingVerdictReveal
-          verdict={flow.verdict}
-          projectId={flow.projectId}
-          onContinue={() => goTo("dashboard")}
+      {step === "finale" && activeVerdict && activeProjectId && (
+        <OnboardingFinaleStep
+          verdict={activeVerdict}
+          projectId={activeProjectId}
+          projectName={activeProjectName}
+          onVerdictUpdated={(verdict) => {
+            setFlow((prev) => ({ ...prev, verdict }));
+            setContext((prev) => ({ ...prev, latestVerdict: verdict }));
+          }}
+          onConnectCursor={() => goTo("cursor", { projectId: activeProjectId })}
+          onGoToDashboard={() => void finishWizard("/dashboard?onboarded=1")}
         />
       )}
 
-      {step === "dashboard" && (
-        <OnboardingDashboardEntry projectId={flow.projectId ?? context.projects[0]?.id ?? null} />
+      {step === "cursor" && (
+        <OnboardingCursorStep
+          onFinish={() => void finishWizard("/dashboard?onboarded=1")}
+          onSkip={() => {
+            const href = activeProjectId
+              ? `/projects/${activeProjectId}?onboarded=1`
+              : "/dashboard?onboarded=1";
+            void finishWizard(href);
+          }}
+        />
       )}
     </div>
   );

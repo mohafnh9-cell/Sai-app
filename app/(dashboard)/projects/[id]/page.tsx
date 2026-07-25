@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ProjectVerdictSummary } from "@/features/production-verdict/components/ProductionVerdictExperience";
 import { ProjectSafeFixHero } from "@/features/projects/components/ProjectSafeFixHero";
+import { ProjectOnboardedBanner } from "@/features/projects/components/ProjectOnboardedBanner";
 import { ProjectSubNav } from "@/features/production-journey/components/ProjectSubNav";
 import { ProductionIntelligencePanel } from "@/features/production-intelligence/components/ProductionIntelligencePanel";
 import { buildProjectBrain } from "@/server/brain/build-project-brain";
@@ -18,7 +19,7 @@ import type { Metadata } from "next";
 
 interface ProjectDetailPageProps {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ connected?: string; reviewComplete?: string }>;
+  searchParams: Promise<{ connected?: string; reviewComplete?: string; onboarded?: string }>;
 }
 
 export async function generateMetadata({
@@ -133,6 +134,10 @@ export default async function ProjectDetailPage({
             </div>
           </div>
         </div>
+
+        {query.onboarded === "1" && brain?.currentVerdict && (
+          <ProjectOnboardedBanner readyToShip={brain.currentVerdict.status === "ready_to_ship"} />
+        )}
 
         {query.connected === "1" && (
           <div className="surface-premium rounded-2xl p-5 product-section">

@@ -18,8 +18,8 @@ export function OnboardingWelcomeStep({
     return (
       <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
         <div className="space-y-2 text-center sm:text-left">
-          <h2 className="text-2xl font-semibold tracking-tight">{t("createWorkspace")}</h2>
-          <p className="text-sm text-muted-foreground leading-relaxed">{t("createWorkspaceBody")}</p>
+          <h2 className="text-2xl font-semibold tracking-tight">{t("welcomeHeadline")}</h2>
+          <p className="text-sm text-muted-foreground leading-relaxed">{t("welcomeSub")}</p>
         </div>
         <OrgSetupForm nextStep="github" />
       </div>
@@ -29,10 +29,10 @@ export function OnboardingWelcomeStep({
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
       <div className="space-y-2 text-center sm:text-left">
-        <h2 className="text-2xl font-semibold tracking-tight">{t("createWorkspace")}</h2>
-        <p className="text-sm text-muted-foreground leading-relaxed">{t("createWorkspaceBody")}</p>
+        <h2 className="text-2xl font-semibold tracking-tight">{t("welcomeHeadline")}</h2>
+        <p className="text-sm text-muted-foreground leading-relaxed">{t("welcomeSub")}</p>
       </div>
-      <Button className="w-full" size="lg" onClick={onContinue}>
+      <Button className="w-full h-12 text-base" size="lg" onClick={onContinue}>
         {tc("continue")}
       </Button>
     </div>

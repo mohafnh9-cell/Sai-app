@@ -59,7 +59,7 @@ describe("review_now", () => {
     expect(result.duplicate).toBe(false);
     expect(result.reviewId).toBeTruthy();
     expect(result.commitSha).toBe("new-sha");
-    expect(result.nextAction).toBe(t("reviewNow.nextAction"));
+    expect(result.nextAction).toBe(t("reviewNow.queuedNext"));
     expect(result.summary).toContain("SEQURAI");
     expect(result.summary).toContain(t("modes.production_review_request"));
     expect(okDeps.scheduleBackground).toHaveBeenCalled();

@@ -10,6 +10,16 @@ import { productionHistory } from "./tools/production-history";
 import { reviewNow } from "./tools/review-now";
 import { safeFix } from "./tools/safe-fix";
 import { whatChanged } from "./tools/what-changed";
+import type { VerdictStatus } from "@/brain/production-verdict/schema";
+import { deployAnswerFromVerdictStatus } from "@/server/production-memory/types";
+import {
+  recordDeployCheckMemory,
+  recordReviewStartedMemory,
+  recordSafeFixMemory,
+} from "@/server/production-memory/record-writes";
+import { enrichMcpToolResultWithAlerts } from "@/server/security-alerts/mcp-enrichment";
+import { evaluateDeployCheckAlert } from "@/server/security-alerts/evaluate-project";
+import { enrichMcpToolResultWithReports } from "@/server/protection-reports/mcp-enrichment";
 
 function str(value: unknown): string | undefined {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
@@ -57,6 +67,21 @@ export async function executeMcpTool(
 
   try {
     const result = await dispatch(ctx, toolName, input, t);
+    let enriched: unknown = result;
+    if (toolName === "safe_fix") {
+      enriched = result;
+    } else if (
+      toolName === "can_i_deploy" ||
+      toolName === "what_changed" ||
+      toolName === "production_history"
+    ) {
+      const base = result as { summary?: string; project?: { id?: string }; range?: string };
+      enriched = await enrichMcpToolResultWithAlerts(ctx.admin, toolName, base);
+      enriched = await enrichMcpToolResultWithReports(ctx.admin, toolName, {
+        ...(enriched as object),
+        range: toolName === "production_history" ? (range(input.range) ?? "all") : undefined,
+      } as { summary?: string; project?: { id?: string }; range?: string });
+    }
     logMcpCall({
       tool: toolName,
       organizationId: ctx.organizationId,
@@ -64,7 +89,7 @@ export async function executeMcpTool(
       durationMs: Date.now() - startedAt,
       result: "success",
     });
-    return result;
+    return enriched;
   } catch (error) {
     logMcpCall({
       tool: toolName,
@@ -84,8 +109,8 @@ async function dispatch(
   t: ReturnType<typeof getMcpTranslator>
 ): Promise<unknown> {
   switch (toolName) {
-    case "review_now":
-      return reviewNow(
+    case "review_now": {
+      const result = await reviewNow(
         ctx,
         {
           ...projectSelector(input),
@@ -95,12 +120,43 @@ async function dispatch(
         },
         t
       );
+      if (result.status === "queued" && result.reviewId) {
+        void recordReviewStartedMemory(ctx.admin, {
+          organizationId: ctx.organizationId,
+          projectId: result.project.id,
+          scanId: result.reviewId,
+          trigger: "mcp",
+          reason: reason(input.reason),
+        });
+      }
+      return result;
+    }
 
-    case "can_i_deploy":
-      return canIDeploy(ctx, projectSelector(input), t);
+    case "can_i_deploy": {
+      const result = await canIDeploy(ctx, projectSelector(input), t);
+      const deployAnswer = deployAnswerFromVerdictStatus(result.verdictStatus as VerdictStatus);
+      void recordDeployCheckMemory(ctx.admin, {
+        organizationId: ctx.organizationId,
+        projectId: result.project.id,
+        deployAnswer,
+        productionConfidence: result.score,
+        securityConfidence: result.score,
+        stale: result.stale,
+        primaryBlockerPlain: result.topBlockers[0]?.title ?? null,
+        source: "mcp",
+      });
+      void evaluateDeployCheckAlert(ctx.admin, {
+        organizationId: ctx.organizationId,
+        projectId: result.project.id,
+        projectName: result.project.name,
+        deployAnswer,
+        primaryWorry: result.topBlockers[0]?.title ?? null,
+      });
+      return result;
+    }
 
-    case "safe_fix":
-      return safeFix(
+    case "safe_fix": {
+      const result = await safeFix(
         ctx,
         {
           ...projectSelector(input),
@@ -110,6 +166,18 @@ async function dispatch(
         },
         t
       );
+      if (result.status === "prompt_ready") {
+        void recordSafeFixMemory(ctx.admin, {
+          organizationId: ctx.organizationId,
+          projectId: result.project.id,
+          recommendationId: result.blocker.id,
+          titlePlain: result.blocker.title,
+          severity: result.blocker.severity,
+        });
+      }
+      const { enrichMcpSafeFixWithV2 } = await import("@/server/safe-fix-engine/mcp-enrichment");
+      return enrichMcpSafeFixWithV2(ctx.admin, ctx.organizationId, result);
+    }
 
     case "what_changed":
       return whatChanged(ctx, projectSelector(input), t);

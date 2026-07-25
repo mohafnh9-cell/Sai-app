@@ -1,10 +1,10 @@
-import { NextResponse, after } from "next/server";
+import { NextResponse } from "next/server";
 import { verifyGitHubWebhookSignature } from "@/server/github-automation/webhook-utils";
-import { processGitHubWebhookEvent } from "@/server/github-automation/orchestrator";
 import { enforceRateLimit } from "@/server/http/rate-limit";
+import { ingestGitHubWebhook } from "@/server/jobs/webhook-ingress";
 
 export const runtime = "nodejs";
-export const maxDuration = 300;
+export const maxDuration = 30;
 
 function webhookSecret(): string | null {
   return process.env.GITHUB_WEBHOOK_SECRET ?? null;
@@ -37,7 +37,7 @@ export async function POST(request: Request) {
       component: "github-webhook",
       event: "invalid_signature",
       deliveryId,
-      eventType: request.headers.get("x-github-event") ?? "unknown",
+      eventType,
     });
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
@@ -49,27 +49,33 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
   }
 
-  // Respond immediately — GitHub expects a fast 2xx.
-  after(async () => {
-    try {
-      await processGitHubWebhookEvent({
-        eventType,
-        deliveryId,
-        payload,
-      });
-    } catch (error) {
-      console.error({
-        component: "github-webhook",
-        event: "background_processing_failed",
-        deliveryId,
-        eventType,
-        message: error instanceof Error ? error.message : "unknown",
-      });
-    }
-  });
+  const ingress = await ingestGitHubWebhook({ deliveryId, eventType, payload });
+
+  if (ingress.status === "duplicate") {
+    console.info({
+      component: "github-webhook",
+      event: "duplicate_delivery",
+      deliveryId,
+      eventType,
+    });
+  } else {
+    console.info({
+      component: "github-webhook",
+      event: "delivery_accepted",
+      deliveryId,
+      eventType,
+      scanJobId: ingress.status === "accepted" ? ingress.scanJobId : null,
+    });
+  }
 
   return NextResponse.json(
-    { received: true, event: eventType, deliveryId },
+    {
+      received: true,
+      duplicate: ingress.status === "duplicate",
+      event: eventType,
+      deliveryId,
+      ...(ingress.status === "accepted" ? { scanJobId: ingress.scanJobId } : {}),
+    },
     { status: 202 }
   );
 }

@@ -8,7 +8,7 @@ import { getOnboardingContext } from "@/server/onboarding/get-onboarding-context
 import { I18nShell } from "@/components/shared/I18nShell";
 import type { Metadata } from "next";
 
-export const metadata: Metadata = { title: "Get your first Production Verdict | SequrAI" };
+export const metadata: Metadata = { title: "Ready to ship? | SequrAI" };
 
 export default async function OnboardingPage({
   searchParams,

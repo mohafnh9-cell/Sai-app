@@ -62,7 +62,7 @@ describe("Block 6.4 First Production Verdict onboarding flow", () => {
     ).toBe("review");
   });
 
-  it("starts at verdict when completed scan and verdict exist during first run", () => {
+  it("starts at finale when completed scan and verdict exist during first run", () => {
     const { verdict } = generateProductionVerdict({
       projectId: PROJECT,
       repositoryId: PROJECT,
@@ -113,11 +113,11 @@ describe("Block 6.4 First Production Verdict onboarding flow", () => {
           latestVerdict: verdict,
         })
       )
-    ).toBe("verdict");
+    ).toBe("finale");
   });
 
-  it("redirect target is dashboard when onboarding is complete", () => {
-    expect(resolveInitialWizardStep(baseContext({ isComplete: true }))).toBe("dashboard");
+  it("redirect target is cursor when onboarding wizard is complete", () => {
+    expect(resolveInitialWizardStep(baseContext({ isComplete: true }))).toBe("cursor");
   });
 
   it("skips GitHub step when already connected", () => {
@@ -129,8 +129,8 @@ describe("Block 6.4 First Production Verdict onboarding flow", () => {
     expect(parseWizardStep("review")).toBe("review");
     expect(parseWizardStep("invalid")).toBeNull();
     expect(parseLegacyStepParam("2")).toBe("repository");
-    expect(parseLegacyStepParam("4")).toBe("verdict");
-    expect(parseLegacyStepParam("5")).toBe("dashboard");
+    expect(parseLegacyStepParam("4")).toBe("finale");
+    expect(parseLegacyStepParam("5")).toBe("cursor");
   });
 
   it("detects active and completed scan statuses", () => {
@@ -145,8 +145,8 @@ describe("Block 6.4 First Production Verdict onboarding flow", () => {
     expect(resolveProgressIndex("github", ctx)).toBe(1);
     expect(resolveProgressIndex("repository", ctx)).toBe(1);
     expect(resolveProgressIndex("review", ctx)).toBe(2);
-    expect(resolveProgressIndex("verdict", ctx)).toBe(3);
-    expect(resolveProgressIndex("dashboard", ctx)).toBe(5);
+    expect(resolveProgressIndex("finale", ctx)).toBe(3);
+    expect(resolveProgressIndex("cursor", ctx)).toBe(5);
   });
 
   it("mobile and desktop layouts expose progress tracker steps", () => {

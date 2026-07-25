@@ -45,6 +45,14 @@ export async function getOnboardingContext(
   let latestVerdict: ProductionVerdictV1 | null = null;
   let isComplete = false;
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (user?.user_metadata && typeof user.user_metadata.onboarding_wizard_completed_at === "string") {
+    isComplete = true;
+  }
+
   if (orgId) {
     const { data: projectRows } = await supabase
       .from("projects")
@@ -62,14 +70,6 @@ export async function getOnboardingContext(
     }));
 
     const projectIds = projects.map((p) => p.id);
-    if (projectIds.length > 0) {
-      const { count: verdictCount } = await supabase
-        .from("production_verdicts")
-        .select("id", { count: "exact", head: true })
-        .in("project_id", projectIds);
-
-      isComplete = (verdictCount ?? 0) > 0;
-    }
 
     if (projectIds.length > 0) {
       const { data: scans } = await supabase

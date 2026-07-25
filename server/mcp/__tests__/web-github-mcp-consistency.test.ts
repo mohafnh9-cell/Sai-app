@@ -92,7 +92,7 @@ describe("web / GitHub / MCP consistency", () => {
     // Top priority / next action comes from the same recommendedAction and
     // topPriorities fields for every surface.
     expect(webHero.headline).toBeTruthy();
-    expect(mcpResult.nextAction).toBe(retrieved.recommendedAction);
+    expect(mcpResult.nextAction).toBe(t("actions.applySafeFix"));
     expect(githubSummary).toContain(retrieved.topPriorities[0].title);
     expect(mcpResult.topBlockers[0].title).toBe(retrieved.topPriorities[0].title);
 

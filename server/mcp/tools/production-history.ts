@@ -8,7 +8,7 @@ import type { McpTranslator } from "../i18n";
 import type { ProjectSelector } from "../project-resolution";
 import { resolveMcpProject } from "../project-resolution";
 import { buildProjectHistoryUrl } from "../report-url";
-import { buildTextResponse } from "../response-format";
+import { formatProductionHistoryEmpty, formatProductionHistoryResponse } from "../personality";
 
 export type ProductionHistoryRange = "7d" | "30d" | "all";
 
@@ -82,7 +82,7 @@ export async function productionHistory(
       firstReviewedAt: null,
       lastReviewedAt: null,
       historyUrl: buildProjectHistoryUrl(project.id),
-      summary: buildTextResponse("production_history", t, [t("productionHistory.noHistory")]),
+      summary: formatProductionHistoryEmpty(t),
     };
   }
 
@@ -96,23 +96,15 @@ export async function productionHistory(
     .slice(-limit)
     .map((point) => ({ score: point.score, status: point.status, generatedAt: point.generatedAt }));
 
-  const trendLabel = t(`productionHistory.trend.${journey.trend}`);
-  const lines = [
-    t("productionHistory.currentScoreLabel"),
-    journey.currentScore != null ? String(journey.currentScore) : "—",
-    "",
-    t("productionHistory.bestScoreLabel"),
-    journey.bestScore != null ? String(journey.bestScore) : "—",
-    "",
-    t("productionHistory.trendLabel"),
-    trendLabel,
-    "",
-    t("productionHistory.recentLabel"),
-    recentVerdicts.map((p) => (p.score != null ? String(p.score) : "—")).join(" \u2192 "),
-    "",
-    t("productionHistory.validReviewsLabel"),
-    String(journey.validReviews),
-  ];
+  const recentSparkline = recentVerdicts
+    .map((p) => (p.score != null ? String(p.score) : "—"))
+    .join(" → ");
+
+  const summary = formatProductionHistoryResponse(t, {
+    trendKey: journey.trend,
+    recentSparkline: recentSparkline || "—",
+    validReviews: journey.validReviews,
+  });
 
   return {
     mode: "production_history",
@@ -129,6 +121,6 @@ export async function productionHistory(
     firstReviewedAt: journey.firstReviewedAt,
     lastReviewedAt: journey.lastReviewedAt,
     historyUrl: buildProjectHistoryUrl(project.id),
-    summary: buildTextResponse("production_history", t, lines),
+    summary,
   };
 }

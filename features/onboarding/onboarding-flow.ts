@@ -5,18 +5,20 @@ export const WIZARD_STEPS = [
   "github",
   "repository",
   "review",
-  "verdict",
-  "dashboard",
+  "finale",
+  "cursor",
 ] as const;
 
 export type WizardStep = (typeof WIZARD_STEPS)[number];
 
 /** Legacy step ids kept for deep links and bookmarks. */
 const LEGACY_STEP_ALIASES: Record<string, WizardStep> = {
-  engineer: "verdict",
-  roadmap: "verdict",
-  safefix: "verdict",
-  mcp: "dashboard",
+  engineer: "finale",
+  roadmap: "finale",
+  safefix: "finale",
+  verdict: "finale",
+  mcp: "cursor",
+  dashboard: "cursor",
 };
 
 export const PROGRESS_STEPS = [
@@ -80,8 +82,13 @@ export function resolveProgressIndex(
     "githubConnected" | "projects" | "activeScan" | "latestCompletedScan" | "latestVerdict"
   >
 ): number {
-  if (wizardStep === "dashboard") return PROGRESS_STEPS.length;
-  if (wizardStep === "verdict") return 3;
+  if (wizardStep === "cursor") return PROGRESS_STEPS.length;
+  if (wizardStep === "finale") {
+    const ready =
+      ctx.latestVerdict?.status === "ready_to_ship" ||
+      ctx.latestVerdict?.status === "ready_with_caution";
+    return ready ? 4 : 3;
+  }
   if (wizardStep === "review") {
     if (ctx.latestVerdict) return 3;
     return 2;
@@ -99,12 +106,12 @@ export function resolveInitialWizardStep(
   if (forcedStep && WIZARD_STEPS.includes(forcedStep)) {
     return forcedStep;
   }
-  if (ctx.isComplete) return "dashboard";
+  if (ctx.isComplete) return "cursor";
   if (!ctx.hasOrg) return "welcome";
   if (!ctx.githubConnected) return "github";
   if (ctx.projects.length === 0) return "repository";
   if (ctx.activeScan || !ctx.latestCompletedScan || !ctx.latestVerdict) return "review";
-  return "verdict";
+  return "finale";
 }
 
 export function parseWizardStep(value: string | null | undefined): WizardStep | null {
@@ -123,8 +130,8 @@ export function parseLegacyStepParam(value: string | null | undefined): WizardSt
     "github",
     "repository",
     "review",
-    "verdict",
-    "dashboard",
+    "finale",
+    "cursor",
   ];
   return legacy[Math.min(Math.max(index, 0), legacy.length - 1)] ?? null;
 }

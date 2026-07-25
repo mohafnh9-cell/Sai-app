@@ -3,9 +3,9 @@ import "server-only";
 import { McpError } from "../auth";
 import type { McpAuthContext } from "../auth";
 import type { McpTranslator } from "../i18n";
+import { formatReviewNowResponse } from "../personality";
 import type { ProjectSelector } from "../project-resolution";
 import { resolveMcpProject } from "../project-resolution";
-import { buildTextResponse } from "../response-format";
 import { isMcpReviewRateLimited } from "@/server/review-now/rate-limit";
 import type { TriggerReviewDependencies } from "@/server/review-now/trigger-review";
 import { ReviewNowError, triggerProductionReview } from "@/server/review-now/trigger-review";
@@ -42,13 +42,6 @@ const ERROR_STATUS: Record<string, number> = {
   internal_error: 500,
 };
 
-/**
- * "Scan this project / review this repository before I deploy." review_now
- * only authorizes, resolves the project/repository/commit, and starts the
- * existing Production Review pipeline (or reuses an active/completed one).
- * It never computes score, status, blockers, or a deployment recommendation
- * — call can_i_deploy afterwards for that (ADR-001).
- */
 export async function reviewNow(
   ctx: McpAuthContext,
   input: ReviewNowInput,
@@ -90,26 +83,10 @@ export async function reviewNow(
     throw error;
   }
 
-  const lines: string[] = [];
-  lines.push(t("reviewNow.projectLabel"));
-  lines.push(project.name);
-  lines.push("");
-
-  let result: ReviewNowResult;
+  const nextAction = t("reviewNow.queuedNext");
 
   if (outcome.outcome === "queued") {
-    lines.push(t("reviewNow.commitLabel"));
-    lines.push(outcome.commitSha);
-    lines.push("");
-    lines.push(t("reviewNow.statusLabel"));
-    lines.push(t("reviewNow.statusQueued"));
-    lines.push("");
-    lines.push(t("reviewNow.queuedNote"));
-    lines.push("");
-    lines.push(t("reviewNow.nextActionLabel"));
-    lines.push(t("reviewNow.nextAction"));
-
-    result = {
+    return {
       mode: "production_review_request",
       project,
       reviewId: outcome.reviewId,
@@ -121,19 +98,13 @@ export async function reviewNow(
       verdictStatus: null,
       score: null,
       reviewedCommitSha: null,
-      nextAction: t("reviewNow.nextAction"),
-      summary: buildTextResponse("production_review_request", t, lines),
+      nextAction,
+      summary: formatReviewNowResponse(t, "queued", project.name),
     };
-  } else if (outcome.outcome === "processing") {
-    lines.push(t("reviewNow.statusLabel"));
-    lines.push(t("reviewNow.statusProcessing"));
-    lines.push("");
-    lines.push(t("reviewNow.processingNote"));
-    lines.push("");
-    lines.push(t("reviewNow.nextActionLabel"));
-    lines.push(t("reviewNow.nextAction"));
+  }
 
-    result = {
+  if (outcome.outcome === "processing") {
+    return {
       mode: "production_review_request",
       project,
       reviewId: outcome.reviewId,
@@ -145,37 +116,24 @@ export async function reviewNow(
       verdictStatus: null,
       score: null,
       reviewedCommitSha: null,
-      nextAction: t("reviewNow.nextAction"),
-      summary: buildTextResponse("production_review_request", t, lines),
-    };
-  } else {
-    lines.push(t("reviewNow.commitLabel"));
-    lines.push(outcome.reviewedCommitSha);
-    lines.push("");
-    lines.push(t("reviewNow.statusLabel"));
-    lines.push(t("reviewNow.statusAlreadyCompleted"));
-    lines.push("");
-    lines.push(t("reviewNow.alreadyCompletedNote"));
-    lines.push("");
-    lines.push(t("reviewNow.nextActionLabel"));
-    lines.push(t("reviewNow.nextAction"));
-
-    result = {
-      mode: "production_review_request",
-      project,
-      reviewId: outcome.reviewId,
-      commitSha: outcome.reviewedCommitSha,
-      branch: null,
-      status: "already_completed",
-      createdAt: new Date().toISOString(),
-      duplicate: true,
-      verdictStatus: outcome.verdictStatus,
-      score: outcome.score,
-      reviewedCommitSha: outcome.reviewedCommitSha,
-      nextAction: t("reviewNow.nextAction"),
-      summary: buildTextResponse("production_review_request", t, lines),
+      nextAction,
+      summary: formatReviewNowResponse(t, "processing", project.name),
     };
   }
 
-  return result;
+  return {
+    mode: "production_review_request",
+    project,
+    reviewId: outcome.reviewId,
+    commitSha: outcome.reviewedCommitSha,
+    branch: null,
+    status: "already_completed",
+    createdAt: new Date().toISOString(),
+    duplicate: true,
+    verdictStatus: outcome.verdictStatus,
+    score: outcome.score,
+    reviewedCommitSha: outcome.reviewedCommitSha,
+    nextAction: t("reviewNow.alreadyNext"),
+    summary: formatReviewNowResponse(t, "already_completed", project.name),
+  };
 }

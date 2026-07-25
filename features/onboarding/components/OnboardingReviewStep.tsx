@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CheckCircle2, RefreshCw, Shield } from "lucide-react";
+import { RefreshCw, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import type { ProductionVerdictV1 } from "@/brain/production-verdict/schema";
@@ -31,7 +31,6 @@ export function OnboardingReviewStep({
 }) {
   const { t } = useI18n("onboarding");
   const { t: te } = useI18n("errors");
-  const { t: tc } = useI18n("common");
   const [scanId, setScanId] = useState<string | null>(existingScanId ?? null);
   const [scan, setScan] = useState<ScanPayload | null>(null);
   const [error, setError] = useState("");
@@ -134,8 +133,7 @@ export function OnboardingReviewStep({
 
   const progress = Math.max(12, Math.min(100, scan?.progress ?? (starting ? 8 : 18)));
   const active = scan ? scanIsActive(scan.status) : true;
-  const savingVerdict =
-    scan != null && scanIsCompleted(scan.status) && !error && !stalled;
+  const currentStageKey = REVIEW_STAGE_KEYS[stageState.activeIndex] ?? REVIEW_STAGE_KEYS[0];
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -150,53 +148,21 @@ export function OnboardingReviewStep({
           </div>
           <div>
             <h2 className="text-lg font-semibold">{t("reviewTitle")}</h2>
-            <p className="text-sm text-muted-foreground">
-              {savingVerdict ? t("verdictSaving") : t("reviewBuilding")}
-            </p>
+            <p className="text-sm text-muted-foreground">{t("reviewSub")}</p>
           </div>
         </div>
 
-        <ul className="space-y-2 mb-6" aria-label={t("reviewing")}>
-          {REVIEW_STAGE_KEYS.map((stageKey, index) => {
-            const isDone = index <= stageState.completedThrough;
-            const isActive = index === stageState.activeIndex && active;
-            return (
-              <li
-                key={stageKey}
-                className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all duration-500 ${
-                  isActive
-                    ? "bg-primary/10 text-foreground translate-x-1"
-                    : isDone
-                      ? "text-muted-foreground"
-                      : "text-muted-foreground/60"
-                }`}
-              >
-                {isDone ? (
-                  <CheckCircle2 className="h-4 w-4 text-primary shrink-0" aria-hidden />
-                ) : (
-                  <span
-                    className={`h-2 w-2 rounded-full shrink-0 ${
-                      isActive ? "bg-primary animate-pulse" : "bg-border"
-                    }`}
-                    aria-hidden
-                  />
-                )}
-                {t(`reviewStages.${stageKey}`)}
-              </li>
-            );
-          })}
-        </ul>
-
-        {(active || starting || savingVerdict) && (
-          <div className="space-y-2">
-            <Progress value={progress} aria-label={tc("states.buildingVerdict")} />
-            <p className="text-xs text-muted-foreground">
-              {starting
-                ? t("startingReview")
-                : savingVerdict
-                  ? t("verdictSaving")
+        {(active || starting) && (
+          <div className="space-y-4">
+            <p className="text-sm font-medium animate-pulse">{t(`reviewStages.${currentStageKey}`)}</p>
+            <div className="space-y-2">
+              <Progress value={progress} aria-label={t("reviewing")} />
+              <p className="text-xs text-muted-foreground">
+                {starting
+                  ? t("startingReview")
                   : scan?.progress_message || t("analyzingRepo")}
-            </p>
+              </p>
+            </div>
           </div>
         )}
       </div>

@@ -113,6 +113,20 @@ const COMPOUND_PATTERNS: Array<{ pattern: RegExp; tools: string[] }> = [
 ];
 
 const STRONG_SINGLE_RULES: Array<{ pattern: RegExp; tool: string }> = [
+  {
+    pattern: /\b(verify the fix|review the fix|verifica el fix|revisa el fix)\b/i,
+    tool: "review_now",
+  },
+  {
+    pattern:
+      /\b(fix this|prepare the safest fix|can you solve this|would you apply this|should i trust this fix|arregla esto|prepara el fix m[aá]s seguro|conf[ií]o en este fix)\b/i,
+    tool: "safe_fix",
+  },
+  {
+    pattern:
+      /\b(show my monthly report|what improved this month|am i safer than before|how was my month|mu[eé]strame el reporte mensual|qu[eé] mejor[oó] este mes|c[oó]mo estuvo mi mes)\b/i,
+    tool: "production_history",
+  },
   // Compound-adjacent phrases that mention deploy but primary intent is diff/history/fix/review
   {
     pattern: /\b(primero|first|but first|pero primero).*(qu[eé] ha cambiado|what changed)\b/,
@@ -122,6 +136,41 @@ const STRONG_SINGLE_RULES: Array<{ pattern: RegExp; tool: string }> = [
     pattern:
       /\b(score baj[oó]|score dropped).*(no s[eé]|don't know|fui yo|was me|sequrai encontr[oó])\b/,
     tool: "what_changed",
+  },
+  {
+    pattern:
+      /\b(protect my application|protect my app|protege mi aplicaci[oó]n|protege mi app|start protecting|empezar a proteger)\b/,
+    tool: "review_now",
+  },
+  {
+    pattern:
+      /\b(am i protected|are you protecting|am i safe in production|estoy protegido|me est[aá]s protegiendo|sigues protegiendo)\b/,
+    tool: "can_i_deploy",
+  },
+  {
+    pattern:
+      /\b(what worries you|what worry you most|qu[eé] te preocupa|qu[eé] es lo que m[aá]s te preocupa)\b/,
+    tool: "can_i_deploy",
+  },
+  {
+    pattern:
+      /\b(would you deploy if it was your company|would you ship if this was your company|if this were your company|si fuera tu empresa|desplegar[ií]as si fuera tu empresa|publicar[ií]as si fuera tu empresa)\b/,
+    tool: "can_i_deploy",
+  },
+  {
+    pattern:
+      /\b(how healthy is my application|how healthy is my app|qu[eé] tan sana est[aá] mi app|salud de mi aplicaci[oó]n)\b/,
+    tool: "production_history",
+  },
+  {
+    pattern:
+      /\b(review again|check again|revisa otra vez|revisa de nuevo|vuelve a revisar)\b/,
+    tool: "review_now",
+  },
+  {
+    pattern:
+      /\b(fix this problem|fix the problem|arregla este problema|arreglar este problema)\b/,
+    tool: "safe_fix",
   },
   {
     pattern:
@@ -145,6 +194,11 @@ const STRONG_SINGLE_RULES: Array<{ pattern: RegExp; tool: string }> = [
   },
   {
     pattern:
+      /\b(how was my month|how was my week|show my monthly report|monthly report|my monthly report|what improved this month|am i safer than before|am i becoming more protected|summarize last month|informe mensual|reporte mensual|c[oó]mo estuvo mi mes|estoy m[aá]s seguro)\b/,
+    tool: "production_history",
+  },
+  {
+    pattern:
       /\b(how has this project evolved|show me the history|mu[eé]strame el historial|what was my best score|cu[aá]l fue mi mejor score|how many blockers have i resolved|cu[aá]ntos blockers he resuelto|how was the project last week|c[oó]mo estuvo el proyecto la semana pasada|show the last 30 days|muestra los [uú]ltimos 30 d[ií]as|production history|historial de producci[oó]n|score trend|tendencia del score|how many valid reviews|cu[aá]ntas reviews v[aá]lidas|project evolution|evoluci[oó]n del proyecto|my progress over|mi progreso en la [uú]ltima semana|historical production scores|am i improving|estoy mejorando)\b/,
     tool: "production_history",
   },
@@ -155,7 +209,16 @@ const STRONG_SINGLE_RULES: Array<{ pattern: RegExp; tool: string }> = [
   },
   {
     pattern:
-      /\b(can i deploy\??|is this ready\??|can i launch|can real users|should i ship|production ready|would you release|deployment recommendation|production verdict|puedo desplegar|est[aá] listo|puedo lanzar|usuarios reales|deber[ií]a hacer ship|listo para producci[oó]n|lo publicar[ií]as hoy|publicar en producci[oó]n|liberarlo a usuarios reales|recomendaci[oó]n de despliegue|puedo hacer ship)\b/,
+      /\b(should i worry|do i need to worry|should i be worried|is my application still protected|still protected|why did you email|why did sequrai email|did you alert me|that email from sequrai|deber[ií]a preocuparme|tengo que preocuparme|sigo protegido|por qu[eé] me escribiste|me alertaste)\b/,
+    tool: "can_i_deploy",
+  },
+  {
+    pattern: /\b(what happened|what happened\??|qu[eé] pas[oó]|qu[eé] pas[oó]\??)\b/,
+    tool: "what_changed",
+  },
+  {
+    pattern:
+      /\b(what should i do next|qu[eé] hago ahora|what do i do now|next step|siguiente paso)\b/,
     tool: "can_i_deploy",
   },
   {
@@ -198,24 +261,38 @@ function intentScores(phrase: string): Record<McpCanonicalIntent, number> {
       ? 2
       : 0;
   const historyQ =
-    /\b(history|evolution|trend|last (week|month)|best score|progress|historial|evoluci|tendencia|[uú]ltima semana|mejor score|progreso)\b/.test(
+    /\b(history|evolution|trend|last (week|month)|best score|progress|historial|evoluci|tendencia|[uú]ltima semana|mejor score|progreso|how healthy|app health|salud de mi)\b/.test(
       text
     )
       ? 2
+      : 0;
+  const protectQ =
+    /\b(am i protected|what worries you|protegido|preocupa|protect my app|would you deploy if)\b/.test(
+      text
+    )
+      ? 3
       : 0;
 
   return {
     REVIEW_NOW:
       reviewCompute +
       containsAny(text, INTENT_SIGNAL_DICTIONARY.review) +
-      (/\b(before i deploy|antes de desplegar|check everything)\b/.test(text) ? 2 : 0),
+      (/\b(before i deploy|antes de desplegar|check everything|review again|revisa otra vez)\b/.test(text) ? 2 : 0) +
+      (/\b(protect my application|protege mi aplicaci[oó]n)\b/.test(text) ? 2 : 0),
     CAN_I_DEPLOY:
       deployQ +
+      protectQ +
       containsAny(text, INTENT_SIGNAL_DICTIONARY.deployment) +
+      containsAny(text, INTENT_SIGNAL_DICTIONARY.protection) +
+      containsAny(text, INTENT_SIGNAL_DICTIONARY.worries) +
+      containsAny(text, INTENT_SIGNAL_DICTIONARY.company) +
       (/\b(ready|listo|production ready|usuarios reales|safe to launch)\b/.test(text) ? 1 : 0),
     SAFE_FIX: fixQ + containsAny(text, INTENT_SIGNAL_DICTIONARY.fix),
     WHAT_CHANGED: changeQ + containsAny(text, INTENT_SIGNAL_DICTIONARY.changes),
-    PRODUCTION_HISTORY: historyQ + containsAny(text, INTENT_SIGNAL_DICTIONARY.history),
+    PRODUCTION_HISTORY:
+      historyQ +
+      containsAny(text, INTENT_SIGNAL_DICTIONARY.history) +
+      containsAny(text, INTENT_SIGNAL_DICTIONARY.health),
   };
 }
 

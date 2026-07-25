@@ -6,10 +6,10 @@ import { McpError } from "../auth";
 import { mapVerdictStatusToDecision } from "../decision-mapping";
 import type { McpTranslator } from "../i18n";
 import { getLatestReviewSummary } from "../latest-review";
+import { formatCanIDeployResponse, pickRecommendedAction } from "../personality";
 import type { ProjectSelector } from "../project-resolution";
 import { resolveMcpProject } from "../project-resolution";
 import { buildProjectReportUrl } from "../report-url";
-import { buildTextResponse } from "../response-format";
 import { getStalenessInfo } from "../staleness";
 
 export type CanIDeployInput = ProjectSelector;
@@ -27,7 +27,6 @@ export type CanIDeployResult = {
   verdictStatus: string;
   score: number | null;
   scoreDelta: number | null;
-  /** Migrated from the retired deployment_confidence tool: the verdict engine's own confidence field, verbatim. */
   confidenceBand: "high" | "medium" | "low";
   blockersCount: number;
   topBlockers: CanIDeployBlocker[];
@@ -45,7 +44,6 @@ export type CanIDeployResult = {
   freshnessStatus: "current" | "stale" | "unknown";
   reviewInProgress: boolean;
   reviewFailed: boolean;
-  /** The most recently created review of any kind (web, GitHub push, or MCP review_now), regardless of whether it is the one that produced this verdict. */
   latestReviewId: string | null;
   latestReviewStatus: string | null;
   deploymentRecommendation: "SHIP_IT" | "DO_NOT_DEPLOY" | "MORE_ANALYSIS_REQUIRED";
@@ -53,12 +51,6 @@ export type CanIDeployResult = {
   summary: string;
 };
 
-/**
- * "Can I deploy this?" — retrieves the latest persisted canonical Production
- * Verdict and formats it. This handler never calculates score, status,
- * blockers, or recommendation inputs; those come only from the Production
- * Verdict Engine (ADR-001).
- */
 export async function canIDeploy(
   ctx: McpAuthContext,
   input: CanIDeployInput,
@@ -77,9 +69,6 @@ export async function canIDeploy(
   ]);
 
   const engineDecision = mapVerdictStatusToDecision(verdict.status);
-  // A failed automatic review is positive proof of an unreviewed newer
-  // commit — never let SHIP_IT stand on a verdict known to be outdated for
-  // that reason. This only translates already-known facts (ADR-001).
   const decision =
     staleness.reviewFailed && engineDecision === "deploy" ? "more_analysis_required" : engineDecision;
   const deploymentRecommendation =
@@ -92,50 +81,29 @@ export async function canIDeploy(
     category: priority.category,
   }));
 
-  const lines: string[] = [];
-  lines.push(t("canIDeploy.verdictLabel"));
-  lines.push(verdict.status.toUpperCase().replace(/_/g, " "));
-  lines.push("");
-  lines.push(
-    verdict.score != null ? t("canIDeploy.scoreLabel") : t("canIDeploy.scoreUnavailable")
-  );
-  if (verdict.score != null) lines.push(`${verdict.score} / 100`);
-  lines.push("");
-  lines.push(t("canIDeploy.blockersLabel"));
-  lines.push(String(verdict.blockersCount));
-  lines.push("");
-  lines.push(t("canIDeploy.nextActionLabel"));
-  lines.push(verdict.recommendedAction);
-  lines.push("");
-  lines.push(t("canIDeploy.recommendationLabel"));
-  lines.push(
-    decision === "deploy"
-      ? t("canIDeploy.deploy")
-      : decision === "do_not_deploy"
-        ? t("canIDeploy.doNotDeploy")
-        : t("canIDeploy.moreAnalysisRequired")
-  );
+  const worries = topBlockers.map((b) => b.title);
+  const stalenessFootnotes = {
+    reviewInProgress: staleness.reviewInProgress,
+    freshnessStatus: staleness.freshnessStatus,
+    reviewFailed: staleness.reviewFailed,
+    latestDetectedCommitSha: staleness.latestDetectedCommitSha,
+  };
 
-  if (verdict.status === "insufficient_data") {
-    lines.push("", t("canIDeploy.insufficientData"));
-  }
-  if (verdict.status === "analysis_failed") {
-    lines.push("", t("canIDeploy.analysisFailed"));
-  }
-  if (staleness.reviewInProgress) {
-    lines.push("", t("canIDeploy.reviewInProgress"));
-  }
-  if (staleness.freshnessStatus === "stale") {
-    lines.push(
-      "",
-      t("canIDeploy.staleWarning", { commitSha: staleness.latestDetectedCommitSha?.slice(0, 7) ?? "" })
-    );
-  } else if (staleness.freshnessStatus === "unknown") {
-    lines.push("", t("canIDeploy.freshnessUnknown"));
-  }
-  if (staleness.reviewFailed) {
-    lines.push("", t("canIDeploy.reviewFailedWarning"));
-  }
+  const nextAction = pickRecommendedAction(t, {
+    decision,
+    status: verdict.status,
+    blockersCount: verdict.blockersCount,
+    staleness: stalenessFootnotes,
+  });
+
+  const summary = formatCanIDeployResponse(t, {
+    decision,
+    status: verdict.status,
+    executiveSummary: verdict.executiveSummary,
+    worries,
+    blockersCount: verdict.blockersCount,
+    staleness: stalenessFootnotes,
+  });
 
   return {
     mode: "production_review",
@@ -146,7 +114,7 @@ export async function canIDeploy(
     confidenceBand: verdict.confidence,
     blockersCount: verdict.blockersCount,
     topBlockers,
-    nextAction: verdict.recommendedAction,
+    nextAction,
     evaluatedCoverage: {
       ratio: verdict.coverageRatio,
       evaluatedAreas: verdict.evaluatedAreas.length,
@@ -164,6 +132,6 @@ export async function canIDeploy(
     latestReviewStatus: latestReview?.status ?? null,
     deploymentRecommendation,
     reportUrl: buildProjectReportUrl(project.id),
-    summary: buildTextResponse("production_review", t, lines),
+    summary,
   };
 }

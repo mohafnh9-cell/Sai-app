@@ -14,7 +14,7 @@ export const MCP_PROMPT_DEFINITIONS: McpPromptDefinition[] = [
   {
     name: "prepare_for_deploy",
     description:
-      "Prepare for deployment: check readiness with can_i_deploy; if stale or blocked, guide review_now or safe_fix. Does not compute truth itself.",
+      "Prepare to ship: ask can_i_deploy first; if not comfortable or stale, guide review_now then safe_fix. Speaks as SequrAI engineer.",
     arguments: [
       { name: "projectId", description: "SequrAI project ID (optional if single project)." },
     ],
@@ -23,7 +23,7 @@ export const MCP_PROMPT_DEFINITIONS: McpPromptDefinition[] = [
   {
     name: "review_latest_work",
     description:
-      "Run a Production Review on latest work, then summarize readiness. Orchestrates review_now then can_i_deploy.",
+      "Fresh protection review on latest work, then deploy answer. review_now then can_i_deploy.",
     arguments: [
       { name: "projectId", description: "SequrAI project ID (optional if single project)." },
     ],
@@ -32,7 +32,7 @@ export const MCP_PROMPT_DEFINITIONS: McpPromptDefinition[] = [
   {
     name: "fix_top_blocker",
     description:
-      "Identify the top blocker and return a Safe Fix Prompt. Orchestrates can_i_deploy or safe_fix (list) then safe_fix (with blocker).",
+      "Fix what worries SequrAI most: can_i_deploy or safe_fix, then safe_fix with blocker.",
     arguments: [
       { name: "projectId", description: "SequrAI project ID (optional if single project)." },
     ],

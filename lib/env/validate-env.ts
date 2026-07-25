@@ -32,6 +32,9 @@ const RULES: EnvRule[] = [
   { key: "GITHUB_WEBHOOK_SECRET", required: false, productionRequired: true, secret: true },
   { key: "ANTHROPIC_API_KEY", required: false, productionRequired: false, secret: true },
   { key: "GITHUB_TOKEN_ENCRYPTION_KEY", required: false, productionRequired: false, secret: true },
+  { key: "SCAN_SCHEDULER", required: false },
+  { key: "INNGEST_EVENT_KEY", required: false, secret: true },
+  { key: "INNGEST_SIGNING_KEY", required: false, secret: true },
   { key: "SEQURAI_BYPASS_AUTH", required: false },
 ];
 
@@ -80,6 +83,16 @@ export function validateEnvironment(options?: {
 
   if (production && !process.env.SUPABASE_SERVICE_ROLE_KEY) {
     errors.push("SUPABASE_SERVICE_ROLE_KEY is required in production for webhooks and scans");
+  }
+
+  const scheduler = process.env.SCAN_SCHEDULER?.trim().toLowerCase();
+  if (scheduler === "inngest") {
+    if (!process.env.INNGEST_EVENT_KEY?.trim()) {
+      errors.push("INNGEST_EVENT_KEY is required when SCAN_SCHEDULER=inngest");
+    }
+    if (production && !process.env.INNGEST_SIGNING_KEY?.trim()) {
+      errors.push("INNGEST_SIGNING_KEY is required in production when SCAN_SCHEDULER=inngest");
+    }
   }
 
   return { ok: errors.length === 0, errors, warnings };

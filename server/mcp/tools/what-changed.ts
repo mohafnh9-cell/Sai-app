@@ -8,7 +8,8 @@ import { McpError } from "../auth";
 import type { McpTranslator } from "../i18n";
 import type { ProjectSelector } from "../project-resolution";
 import { resolveMcpProject } from "../project-resolution";
-import { buildTextResponse } from "../response-format";
+import { formatWhatChangedResponse, pickRecommendedAction } from "../personality";
+import { mapVerdictStatusToDecision } from "../decision-mapping";
 
 export type WhatChangedInput = ProjectSelector;
 
@@ -87,30 +88,26 @@ export async function whatChanged(
     regressions.push(`${scoreDelta} pts`);
   }
 
-  const lines: string[] = [];
-  if (!previous) {
-    lines.push(t("whatChanged.noPreviousReview"));
-  } else {
-    lines.push(t("whatChanged.scoreChangeLabel"));
-    lines.push(
-      current.score != null && previous.score != null
-        ? `${previous.score} \u2192 ${current.score}${scoreDelta != null && scoreDelta !== 0 ? ` (${scoreDelta > 0 ? "+" : ""}${scoreDelta})` : ""}`
-        : "—"
-    );
-    if (resolvedBlockers.length > 0) {
-      lines.push("", t("whatChanged.resolvedHeader"));
-      resolvedBlockers.forEach((title) => lines.push(`- ${title}`));
-    }
-    if (detectedBlockers.length > 0) {
-      lines.push("", t("whatChanged.detectedHeader"));
-      detectedBlockers.forEach((title) => lines.push(`- ${title}`));
-    }
-    if (resolvedBlockers.length === 0 && detectedBlockers.length === 0) {
-      lines.push("", t("whatChanged.noChange"));
-    }
-    lines.push("", t("whatChanged.nextActionLabel"));
-    lines.push(current.verdict.recommendedAction);
-  }
+  const decision = mapVerdictStatusToDecision(current.status);
+  const recommendedAction = pickRecommendedAction(t, {
+    decision,
+    status: current.status,
+    blockersCount: current.verdict.blockersCount,
+    staleness: {
+      reviewInProgress: false,
+      freshnessStatus: "current",
+      reviewFailed: false,
+      latestDetectedCommitSha: null,
+    },
+  });
+
+  const summary = formatWhatChangedResponse(t, {
+    hasPrevious: Boolean(previous),
+    scoreDelta,
+    resolved: resolvedBlockers,
+    detected: detectedBlockers,
+    recommendedAction,
+  });
 
   return {
     mode: "continuous_review",
@@ -125,10 +122,10 @@ export async function whatChanged(
     confirmedIntroducedBlockers,
     improvements,
     regressions,
-    nextAction: current.verdict.recommendedAction,
+    nextAction: recommendedAction,
     currentCommitSha: current.commitSha,
     previousCommitSha: previous?.commitSha ?? null,
     reviewedAt: current.generatedAt,
-    summary: buildTextResponse("continuous_review", t, lines),
+    summary,
   };
 }

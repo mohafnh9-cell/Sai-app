@@ -1,12 +1,10 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Suspense } from "react";
 import { FolderGit2, Plus, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { PortfolioVerdictCard } from "@/features/production-verdict/components/PortfolioVerdictCard";
 import { ProductionControlCenter } from "@/features/dashboard/components/ProductionControlCenter";
-import { FirstVerdictDashboardModal } from "@/features/onboarding/components/FirstVerdictDashboardModal";
 import { buildOrgBrain } from "@/server/brain/build-org-brain";
 import { organizationHasProductionVerdict } from "@/server/onboarding/has-production-verdict";
 import { getLatestVerdictsByOrganization } from "@/server/production-verdict/service";
@@ -109,10 +107,6 @@ export default async function DashboardPage() {
   return (
     <div className="app-cinematic-bg min-h-full">
       <div className="mx-auto max-w-5xl px-4 sm:px-8 pb-20">
-        <Suspense fallback={null}>
-          <FirstVerdictDashboardModal />
-        </Suspense>
-
         {focus && (
           <ProductionControlCenter
             greeting={greeting}

@@ -60,7 +60,9 @@ describe("can_i_deploy", () => {
     expect(result.topBlockers).toHaveLength(2);
     expect(result.deploymentRecommendation).toBe("DO_NOT_DEPLOY");
     expect(result.summary).toContain("SEQURAI");
-    expect(result.summary).toContain("PRODUCTION REVIEW");
+    expect(result.summary).toContain("DEPLOY ANSWER");
+    expect(result.summary).toContain("What worries me most:");
+    expect(result.summary).not.toContain("Production Ready Score:");
   });
 
   it("includes the deployment recommendation and the fields migrated from the retired deployment_confidence tool", async () => {
@@ -90,7 +92,7 @@ describe("can_i_deploy", () => {
 
     expect(result.score).toBeNull();
     expect(result.deploymentRecommendation).toBe("MORE_ANALYSIS_REQUIRED");
-    expect(result.summary).toContain(t("canIDeploy.insufficientData"));
+    expect(result.summary).toContain(t("canIDeploy.cantAnswerLead"));
   });
 
   it("caps topBlockers at 3 even if more priorities exist", async () => {
@@ -119,7 +121,7 @@ describe("can_i_deploy", () => {
     expect(result.stale).toBe(true);
     expect(result.freshnessStatus).toBe("stale");
     expect(result.latestDetectedCommitSha).toBe("bbb2222");
-    expect(result.summary).toContain("outdated");
+    expect(result.summary).toContain("bbb2222");
   });
 
   it("flags reviewInProgress when a scan is currently active", async () => {
@@ -292,7 +294,7 @@ describe("safe_fix", () => {
       expect(["LOW", "MEDIUM", "HIGH"]).toContain(result.implementationRisk);
       expect(result.estimatedFixTime.length).toBeGreaterThan(0);
       expect(typeof result.projectedScore).toBe("number");
-      expect(result.summary).toContain("SAFE FIX");
+      expect(result.summary).toContain("FIX FOR CURSOR");
     }
   });
 
@@ -373,7 +375,7 @@ describe("what_changed", () => {
     expect(result.detectedBlockers).toEqual(["Missing rate limiting"]);
     expect(result.confirmedIntroducedBlockers).toEqual([]);
     expect(result.scoreDelta).toBe(20);
-    expect(result.summary).toContain(t("whatChanged.detectedHeader"));
+    expect(result.summary).toContain(t("whatChanged.worriesNowHeader"));
     expect(result.summary).not.toContain("introduced by your latest change");
   });
 

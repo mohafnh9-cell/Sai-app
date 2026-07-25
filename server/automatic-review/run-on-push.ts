@@ -6,11 +6,9 @@ import {
   shouldRunAutomaticReview,
   validateCommitForReview,
 } from "@/brain/automatic-review";
-import { AUTOMATIC_VERDICT_UPDATE_CONFIG } from "@/brain/automatic-verdict-update";
-import { InlineScanJobRunner } from "@/server/security-scanner/scan-job-runner";
-import { finalizeProjectStateAfterAutomaticReview } from "@/server/automatic-verdict-update";
 import { GitHubServiceError } from "@/lib/github/repository-service";
 import { markRepositorySyncError } from "@/server/repository-sync";
+import { scheduleAutomationScan } from "@/server/jobs/schedule-scan";
 import {
   buildCommitValidationInput,
   hasActiveRepositoryReview,
@@ -33,7 +31,7 @@ export type AutomaticReviewRunResult =
       ok: true;
       action: "automatic_review_started";
       scanId: string;
-      status: "completed" | "failed";
+      status: "queued" | "completed" | "failed";
       verdictUpdated: boolean;
       verdictError?: string;
     }
@@ -136,17 +134,18 @@ export async function runAutomaticProductionReview(
     { onConflict: "repository_id" }
   );
 
-  const runner = new InlineScanJobRunner(admin);
-
   try {
-    await runner.run({
+    await scheduleAutomationScan(admin, {
+      scanJobId: "",
       scanId: scan.id,
-      repositoryId: input.project.id,
       organizationId: input.project.organization_id,
-      githubRepo: input.project.github_repo!,
+      projectId: input.project.id,
+      userId: input.userId,
       branch: input.detection.branch,
-      providerToken: input.token,
+      scanType: "full",
       persistMode: "review_only",
+      jobType: "automatic_review",
+      finalize: { kind: "automatic_review" },
     });
   } catch (error) {
     if (
@@ -174,37 +173,17 @@ export async function runAutomaticProductionReview(
     };
   }
 
-  const { data: completed } = await admin
-    .from("scans")
-    .select("status")
-    .eq("id", scan.id)
-    .single();
-
-  const reviewStatus = completed?.status === "completed" ? "completed" : "failed";
-  let verdictUpdated = false;
-  let verdictError: string | undefined;
-
-  if (
-    reviewStatus === "completed" &&
-    AUTOMATIC_VERDICT_UPDATE_CONFIG.enabled
-  ) {
-    const finalizeResult = await finalizeProjectStateAfterAutomaticReview(admin, {
-      organizationId: input.project.organization_id,
-      projectId: input.project.id,
-      scanId: scan.id,
-    });
-    verdictUpdated = finalizeResult.verdictUpdated;
-    if (!finalizeResult.ok && finalizeResult.errorCode) {
-      verdictError = finalizeResult.errorCode;
-    }
-  }
+  log("automatic_review_queued", {
+    projectId: input.project.id,
+    commitSha: input.detection.commitSha,
+    scanId: scan.id,
+  });
 
   return {
     ok: true,
     action: "automatic_review_started",
     scanId: scan.id,
-    status: reviewStatus,
-    verdictUpdated,
-    ...(verdictError ? { verdictError } : {}),
+    status: "queued",
+    verdictUpdated: false,
   };
 }

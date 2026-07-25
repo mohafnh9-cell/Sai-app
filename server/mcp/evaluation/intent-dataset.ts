@@ -231,6 +231,50 @@ export const MCP_INTENT_EVALUATION_DATASET: EvalPhrase[] = [
   { id: "neg-18", locale: "en", phrase: "Open the settings page.", expected: none() },
   { id: "neg-19", locale: "en", phrase: "Create a new workspace.", expected: none() },
   { id: "neg-20", locale: "es", phrase: "Crea un workspace nuevo.", expected: none() },
+
+  // Sprint 2 — founder protection phrasing
+  { id: "s2-en-01", locale: "en", phrase: "Am I protected?", expected: tool(["can_i_deploy"]) },
+  { id: "s2-en-02", locale: "en", phrase: "Protect my application.", expected: tool(["review_now"]) },
+  { id: "s2-en-03", locale: "en", phrase: "What worries you?", expected: tool(["can_i_deploy"]) },
+  { id: "s2-en-04", locale: "en", phrase: "Would you deploy this if it was your company?", expected: tool(["can_i_deploy"]) },
+  { id: "s2-en-05", locale: "en", phrase: "Fix this problem.", expected: tool(["safe_fix"]) },
+  { id: "s2-en-06", locale: "en", phrase: "Review again.", expected: tool(["review_now"]) },
+  { id: "s2-en-07", locale: "en", phrase: "How healthy is my application?", expected: tool(["production_history"]) },
+  { id: "s2-es-01", locale: "es", phrase: "¿Estoy protegido?", expected: tool(["can_i_deploy"]) },
+  { id: "s2-es-02", locale: "es", phrase: "Protege mi aplicación.", expected: tool(["review_now"]) },
+  { id: "s2-es-03", locale: "es", phrase: "¿Qué te preocupa?", expected: tool(["can_i_deploy"]) },
+  { id: "s2-es-04", locale: "es", phrase: "¿Desplegarías esto si fuera tu empresa?", expected: tool(["can_i_deploy"]) },
+  { id: "s2-es-05", locale: "es", phrase: "Arregla este problema.", expected: tool(["safe_fix"]) },
+  { id: "s2-es-06", locale: "es", phrase: "Revisa otra vez.", expected: tool(["review_now"]) },
+  { id: "s2-es-07", locale: "es", phrase: "¿Qué tan sana está mi aplicación?", expected: tool(["production_history"]) },
+
+  // Sprint 5 — alert conversation (existing tools only)
+  { id: "s5-en-01", locale: "en", phrase: "Should I worry?", expected: tool(["can_i_deploy"]) },
+  { id: "s5-en-02", locale: "en", phrase: "Should I worry about that email?", expected: tool(["can_i_deploy"]) },
+  { id: "s5-en-03", locale: "en", phrase: "What happened?", expected: tool(["what_changed"]) },
+  { id: "s5-en-04", locale: "en", phrase: "Is my application still protected?", expected: tool(["can_i_deploy"]) },
+  { id: "s5-en-05", locale: "en", phrase: "Why did you email me?", expected: tool(["what_changed"]) },
+  { id: "s5-en-06", locale: "en", phrase: "Did you alert me?", expected: tool(["can_i_deploy"]) },
+  { id: "s5-en-07", locale: "en", phrase: "What should I do next?", expected: tool(["can_i_deploy"]) },
+  { id: "s5-es-01", locale: "es", phrase: "¿Debería preocuparme?", expected: tool(["can_i_deploy"]) },
+  { id: "s5-es-02", locale: "es", phrase: "¿Qué pasó?", expected: tool(["what_changed"]) },
+  { id: "s5-es-03", locale: "es", phrase: "¿Sigo protegido?", expected: tool(["can_i_deploy"]) },
+  { id: "s5-es-04", locale: "es", phrase: "¿Por qué me escribiste?", expected: tool(["what_changed"]) },
+
+  // Sprint 6 — protection reports (existing tools)
+  { id: "s6-en-01", locale: "en", phrase: "Show my monthly report.", expected: tool(["production_history"]) },
+  { id: "s6-en-02", locale: "en", phrase: "What improved this month?", expected: tool(["production_history"]) },
+  { id: "s6-en-03", locale: "en", phrase: "Am I safer than before?", expected: tool(["production_history"]) },
+  { id: "s6-en-04", locale: "en", phrase: "How was my month?", expected: tool(["production_history"]) },
+  { id: "s6-es-01", locale: "es", phrase: "Muéstrame el reporte mensual.", expected: tool(["production_history"]) },
+  { id: "s6-es-02", locale: "es", phrase: "¿Qué mejoró este mes?", expected: tool(["production_history"]) },
+
+  // Sprint 7 — Safe Fix conversation (existing tool)
+  { id: "s7-en-01", locale: "en", phrase: "Fix this.", expected: tool(["safe_fix"]) },
+  { id: "s7-en-02", locale: "en", phrase: "Prepare the safest fix.", expected: tool(["safe_fix"]) },
+  { id: "s7-en-03", locale: "en", phrase: "Verify the fix.", expected: tool(["review_now"]) },
+  { id: "s7-en-04", locale: "en", phrase: "Should I trust this fix?", expected: tool(["safe_fix"]) },
+  { id: "s7-es-01", locale: "es", phrase: "Arregla esto.", expected: tool(["safe_fix"]) },
 ];
 
 export const MCP_INTENT_DATASET_COUNTS = {

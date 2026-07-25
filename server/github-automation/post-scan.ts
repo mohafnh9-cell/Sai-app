@@ -87,6 +87,7 @@ export async function finalizeScanAutomation(
 
   await notifyOrganizationMembers(admin, organizationId, {
     projectId,
+    scanId: input.scanId,
     notificationType: "scan_completed",
     title: "GitHub push analyzed",
     body: `${input.triggerLabel}: production score ${input.securityScore}, ${input.criticalCount + input.highCount} blocker${input.criticalCount + input.highCount === 1 ? "" : "s"}.`,

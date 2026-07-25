@@ -32,13 +32,13 @@ describe("getMcpTranslator", () => {
   it("returns English copy for the en locale", () => {
     const t = getMcpTranslator("en");
     expect(t("header")).toBe("SEQURAI");
-    expect(t("modes.production_review")).toBe("PRODUCTION REVIEW");
+    expect(t("modes.production_review")).toBe("DEPLOY ANSWER");
   });
 
   it("returns Spanish copy for the es locale", () => {
     const t = getMcpTranslator("es");
     expect(t("header")).toBe("SEQURAI");
-    expect(t("modes.production_review")).toBe("REVISIÓN DE PRODUCCIÓN");
+    expect(t("modes.production_review")).toBe("RESPUESTA DE DESPLIEGUE");
   });
 
   it("interpolates params in error messages", () => {
@@ -50,21 +50,20 @@ describe("getMcpTranslator", () => {
     const en = getMcpTranslator("en");
     const es = getMcpTranslator("es");
 
-    expect(en("canIDeploy.freshnessUnknown")).toContain("could not verify");
-    expect(es("canIDeploy.freshnessUnknown")).toContain("no pudo verificar");
-    expect(en("canIDeploy.reviewFailedWarning")).toContain("failed to complete");
-    expect(es("canIDeploy.reviewFailedWarning")).toContain("no se completó");
+    expect(en("canIDeploy.freshnessUnknown")).toContain("couldn't verify");
+    expect(es("canIDeploy.freshnessUnknown")).toContain("No pude verificar");
+    expect(en("canIDeploy.reviewFailedWarning")).toContain("didn't finish");
+    expect(es("canIDeploy.reviewFailedWarning")).toContain("no terminó");
   });
 
   it("has EN and ES copy for review_now (production review request)", () => {
     const en = getMcpTranslator("en");
     const es = getMcpTranslator("es");
 
-    expect(en("modes.production_review_request")).toBe("PRODUCTION REVIEW REQUESTED");
-    expect(es("modes.production_review_request")).toBe("REVISIÓN DE PRODUCCIÓN SOLICITADA");
-    expect(en("reviewNow.nextAction")).toBe("Call can_i_deploy to retrieve the updated verdict.");
-    expect(es("reviewNow.nextAction")).toContain("can_i_deploy");
-    expect(en("reviewNow.statusQueued")).toBe("QUEUED");
+    expect(en("modes.production_review_request")).toBe("STARTING PROTECTION REVIEW");
+    expect(es("modes.production_review_request")).toBe("INICIANDO REVISIÓN DE PROTECCIÓN");
+    expect(en("reviewNow.queuedNext")).toContain("Can I deploy");
+    expect(es("reviewNow.queuedNext")).toContain("desplegar");
   });
 
   it("has EN and ES copy for review_now's new error codes", () => {

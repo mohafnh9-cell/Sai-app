@@ -13,7 +13,7 @@ import {
   type ResolvedCommitReference,
 } from "@/lib/github/repository-service";
 import { getCurrentProductionVerdict } from "@/server/production-verdict/service";
-import { InlineScanJobRunner } from "@/server/security-scanner/scan-job-runner";
+import { scheduleScanRun } from "@/server/jobs/schedule-scan";
 
 export type ResolveGitHubTokenFn = (
   admin: SupabaseClient,
@@ -27,13 +27,13 @@ export type ResolveCommitFn = (
 ) => Promise<ResolvedCommitReference>;
 
 export type RunScanFn = (context: {
+  scanJobId: string;
   scanId: string;
-  repositoryId: string;
   organizationId: string;
-  githubRepo: string;
-  branch?: string;
-  providerToken: string;
+  projectId: string;
+  userId: string;
   scanType?: "full" | "incremental";
+  branch?: string;
 }) => Promise<void>;
 
 export class ReviewNowError extends Error {
@@ -144,7 +144,20 @@ export async function triggerProductionReview(
     ((admin, organizationId) =>
       resolveOrganizationGitHubToken(admin, organizationId, input.projectId));
   const resolveCommit = deps.resolveCommit ?? resolveCommitReference;
-  const runScan = deps.runScan ?? ((context) => new InlineScanJobRunner(admin).run(context));
+  const runScan =
+    deps.runScan ??
+    (async (context) => {
+      await scheduleScanRun(admin, {
+        scanJobId: context.scanJobId,
+        scanId: context.scanId,
+        organizationId: context.organizationId,
+        projectId: context.projectId,
+        userId: context.userId,
+        branch: context.branch,
+        scanType: context.scanType ?? "full",
+        jobType: "mcp_review",
+      });
+    });
 
   if (!input.githubRepo || !input.githubRepositoryId) {
     throw new ReviewNowError(
@@ -266,23 +279,20 @@ export async function triggerProductionReview(
     commitSha: resolvedCommitSha,
   });
 
-  const githubRepo = input.githubRepo;
   const organizationId = input.organizationId;
   const projectId = input.projectId;
-  const providerToken = tokenResult.token;
   const scanId: string = scan.id;
   const branchForRun = resolvedBranch ?? undefined;
+  const userId = tokenResult.userId;
 
-  // Return quickly; the scan itself (same InlineScanJobRunner pipeline used
-  // by web manual reviews) continues after the MCP response has been sent.
   scheduleBackground(() =>
     runScan({
+      scanJobId: "",
       scanId,
-      repositoryId: projectId,
       organizationId,
-      githubRepo,
+      projectId,
+      userId,
       branch: branchForRun,
-      providerToken,
       scanType: "full",
     }).catch((error) => {
       log("review_now_background_failed", {

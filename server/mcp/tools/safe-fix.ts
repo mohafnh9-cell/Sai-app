@@ -16,7 +16,11 @@ import { McpError } from "../auth";
 import type { McpTranslator } from "../i18n";
 import type { ProjectSelector } from "../project-resolution";
 import { resolveMcpProject } from "../project-resolution";
-import { buildTextResponse } from "../response-format";
+import {
+  formatSafeFixChooseBlockers,
+  formatSafeFixNoBlockers,
+  formatSafeFixPromptReady,
+} from "../personality";
 
 export type SafeFixInput = ProjectSelector & {
   blockerId?: string;
@@ -106,7 +110,7 @@ export async function safeFix(
       mode: "safe_fix",
       status: "no_blockers",
       project,
-      summary: buildTextResponse("safe_fix", t, [t("safeFix.noBlockers")]),
+      summary: formatSafeFixNoBlockers(t),
     };
   }
 
@@ -148,11 +152,7 @@ export async function safeFix(
       status: "choose_blocker",
       project,
       blockers,
-      summary: buildTextResponse("safe_fix", t, [
-        t("safeFix.chooseBlocker"),
-        "",
-        ...blockers.map((b, i) => `${i + 1}. ${b.title} (${b.id})`),
-      ]),
+      summary: formatSafeFixChooseBlockers(t, blockers),
     };
   }
 
@@ -235,24 +235,7 @@ export async function safeFix(
 
   const projectedScore = projectedScoreAfterFix(promptInput);
   const projectedStatus = projectedVerdictStatusAfterFix(promptInput);
-
-  const lines = [
-    t("safeFix.blockerLabel"),
-    blockerSummary.title,
-    "",
-    t("safeFix.riskLabel"),
-    fixResult.assessment.implementationRisk,
-    "",
-    t("safeFix.timeLabel"),
-    formatEstimatedFixTime(promptInput.estimatedFixMinutes),
-    "",
-    t("safeFix.projectedVerdictLabel"),
-    fixResult.projectedVerdictLabel,
-    "",
-    t("safeFix.projectedEstimateNote"),
-    "",
-    t("safeFix.copyPrompt"),
-  ];
+  const estimatedFixTime = formatEstimatedFixTime(promptInput.estimatedFixMinutes);
 
   return {
     mode: "safe_fix",
@@ -262,12 +245,16 @@ export async function safeFix(
     safeFixPrompt: fixResult.prompt,
     safeFixConfidence: fixResult.assessment.safeFixConfidence,
     implementationRisk: fixResult.assessment.implementationRisk,
-    estimatedFixTime: formatEstimatedFixTime(promptInput.estimatedFixMinutes),
+    estimatedFixTime,
     estimatedFilesChanged: fixResult.assessment.estimatedScope.filesExpected,
     estimatedScope: fixResult.assessment.estimatedScope.complexityLabel,
     projectedScore,
     projectedVerdict: projectedStatus,
     generatedAt: new Date().toISOString(),
-    summary: buildTextResponse("safe_fix", t, lines),
+    summary: formatSafeFixPromptReady(t, {
+      title: blockerSummary.title,
+      estimatedFixTime,
+      prompt: fixResult.prompt,
+    }),
   };
 }

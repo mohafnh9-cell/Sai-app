@@ -1,7 +1,5 @@
-import { after } from "next/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { InlineScanJobRunner } from "@/server/security-scanner/scan-job-runner";
 import {
   getScanRequestContext,
   ScanRequestError,
@@ -9,6 +7,7 @@ import {
 import { GitHubServiceError, parseGitHubRepository } from "@/lib/github/repository-service";
 import { createAdminClient, mapDatabaseError } from "@/server/security-scanner/admin-client";
 import { enforceRateLimit } from "@/server/http/rate-limit";
+import { scheduleScanRun } from "@/server/jobs/schedule-scan";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -76,7 +75,7 @@ export async function POST(
     }
 
     const { repositoryId } = parsedParams.data;
-    const { supabase, user, project, providerToken } = await getScanRequestContext(
+    const { supabase, user, project } = await getScanRequestContext(
       repositoryId,
       true
     );
@@ -197,27 +196,16 @@ export async function POST(
     }
 
     // Queue the scan asynchronously so the HTTP response returns immediately.
-    // Same InlineScanJobRunner pipeline as MCP review_now and web manual reviews.
-    const runner = new InlineScanJobRunner(admin);
-    const runContext = {
+    await scheduleScanRun(admin, {
+      scanJobId: "",
       scanId: scan.id,
-      repositoryId,
       organizationId: project.organization_id,
-      githubRepo: project.github_repo,
+      projectId: project.id,
+      userId: user.id,
       branch: parsedBody.data.branch,
-      providerToken: providerToken!,
-    };
-    after(() =>
-      runner.run(runContext).catch((error) => {
-        console.error({
-          component: "repository-scans-api",
-          event: "background_scan_failed",
-          scanId: scan.id,
-          repositoryId,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      })
-    );
+      scanType: parsedBody.data.scanType,
+      jobType: "manual_scan",
+    });
 
     return NextResponse.json({ scan_id: scan.id, scan }, { status: 202 });
   } catch (error) {

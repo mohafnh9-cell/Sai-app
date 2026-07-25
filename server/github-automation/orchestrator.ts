@@ -1,13 +1,10 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { InlineScanJobRunner } from "@/server/security-scanner/scan-job-runner";
 import { createAdminClient } from "@/server/security-scanner/admin-client";
 import {
   postGitHubCommitStatus,
-  statusFromSecurityCheck,
 } from "./github-status";
-import { finalizeScanAutomation } from "./post-scan";
 import { resolveOrganizationGitHubToken } from "./token-resolver";
 import {
   branchFromRef,
@@ -25,12 +22,11 @@ import {
 } from "@/server/repository-sync";
 import { runAutomaticProductionReview } from "@/server/automatic-review";
 import { isVerdictAutopilotEnabled } from "@/server/autopilot";
-import { formatGithubCheckDescription } from "@/brain/production-verdict/build-verdict";
-import { buildScanProductionVerdict } from "@/server/brain/build-scan-verdict";
-import { extractCriticalPaths } from "./health";
 import {
   isDeliveryAlreadyHandled,
 } from "./delivery-idempotency";
+import { scheduleAutomationScan } from "@/server/jobs/schedule-scan";
+import type { ScanRunPayload } from "@/server/jobs/types";
 
 type ProjectRow = {
   id: string;
@@ -158,13 +154,12 @@ async function createAutomationScan(
   return scan.id;
 }
 
-async function runScanAndFinalize(
+async function enqueueAutomationScan(
   admin: SupabaseClient,
   input: {
     scanId: string;
     project: ProjectRow;
     userId: string;
-    token: string;
     branch?: string;
     scanType: "incremental" | "full";
     baseCommitSha?: string;
@@ -172,110 +167,23 @@ async function runScanAndFinalize(
     triggerLabel: string;
     statusSha?: string;
     appUrl?: string;
+    jobType: "webhook_push_scan" | "webhook_pr_scan";
+    finalize: ScanRunPayload["finalize"];
   }
 ) {
-  const runner = new InlineScanJobRunner(admin);
-  await runner.run({
+  await scheduleAutomationScan(admin, {
+    scanJobId: "",
     scanId: input.scanId,
-    repositoryId: input.project.id,
     organizationId: input.project.organization_id,
-    githubRepo: input.project.github_repo!,
-    branch: input.branch,
-    providerToken: input.token,
+    projectId: input.project.id,
+    userId: input.userId,
     scanType: input.scanType,
+    branch: input.branch,
     baseCommitSha: input.baseCommitSha,
     headCommitSha: input.headCommitSha,
+    jobType: input.jobType,
+    finalize: input.finalize,
   });
-
-  const { data: completed } = await admin
-    .from("scans")
-    .select("*")
-    .eq("id", input.scanId)
-    .single();
-  if (!completed || completed.status !== "completed") {
-    throw new Error("Automation scan did not complete");
-  }
-
-  const { data: findings } = await admin
-    .from("scan_findings")
-    .select("category, title, severity, recommendation")
-    .eq("scan_id", input.scanId);
-
-  const categoryCounts: Record<string, number> = {};
-  for (const row of findings ?? []) {
-    const key = row.category.toLowerCase();
-    categoryCounts[key] = (categoryCounts[key] ?? 0) + 1;
-  }
-
-  const { data: previousScan } = await admin
-    .from("scans")
-    .select("id, critical_count, high_count")
-    .eq("project_id", input.project.id)
-    .eq("status", "completed")
-    .neq("id", input.scanId)
-    .order("completed_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  const previousBlockers =
-    (previousScan?.critical_count ?? 0) + (previousScan?.high_count ?? 0);
-  const currentBlockers =
-    (completed.critical_count ?? 0) + (completed.high_count ?? 0);
-  const blockersResolved = Math.max(0, previousBlockers - currentBlockers);
-  const blockersIntroduced = Math.max(0, currentBlockers - previousBlockers);
-
-  const verdict = await buildScanProductionVerdict(admin, {
-    scanId: input.scanId,
-    projectId: input.project.id,
-    organizationId: input.project.organization_id,
-    securityScore: completed.security_score,
-    severityCounts: {
-      critical: completed.critical_count ?? 0,
-      high: completed.high_count ?? 0,
-      medium: completed.medium_count ?? 0,
-      low: completed.low_count ?? 0,
-      info: completed.info_count ?? 0,
-    },
-    categoryCounts,
-    findings: (findings ?? []).map((row) => ({
-      title: row.title,
-      severity: row.severity,
-      recommendation: row.recommendation,
-    })),
-  });
-
-  const { checkStatus } = await finalizeScanAutomation(admin, {
-    organizationId: input.project.organization_id,
-    projectId: input.project.id,
-    scanId: input.scanId,
-    securityScore: completed.security_score ?? 0,
-    criticalCount: completed.critical_count ?? 0,
-    highCount: completed.high_count ?? 0,
-    findingsCount: completed.findings_count ?? 0,
-    previousScore: input.project.security_score,
-    triggerLabel: input.triggerLabel,
-  });
-
-  if (input.statusSha) {
-    const reportUrl = input.appUrl
-      ? `${input.appUrl}/projects/${input.project.id}/scans/${input.scanId}`
-      : undefined;
-    await postGitHubCommitStatus({
-      githubRepo: input.project.github_repo!,
-      sha: input.statusSha,
-      token: input.token,
-      state: statusFromSecurityCheck(checkStatus),
-      context: "sequrai/production",
-      description: formatGithubCheckDescription({
-        verdict,
-        blockersIntroduced,
-        blockersResolved,
-      }),
-      targetUrl: reportUrl,
-    });
-  }
-
-  return { completed, checkStatus };
 }
 
 export async function processGitHubWebhookEvent(input: {
@@ -543,7 +451,8 @@ async function handlePushEvent(
     }
 
     const eventStatus =
-      outcome.ok === false || outcome.action === "automatic_review_failed"
+      outcome.ok === false ||
+      outcome.action === "automatic_review_failed"
         ? "failed"
         : "processed";
 
@@ -659,11 +568,10 @@ async function handlePushEventWithScan(
     });
   }
 
-  const { completed } = await runScanAndFinalize(admin, {
+  await enqueueAutomationScan(admin, {
     scanId,
     project: input.project,
     userId: input.userId,
-    token: input.token,
     branch,
     scanType,
     baseCommitSha: scanType === "incremental" ? effectiveBase : undefined,
@@ -671,23 +579,19 @@ async function handlePushEventWithScan(
     triggerLabel: `Push to ${branch}`,
     statusSha: headSha,
     appUrl: input.appUrl,
+    jobType: "webhook_push_scan",
+    finalize: {
+      kind: "webhook_automation",
+      triggerLabel: `Push to ${branch}`,
+      statusSha: headSha,
+      appUrl: input.appUrl,
+      ...(scanType === "incremental" && effectiveBase
+        ? { incremental: { baseSha: effectiveBase, headSha } }
+        : {}),
+    },
   });
 
-  if (scanType === "incremental" && effectiveBase) {
-    const changedPaths =
-      (completed.metrics as { changedPaths?: string[] } | null)?.changedPaths ?? [];
-    await admin.from("incremental_scans").insert({
-      organization_id: input.project.organization_id,
-      project_id: input.project.id,
-      scan_id: scanId,
-      base_commit_sha: effectiveBase,
-      head_commit_sha: headSha,
-      changed_files: changedPaths,
-      critical_files_changed: extractCriticalPaths(changedPaths),
-    });
-  }
-
-  return { ok: true, action: "scan_completed", scanId };
+  return { ok: true, action: "scan_queued", scanId };
 }
 
 async function handlePullRequestEvent(
@@ -768,11 +672,10 @@ async function handlePullRequestEvent(
     description: "Pull Request production analysis in progress",
   });
 
-  const { completed, checkStatus } = await runScanAndFinalize(admin, {
+  await enqueueAutomationScan(admin, {
     scanId,
     project: input.project,
     userId: input.userId,
-    token: input.token,
     branch: headBranch,
     scanType: "incremental",
     baseCommitSha: baseSha,
@@ -780,47 +683,19 @@ async function handlePullRequestEvent(
     triggerLabel: `Pull Request #${pr.number}`,
     statusSha: headSha,
     appUrl: input.appUrl,
-  });
-
-  const scoreAfter = completed.security_score ?? 0;
-  const scoreDelta = scoreBefore === null ? 0 : scoreAfter - scoreBefore;
-
-  const { data: prFindings } = await admin
-    .from("scan_findings")
-    .select("title, severity, category, status")
-    .eq("scan_id", scanId);
-
-  const added = (prFindings ?? [])
-    .filter((f) => f.severity !== "info")
-    .slice(0, 5)
-    .map((f) => f.title);
-  const resolved: string[] = [];
-
-  await admin.from("pull_request_scans").upsert(
-    {
-      organization_id: input.project.organization_id,
-      project_id: input.project.id,
-      scan_id: scanId,
-      pull_request_number: pr.number,
-      pull_request_title: pr.title,
-      base_branch: baseBranch,
-      head_branch: headBranch,
-      base_commit_sha: baseSha,
-      head_commit_sha: headSha,
-      security_score_before: scoreBefore,
-      security_score_after: scoreAfter,
-      score_delta: scoreDelta,
-      check_status: checkStatus,
-      impact_summary: {
-        scoreDelta,
-        added,
-        resolved,
-        checkStatus,
-        securityScore: scoreAfter,
-      },
+    jobType: "webhook_pr_scan",
+    finalize: {
+      kind: "webhook_pr",
+      pullRequestNumber: pr.number,
+      pullRequestTitle: pr.title,
+      baseBranch,
+      headBranch,
+      baseSha,
+      headSha,
+      scoreBefore,
+      appUrl: input.appUrl,
     },
-    { onConflict: "project_id,pull_request_number,head_commit_sha" }
-  );
+  });
 
   await recordEvent(admin, {
     organizationId: input.project.organization_id,
@@ -836,7 +711,7 @@ async function handlePullRequestEvent(
     status: "processed",
   });
 
-  return { ok: true, action: "pr_analyzed", scanId };
+  return { ok: true, action: "pr_scan_queued", scanId };
 }
 
 async function handleRepositoryEvent(

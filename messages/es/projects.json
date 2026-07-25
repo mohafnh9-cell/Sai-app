@@ -87,5 +87,9 @@
     "findingsCount": "{count} hallazgos",
     "loadError": "No se pudo cargar el historial de revisiones.",
     "loadMoreError": "No se pudieron cargar más revisiones."
-  }
+  },
+  "onboardedBannerReady": "Estás listo para desplegar. Conecta Cursor para comprobar antes de cada despliegue.",
+  "onboardedBannerFix": "Arregla el problema de arriba y luego revisa de nuevo.",
+  "onboardedConnectCursor": "Conectar Cursor",
+  "onboardedDismiss": "Cerrar"
 }

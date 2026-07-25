@@ -4,6 +4,12 @@ import {
   type ProductionVerdictV1,
 } from "@/brain/production-verdict/schema";
 import { generateProductionVerdict as runEngine } from "@/brain/production-verdict/engine";
+import { emitOperationalEvent } from "@/server/observability/operational-events";
+import {
+  buildIdempotencyKey,
+  hasCompletedSideEffect,
+  recordSideEffect,
+} from "@/server/observability/idempotency";
 
 function log(event: string, fields: Record<string, unknown>) {
   console.info({ component: "production-verdict-service", event, ...fields });
@@ -91,7 +97,26 @@ export async function generateAndPersistProductionVerdict(
 
   if (scanError || !scan) {
     log("verdict_generation_failed", { scanId: input.scanId, reason: "scan_not_found" });
+    await emitOperationalEvent(admin, {
+      eventType: "verdict_failed",
+      scanId: input.scanId,
+      projectId: input.projectId,
+      organizationId: input.organizationId,
+      failureCode: "SCAN_NOT_FOUND",
+    });
     return null;
+  }
+
+  const verdictKey = buildIdempotencyKey({
+    organizationId: input.organizationId,
+    projectId: input.projectId,
+    scanId: input.scanId,
+    commitSha: (scan.commit_sha as string | null) ?? null,
+    operationType: "production_verdict",
+  });
+  if (await hasCompletedSideEffect(admin, verdictKey)) {
+    const existing = await getProductionVerdictByScan(admin, input.scanId);
+    if (existing) return existing;
   }
 
   const [{ data: findings }, { data: previousScan }, { data: previousVerdict }] = await Promise.all([
@@ -179,8 +204,23 @@ export async function generateAndPersistProductionVerdict(
 
   if (persistError) {
     log("verdict_persistence_failed", { scanId: input.scanId, error: persistError.message });
+    await emitOperationalEvent(admin, {
+      eventType: "verdict_failed",
+      scanId: input.scanId,
+      projectId: input.projectId,
+      organizationId: input.organizationId,
+      failureCode: "VERDICT_PERSISTENCE_FAILED",
+    });
     throw new Error(persistError.message);
   }
+
+  await recordSideEffect(admin, {
+    idempotencyKey: verdictKey,
+    organizationId: input.organizationId,
+    projectId: input.projectId,
+    scanId: input.scanId,
+    operationType: "production_verdict",
+  });
 
   const { error: stateError } = await admin
     .from("repository_scan_state")
@@ -202,6 +242,32 @@ export async function generateAndPersistProductionVerdict(
   }
 
   log("verdict_persistence_completed", { scanId: input.scanId, verdictId: persisted?.id });
+  await emitOperationalEvent(admin, {
+    eventType: "verdict_created",
+    scanId: input.scanId,
+    projectId: input.projectId,
+    organizationId: input.organizationId,
+  });
+
+  try {
+    const { recordReviewCompletedMemory } = await import("@/server/production-memory/record-writes");
+    await recordReviewCompletedMemory(admin, {
+      organizationId: input.organizationId,
+      projectId: input.projectId,
+      scanId: input.scanId,
+      verdict,
+      verdictRowId: persisted?.id ?? null,
+      securityScore: scan.security_score ?? null,
+      detectedStack: scan.detected_stack,
+      trigger: scan.trigger_type === "mcp" ? "mcp" : "web",
+    });
+  } catch (memoryError) {
+    log("memory_record_failed", {
+      scanId: input.scanId,
+      error: memoryError instanceof Error ? memoryError.message : String(memoryError),
+    });
+  }
+
   return verdict;
 }
 

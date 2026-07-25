@@ -87,5 +87,9 @@
     "findingsCount": "{count} findings",
     "loadError": "Could not load review history.",
     "loadMoreError": "Could not load more reviews."
-  }
+  },
+  "onboardedBannerReady": "You're ready to ship. Connect Cursor to check before every deploy.",
+  "onboardedBannerFix": "Fix the issue above, then check again.",
+  "onboardedConnectCursor": "Connect Cursor",
+  "onboardedDismiss": "Dismiss"
 }
