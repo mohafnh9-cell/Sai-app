@@ -147,16 +147,27 @@ export async function triggerProductionReview(
   const runScan =
     deps.runScan ??
     (async (context) => {
-      await scheduleScanRun(admin, {
-        scanJobId: context.scanJobId,
-        scanId: context.scanId,
-        organizationId: context.organizationId,
-        projectId: context.projectId,
-        userId: context.userId,
-        branch: context.branch,
-        scanType: context.scanType ?? "full",
-        jobType: "mcp_review",
-      });
+      await scheduleScanRun(
+        admin,
+        {
+          scanJobId: context.scanJobId,
+          scanId: context.scanId,
+          organizationId: context.organizationId,
+          projectId: context.projectId,
+          userId: context.userId,
+          branch: context.branch,
+          scanType: context.scanType ?? "full",
+          jobType: "mcp_review",
+        },
+        {
+          jobType: "mcp_review",
+          // Run inline work in the same `after()` continuation — nested `after()` from
+          // scheduleScanRun's default scheduler often never executes on serverless.
+          scheduler: (fn) => {
+            void fn();
+          },
+        }
+      );
     });
 
   if (!input.githubRepo || !input.githubRepositoryId) {
@@ -285,8 +296,8 @@ export async function triggerProductionReview(
   const branchForRun = resolvedBranch ?? undefined;
   const userId = tokenResult.userId;
 
-  scheduleBackground(() =>
-    runScan({
+  scheduleBackground(async () => {
+    await runScan({
       scanJobId: "",
       scanId,
       organizationId,
@@ -300,8 +311,8 @@ export async function triggerProductionReview(
         reviewId: scanId,
         error: error instanceof Error ? error.message : String(error),
       });
-    })
-  );
+    });
+  });
 
   return {
     outcome: "queued",

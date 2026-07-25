@@ -196,16 +196,24 @@ export async function POST(
     }
 
     // Queue the scan asynchronously so the HTTP response returns immediately.
-    await scheduleScanRun(admin, {
-      scanJobId: "",
-      scanId: scan.id,
-      organizationId: project.organization_id,
-      projectId: project.id,
-      userId: user.id,
-      branch: parsedBody.data.branch,
-      scanType: parsedBody.data.scanType,
-      jobType: "manual_scan",
-    });
+    await scheduleScanRun(
+      admin,
+      {
+        scanJobId: "",
+        scanId: scan.id,
+        organizationId: project.organization_id,
+        projectId: project.id,
+        userId: user.id,
+        branch: parsedBody.data.branch,
+        scanType: parsedBody.data.scanType,
+        jobType: "manual_scan",
+      },
+      {
+        scheduler: (fn) => {
+          void fn();
+        },
+      }
+    );
 
     return NextResponse.json({ scan_id: scan.id, scan }, { status: 202 });
   } catch (error) {
