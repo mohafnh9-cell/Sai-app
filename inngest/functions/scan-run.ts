@@ -7,6 +7,7 @@ import {
   SCAN_JOB_ORG_CONCURRENCY_LIMIT,
   SCAN_JOB_TIMEOUT_MS,
 } from "@/server/jobs/types";
+import { scanJobIdFromInngestFailure } from "@/inngest/failure-scan-job-id";
 
 async function markScanJobFailureFromInngest(
   scanJobId: string | undefined,
@@ -39,7 +40,7 @@ export const scanRunFunction = inngest.createFunction(
       key: "event.data.organizationId",
     },
     onFailure: async ({ event, error }) => {
-      const scanJobId = event?.data?.scanJobId as string | undefined;
+      const scanJobId = scanJobIdFromInngestFailure(event);
       const message = error.message.includes("timeout")
         ? "Scan job exceeded Inngest finish timeout"
         : error.message;

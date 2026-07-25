@@ -3,6 +3,7 @@ import { INNGEST_EVENTS } from "@/inngest/events";
 import { createAdminClient } from "@/server/security-scanner/admin-client";
 import { processWebhookJob } from "@/server/jobs/schedule-scan";
 import { markScanJobFailed } from "@/server/jobs/scan-job-store";
+import { scanJobIdFromInngestFailure } from "@/inngest/failure-scan-job-id";
 
 export const processGitHubWebhookFunction = inngest.createFunction(
   {
@@ -11,7 +12,7 @@ export const processGitHubWebhookFunction = inngest.createFunction(
     retries: 3,
     concurrency: { limit: 20 },
     onFailure: async ({ event, error }) => {
-      const scanJobId = event?.data?.scanJobId as string | undefined;
+      const scanJobId = scanJobIdFromInngestFailure(event);
       if (!scanJobId) return;
       const admin = createAdminClient();
       await markScanJobFailed(admin, scanJobId, {
