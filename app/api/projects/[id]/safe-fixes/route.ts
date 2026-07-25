@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/server/security-scanner/admin-client";
 import { generateSafeFix } from "@/server/safe-fix-engine/generate";
 import { listSafeFixHistory } from "@/server/safe-fix-engine/history";
+import { requireProjectApiAccess } from "@/server/projects/project-access";
 
 export async function GET(
   _request: Request,
@@ -13,10 +14,9 @@ export async function GET(
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data: project } = await supabase.from("projects").select("id").eq("id", projectId).maybeSingle();
-  if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const access = await requireProjectApiAccess(supabase, user?.id, projectId);
+  if (!access.ok) return access.response;
 
   const admin = createAdminClient();
   const history = await listSafeFixHistory(admin, projectId);
@@ -37,23 +37,18 @@ export async function POST(
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data: project } = await supabase
-    .from("projects")
-    .select("id, name, organization_id")
-    .eq("id", projectId)
-    .maybeSingle();
-  if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const access = await requireProjectApiAccess(supabase, user?.id, projectId);
+  if (!access.ok) return access.response;
 
   const admin = createAdminClient();
   const result = await generateSafeFix(admin, {
-    organizationId: project.organization_id as string,
+    organizationId: access.project.organization_id,
     projectId,
-    projectName: project.name as string,
+    projectName: access.project.name ?? "Project",
     blockerId: body.blockerId,
     priorityId: body.priorityId,
-    actor: user.id,
+    actor: access.userId,
   });
 
   return NextResponse.json({ projectId, result });

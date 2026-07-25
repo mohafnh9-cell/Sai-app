@@ -10,7 +10,7 @@ import {
   ProductionJourneySchema,
 } from "@/brain/production-journey";
 import { loadVerdictJourneyRecords } from "./load-verdicts";
-import { canAccessRepository } from "@/server/security-scanner/authorization";
+import { getProjectAccessForUser } from "@/server/projects/project-access";
 
 function log(event: string, fields: Record<string, unknown>) {
   console.info({ component: "production-journey-service", event, ...fields });
@@ -21,32 +21,7 @@ async function resolveProjectAccess(
   projectId: string,
   userId: string
 ) {
-  const { data: project, error } = await client
-    .from("projects")
-    .select("id, organization_id, name")
-    .eq("id", projectId)
-    .maybeSingle();
-
-  if (error || !project) return null;
-
-  const { data: membership } = await client
-    .from("organization_members")
-    .select("user_id, organization_id")
-    .eq("user_id", userId)
-    .eq("organization_id", project.organization_id)
-    .maybeSingle();
-
-  if (
-    !canAccessRepository({
-      authenticatedUserId: userId,
-      projectOrganizationId: project.organization_id,
-      membership,
-    })
-  ) {
-    return null;
-  }
-
-  return project;
+  return getProjectAccessForUser(client, projectId, userId);
 }
 
 export async function getProductionJourneyByProject(

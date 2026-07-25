@@ -7,6 +7,7 @@ import {
   markSafeFixApplied,
   verifySafeFix,
 } from "@/server/safe-fix-engine/verify";
+import { requireProjectApiAccess } from "@/server/projects/project-access";
 
 export async function GET(
   _request: Request,
@@ -17,11 +18,16 @@ export async function GET(
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const access = await requireProjectApiAccess(supabase, user?.id, projectId);
+  if (!access.ok) return access.response;
 
   const admin = createAdminClient();
   const record = await getSafeFixById(admin, safeFixId);
   if (!record || record.projectId !== projectId) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  if (record.organizationId !== access.project.organization_id) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
   return NextResponse.json({ safeFix: record });
@@ -38,25 +44,25 @@ export async function POST(
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data: project } = await supabase
-    .from("projects")
-    .select("organization_id")
-    .eq("id", projectId)
-    .maybeSingle();
-  if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const access = await requireProjectApiAccess(supabase, user?.id, projectId);
+  if (!access.ok) return access.response;
 
   const admin = createAdminClient();
-  const orgId = project.organization_id as string;
+  const orgId = access.project.organization_id;
   const action = body.action ?? "verify";
 
+  const existing = await getSafeFixById(admin, safeFixId);
+  if (!existing || existing.projectId !== projectId || existing.organizationId !== orgId) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
   if (action === "approve") {
-    await approveSafeFix(admin, { safeFixId, organizationId: orgId, projectId, actor: user.id });
+    await approveSafeFix(admin, { safeFixId, organizationId: orgId, projectId, actor: access.userId });
     return NextResponse.json({ ok: true, state: "APPROVED" });
   }
   if (action === "applied") {
-    await markSafeFixApplied(admin, { safeFixId, organizationId: orgId, projectId, actor: user.id });
+    await markSafeFixApplied(admin, { safeFixId, organizationId: orgId, projectId, actor: access.userId });
     return NextResponse.json({ ok: true, state: "APPLIED" });
   }
 
@@ -64,7 +70,7 @@ export async function POST(
     safeFixId,
     organizationId: orgId,
     projectId,
-    actor: user.id,
+    actor: access.userId,
   });
   return NextResponse.json({ ok: true, verification });
 }

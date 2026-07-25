@@ -4,6 +4,7 @@ import { createAdminClient } from "@/server/security-scanner/admin-client";
 import { getProtectionCenterModel } from "@/server/continuous-protection/protection-context";
 import { cachedRead } from "@/server/cache/read-cache";
 import { withOperationTiming } from "@/server/observability/operation-timing";
+import { requireProjectApiAccess } from "@/server/projects/project-access";
 
 /** Backend Protection Center model (Sprint 4 — no UI). */
 export async function GET(
@@ -16,19 +17,8 @@ export async function GET(
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const { data: project } = await supabase
-    .from("projects")
-    .select("id")
-    .eq("id", projectId)
-    .maybeSingle();
-
-  if (!project) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
+  const access = await requireProjectApiAccess(supabase, user?.id, projectId);
+  if (!access.ok) return access.response;
 
   const admin = createAdminClient();
   const model = await withOperationTiming("api.protection_center", () =>
