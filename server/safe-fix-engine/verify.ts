@@ -74,12 +74,12 @@ async function verifySafeFixInner(
   const ctx = await loadProtectionContext(admin, input.projectId);
 
   const baselineScore = (baselineSnap?.score as number) ?? null;
-  const afterScore = verdict?.score ?? ctx.productionConfidence;
+  const afterScore = verdict?.score ?? ctx?.productionConfidence ?? null;
   const productionConfidenceImproved =
     baselineScore != null && afterScore != null ? afterScore > baselineScore : false;
 
-  const beforeStatus = ctx.latestSnapshotStatus;
-  const afterStatus = ctx.latestSnapshotStatus;
+  const beforeStatus = ctx?.latestSnapshotStatus;
+  const afterStatus = ctx?.latestSnapshotStatus;
   const protectionStatusImproved = rank(afterStatus) < rank(beforeStatus);
 
   const baselineBlockers = (baselineSnap?.blockersCount as number) ?? 999;
