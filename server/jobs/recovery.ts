@@ -15,6 +15,7 @@ import { processWebhookJob } from "./schedule-scan";
 import type { ScanRunPayload } from "./types";
 import { rehydrateWebhookProcessPayload } from "./inngest-payload";
 import { reenqueueExistingScanRunJob, ScanEnqueueError } from "./scan-execution/enqueue-scan-run";
+import { emitOperationalEvent } from "@/server/observability/operational-events";
 import { buildJobsHealthSummary } from "@/server/observability/health-summary";
 import {
   evaluateOperationalAlerts,
