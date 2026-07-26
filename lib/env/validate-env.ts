@@ -86,6 +86,9 @@ export function validateEnvironment(options?: {
   }
 
   const scheduler = process.env.SCAN_SCHEDULER?.trim().toLowerCase();
+  if (scheduler && scheduler !== "inline" && scheduler !== "inngest") {
+    errors.push(`Invalid SCAN_SCHEDULER="${scheduler}". Use inline or inngest.`);
+  }
   if (scheduler === "inngest") {
     if (!process.env.INNGEST_EVENT_KEY?.trim()) {
       errors.push("INNGEST_EVENT_KEY is required when SCAN_SCHEDULER=inngest");

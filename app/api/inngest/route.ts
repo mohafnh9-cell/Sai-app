@@ -1,5 +1,6 @@
 import { serve } from "inngest/next";
 import { inngest } from "@/inngest/client";
+import { INNGEST_EVENTS } from "@/inngest/events";
 import { scanRunFunction } from "@/inngest/functions/scan-run";
 import { processGitHubWebhookFunction } from "@/inngest/functions/process-github-webhook";
 import { scanJobRecoveryFunction } from "@/inngest/functions/scan-job-recovery";
@@ -23,6 +24,13 @@ import {
 } from "@/inngest/functions/reports-protection";
 
 export const runtime = "nodejs";
+
+console.info({
+  component: "inngest-serve",
+  event: "functions_registered",
+  scanRunEvent: INNGEST_EVENTS.SCAN_RUN,
+  functionIds: ["scan-run", "process-github-webhook", "scan-job-recovery"],
+});
 
 export const { GET, POST, PUT } = serve({
   client: inngest,

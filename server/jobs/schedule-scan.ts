@@ -2,14 +2,15 @@ import "server-only";
 
 import { after } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { INNGEST_EVENTS } from "@/inngest/events";
 import {
   assertInngestSchedulerConfigured,
   getScanSchedulerMode,
   isInngestEnabledForOrganization,
 } from "@/lib/env/scan-scheduler";
+import { resolveScanSchedulerPlan } from "@/lib/env/scan-scheduler-plan";
 import { createAdminClient } from "@/server/security-scanner/admin-client";
 import { createScanJob } from "./scan-job-store";
-import { executeScanRunJob } from "./run-scan-job";
 import type { ScanJobType, ScanRunPayload, WebhookProcessPayload } from "./types";
 import { processGitHubWebhookEvent } from "@/server/github-automation/orchestrator";
 import {
@@ -18,9 +19,29 @@ import {
   extractWebhookMetadata,
   rehydrateWebhookProcessPayload,
 } from "./inngest-payload";
+import {
+  enqueueScanRunExecution,
+  ScanEnqueueError,
+} from "./scan-execution/enqueue-scan-run";
+import { logScanExecutionTrace } from "./scan-execution/scan-execution-trace";
 
 function log(event: string, fields: Record<string, unknown>) {
   console.info({ component: "schedule-scan", event, ...fields });
+}
+
+function logSchedulerResolution(organizationId: string) {
+  const plan = resolveScanSchedulerPlan(organizationId);
+  log("scan_scheduler_resolved", {
+    organizationId,
+    configuredMode: plan.ok ? plan.configuredMode : plan.configuredMode,
+    executor: plan.ok ? plan.executor : null,
+    allowlistApplied: plan.ok ? plan.allowlistApplied : false,
+    orgFallbackUsed: plan.ok ? plan.orgFallbackUsed : false,
+    planOk: plan.ok,
+    planError: plan.ok ? null : plan.message,
+    envScanScheduler: getScanSchedulerMode(),
+  });
+  return plan;
 }
 
 export type BackgroundScheduler = (fn: () => void | Promise<void>) => void;
@@ -29,13 +50,21 @@ const defaultScheduler: BackgroundScheduler = (fn) => {
   after(fn);
 };
 
+/**
+ * Inline scans run inside Vercel `after()` continuations. Keep scan work within
+ * SCAN_JOB_TIMEOUT_MS (15m) — longer runs require SCAN_SCHEDULER=inngest.
+ */
 async function sendInngestEvent<T extends Record<string, unknown>>(
   name: string,
   data: T
 ): Promise<void> {
   assertInngestSchedulerConfigured();
   const { inngest } = await import("@/inngest/client");
-  await inngest.send({ name, data });
+  const result = await inngest.send({ name, data });
+  const ids = (result as { ids?: string[] } | null)?.ids ?? [];
+  if (ids.length === 0) {
+    throw new ScanEnqueueError("enqueue_failed", `Inngest did not accept event ${name}`);
+  }
 }
 
 export async function scheduleScanRun(
@@ -68,36 +97,44 @@ export async function scheduleScanRun(
   }
 
   const runPayload = { ...payload, scanJobId: job.id };
+  const plan = logSchedulerResolution(payload.organizationId);
 
-  if (isInngestEnabledForOrganization(payload.organizationId)) {
-    await sendInngestEvent("scan/run", buildInngestScanRunPayload(runPayload));
-    log("scan_enqueued_inngest", {
+  logScanExecutionTrace("review_created", {
+    reviewId: payload.scanId,
+    scanJobId: job.id,
+    projectId: payload.projectId,
+    organizationId: payload.organizationId,
+    commitSha: payload.headCommitSha ?? payload.baseCommitSha ?? null,
+    scheduler: plan.ok ? plan.executor : plan.configuredMode,
+    status: "queued",
+    stage: "review_created",
+  });
+
+  try {
+    const enqueued = await enqueueScanRunExecution(admin, job, runPayload, {
+      scheduler: options?.scheduler ?? defaultScheduler,
+      commitSha: payload.headCommitSha ?? payload.baseCommitSha ?? null,
+    });
+    log("scan_enqueued", {
       scanJobId: job.id,
       scanId: payload.scanId,
       organizationId: payload.organizationId,
       projectId: payload.projectId,
+      executor: enqueued.executor,
+      inngestEventId: enqueued.inngestEventId ?? null,
     });
-    return { scanJobId: job.id, duplicate: false };
-  }
-
-  const scheduler = options?.scheduler ?? defaultScheduler;
-  scheduler(() =>
-    executeScanRunJob(createAdminClient(), runPayload).catch((error) => {
-      log("inline_scan_failed", {
+  } catch (error) {
+    if (error instanceof ScanEnqueueError) {
+      log("scan_enqueue_failed", {
         scanJobId: job.id,
         scanId: payload.scanId,
-        message: error instanceof Error ? error.message : String(error),
+        code: error.code,
+        message: error.message,
       });
-    })
-  );
-
-  log("scan_enqueued_inline", {
-    scanJobId: job.id,
-    scanId: payload.scanId,
-    organizationId: payload.organizationId,
-    projectId: payload.projectId,
-    scheduler: getScanSchedulerMode(),
-  });
+      throw error;
+    }
+    throw error;
+  }
 
   return { scanJobId: job.id, duplicate: false };
 }
@@ -109,6 +146,7 @@ export async function scheduleWebhookProcessing(input: {
   organizationId: string;
 }): Promise<{ scanJobId: string | null; duplicate: boolean }> {
   const admin = createAdminClient();
+  logSchedulerResolution(input.organizationId);
 
   if (input.deliveryId) {
     const { job, duplicate } = await createScanJob(admin, {
@@ -136,7 +174,7 @@ export async function scheduleWebhookProcessing(input: {
 
     if (isInngestEnabledForOrganization(input.organizationId)) {
       await sendInngestEvent(
-        "github/webhook.process",
+        INNGEST_EVENTS.GITHUB_WEBHOOK_PROCESS,
         buildInngestWebhookProcessPayload(job.id)
       );
       log("webhook_enqueued_inngest", {
@@ -173,7 +211,7 @@ export async function scheduleWebhookProcessing(input: {
     });
     if (!job) return { scanJobId: null, duplicate: false };
     await sendInngestEvent(
-      "github/webhook.process",
+      INNGEST_EVENTS.GITHUB_WEBHOOK_PROCESS,
       buildInngestWebhookProcessPayload(job.id)
     );
     return { scanJobId: job.id, duplicate: false };
@@ -244,42 +282,8 @@ export async function scheduleAutomationScan(
   payload: ScanRunPayload & { jobType: "webhook_push_scan" | "webhook_pr_scan" | "automatic_review" },
   options?: { scheduler?: BackgroundScheduler }
 ): Promise<{ scanJobId: string; duplicate: boolean }> {
-  const { job, duplicate } = await createScanJob(admin, {
-    organizationId: payload.organizationId,
-    projectId: payload.projectId,
-    scanId: payload.scanId,
+  return scheduleScanRun(admin, payload, {
+    scheduler: options?.scheduler,
     jobType: payload.jobType,
-    metadata: {
-      scanType: payload.scanType ?? "full",
-      branch: payload.branch ?? null,
-      finalizeKind: payload.finalize?.kind ?? null,
-      userId: payload.userId,
-      persistMode: payload.persistMode ?? null,
-      finalize: payload.finalize ?? null,
-    },
   });
-
-  if (duplicate || !job) {
-    return { scanJobId: job?.id ?? payload.scanJobId, duplicate: true };
-  }
-
-  const runPayload = { ...payload, scanJobId: job.id };
-
-  if (isInngestEnabledForOrganization(payload.organizationId)) {
-    await sendInngestEvent("scan/run", buildInngestScanRunPayload(runPayload));
-    return { scanJobId: job.id, duplicate: false };
-  }
-
-  const scheduler = options?.scheduler ?? defaultScheduler;
-  scheduler(() =>
-    executeScanRunJob(createAdminClient(), runPayload).catch((error) => {
-      log("inline_automation_scan_failed", {
-        scanJobId: job.id,
-        scanId: payload.scanId,
-        message: error instanceof Error ? error.message : String(error),
-      });
-    })
-  );
-
-  return { scanJobId: job.id, duplicate: false };
 }

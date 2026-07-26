@@ -228,6 +228,17 @@ export async function markScanJobCompleted(
   jobId: string
 ): Promise<{ updated: boolean }> {
   const existing = await getScanJob(admin, jobId);
+  if (existing?.scan_id) {
+    const { data: scan } = await admin
+      .from("scans")
+      .select("status")
+      .eq("id", existing.scan_id)
+      .maybeSingle();
+    if (scan?.status === "failed") {
+      return { updated: false };
+    }
+  }
+
   const startedAt = existing?.started_at ? new Date(existing.started_at).getTime() : null;
   const durationMs =
     startedAt && Number.isFinite(startedAt) ? Math.max(0, Date.now() - startedAt) : null;
@@ -278,6 +289,18 @@ export async function markScanJobFailed(
     await emitOperationalEvent(admin, {
       eventType,
       ...baseEventFields(job, { failureCode: input.failureCode }),
+    });
+    const { syncScanFailureFromJob } = await import("./scan-execution/review-lifecycle");
+    await syncScanFailureFromJob(admin, jobId, {
+      failureCode: input.failureCode,
+      failureMessage: input.failureMessage,
+    }).catch((error) => {
+      console.error({
+        component: "scan-job-store",
+        event: "sync_scan_failure_failed",
+        scanJobId: jobId,
+        message: error instanceof Error ? error.message : String(error),
+      });
     });
   }
   return { updated };

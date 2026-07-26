@@ -45,6 +45,12 @@
     "freshnessUnknown": "No pude verificar si esta respuesta cubre tu código más reciente. Di \"Revisa otra vez\" después de hacer push.",
     "reviewFailedWarning": "Tu última revisión automática no terminó. Esta respuesta puede no cubrir tu commit más nuevo.",
     "reviewInProgress": "Sigo revisando tus últimos cambios. Esta respuesta refleja tu última revisión completada.",
+    "pendingReviewLead": "Estoy revisando el commit {currentSha}.",
+    "pendingReviewHistorical": "El último veredicto completado corresponde al commit {historicalSha} ({historicalStatus}, puntuación {historicalScore}) y queda marcado como histórico — ya no es representativo.",
+    "pendingReviewFinish": "Te daré una recomendación de despliegue cuando termine la revisión actual.",
+    "pendingReviewFailedLead": "La última revisión no se completó correctamente (commit {currentSha}).",
+    "pendingReviewTimedOutLead": "La última revisión expiró antes de terminar (commit {currentSha}).",
+    "pendingReviewRetryLead": "Hay una revisión nueva en curso para el commit {currentSha}.",
     "insufficientData": "Aún no he revisado suficiente de tu repositorio para protegerte con responsabilidad.",
     "analysisFailed": "Tu última revisión no se completó. Di \"Revisa otra vez\" antes de confiar en esta respuesta."
   },

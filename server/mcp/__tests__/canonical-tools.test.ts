@@ -66,17 +66,33 @@ describe("can_i_deploy", () => {
   });
 
   it("includes the deployment recommendation and the fields migrated from the retired deployment_confidence tool", async () => {
-    const verdict = buildVerdictFixture({ status: "ready_to_ship", score: 96, blockersCount: 0, topPriorities: [], confidence: "low" });
+    const verdict = buildVerdictFixture({
+      status: "ready_to_ship",
+      score: 96,
+      blockersCount: 0,
+      topPriorities: [],
+      confidence: "low",
+      scanId: "44444444-4444-4444-8444-444444444441",
+      commitSha: "ready111",
+    });
     const tables = baseTables({
       production_verdicts: [verdictRow(PROJECT_1, verdict)],
-      scans: [{ id: "scan-latest", repository_id: PROJECT_1, status: "completed", created_at: "2026-03-01" }],
+      scans: [
+        {
+          id: "44444444-4444-4444-8444-444444444441",
+          repository_id: PROJECT_1,
+          status: "completed",
+          commit_sha: "ready111",
+          created_at: "2026-03-01",
+        },
+      ],
     });
     const result = await canIDeploy(ctxFor(createFakeAdmin(tables)), {}, t);
 
     expect(result.deploymentRecommendation).toBe("SHIP_IT");
     // Reuses the verdict engine's own confidence field rather than inventing one.
     expect(result.confidenceBand).toBe("low");
-    expect(result.latestReviewId).toBe("scan-latest");
+    expect(result.latestReviewId).toBe("44444444-4444-4444-8444-444444444441");
     expect(result.latestReviewStatus).toBe("completed");
   });
 
@@ -132,10 +148,21 @@ describe("can_i_deploy", () => {
         { project_id: PROJECT_1, commit_sha: "aaa1111", connection_status: "connected", last_error: null },
       ],
       repository_scan_state: [{ repository_id: PROJECT_1, last_commit_sha: "aaa1111", active_scan_id: "scan-99" }],
+      scans: [
+        {
+          id: "scan-99",
+          repository_id: PROJECT_1,
+          status: "scanning",
+          commit_sha: "bbb2222",
+          created_at: "2026-03-02",
+        },
+      ],
     });
     const result = await canIDeploy(ctxFor(createFakeAdmin(tables)), {}, t);
     expect(result.reviewInProgress).toBe(true);
-    expect(result.freshnessStatus).toBe("current");
+    expect(result.deploymentRecommendation).toBe("MORE_ANALYSIS_REQUIRED");
+    expect(result.summary).not.toContain("YES.");
+    expect(result.summary).not.toContain("NO.");
   });
 
   it("reports freshnessStatus unknown — never 'current' — when push detection has no proof of working", async () => {
@@ -176,7 +203,8 @@ describe("can_i_deploy", () => {
     const result = await canIDeploy(ctxFor(createFakeAdmin(tables)), {}, t);
     expect(result.reviewFailed).toBe(true);
     expect(result.freshnessStatus).toBe("stale");
-    expect(result.summary).toContain(t("canIDeploy.reviewFailedWarning"));
+    expect(result.deploymentRecommendation).toBe("MORE_ANALYSIS_REQUIRED");
+    expect(result.summary).toContain("did not complete successfully");
   });
 
   it("maps ready_to_ship to SHIP_IT", async () => {

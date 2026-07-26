@@ -2,6 +2,8 @@ import "server-only";
 
 import type { VerdictStatus } from "@/brain/production-verdict/schema";
 import type { DeploymentDecision } from "./decision-mapping";
+import type { DeployDeferReason } from "./deploy-decision/evaluate-deploy-decision";
+import { shortSha } from "./deploy-decision/evaluate-deploy-decision";
 import type { McpTranslator } from "./i18n";
 import { buildTextResponse, type McpMode } from "./response-format";
 
@@ -76,6 +78,53 @@ function stalenessFootnotes(t: McpTranslator, staleness: StalenessFootnotes): st
     lines.push("", t("canIDeploy.reviewFailedWarning"));
   }
   return lines;
+}
+
+/**
+ * Used when the newest review has not completed — do not emit YES/NO/NOT YET
+ * from an older completed verdict.
+ */
+export function formatCanIDeployDeferredResponse(
+  t: McpTranslator,
+  input: {
+    reason: DeployDeferReason;
+    currentCommitSha: string | null;
+    historicalVerdict: {
+      commitSha: string | null;
+      status: VerdictStatus;
+      score: number | null;
+    };
+  }
+): string {
+  const currentSha = shortSha(input.currentCommitSha);
+  const historicalSha = shortSha(input.historicalVerdict.commitSha);
+  const historicalScore =
+    input.historicalVerdict.score != null ? String(input.historicalVerdict.score) : "—";
+
+  const leadKey =
+    input.reason === "failed"
+      ? "canIDeploy.pendingReviewFailedLead"
+      : input.reason === "timed_out"
+        ? "canIDeploy.pendingReviewTimedOutLead"
+        : input.reason === "in_progress" || input.reason === "awaiting_verdict"
+          ? "canIDeploy.pendingReviewLead"
+          : "canIDeploy.pendingReviewRetryLead";
+
+  const lines = [
+    t(leadKey, { currentSha }),
+    "",
+    t("canIDeploy.pendingReviewHistorical", {
+      historicalSha,
+      historicalStatus: input.historicalVerdict.status,
+      historicalScore,
+    }),
+    "",
+    t("canIDeploy.pendingReviewFinish"),
+    "",
+    ...recommendedActionBlock(t, t("actions.waitForReview")),
+  ];
+
+  return buildTextResponse("production_review", t, lines);
 }
 
 /**

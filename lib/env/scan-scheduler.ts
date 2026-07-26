@@ -1,13 +1,21 @@
-export type ScanSchedulerMode = "inline" | "inngest";
+import type { ScanSchedulerMode } from "./scan-scheduler-plan";
+import {
+  assertProductionScanSchedulerConfiguration,
+  parseConfiguredScanSchedulerMode,
+  resolveScanSchedulerPlan,
+} from "./scan-scheduler-plan";
 
-const VALID_MODES: ScanSchedulerMode[] = ["inline", "inngest"];
+export type { ScanSchedulerMode };
 
 export function getScanSchedulerMode(): ScanSchedulerMode {
-  const raw = process.env.SCAN_SCHEDULER?.trim().toLowerCase();
-  if (raw && VALID_MODES.includes(raw as ScanSchedulerMode)) {
-    return raw as ScanSchedulerMode;
+  const { mode, invalidRaw } = parseConfiguredScanSchedulerMode();
+  if (invalidRaw) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error(`Invalid SCAN_SCHEDULER="${invalidRaw}". Use inline or inngest.`);
+    }
+    return "inline";
   }
-  return "inline";
+  return mode ?? "inline";
 }
 
 export function isInngestSchedulerEnabled(): boolean {
@@ -15,16 +23,16 @@ export function isInngestSchedulerEnabled(): boolean {
 }
 
 export function isInngestEnabledForOrganization(organizationId: string): boolean {
-  if (!isInngestSchedulerEnabled()) return false;
-  const allowlist = process.env.INNGEST_ASYNC_ORG_ALLOWLIST?.trim();
-  if (!allowlist) return true;
-  const allowed = allowlist.split(",").map((id) => id.trim()).filter(Boolean);
-  return allowed.includes(organizationId);
+  const plan = resolveScanSchedulerPlan(organizationId);
+  return plan.ok && plan.executor === "inngest";
 }
 
 export function assertInngestSchedulerConfigured(): void {
+  assertProductionScanSchedulerConfiguration();
   if (!isInngestSchedulerEnabled()) return;
   if (!process.env.INNGEST_EVENT_KEY?.trim()) {
     throw new Error("INNGEST_EVENT_KEY is required when SCAN_SCHEDULER=inngest");
   }
 }
+
+export { assertProductionScanSchedulerConfiguration, resolveScanSchedulerPlan };

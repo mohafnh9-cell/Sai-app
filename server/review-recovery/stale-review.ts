@@ -38,12 +38,19 @@ function isProcessingScanStatus(status: string): boolean {
 }
 
 export function isStaleActiveReviewScan(
-  scan: { status: string; created_at: string; updated_at: string; started_at?: string | null },
+  scan: {
+    status: string;
+    created_at: string;
+    updated_at: string;
+    started_at?: string | null;
+    queued_at?: string | null;
+  },
   nowMs = Date.now()
 ): boolean {
   if (!isActiveReviewScanStatus(scan.status)) return false;
   if (scan.status === "queued") {
-    return nowMs - Date.parse(scan.created_at) >= getQueuedStaleMs();
+    const anchor = scan.queued_at ?? scan.created_at;
+    return nowMs - Date.parse(anchor) >= getQueuedStaleMs();
   }
   if (isProcessingScanStatus(scan.status)) {
     const anchor = scan.started_at ?? scan.updated_at ?? scan.created_at;
@@ -92,6 +99,23 @@ async function markReviewStaleTimedOut(
 
   if (!data) return false;
 
+  await admin
+    .from("scan_jobs")
+    .update({
+      status: "failed",
+      failure_code: REVIEW_STALE_FAILURE_CODE,
+      failure_message:
+        reason === "queued_stale"
+          ? "Scan job never started before review recovery"
+          : "Scan job lost heartbeat before review recovery",
+      failed_at: now,
+      updated_at: now,
+      locked_at: null,
+      locked_by: null,
+    })
+    .eq("scan_id", scan.id)
+    .in("status", ["queued", "running"]);
+
   await emitOperationalEvent(admin, {
     eventType: "job_timed_out",
     scanId: scan.id,
@@ -111,7 +135,7 @@ export async function recoverStaleActiveReviewsForProject(
 ): Promise<StaleReviewRecoveryResult> {
   const { data: activeScans } = await admin
     .from("scans")
-    .select("id, status, created_at, updated_at, started_at, organization_id, project_id, repository_id")
+    .select("id, status, created_at, updated_at, started_at, queued_at, organization_id, project_id, repository_id")
     .eq("repository_id", projectId)
     .in("status", ["queued", ...PROCESSING_SCAN_STATUSES])
     .order("created_at", { ascending: false });

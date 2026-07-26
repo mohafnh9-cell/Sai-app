@@ -4,9 +4,16 @@ import { getCurrentProductionVerdict } from "@/server/production-verdict/service
 import type { McpAuthContext } from "../auth";
 import { McpError } from "../auth";
 import { mapVerdictStatusToDecision } from "../decision-mapping";
+import {
+  evaluateDeployDecision,
+} from "../deploy-decision/evaluate-deploy-decision";
 import type { McpTranslator } from "../i18n";
 import { getLatestReviewSummary } from "../latest-review";
-import { formatCanIDeployResponse, pickRecommendedAction } from "../personality";
+import {
+  formatCanIDeployDeferredResponse,
+  formatCanIDeployResponse,
+  pickRecommendedAction,
+} from "../personality";
 import type { ProjectSelector } from "../project-resolution";
 import { resolveMcpProject } from "../project-resolution";
 import { buildProjectReportUrl } from "../report-url";
@@ -68,11 +75,22 @@ export async function canIDeploy(
     getLatestReviewSummary(ctx.admin, project.id),
   ]);
 
-  const engineDecision = mapVerdictStatusToDecision(verdict.status);
-  const decision =
-    staleness.reviewFailed && engineDecision === "deploy" ? "more_analysis_required" : engineDecision;
-  const deploymentRecommendation =
-    decision === "deploy" ? "SHIP_IT" : decision === "do_not_deploy" ? "DO_NOT_DEPLOY" : "MORE_ANALYSIS_REQUIRED";
+  const deployEvaluation = evaluateDeployDecision({
+    latestReview: latestReview
+      ? {
+          id: latestReview.id,
+          status: latestReview.status,
+          commitSha: latestReview.commitSha,
+          errorCode: latestReview.errorCode,
+        }
+      : null,
+    historicalVerdict: {
+      scanId: verdict.scanId,
+      commitSha: verdict.commitSha,
+      status: verdict.status,
+      score: verdict.score,
+    },
+  });
 
   const topBlockers: CanIDeployBlocker[] = verdict.topPriorities.slice(0, 3).map((priority) => ({
     id: priority.id,
@@ -82,12 +100,69 @@ export async function canIDeploy(
   }));
 
   const worries = topBlockers.map((b) => b.title);
+  const reviewInProgress =
+    deployEvaluation.kind === "deferred" &&
+    (deployEvaluation.reason === "in_progress" || deployEvaluation.reason === "awaiting_verdict")
+      ? true
+      : staleness.reviewInProgress;
+
   const stalenessFootnotes = {
-    reviewInProgress: staleness.reviewInProgress,
+    reviewInProgress,
     freshnessStatus: staleness.freshnessStatus,
     reviewFailed: staleness.reviewFailed,
     latestDetectedCommitSha: staleness.latestDetectedCommitSha,
   };
+
+  if (deployEvaluation.kind === "deferred") {
+    const summary = formatCanIDeployDeferredResponse(t, {
+      reason: deployEvaluation.reason,
+      currentCommitSha: deployEvaluation.latestReview.commitSha,
+      historicalVerdict: {
+        commitSha: verdict.commitSha,
+        status: verdict.status,
+        score: verdict.score,
+      },
+    });
+
+    return {
+      mode: "production_review",
+      project,
+      verdictStatus: verdict.status,
+      score: verdict.score,
+      scoreDelta: verdict.scoreDelta,
+      confidenceBand: verdict.confidence,
+      blockersCount: verdict.blockersCount,
+      topBlockers,
+      nextAction: t("actions.waitForReview"),
+      evaluatedCoverage: {
+        ratio: verdict.coverageRatio,
+        evaluatedAreas: verdict.evaluatedAreas.length,
+        partiallyEvaluatedAreas: verdict.partiallyEvaluatedAreas.length,
+        unevaluatedAreas: verdict.unevaluatedAreas.length,
+      },
+      generatedAt: verdict.generatedAt,
+      reviewedCommitSha: verdict.commitSha,
+      latestDetectedCommitSha: staleness.latestDetectedCommitSha,
+      stale: staleness.stale,
+      freshnessStatus: staleness.freshnessStatus,
+      reviewInProgress,
+      reviewFailed:
+        deployEvaluation.reason === "failed" || deployEvaluation.reason === "timed_out"
+          ? true
+          : staleness.reviewFailed,
+      latestReviewId: latestReview?.id ?? null,
+      latestReviewStatus: latestReview?.status ?? null,
+      deploymentRecommendation: "MORE_ANALYSIS_REQUIRED",
+      reportUrl: buildProjectReportUrl(project.id),
+      summary,
+    };
+  }
+
+  const engineDecision = mapVerdictStatusToDecision(verdict.status);
+  const decision =
+    staleness.reviewFailed && engineDecision === "deploy" ? "more_analysis_required" : engineDecision;
+  const deploymentRecommendation =
+    decision === "deploy" ? "SHIP_IT" : decision === "do_not_deploy" ? "DO_NOT_DEPLOY" : "MORE_ANALYSIS_REQUIRED";
 
   const nextAction = pickRecommendedAction(t, {
     decision,
@@ -126,7 +201,7 @@ export async function canIDeploy(
     latestDetectedCommitSha: staleness.latestDetectedCommitSha,
     stale: staleness.stale,
     freshnessStatus: staleness.freshnessStatus,
-    reviewInProgress: staleness.reviewInProgress,
+    reviewInProgress,
     reviewFailed: staleness.reviewFailed,
     latestReviewId: latestReview?.id ?? null,
     latestReviewStatus: latestReview?.status ?? null,

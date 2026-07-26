@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { isActiveReviewScanStatus } from "@/brain/automatic-review/review-status";
 import { InlineScanJobRunner } from "@/server/security-scanner/scan-job-runner";
 import { resolveOrganizationGitHubToken } from "@/server/github-automation/token-resolver";
 import {
@@ -16,6 +17,11 @@ import { finalizeWebhookAutomationScan } from "./finalize-webhook-scan";
 import { invalidateProjectCache } from "@/server/cache/read-cache";
 import { finalizeAutomaticReviewJob } from "./finalize-automatic-review-job";
 import { emitOperationalEvent } from "@/server/observability/operational-events";
+import { beginReviewProcessing } from "./scan-execution/review-lifecycle";
+import {
+  appendScanJobExecutionTrace,
+  logScanExecutionTrace,
+} from "./scan-execution/scan-execution-trace";
 
 function log(level: "info" | "error", event: string, fields: Record<string, unknown>) {
   const payload = { component: "run-scan-job", event, ...fields };
@@ -26,7 +32,7 @@ function log(level: "info" | "error", event: string, fields: Record<string, unkn
 export async function executeScanRunJob(
   admin: SupabaseClient,
   payload: ScanRunPayload,
-  input?: { inngestRunId?: string; attempt?: number }
+  input?: { inngestRunId?: string; attempt?: number; lockedBy?: string }
 ): Promise<void> {
   const existingJob = await getScanJob(admin, payload.scanJobId);
   if (existingJob && isTerminalScanJobStatus(existingJob.status)) {
@@ -40,17 +46,62 @@ export async function executeScanRunJob(
   const running = await markScanJobRunning(admin, payload.scanJobId, {
     inngestRunId: input?.inngestRunId,
     attemptCount: input?.attempt ?? undefined,
+    lockedBy: input?.lockedBy,
   });
   if (!running.updated) {
     const current = await getScanJob(admin, payload.scanJobId);
     if (current && isTerminalScanJobStatus(current.status)) return;
   }
 
+  const jobAfterClaim = (await getScanJob(admin, payload.scanJobId)) ?? existingJob;
+  const scheduler =
+    (jobAfterClaim?.metadata as { scheduler?: string } | null)?.scheduler ?? input?.lockedBy ?? null;
+
   const { data: scanBeforeRun } = await admin
     .from("scans")
-    .select("status")
+    .select("status, commit_sha")
     .eq("id", payload.scanId)
     .maybeSingle();
+
+  if (scanBeforeRun?.status && !isActiveReviewScanStatus(scanBeforeRun.status as string)) {
+    await markScanJobFailed(admin, payload.scanJobId, {
+      failureCode: "STALE_WORKER_REJECTED",
+      failureMessage: `Review is no longer active (status ${scanBeforeRun.status})`,
+    });
+    log("info", "scan_worker_rejected_stale_review", {
+      scanJobId: payload.scanJobId,
+      scanId: payload.scanId,
+      reviewStatus: scanBeforeRun.status,
+    });
+    return;
+  }
+
+  if (scanBeforeRun?.status === "queued") {
+    await beginReviewProcessing(admin, {
+      reviewId: payload.scanId,
+      scanJobId: payload.scanJobId,
+      organizationId: payload.organizationId,
+      projectId: payload.projectId,
+      commitSha: (scanBeforeRun.commit_sha as string | null) ?? payload.headCommitSha ?? null,
+      scheduler,
+    });
+  }
+
+  await appendScanJobExecutionTrace(admin, payload.scanJobId, {
+    stage: "scan_started",
+    at: new Date().toISOString(),
+    scheduler: (scheduler as "inline" | "inngest" | null) ?? null,
+  });
+  logScanExecutionTrace("scan_started", {
+    reviewId: payload.scanId,
+    scanJobId: payload.scanJobId,
+    projectId: payload.projectId,
+    organizationId: payload.organizationId,
+    commitSha: (scanBeforeRun?.commit_sha as string | null) ?? payload.headCommitSha ?? null,
+    scheduler,
+    status: scanBeforeRun?.status ?? null,
+    stage: "scan_started",
+  });
 
   const tokenResult = await resolveOrganizationGitHubToken(
     admin,
@@ -203,6 +254,22 @@ export async function executeScanRunJob(
     organizationId: payload.organizationId,
     projectId: payload.projectId,
   });
+
+  await appendScanJobExecutionTrace(admin, payload.scanJobId, {
+    stage: "verdict_persisted",
+    at: new Date().toISOString(),
+    scheduler: (scheduler as "inline" | "inngest" | null) ?? null,
+  });
+  logScanExecutionTrace("verdict_persisted", {
+    reviewId: payload.scanId,
+    scanJobId: payload.scanJobId,
+    projectId: payload.projectId,
+    organizationId: payload.organizationId,
+    scheduler,
+    status: "completed",
+    stage: "verdict_persisted",
+  });
+
   invalidateProjectCache(payload.projectId);
 }
 

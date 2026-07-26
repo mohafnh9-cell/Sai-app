@@ -1,8 +1,6 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { isInngestEnabledForOrganization } from "@/lib/env/scan-scheduler";
-import { emitOperationalEvent } from "@/server/observability/operational-events";
 import {
   findJobsNeedingFinalize,
   findStuckScanJobs,
@@ -16,6 +14,7 @@ import { executeScanRunJob } from "./run-scan-job";
 import { processWebhookJob } from "./schedule-scan";
 import type { ScanRunPayload } from "./types";
 import { rehydrateWebhookProcessPayload } from "./inngest-payload";
+import { reenqueueExistingScanRunJob, ScanEnqueueError } from "./scan-execution/enqueue-scan-run";
 import { buildJobsHealthSummary } from "@/server/observability/health-summary";
 import {
   evaluateOperationalAlerts,
@@ -54,14 +53,18 @@ async function reenqueueScanJob(admin: SupabaseClient, job: ScanJobRow): Promise
     finalize: job.metadata.finalize as ScanRunPayload["finalize"],
   };
 
-  if (isInngestEnabledForOrganization(job.organization_id)) {
-    const { inngest } = await import("@/inngest/client");
-    await inngest.send({ name: "scan/run", data: payload });
+  try {
+    await reenqueueExistingScanRunJob(admin, job, payload);
     return true;
+  } catch (error) {
+    if (error instanceof ScanEnqueueError) {
+      await markScanJobFailed(admin, job.id, {
+        failureCode: error.code,
+        failureMessage: error.message,
+      });
+    }
+    return false;
   }
-
-  await executeScanRunJob(admin, payload);
-  return true;
 }
 
 export async function runScanJobRecovery(admin: SupabaseClient): Promise<RecoverySummary> {

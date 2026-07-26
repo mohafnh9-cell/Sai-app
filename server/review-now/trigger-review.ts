@@ -258,6 +258,7 @@ export async function triggerProductionReview(
       review_type: "manual",
       scan_type: "full",
       status: "queued",
+      queued_at: new Date().toISOString(),
       progress: 0,
       progress_message: "Production Review requested from MCP",
       branch: resolvedBranch,

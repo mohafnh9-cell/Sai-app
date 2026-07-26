@@ -45,6 +45,12 @@
     "freshnessUnknown": "I couldn't verify whether this answer covers your latest code. Say \"Review again\" after you push.",
     "reviewFailedWarning": "Your latest automatic review didn't finish. This answer may not cover your newest commit.",
     "reviewInProgress": "I'm still reviewing your latest changes. This answer reflects your last completed review.",
+    "pendingReviewLead": "I'm currently reviewing commit {currentSha}.",
+    "pendingReviewHistorical": "The latest completed verdict belongs to commit {historicalSha} ({historicalStatus}, score {historicalScore}) and is marked as historical — it is no longer representative.",
+    "pendingReviewFinish": "I'll provide a deployment recommendation once the current review finishes.",
+    "pendingReviewFailedLead": "The latest review did not complete successfully (commit {currentSha}).",
+    "pendingReviewTimedOutLead": "The latest review timed out before it could finish (commit {currentSha}).",
+    "pendingReviewRetryLead": "A new review is in progress for commit {currentSha}.",
     "insufficientData": "I don't have enough of your repository reviewed yet to protect you responsibly.",
     "analysisFailed": "Your last review didn't complete. Say \"Review again\" before you trust this answer."
   },
