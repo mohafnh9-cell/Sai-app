@@ -247,7 +247,7 @@ export function buildMissionControlView(input: MissionControlBuildInput): Missio
       ? {
           projectName: input.projectName,
           currentVerdictStatus: input.verdict.status,
-          currentScore: input.verdict.score,
+          currentScore: input.verdict.score ?? 0,
         }
       : undefined,
   };

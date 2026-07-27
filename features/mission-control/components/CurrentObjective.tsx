@@ -48,7 +48,12 @@ export function CurrentObjective({
       </div>
       <div className="flex flex-wrap gap-3">
         {fixInput && objective.primaryAction === "generate_fix" ? (
-          <CopySafeFixPromptButton fixPromptInput={fixInput} label="Generate Fix" />
+          <CopySafeFixPromptButton
+            input={fixInput}
+            source="priority"
+            priorityId={top?.id}
+            label="Generate Fix"
+          />
         ) : (
           <Button asChild>
             <Link href={`/projects/${projectId}`}>
