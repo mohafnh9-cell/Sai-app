@@ -29,7 +29,10 @@ export async function POST(
 
     const { id: projectId, reviewId } = parsed.data;
     const supabase = await createClient();
-    const access = await requireProjectApiAccess(supabase, projectId);
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    const access = await requireProjectApiAccess(supabase, user?.id, projectId);
     if (!access.ok) return access.response;
 
     const admin = createAdminClient();
