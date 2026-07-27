@@ -31,7 +31,7 @@ import {
   mapDiscoveryToSourceRefs,
 } from "./input-mapping";
 import { threatChainFingerprint, threatLogicalId, modelFingerprint, sortByLogicalId } from "./deterministic-id";
-import { classifyFeasibility, classifyPriority, estimateAttackCost } from "./scoring";
+import { classifyFeasibility, classifyPriority, coreConfidenceToScoringBand, estimateAttackCost } from "./scoring";
 import { validateThreatModel } from "./validation";
 
 const ACTOR_CATALOG: Array<{
@@ -92,8 +92,8 @@ function buildActors(input: ThreatModelBuildInput, surfaces: ThreatSurface[]): T
       controlledComponents: [],
       reachableBoundaryIds: boundaryIds,
       constraints: [],
-      evidence: [evidenceFromSources(input.scope, refs, `Actor ${def.label} reachable from validated surfaces`, "medium")],
-      confidence: "medium",
+      evidence: [evidenceFromSources(input.scope, refs, `Actor ${def.label} reachable from validated surfaces`, "likely")],
+      confidence: "likely",
     });
   }
   return sortByLogicalId(actors);
@@ -214,17 +214,18 @@ function buildPathsAndChains(input: ThreatModelBuildInput, ctx: {
         stepCount: crossTeam ? 5 : 3,
         detectionSurfaces: ctx.surfaces.length,
       });
+      const scoringConfidence = coreConfidenceToScoringBand(surface.confidence);
       const feasibility = classifyFeasibility({
         conditions: ctx.conditions,
         hasUnsupportedPreconditions: hasUnsupported,
-        evidenceConfidence: surface.confidence,
+        evidenceConfidence: scoringConfidence,
         attackCost,
       });
       const priority = classifyPriority({
         feasibility,
         assetCriticality: surface.kind === "business_workflow" ? "critical" : "high",
         businessImpact: crossTeam ? "critical" : "high",
-        confidence: surface.confidence,
+        confidence: scoringConfidence,
         crossTeam,
       });
 

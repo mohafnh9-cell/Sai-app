@@ -59,7 +59,7 @@ export interface ApiSpecialist {
   readonly id: string;
   readonly name: string;
   readonly priority: number;
-  readonly capabilities: ApiCapability[];
+  readonly capabilities: readonly ApiCapability[];
   canRun(context: ApiTeamContext): boolean | Promise<boolean>;
   plan(context: ApiTeamContext): Promise<ApiScenario[]>;
   execute(

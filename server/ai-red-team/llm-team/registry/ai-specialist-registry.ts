@@ -21,7 +21,15 @@ export class AISpecialistRegistry {
   }
 
   selectEligible(context: import("../specialists/specialist.types").AISpecialistContext): AISecuritySpecialist[] {
-    return this.listAll().filter((s) => s.canRun(context).eligible);
+    return this.listAll().filter((s) => {
+      const eligibility = s.canRun(context);
+      if (eligibility instanceof Promise) {
+        throw new Error(
+          `AISpecialistRegistry.selectEligible is synchronous; specialist ${s.id} returned a Promise from canRun`,
+        );
+      }
+      return eligibility.eligible;
+    });
   }
 }
 

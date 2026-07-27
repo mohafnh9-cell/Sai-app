@@ -4,8 +4,8 @@ import { randomUUID } from "node:crypto";
 import type { AttackRequest } from "../types";
 import type { AttackAuthorizationRecord } from "../authorization";
 import { createBrowserEnabledRedTeamEngine } from "../index";
-import { createSupabaseRedTeamRunStore } from "./supabase-red-team-run-store";
-import { executeQueuedRedTeamRun } from "./request-red-team-run";
+import { createSupabaseRedTeamRunStore } from "../runs/supabase-red-team-run-store";
+import { executeQueuedRedTeamRun } from "../runs/request-red-team-run";
 import { recordBrowserSimulationMemory } from "../teams/browser/production-memory";
 import type { SupabaseClient } from "@supabase/supabase-js";
 

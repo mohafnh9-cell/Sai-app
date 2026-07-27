@@ -156,12 +156,12 @@ export interface AISecuritySpecialist {
   readonly name: string;
   readonly version: string;
   readonly priority: number;
-  readonly supportedComponents: DiscoveredAiComponentKind[];
-  readonly supportedInvariantCategories: AIInvariantCategory[];
-  readonly supportedAttackCategories: AIAttackCategory[];
+  readonly supportedComponents: readonly DiscoveredAiComponentKind[];
+  readonly supportedInvariantCategories: readonly AIInvariantCategory[];
+  readonly supportedAttackCategories: readonly AIAttackCategory[];
   /** Declarative families; eligibility uses graph context, not package install alone. */
   readonly supportedProviders: readonly (NormalizedAiProviderFamily | "provider_agnostic")[];
-  readonly supportedArchitectures: AISpecialistArchitecture[];
+  readonly supportedArchitectures: readonly AISpecialistArchitecture[];
 
   canRun(context: AISpecialistContext): AISpecialistEligibility | Promise<AISpecialistEligibility>;
 

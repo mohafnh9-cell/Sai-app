@@ -21,14 +21,12 @@ export * from "./decision";
 export * from "./fix-strategy";
 export * from "./engineering";
 export * from "./autonomous-orchestrator";
-export * from "./teams/browser";
-export * from "./teams/api";
-export * from "./teams/authorization";
-export * from "./business-logic";
-export * from "./llm-team";
+/** Team coordinators and specialists: import from `@/server/ai-red-team/teams/*`, `business-logic`, or `llm-team` to avoid duplicate symbol re-exports. */
 export * from "./authorization";
-export * from "./runs/red-team-run-store";
+
 export { InMemoryRedTeamRunStore } from "./runs/red-team-run-store";
+export type { RedTeamRunRecord, RedTeamRunStore } from "./runs/red-team-run-store";
+export type { RedTeamRunStatus as PersistedRedTeamRunStatus } from "./runs/red-team-run-store";
 export * from "./runs/request-red-team-run";
 
 import { createAgentRegistry, registerRedTeamAgents } from "./agents";

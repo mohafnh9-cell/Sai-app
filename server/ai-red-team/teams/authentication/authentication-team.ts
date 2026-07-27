@@ -75,11 +75,13 @@ export class AuthenticationTeam {
     };
   }
 
-  private finding(input: Omit<AuthenticationTeamFinding, "findingId">): AuthenticationTeamFinding {
+  private finding(
+    input: Omit<AuthenticationTeamFinding, "findingId" | "safeFixEligible"> & { safeFixEligible?: boolean },
+  ): AuthenticationTeamFinding {
     return {
       findingId: randomUUID(),
-      safeFixEligible: true,
       ...input,
+      safeFixEligible: input.safeFixEligible ?? true,
     };
   }
 }

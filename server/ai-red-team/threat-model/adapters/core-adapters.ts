@@ -1,7 +1,7 @@
-import type { CoreProtectedAsset } from "../core/assets/asset.types";
-import type { CoreTrustBoundary } from "../core/boundaries/boundary.types";
-import type { CoreAttackPreconditions } from "../core/preconditions/precondition.types";
-import type { ThreatSourceReference } from "./threat-model.types";
+import type { CoreProtectedAsset } from "../../core/assets/asset.types";
+import type { CoreTrustBoundary } from "../../core/boundaries/boundary.types";
+import type { CoreAttackPreconditions } from "../../core/preconditions/precondition.types";
+import type { ThreatSourceReference } from "../threat-model.types";
 
 /** Map RT-Core protected assets to threat-model source refs (no duplicate asset model). */
 export function coreAssetsToSourceRefs(assets: CoreProtectedAsset[], team: "rt9" | "rt10"): ThreatSourceReference[] {

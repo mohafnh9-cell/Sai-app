@@ -4,6 +4,7 @@ import type {
   AIExecutionGraph,
   AIExecutionNode,
   AIExecutionNodeKind,
+  AIExecutionPath,
   AIPrompt,
 } from "./execution-graph.types";
 import { validateAiExecutionGraph } from "./graph-validation";
@@ -366,7 +367,7 @@ export function buildAiExecutionGraph(inventory: AiDiscoveryInventory): AIExecut
     .filter(Boolean)
     .map((n) => n!.id);
 
-  const paths = hasAi
+  const paths: AIExecutionPath[] = hasAi
     ? [
         {
           id: stableAiId("path:canonical"),
@@ -382,7 +383,7 @@ export function buildAiExecutionGraph(inventory: AiDiscoveryInventory): AIExecut
       id: stableAiId("path:rag"),
       nodeIds: [retrievalContextNode.id, llmNode.id],
       label: "RAG retrieval path",
-      purpose: "rag_path",
+      purpose: "rag_path" as const,
     });
   }
 

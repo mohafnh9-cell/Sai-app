@@ -6,6 +6,22 @@ import type {
   ThreatPriority,
   ThreatCondition,
 } from "./threat-model.types";
+import type { CoreFindingConfidence } from "../core/confidence/confidence.types";
+
+export type ThreatScoringConfidence = "high" | "medium" | "low";
+
+export function coreConfidenceToScoringBand(confidence: CoreFindingConfidence): ThreatScoringConfidence {
+  switch (confidence) {
+    case "confirmed":
+    case "highly_likely":
+      return "high";
+    case "likely":
+      return "medium";
+    case "possible":
+    case "unsupported":
+      return "low";
+  }
+}
 
 function levelMax(...levels: AttackCostLevel[]): AttackCostLevel {
   const order: AttackCostLevel[] = ["trivial", "low", "moderate", "high", "prohibitive"];
@@ -53,7 +69,7 @@ export function estimateAttackCost(input: {
 export function classifyFeasibility(input: {
   conditions: ThreatCondition[];
   hasUnsupportedPreconditions: boolean;
-  evidenceConfidence: "high" | "medium" | "low";
+  evidenceConfidence: ThreatScoringConfidence;
   attackCost: AttackCost;
 }): ThreatFeasibility {
   if (input.hasUnsupportedPreconditions) return "blocked";
@@ -74,7 +90,7 @@ export function classifyPriority(input: {
   feasibility: ThreatFeasibility;
   assetCriticality: "critical" | "high" | "medium" | "low";
   businessImpact: "critical" | "high" | "medium" | "low";
-  confidence: "high" | "medium" | "low";
+  confidence: ThreatScoringConfidence;
   crossTeam: boolean;
 }): ThreatPriority {
   if (input.feasibility === "blocked") return "informational";

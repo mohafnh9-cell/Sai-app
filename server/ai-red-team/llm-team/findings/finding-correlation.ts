@@ -94,7 +94,7 @@ function rankConfidence(confidence: AIFinding["confidence"]): number {
   return order.indexOf(confidence);
 }
 
-export const AIFindingCorrelation = {
+export const aiFindingCorrelation = {
   merge: correlateFindings,
   mapEvidence: mapRuntimeToFindingEvidence,
 };

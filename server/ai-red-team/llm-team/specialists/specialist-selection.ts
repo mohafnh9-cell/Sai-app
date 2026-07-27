@@ -1,4 +1,4 @@
-import type { AIExecutionGraph } from "../model/execution-graph.types";
+import type { AIExecutionGraph, AIBoundaryKind } from "../model/execution-graph.types";
 import type { AIInvariant } from "../invariants/invariant.types";
 import type { AIAttackCase } from "../attacks/attack.types";
 import type {
@@ -23,7 +23,7 @@ export function detectGraphArchitectures(graph: AIExecutionGraph): AISpecialistA
 
 export function componentKindsInGraph(
   graph: AIExecutionGraph,
-  inventoryKinds: DiscoveredAiComponentKind[]
+  inventoryKinds: readonly DiscoveredAiComponentKind[]
 ): DiscoveredAiComponentKind[] {
   const nodeKinds = new Set(graph.nodes.map((n) => n.kind));
   const matched: DiscoveredAiComponentKind[] = [];
@@ -64,7 +64,7 @@ export function componentKindsInGraph(
 
 export function selectInvariantsForSpecialist(input: {
   context: AISpecialistContext;
-  categories: AIInvariant["category"][];
+  categories: readonly AIInvariant["category"][];
 }): AIInvariant[] {
   const set = new Set(input.categories);
   return input.context.invariants.invariants.filter((i) => set.has(i.category));
@@ -87,10 +87,10 @@ export function selectAttacksForSpecialist(input: {
 export function evaluateSpecialistEligibility(input: {
   context: AISpecialistContext;
   specialistLabel: string;
-  supportedComponents: DiscoveredAiComponentKind[];
-  supportedInvariantCategories: AIInvariant["category"][];
-  supportedAttackCategories: AIAttackCase["category"][];
-  supportedArchitectures: AISpecialistArchitecture[];
+  supportedComponents: readonly DiscoveredAiComponentKind[];
+  supportedInvariantCategories: readonly AIInvariant["category"][];
+  supportedAttackCategories: readonly AIAttackCase["category"][];
+  supportedArchitectures: readonly AISpecialistArchitecture[];
   requireGraphNodes?: string[];
 }): AISpecialistEligibility {
   const { graph, inventory } = input.context;
@@ -118,7 +118,7 @@ export function evaluateSpecialistEligibility(input: {
     ...new Set(
       invariants
         .map((i) => input.context.graph.boundaries.find((b) => b.id === i.protectedTrustBoundaryId)?.kind)
-        .filter((k): k is string => Boolean(k))
+        .filter((k): k is AIBoundaryKind => k !== undefined)
     ),
   ];
 

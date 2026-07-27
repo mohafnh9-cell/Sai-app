@@ -9,7 +9,7 @@ abstract class BaseApiSpecialist implements ApiSpecialist {
   abstract readonly priority: number;
   abstract readonly capabilities: ApiSpecialist["capabilities"];
 
-  canRun(): boolean {
+  canRun(_context: ApiTeamContext): boolean {
     return true;
   }
 

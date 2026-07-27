@@ -14,7 +14,7 @@ export abstract class BaseBrowserSpecialist implements BrowserSpecialist {
   abstract readonly capabilities: BrowserSpecialist["capabilities"];
   abstract readonly supportedEnvironments: BrowserSpecialist["supportedEnvironments"];
 
-  canRun(): boolean {
+  canRun(_context: BrowserTeamContext): boolean {
     return true;
   }
 

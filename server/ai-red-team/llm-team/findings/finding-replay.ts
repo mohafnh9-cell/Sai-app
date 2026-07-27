@@ -1,7 +1,7 @@
 import type { AIAttackCase } from "../attacks/attack.types";
 import type { AIInvariant } from "../invariants/invariant.types";
 import type { AIExecutionResult } from "../runtime/runtime.types";
-import type { AttackPreconditions, AIReplayPlan } from "./finding.types";
+import type { AttackPreconditions, AIReplayAction, AIReplayPlan } from "./finding.types";
 import { stableAiId } from "../model/stable-id";
 
 export function buildReplayPlan(input: {
@@ -20,7 +20,7 @@ export function buildReplayPlan(input: {
       ? filteredPrompts
       : (input.attack?.sequence.steps.map((s) => s.label).slice(0, 3) ?? ["Synthetic user turn"]);
 
-  const replaySteps =
+  const replaySteps: AIReplayAction[] =
     input.attack?.sequence.steps.map((s, i) => ({
       id: stableAiId(`replay:${input.findingId}:${i}`),
       order: i + 1,

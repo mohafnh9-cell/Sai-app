@@ -83,7 +83,15 @@ export function discoverySurfaceKinds(
       label: entry.label,
     };
     const band: CoreFindingConfidence =
-      entry.confidence >= 0.85 ? "high" : entry.confidence >= 0.65 ? "medium" : "low";
+      entry.confidence >= 0.9
+        ? "confirmed"
+        : entry.confidence >= 0.85
+          ? "highly_likely"
+          : entry.confidence >= 0.65
+            ? "likely"
+            : entry.confidence >= 0.4
+              ? "possible"
+              : "unsupported";
     out.push({ kind, label: entry.label, ref, confidence: band });
   }
   return out.sort((a, b) => `${a.kind}:${a.label}`.localeCompare(`${b.kind}:${b.label}`));

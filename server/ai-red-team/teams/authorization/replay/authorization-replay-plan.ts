@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { AuthzFindingRecord } from "./findings/authorization-finding";
+import type { AuthzFindingRecord } from "../findings/authorization-finding";
 
 export type AuthzReplayPlan = {
   replayPlanId: string;

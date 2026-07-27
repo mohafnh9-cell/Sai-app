@@ -1,13 +1,15 @@
 import type {
   AttackChain,
+  BusinessImpactAssessment,
   ConfidenceBand,
+  FindingConfidence,
   IntelligenceProductionVerdict,
   IntelligenceProductionVerdictStatus,
   NormalizedObservation,
   PrioritizedRemediation,
 } from "./models";
-import { aggregateRiskScore, type BusinessImpactAssessment } from "./business-impact";
-import { aggregateConfidence, type FindingConfidence } from "./confidence-engine";
+import { aggregateRiskScore } from "./business-impact";
+import { aggregateConfidence } from "./confidence-engine";
 
 function mapStatus(input: {
   observations: NormalizedObservation[];

@@ -1,4 +1,4 @@
-import type { BrowserFindingRecord } from "../browser-findings";
+import type { BrowserFindingRecord } from "./browser-findings";
 
 /** Boundary for Safe Fix Engine (RT3) — creates candidates only; never auto-applies. */
 export type BrowserSafeFixCandidate = {

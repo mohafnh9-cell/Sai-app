@@ -167,7 +167,8 @@ export async function canIDeploy(
   const engineDecision = mapVerdictStatusToDecision(verdict.status);
   const decision =
     staleness.reviewFailed && engineDecision === "deploy" ? "more_analysis_required" : engineDecision;
-  let deploymentRecommendation =
+  type McpDeploymentRecommendation = "DO_NOT_DEPLOY" | "SHIP_IT" | "MORE_ANALYSIS_REQUIRED";
+  let deploymentRecommendation: McpDeploymentRecommendation =
     decision === "deploy" ? "SHIP_IT" : decision === "do_not_deploy" ? "DO_NOT_DEPLOY" : "MORE_ANALYSIS_REQUIRED";
 
   if (securityOverlay.applied && securityOverlay.deploymentRecommendation) {

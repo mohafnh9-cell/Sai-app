@@ -82,8 +82,8 @@ export interface BrowserSpecialist {
   readonly name: string;
   readonly description: string;
   readonly priority: number;
-  readonly capabilities: BrowserCapability[];
-  readonly supportedEnvironments: AttackEnvironmentType[];
+  readonly capabilities: readonly BrowserCapability[];
+  readonly supportedEnvironments: readonly AttackEnvironmentType[];
   canRun(context: BrowserTeamContext): boolean | Promise<boolean>;
   plan(context: BrowserTeamContext): Promise<BrowserScenario[]>;
   execute(

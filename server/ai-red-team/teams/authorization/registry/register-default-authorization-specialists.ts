@@ -14,7 +14,7 @@ abstract class BaseAuthzSpecialist implements AuthorizationSpecialist {
   abstract readonly name: string;
   abstract readonly priority: number;
 
-  canRun(): boolean {
+  canRun(_context: AuthorizationTeamContext): boolean {
     return true;
   }
 
