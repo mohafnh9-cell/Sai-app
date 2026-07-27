@@ -21,7 +21,12 @@ export type RedTeamLogEvent =
   | "authorization_team_completed"
   | "api_team_completed"
   | "browser_team_completed"
-  | "browser_team_failed";
+  | "browser_team_failed"
+  | "business_logic_metrics"
+  | "business_logic_persist_started"
+  | "business_logic_persist_completed"
+  | "business_logic_persist_partial"
+  | "business_logic_persist_failed";
 
 export type RedTeamLogEntry = {
   component: "ai-red-team";

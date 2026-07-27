@@ -1,5 +1,6 @@
 import type { BusinessLogicPlatformPayload } from "../integration/platform-payload";
 import type { BusinessLogicPerformanceSnapshot } from "./performance-tracker";
+import type { RedTeamLogger } from "../../logging/red-team-logger";
 
 export type BusinessLogicTelemetryEvent =
   | "business_logic_persist_started"
@@ -59,7 +60,7 @@ export function buildOperationalMetrics(input: {
 }
 
 export function emitBusinessLogicTelemetry(
-  logger: { log: (entry: Record<string, unknown>) => void },
+  logger: RedTeamLogger,
   event: BusinessLogicTelemetryEvent,
   requestId: string,
   metadata: Record<string, unknown>
