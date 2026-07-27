@@ -1,6 +1,6 @@
-import type { DecisionPolicy } from "./decision-policy";
-import type { SecurityIntelligenceReport } from "../intelligence/models";
-import type { DecisionContext } from "./decision-context";
+import type { DecisionPolicy } from "../decision-policy";
+import type { SecurityIntelligenceReport } from "../../intelligence/models";
+import type { DecisionContext } from "../decision-context";
 
 export const confirmedDeployBlockerPolicy: DecisionPolicy = {
   id: "gate.confirmed_deploy_blocker",
