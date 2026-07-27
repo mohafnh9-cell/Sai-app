@@ -24,7 +24,7 @@ export function analyzeDiscoverySignals(discovery: DiscoveryReport): DiscoverySi
   const hasPayments = discovery.payments.length > 0 || surfaces.includes("payments");
   const hasLlm =
     discovery.aiProviders.length > 0 ||
-    surfaces.some((s) => s === "llm" || s === "ai") ||
+    surfaces.includes("llm") ||
     /openai|anthropic|langchain|vercel.*ai/i.test(techNames);
 
   const hasMcp = /mcp|model context protocol/i.test(summary + techNames);
@@ -35,7 +35,8 @@ export function analyzeDiscoverySignals(discovery: DiscoveryReport): DiscoverySi
     !hasApiSurface &&
     !hasPayments &&
     !hasLlm &&
-    (surfaces.length === 0 || surfaces.every((s) => s === "static" || s === "marketing"));
+    (surfaces.length === 0 ||
+      (surfaces.length === 1 && (surfaces[0] === "browser" || surfaces[0] === "third_party_services")));
 
   const hasBrowserSurface = !isStaticSite || surfaces.includes("browser") || true;
 
