@@ -1,4 +1,5 @@
 import type { BusinessLogicTeamInput, BusinessLogicTeamResult } from "../business-logic.types";
+import type { BusinessLogicTeamContext } from "../discovery/discovery.types";
 import {
   BUSINESS_LOGIC_ANALYSIS_PHASE,
   BUSINESS_LOGIC_NO_WORKFLOWS_DEFERRAL,
@@ -47,9 +48,7 @@ export async function runBusinessLogicDeclarativePipeline(
   };
 
   const pipeline = await executePluginPipeline({ plugin, capabilityRegistry, context });
-  const teamContext = pipeline.context.artifacts.teamContext as
-    | import("../business-logic.types").BusinessLogicTeamContext
-    | undefined;
+  const teamContext = pipeline.context.artifacts.teamContext as BusinessLogicTeamContext | undefined;
 
   if (!teamContext || teamContext.workflows.length === 0) {
     return {
@@ -81,7 +80,7 @@ export async function runBusinessLogicDeclarativePipeline(
         status: "failed",
         skippedReason: pipeline.stageResults.find((s) => s.status === "failed")?.skipReason ?? "pipeline_failed",
         analysisPhase: BUSINESS_LOGIC_ANALYSIS_PHASE,
-        executionMode: "failed",
+        executionMode: "analysis",
         findingsCount: 0,
         workflowsDiscovered: teamContext.workflows.length,
         invariantsExtracted: 0,
