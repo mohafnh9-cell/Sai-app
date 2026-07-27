@@ -24,7 +24,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 export default async function MissionControlPage({ params }: PageProps) {
   const { id: projectId } = await params;
   const auth = await getCachedServerAuthContext();
-  if (!auth) redirect("/login");
+  if (!auth?.organizationId) redirect("/login");
 
   if (!isFeatureEnabled("mission_control", { organizationId: auth.organizationId })) {
     redirect(`/projects/${projectId}`);

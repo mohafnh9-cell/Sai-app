@@ -2,8 +2,75 @@
 
 **Date:** 2026-07-27  
 **Commit SHA:** `941162c47e01efea4e7723e0aaeb4c64582ebb48`  
-**Certification command:** `npm run validate:platform-convergence:staging`  
+**Certification command (staging URL):** `npm run validate:platform-convergence:staging`  
+**Certification command (main / single Vercel deployment):** `npm run validate:platform-convergence:main`  
 **Unit/snapshot gate:** `npm run validate:platform-convergence`
+
+---
+
+## Main-environment certification (single deployment)
+
+SequrAI may use **one** branch (`main`) and **one** Vercel deployment as the only validation environment. There is **no** separate staging branch or second deployment.
+
+Main certification is **opt-in only** and does **not** weaken the default production host guard used by the staging certification command.
+
+### Required safeguards (all must be true)
+
+| Control | Purpose |
+|---------|---------|
+| `ALLOW_MAIN_CERTIFICATION=1` | Explicit operator opt-in |
+| `MAIN_CERTIFICATION_CONFIRMATION=I_UNDERSTAND_THIS_USES_THE_MAIN_ENVIRONMENT` | Typed confirmation |
+| `STAGING_CERT_ORG_ID` / `STAGING_CERT_PROJECT_ID` | Scoped org/project (names retained for compatibility) |
+| `CERTIFICATION_PROJECT_IDS` | Allowlist; must include the project id |
+| Project name prefix `[CERT]` | Visible certification/test marker in the product |
+| `CERTIFICATION_FIXTURE_REPOSITORIES` | Non-production GitHub fixture only |
+| `MAIN_CERTIFICATION_URL` | Must match `NEXT_PUBLIC_APP_URL` origin exactly |
+| Fault injection env **unset** | Blocks Scenario C on live runs |
+| Destructive cert flags **unset** | No cleanup / destructive suites |
+| **Scenario A only** | Live main runs reject B/C/D |
+
+### Risks and limitations
+
+- Certification runs against the **same database and deployment** as normal operation; misconfigured scope can mutate a real project.
+- Only the dedicated **`[CERT]`** project + fixture repo + allowlisted ids may be used — never point certification env at customer orgs.
+- **Scenario C** (fault injection) and **Scenario D** (persistence failure simulation) are **not** permitted via `validate:platform-convergence:main`; use unit tests (`certification-fault.test.ts`, verdict idempotency tests) instead.
+- **`NODE_ENV` is not** the sole safety control; URL patterns, opt-in vars, project allowlists, and fixture repos enforce scope.
+- Staging command behavior is unchanged: it still **refuses** known production host patterns unless legacy `PLATFORM_CONVERGENCE_CERT_ALLOW_PRODUCTION=1` (staging path only).
+
+### Safe Scenario A commands (main)
+
+**Preflight (no DB scan inspect):**
+
+```bash
+export ALLOW_MAIN_CERTIFICATION=1
+export MAIN_CERTIFICATION_CONFIRMATION=I_UNDERSTAND_THIS_USES_THE_MAIN_ENVIRONMENT
+export MAIN_CERTIFICATION_URL="$NEXT_PUBLIC_APP_URL"
+export STAGING_CERT_ORG_ID="<cert-org-uuid>"
+export STAGING_CERT_PROJECT_ID="<cert-project-uuid>"
+export CERTIFICATION_PROJECT_IDS="$STAGING_CERT_PROJECT_ID"
+export CERTIFICATION_FIXTURE_REPOSITORIES="your-org/platform-convergence-fixture"
+export FEATURE_RT9_BUSINESS_LOGIC=1
+export FEATURE_LLM_RED_TEAM=1
+
+npm run validate:platform-convergence:main -- --preflight-only --skip-flag-check
+```
+
+**After a completed scan on the `[CERT]` project (inspect one job):**
+
+```bash
+export STAGING_CERT_SCAN_JOB_ID="<completed-scan-job-uuid>"
+export STAGING_CERT_SCENARIO=A
+
+npm run validate:platform-convergence:main -- --inspect
+```
+
+**Poll until job completes (bounded timeout):**
+
+```bash
+npm run validate:platform-convergence:main -- --poll --timeout-ms=900000
+```
+
+Implementation: `scripts/lib/platform-convergence-certification.mjs`, `scripts/run-platform-convergence-certification.mjs`.
 
 ---
 
@@ -178,7 +245,11 @@ Correlation fields: pass `scanId`, `scanJobId`, `organizationId`, `projectId` on
 
 | Path | Change |
 |------|--------|
-| `scripts/validate-platform-convergence-staging.mjs` | Staging certification inspector |
+| `scripts/lib/platform-convergence-certification.mjs` | Certification environment guards |
+| `scripts/run-platform-convergence-certification.mjs` | Shared inspect/poll runner |
+| `scripts/validate-platform-convergence-main.mjs` | Main-environment certification CLI |
+| `scripts/validate-platform-convergence-staging.mjs` | Staging URL certification CLI (unchanged command) |
+| `server/platform-convergence/__tests__/certification-env.test.ts` | Guard unit tests |
 | `server/platform-convergence/validate-platform-metadata.mjs` | Runtime metadata validation |
 | `server/platform-convergence/__tests__/validate-platform-metadata.test.ts` | Validator tests |
 | `server/platform-convergence/__tests__/certification-fault.test.ts` | Scenario C hook test |

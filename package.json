@@ -28,6 +28,7 @@
     "validate:platform-e2e": "vitest run server/ai-red-team/e2e-validation",
     "validate:platform-convergence": "vitest run server/platform-convergence",
     "validate:platform-convergence:staging": "node scripts/validate-platform-convergence-staging.mjs",
+    "validate:platform-convergence:main": "node scripts/validate-platform-convergence-main.mjs",
     "validate:threat-model": "vitest run server/ai-red-team/threat-model",
     "load-test:staging": "node scripts/staging-load-test.mjs",
     "db:apply-migrations": "node scripts/apply-migrations.mjs",

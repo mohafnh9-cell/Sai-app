@@ -55,7 +55,7 @@ export default async function ProjectDetailPage({
   const { id } = await params;
   const query = await searchParams;
   const auth = await getCachedServerAuthContext();
-  if (!auth) redirect("/login");
+  if (!auth?.organizationId) redirect("/login");
 
   const { t } = await getTranslator("projects");
 

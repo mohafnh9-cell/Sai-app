@@ -9,7 +9,7 @@ type RouteParams = { params: Promise<{ id: string }> };
 export async function GET(_request: Request, { params }: RouteParams) {
   const { id: projectId } = await params;
   const auth = await getCachedServerAuthContext();
-  if (!auth) {
+  if (!auth?.organizationId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

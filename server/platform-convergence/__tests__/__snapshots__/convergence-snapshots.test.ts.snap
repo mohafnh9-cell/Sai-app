@@ -1,11 +1,11 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`platform convergence snapshots > matches production verdict merge snapshot > director-verdict-fingerprint 1`] = `"{"commitSha":"e2e00000000000000000000000000000000000007","discoveryReportId":"2a501c8d-4da1-4eb8-9bee-23acfc51e17e","status":"DO_NOT_DEPLOY","summary":"Do not deploy — blockers or failed gates require resolution.","confidence":"very_high","primaryRecommendation":"Block deployment until top blocker is resolved.","correlationCount":1,"chainCount":0}"`;
+exports[`platform convergence snapshots > matches production verdict merge snapshot > director-verdict-fingerprint 1`] = `"{"commitSha":"e2e00000000000000000000000000000000000007","discoveryReportId":"77a4ab3e-b5be-489a-9d63-a9eca504134d","status":"DO_NOT_DEPLOY","summary":"Do not deploy — blockers or failed gates require resolution.","confidence":"very_high","primaryRecommendation":"Block deployment until top blocker is resolved.","correlationCount":1,"chainCount":0}"`;
 
 exports[`platform convergence snapshots > matches production verdict merge snapshot > verdict-decision-merge 1`] = `
 {
   "executiveSummary": "Do not deploy — blockers or failed gates require resolution.",
-  "securityDecisionId": "96e22ba9-6acc-4cd4-9963-5fec87416d07",
+  "securityDecisionId": "1c03c20a-1fdd-48d7-ae44-84d11046e9fd",
   "securityDeploymentVerdict": "DO_NOT_DEPLOY",
   "status": "not_ready",
 }
@@ -33,7 +33,7 @@ exports[`platform convergence snapshots > matches scan metadata snapshot shape >
     "status": "completed",
   },
   "correlationId": "00000000-0000-4000-8000-000000000001",
-  "decisionId": "69f1a83c-318b-46d3-b7aa-8839d045cd2c",
+  "decisionId": "a5785ebe-f749-4aab-b65f-8627c9703cef",
   "executionId": "00000000-0000-4000-8000-000000000002",
   "llmMetrics": {
     "aiComponents": 4,
@@ -1629,7 +1629,7 @@ exports[`platform convergence snapshots > matches scan metadata snapshot shape >
       "specialistsSkipped": 3,
       "workflowCount": 2,
     },
-    "completedAt": "2026-07-27T15:15:20.301Z",
+    "completedAt": "2026-07-27T15:35:17.389Z",
     "coverage": {
       "rt10": 100,
       "rt9": 100,
@@ -1637,17 +1637,17 @@ exports[`platform convergence snapshots > matches scan metadata snapshot shape >
     "errorMessage": undefined,
     "ids": {
       "correlationId": "00000000-0000-4000-8000-000000000001",
-      "decisionId": "69f1a83c-318b-46d3-b7aa-8839d045cd2c",
+      "decisionId": "a5785ebe-f749-4aab-b65f-8627c9703cef",
       "directorRequestId": "00000000-0000-4000-8000-000000000001",
       "executionId": "00000000-0000-4000-8000-000000000002",
       "scanId": "00000000-0000-4000-8000-000000000001",
       "scanJobId": "00000000-0000-4000-8000-000000000002",
       "verdictId": null,
     },
-    "intelligenceReportId": "7c90798d-e2d0-4301-b2a9-04f8558c9563",
+    "intelligenceReportId": "331480ea-9c85-4010-921c-0d5bb89cc967",
     "intelligenceSummary": {
       "correlationCount": 1,
-      "reportId": "7c90798d-e2d0-4301-b2a9-04f8558c9563",
+      "reportId": "331480ea-9c85-4010-921c-0d5bb89cc967",
       "verdictStatus": "DO_NOT_DEPLOY",
     },
     "llmMetrics": {
@@ -1723,7 +1723,7 @@ exports[`platform convergence snapshots > matches scan metadata snapshot shape >
           "plansCompleted": 10,
           "plansFailed": 0,
           "profileId": "mock_deterministic_v1",
-          "runtimeMsUsed": 1,
+          "runtimeMsUsed": 0,
         },
         "findingSummary": {
           "byConfidence": {
@@ -1793,7 +1793,7 @@ exports[`platform convergence snapshots > matches scan metadata snapshot shape >
         "ueeRemediationInputs": [
           {
             "entityIds": [
-              "033929f6-e12b-433c-978d-ba1609830233",
+              "0da3d0f6-597c-4cb7-8893-fde6094a0ce7",
             ],
             "expectedInvariantRestoration": "Restore and enforce invariant: Settlement before fulfillment",
             "findingId": "2c4f7f5fcfde8168e96191380a627dba",
@@ -1803,14 +1803,14 @@ exports[`platform convergence snapshots > matches scan metadata snapshot shape >
             "protectionTarget": "Restore and enforce invariant: Settlement before fulfillment",
             "replayPlanId": "c2e8a53029cd064f88e23a387bc569c5",
             "transitionIds": [
-              "c6f1f42b-8053-499e-a300-1e70f246c2aa",
+              "da43d176-c881-42cb-9d55-dc1009058ead",
             ],
-            "workflowId": "22aa969c-578a-47b1-bba3-be4d0501caad",
+            "workflowId": "ba9ee2f5-b0ab-47a7-ae40-12945fb2f420",
             "workflowKind": "payment_checkout",
           },
           {
             "entityIds": [
-              "033929f6-e12b-433c-978d-ba1609830233",
+              "0da3d0f6-597c-4cb7-8893-fde6094a0ce7",
             ],
             "expectedInvariantRestoration": "Restore and enforce invariant: Workflow step ordering",
             "findingId": "6d827bc0671659393eaaa28b864ae447",
@@ -1820,16 +1820,16 @@ exports[`platform convergence snapshots > matches scan metadata snapshot shape >
             "protectionTarget": "Restore and enforce invariant: Workflow step ordering",
             "replayPlanId": "30159b2bc859cab019feed015e23601a",
             "transitionIds": [
-              "7b277917-3ae8-4dca-907d-cedc0698c665",
-              "c6f1f42b-8053-499e-a300-1e70f246c2aa",
-              "9de3d380-04e3-4d32-9f0c-893d3b0f70a6",
+              "516220d0-3007-460c-98e3-af901e92632c",
+              "da43d176-c881-42cb-9d55-dc1009058ead",
+              "2d5693c8-9abe-4bb9-9836-ba9d69ab9a2e",
             ],
-            "workflowId": "22aa969c-578a-47b1-bba3-be4d0501caad",
+            "workflowId": "ba9ee2f5-b0ab-47a7-ae40-12945fb2f420",
             "workflowKind": "payment_checkout",
           },
           {
             "entityIds": [
-              "033929f6-e12b-433c-978d-ba1609830233",
+              "0da3d0f6-597c-4cb7-8893-fde6094a0ce7",
             ],
             "expectedInvariantRestoration": "Restore and enforce invariant: Terminal lifecycle completion",
             "findingId": "d32d79ef80f6be0ca4177c7d5c955313",
@@ -1839,12 +1839,12 @@ exports[`platform convergence snapshots > matches scan metadata snapshot shape >
             "protectionTarget": "Restore and enforce invariant: Terminal lifecycle completion",
             "replayPlanId": "91aeeb9ebba3e8455a24d4e3cdafa180",
             "transitionIds": [
-              "5d742d3e-f5d6-461e-bea9-38c4e73658c4",
-              "9de3d380-04e3-4d32-9f0c-893d3b0f70a6",
-              "b7c0fcfc-2137-45aa-be6e-bc54ead59de6",
-              "c6f1f42b-8053-499e-a300-1e70f246c2aa",
+              "8e78b35a-dc1d-4560-bd30-42703ac6f733",
+              "2d5693c8-9abe-4bb9-9836-ba9d69ab9a2e",
+              "171116db-4f1b-4498-a6db-c92d545da458",
+              "da43d176-c881-42cb-9d55-dc1009058ead",
             ],
-            "workflowId": "22aa969c-578a-47b1-bba3-be4d0501caad",
+            "workflowId": "ba9ee2f5-b0ab-47a7-ae40-12945fb2f420",
             "workflowKind": "payment_checkout",
           },
           {
@@ -1857,15 +1857,15 @@ exports[`platform convergence snapshots > matches scan metadata snapshot shape >
             "protectionTarget": "Restore and enforce invariant: Checkout fulfillment aligns with webhook settlement",
             "replayPlanId": "e2c9e105eed5b4141ebd552cc5471644",
             "transitionIds": [
-              "9de3d380-04e3-4d32-9f0c-893d3b0f70a6",
-              "0dcd3a64-0a88-4979-a0ac-edd7c76ed329",
+              "2d5693c8-9abe-4bb9-9836-ba9d69ab9a2e",
+              "0405a1ce-e2e6-42b9-8369-62f8a557f301",
             ],
-            "workflowId": "22aa969c-578a-47b1-bba3-be4d0501caad",
+            "workflowId": "ba9ee2f5-b0ab-47a7-ae40-12945fb2f420",
             "workflowKind": "payment_checkout",
           },
           {
             "entityIds": [
-              "fe30f22a-f060-4ea1-b61c-dc7d79413a43",
+              "170a74ed-f197-48aa-bb98-a4c31e73646d",
             ],
             "expectedInvariantRestoration": "Restore and enforce invariant: Webhook verify-before-apply",
             "findingId": "8e14a0109c35a021656f4a79d2ff47d4",
@@ -1875,10 +1875,10 @@ exports[`platform convergence snapshots > matches scan metadata snapshot shape >
             "protectionTarget": "Restore and enforce invariant: Webhook verify-before-apply",
             "replayPlanId": "3496593301c60b4f5514df108f79c13b",
             "transitionIds": [
-              "4933c435-260b-46c4-837b-f33c9fc79c10",
-              "0dcd3a64-0a88-4979-a0ac-edd7c76ed329",
+              "908c9f56-ae23-4486-8ac9-c4ba6238c84d",
+              "0405a1ce-e2e6-42b9-8369-62f8a557f301",
             ],
-            "workflowId": "aa291471-71d3-4652-9cf8-a735dab35959",
+            "workflowId": "da417a83-353b-4aa7-a4f7-0ee1852b09e7",
             "workflowKind": "payment_webhook_settlement",
           },
         ],
@@ -3502,7 +3502,7 @@ exports[`platform convergence snapshots > matches scan metadata snapshot shape >
           "failureCount": 0,
           "replayPlanCount": 14,
           "runtimeBudgetMs": 45000,
-          "runtimeMsUsed": 0,
+          "runtimeMsUsed": 1,
           "skippedSpecialists": 2,
           "specialistsExecuted": 6,
         },
@@ -5679,8 +5679,8 @@ exports[`platform convergence snapshots > matches scan metadata snapshot shape >
       "llm": "completed",
     },
     "teamRunIds": {
-      "rt10": "13eaf79b-6434-4935-94ee-46423588e7a2",
-      "rt9": "a291ebe2-a5af-45a4-bb59-f612bbc34ad5",
+      "rt10": "0527dacc-be17-447c-a756-8d2c6702bf9c",
+      "rt9": "6df0e3f8-8d69-4aa6-9be1-9f738b494b19",
     },
     "version": "1.0.0",
   },
@@ -7253,7 +7253,7 @@ exports[`platform convergence snapshots > matches scan metadata snapshot shape >
       "specialistsSkipped": 3,
       "workflowCount": 2,
     },
-    "completedAt": "2026-07-27T15:15:20.301Z",
+    "completedAt": "2026-07-27T15:35:17.389Z",
     "coverage": {
       "rt10": 100,
       "rt9": 100,
@@ -7261,17 +7261,17 @@ exports[`platform convergence snapshots > matches scan metadata snapshot shape >
     "errorMessage": undefined,
     "ids": {
       "correlationId": "00000000-0000-4000-8000-000000000001",
-      "decisionId": "69f1a83c-318b-46d3-b7aa-8839d045cd2c",
+      "decisionId": "a5785ebe-f749-4aab-b65f-8627c9703cef",
       "directorRequestId": "00000000-0000-4000-8000-000000000001",
       "executionId": "00000000-0000-4000-8000-000000000002",
       "scanId": "00000000-0000-4000-8000-000000000001",
       "scanJobId": "00000000-0000-4000-8000-000000000002",
       "verdictId": null,
     },
-    "intelligenceReportId": "7c90798d-e2d0-4301-b2a9-04f8558c9563",
+    "intelligenceReportId": "331480ea-9c85-4010-921c-0d5bb89cc967",
     "intelligenceSummary": {
       "correlationCount": 1,
-      "reportId": "7c90798d-e2d0-4301-b2a9-04f8558c9563",
+      "reportId": "331480ea-9c85-4010-921c-0d5bb89cc967",
       "verdictStatus": "DO_NOT_DEPLOY",
     },
     "llmMetrics": {
@@ -7347,7 +7347,7 @@ exports[`platform convergence snapshots > matches scan metadata snapshot shape >
           "plansCompleted": 10,
           "plansFailed": 0,
           "profileId": "mock_deterministic_v1",
-          "runtimeMsUsed": 1,
+          "runtimeMsUsed": 0,
         },
         "findingSummary": {
           "byConfidence": {
@@ -7417,7 +7417,7 @@ exports[`platform convergence snapshots > matches scan metadata snapshot shape >
         "ueeRemediationInputs": [
           {
             "entityIds": [
-              "033929f6-e12b-433c-978d-ba1609830233",
+              "0da3d0f6-597c-4cb7-8893-fde6094a0ce7",
             ],
             "expectedInvariantRestoration": "Restore and enforce invariant: Settlement before fulfillment",
             "findingId": "2c4f7f5fcfde8168e96191380a627dba",
@@ -7427,14 +7427,14 @@ exports[`platform convergence snapshots > matches scan metadata snapshot shape >
             "protectionTarget": "Restore and enforce invariant: Settlement before fulfillment",
             "replayPlanId": "c2e8a53029cd064f88e23a387bc569c5",
             "transitionIds": [
-              "c6f1f42b-8053-499e-a300-1e70f246c2aa",
+              "da43d176-c881-42cb-9d55-dc1009058ead",
             ],
-            "workflowId": "22aa969c-578a-47b1-bba3-be4d0501caad",
+            "workflowId": "ba9ee2f5-b0ab-47a7-ae40-12945fb2f420",
             "workflowKind": "payment_checkout",
           },
           {
             "entityIds": [
-              "033929f6-e12b-433c-978d-ba1609830233",
+              "0da3d0f6-597c-4cb7-8893-fde6094a0ce7",
             ],
             "expectedInvariantRestoration": "Restore and enforce invariant: Workflow step ordering",
             "findingId": "6d827bc0671659393eaaa28b864ae447",
@@ -7444,16 +7444,16 @@ exports[`platform convergence snapshots > matches scan metadata snapshot shape >
             "protectionTarget": "Restore and enforce invariant: Workflow step ordering",
             "replayPlanId": "30159b2bc859cab019feed015e23601a",
             "transitionIds": [
-              "7b277917-3ae8-4dca-907d-cedc0698c665",
-              "c6f1f42b-8053-499e-a300-1e70f246c2aa",
-              "9de3d380-04e3-4d32-9f0c-893d3b0f70a6",
+              "516220d0-3007-460c-98e3-af901e92632c",
+              "da43d176-c881-42cb-9d55-dc1009058ead",
+              "2d5693c8-9abe-4bb9-9836-ba9d69ab9a2e",
             ],
-            "workflowId": "22aa969c-578a-47b1-bba3-be4d0501caad",
+            "workflowId": "ba9ee2f5-b0ab-47a7-ae40-12945fb2f420",
             "workflowKind": "payment_checkout",
           },
           {
             "entityIds": [
-              "033929f6-e12b-433c-978d-ba1609830233",
+              "0da3d0f6-597c-4cb7-8893-fde6094a0ce7",
             ],
             "expectedInvariantRestoration": "Restore and enforce invariant: Terminal lifecycle completion",
             "findingId": "d32d79ef80f6be0ca4177c7d5c955313",
@@ -7463,12 +7463,12 @@ exports[`platform convergence snapshots > matches scan metadata snapshot shape >
             "protectionTarget": "Restore and enforce invariant: Terminal lifecycle completion",
             "replayPlanId": "91aeeb9ebba3e8455a24d4e3cdafa180",
             "transitionIds": [
-              "5d742d3e-f5d6-461e-bea9-38c4e73658c4",
-              "9de3d380-04e3-4d32-9f0c-893d3b0f70a6",
-              "b7c0fcfc-2137-45aa-be6e-bc54ead59de6",
-              "c6f1f42b-8053-499e-a300-1e70f246c2aa",
+              "8e78b35a-dc1d-4560-bd30-42703ac6f733",
+              "2d5693c8-9abe-4bb9-9836-ba9d69ab9a2e",
+              "171116db-4f1b-4498-a6db-c92d545da458",
+              "da43d176-c881-42cb-9d55-dc1009058ead",
             ],
-            "workflowId": "22aa969c-578a-47b1-bba3-be4d0501caad",
+            "workflowId": "ba9ee2f5-b0ab-47a7-ae40-12945fb2f420",
             "workflowKind": "payment_checkout",
           },
           {
@@ -7481,15 +7481,15 @@ exports[`platform convergence snapshots > matches scan metadata snapshot shape >
             "protectionTarget": "Restore and enforce invariant: Checkout fulfillment aligns with webhook settlement",
             "replayPlanId": "e2c9e105eed5b4141ebd552cc5471644",
             "transitionIds": [
-              "9de3d380-04e3-4d32-9f0c-893d3b0f70a6",
-              "0dcd3a64-0a88-4979-a0ac-edd7c76ed329",
+              "2d5693c8-9abe-4bb9-9836-ba9d69ab9a2e",
+              "0405a1ce-e2e6-42b9-8369-62f8a557f301",
             ],
-            "workflowId": "22aa969c-578a-47b1-bba3-be4d0501caad",
+            "workflowId": "ba9ee2f5-b0ab-47a7-ae40-12945fb2f420",
             "workflowKind": "payment_checkout",
           },
           {
             "entityIds": [
-              "fe30f22a-f060-4ea1-b61c-dc7d79413a43",
+              "170a74ed-f197-48aa-bb98-a4c31e73646d",
             ],
             "expectedInvariantRestoration": "Restore and enforce invariant: Webhook verify-before-apply",
             "findingId": "8e14a0109c35a021656f4a79d2ff47d4",
@@ -7499,10 +7499,10 @@ exports[`platform convergence snapshots > matches scan metadata snapshot shape >
             "protectionTarget": "Restore and enforce invariant: Webhook verify-before-apply",
             "replayPlanId": "3496593301c60b4f5514df108f79c13b",
             "transitionIds": [
-              "4933c435-260b-46c4-837b-f33c9fc79c10",
-              "0dcd3a64-0a88-4979-a0ac-edd7c76ed329",
+              "908c9f56-ae23-4486-8ac9-c4ba6238c84d",
+              "0405a1ce-e2e6-42b9-8369-62f8a557f301",
             ],
-            "workflowId": "aa291471-71d3-4652-9cf8-a735dab35959",
+            "workflowId": "da417a83-353b-4aa7-a4f7-0ee1852b09e7",
             "workflowKind": "payment_webhook_settlement",
           },
         ],
@@ -9126,7 +9126,7 @@ exports[`platform convergence snapshots > matches scan metadata snapshot shape >
           "failureCount": 0,
           "replayPlanCount": 14,
           "runtimeBudgetMs": 45000,
-          "runtimeMsUsed": 0,
+          "runtimeMsUsed": 1,
           "skippedSpecialists": 2,
           "specialistsExecuted": 6,
         },
@@ -11303,8 +11303,8 @@ exports[`platform convergence snapshots > matches scan metadata snapshot shape >
       "llm": "completed",
     },
     "teamRunIds": {
-      "rt10": "13eaf79b-6434-4935-94ee-46423588e7a2",
-      "rt9": "a291ebe2-a5af-45a4-bb59-f612bbc34ad5",
+      "rt10": "0527dacc-be17-447c-a756-8d2c6702bf9c",
+      "rt9": "6df0e3f8-8d69-4aa6-9be1-9f738b494b19",
     },
     "version": "1.0.0",
   },
