@@ -9,7 +9,19 @@ export type RedTeamLogEvent =
   | "director_completed"
   | "director_error"
   | "agent_error"
-  | "orchestration_cancelled";
+  | "orchestration_cancelled"
+  | "autonomous_orchestrator_planned"
+  | "intelligence_completed"
+  | "decision_completed"
+  | "production_verdict_completed"
+  | "llm_team_completed"
+  | "business_logic_team_completed"
+  | "universal_engineering_completed"
+  | "fix_strategy_completed"
+  | "authorization_team_completed"
+  | "api_team_completed"
+  | "browser_team_completed"
+  | "browser_team_failed";
 
 export type RedTeamLogEntry = {
   component: "ai-red-team";
