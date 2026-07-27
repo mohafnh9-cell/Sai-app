@@ -13,7 +13,8 @@ export type ScanExecutionTraceStage =
   | "scan_started"
   | "scan_completed"
   | "scan_failed"
-  | "verdict_persisted";
+  | "verdict_persisted"
+  | "user_cancelled";
 
 export type ScanExecutionTrace = {
   stages: Array<{
