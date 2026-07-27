@@ -239,7 +239,7 @@ export async function runBusinessLogicRuntime(input: {
       results.push(
         validateExecutionResult(
           {
-            executionId: `exec-${input.plan.id}`,
+            executionId: `exec-${plan.id}`,
             planId: plan.id,
             workflowId: plan.workflowId,
             specialistId: plan.specialistId,
