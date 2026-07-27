@@ -30,7 +30,7 @@ export function resolveDirectorPipelineDomains(
   const llmEnabled = isFeatureEnabled("llm_team", {
     organizationId: request.context.organizationId,
   });
-  const domains = [...core];
+  const domains: AttackDomain[] = [...core];
   if (businessLogicEnabled) domains.push("payments");
   if (llmEnabled) domains.push(SECURITY_DIRECTOR_LLM_DOMAIN);
   return domains;
