@@ -1,6 +1,6 @@
-import type { CoreSpecialist } from "../specialists/specialist.types";
+import type { CoreSpecialist, CoreSpecialistRegistryContract } from "../specialists/specialist.types";
 
-export class CoreSpecialistRegistry implements import("../specialists/specialist.types").CoreSpecialistRegistryContract {
+export class CoreSpecialistRegistry implements CoreSpecialistRegistryContract {
   private readonly specialists = new Map<string, CoreSpecialist>();
 
   register(specialist: CoreSpecialist): void {
