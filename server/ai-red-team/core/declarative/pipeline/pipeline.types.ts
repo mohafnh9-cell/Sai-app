@@ -1,4 +1,4 @@
-import type { CanonicalPipelineStageId } from "./canonical-stages";
+import type { CanonicalPipelineStageId } from "../canonical-stages";
 
 export type PipelineStageExecutionMode = "required" | "optional" | "skip_if_unsupported";
 
