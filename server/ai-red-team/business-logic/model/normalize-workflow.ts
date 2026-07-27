@@ -14,9 +14,10 @@ import type {
   BusinessRiskArea,
   BusinessWorkflow,
   BusinessWorkflowStep,
+  BusinessEntity,
 } from "./domain.types";
 import { buildMetadata } from "./evidence";
-import { entityIdByKind, type BusinessEntity } from "./normalize-entity";
+import { entityIdByKind } from "./normalize-entity";
 
 const RESOURCE_MAP: Record<DiscoveredBusinessResource["kind"], BusinessResourceKind> = {
   payment: "payment",
@@ -35,7 +36,7 @@ const WORKFLOW_RISKS: Record<DiscoveredBusinessWorkflowKind, BusinessRiskArea[]>
   payment_checkout: ["economic", "ordering", "idempotency"],
   payment_webhook_settlement: ["idempotency", "ordering", "economic"],
   subscription_lifecycle: ["economic", "ordering", "access_control"],
-  credit_quota: ["concurrency", "economic", "capacity"],
+  credit_quota: ["concurrency", "economic"],
   coupon_redemption: ["economic", "idempotency"],
   invitation_referral: ["economic", "access_control"],
   admin_business_operations: ["access_control", "audit", "economic"],
