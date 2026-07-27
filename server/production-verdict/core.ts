@@ -4,6 +4,7 @@ import {
   type ProductionVerdictV1,
 } from "@/brain/production-verdict/schema";
 import { generateProductionVerdict as runEngine } from "@/brain/production-verdict/engine";
+import { applySecurityDecisionToProductionVerdict } from "@/server/ai-red-team/decision/production-verdict-bridge";
 import { emitOperationalEvent } from "@/server/observability/operational-events";
 import {
   buildIdempotencyKey,
@@ -84,6 +85,10 @@ export async function generateAndPersistProductionVerdict(
     organizationId: string;
     projectId: string;
     scanId: string;
+    scanJobId?: string | null;
+    /** Authoritative Security Decision from unified scan pipeline (single verdict source). */
+    securityDecisionReport?: import("@/server/ai-red-team/decision/decision-model").SecurityDecisionReport | null;
+    verdictRowId?: string | null;
   }
 ): Promise<ProductionVerdictV1 | null> {
   log("verdict_generation_started", { scanId: input.scanId, projectId: input.projectId });
@@ -155,7 +160,7 @@ export async function generateAndPersistProductionVerdict(
     previousVerdict?.blockers_count ??
     (previousScan ? (previousScan.critical_count ?? 0) + (previousScan.high_count ?? 0) : undefined);
 
-  const { verdict } = runEngine({
+  let verdict = runEngine({
     projectId: input.projectId,
     repositoryId: scan.repository_id ?? input.projectId,
     scanId: input.scanId,
@@ -170,7 +175,18 @@ export async function generateAndPersistProductionVerdict(
     previousBlockersCount: previousBlockers,
     partialScanFailure: scan.status !== "completed",
     aiExecutiveSummary: aiReport?.executive_summary ?? null,
-  });
+  }).verdict;
+
+  if (input.securityDecisionReport) {
+    verdict = applySecurityDecisionToProductionVerdict(verdict, input.securityDecisionReport);
+  }
+
+  const correlationId = input.scanId;
+  verdict = {
+    ...verdict,
+    correlationId,
+    scanExecutionId: input.scanJobId ?? input.scanId,
+  } as ProductionVerdictV1;
 
   log("verdict_generated", {
     scanId: input.scanId,

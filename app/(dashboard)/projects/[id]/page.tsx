@@ -16,6 +16,7 @@ import { getTranslator } from "@/lib/i18n/server";
 import { fixPromptContextFromScan } from "@/features/production-verdict/fix-prompt-context";
 import type { ProjectRow } from "@/types/database";
 import type { Metadata } from "next";
+import { isFeatureEnabled } from "@/server/feature-flags";
 
 interface ProjectDetailPageProps {
   params: Promise<{ id: string }>;
@@ -65,6 +66,10 @@ export default async function ProjectDetailPage({
     .single();
 
   if (error || !project) notFound();
+
+  if (isFeatureEnabled("mission_control", { organizationId: auth.organizationId })) {
+    redirect(`/projects/${id}/mission-control`);
+  }
 
   const p = project as ProjectRow;
 

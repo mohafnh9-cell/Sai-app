@@ -1,0 +1,1 @@
+export const DEFAULT_AUTHZ_EVAL_BUDGET = 10_000;

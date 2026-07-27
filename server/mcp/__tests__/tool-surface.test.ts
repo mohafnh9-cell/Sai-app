@@ -5,16 +5,14 @@ import { MCP_TOOL_DEFINITIONS } from "../tool-definitions";
 import { COPILOT_BRAIN_TOOLS } from "@/brain/copilot-contract";
 
 /**
- * ADR-001 / MCP V1 contract: exactly five public tools are registered.
- * See docs/MCP_V1_PRODUCTION_ENGINE.md §4 and
- * docs/ADR_001_ARCHITECTURE_CLEANUP_REPORT.md.
+ * ADR-001 / MCP V1 + RT2: six public tools including discover_application.
  */
 describe("MCP public tool surface", () => {
-  it("registers exactly five public tools", () => {
-    expect(MCP_TOOL_DEFINITIONS).toHaveLength(5);
+  it("registers exactly six public tools", () => {
+    expect(MCP_TOOL_DEFINITIONS).toHaveLength(6);
   });
 
-  it("registers exactly the five MCP V1 — Remote Production Review tools", () => {
+  it("registers the canonical MCP tools", () => {
     const registeredNames = MCP_TOOL_DEFINITIONS.map((tool) => tool.name);
     expect(registeredNames).toEqual([
       "review_now",
@@ -22,6 +20,7 @@ describe("MCP public tool surface", () => {
       "safe_fix",
       "what_changed",
       "production_history",
+      "discover_application",
     ]);
   });
 

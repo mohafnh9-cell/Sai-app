@@ -47,3 +47,12 @@ Use when: "How healthy is my application?" | "Show my progress." | "Am I improvi
 Do NOT use for "Can I deploy right now?" — use can_i_deploy.
 Compute: NO. Optional range 7d|30d|all.
 Result: short trend summary — then user should ask "Can I deploy?" for today.`;
+
+export const DISCOVER_APPLICATION_DESCRIPTION = `Understand the connected repository architecture before any red team work.
+
+Purpose: Automatic discovery of frameworks, auth, databases, payments, AI providers, deployment, storage, and likely attack surface.
+Use when: "Understand this application." | "Analyze my architecture." | "What technologies am I using?" | "What is my attack surface?" | "Entiende esta aplicación." | "Analiza mi arquitectura." | "¿Qué tecnologías uso?"
+Do NOT use for deploy decisions — use can_i_deploy.
+Do NOT use for fix prompts — use safe_fix.
+Compute: YES (reads repository via GitHub; cached per commit).
+Result: structured discovery report, technology graph, and attack surface summary (no attacks performed).`;

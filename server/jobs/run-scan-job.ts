@@ -124,6 +124,7 @@ export async function executeScanRunJob(
       await touchScanJobHeartbeat(admin, payload.scanJobId);
       await runner.run({
         scanId: payload.scanId,
+        scanJobId: payload.scanJobId,
         repositoryId: payload.projectId,
         organizationId: payload.organizationId,
         githubRepo: await loadGithubRepo(admin, payload.projectId),

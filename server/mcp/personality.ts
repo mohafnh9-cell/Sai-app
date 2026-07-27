@@ -333,3 +333,35 @@ export function formatProductionHistoryResponse(
 export function formatProductionHistoryEmpty(t: McpTranslator): string {
   return buildTextResponse("production_history", t, [t("productionHistory.noHistory")]);
 }
+
+export function formatDiscoverApplicationResponse(
+  discovery: import("@/server/ai-red-team/discovery/types").DiscoveryReport,
+  t: McpTranslator
+): string {
+  const techLines =
+    discovery.detectedTechnologies.length > 0
+      ? discovery.detectedTechnologies.slice(0, 12).map((tech) => `- ${tech.name} (${Math.round(tech.confidence * 100)}%)`)
+      : [`- ${t("discoverApplication.noTechnologies")}`];
+
+  const surfaceLines =
+    discovery.potentialAttackSurface.length > 0
+      ? discovery.potentialAttackSurface.slice(0, 10).map((area) => `- ${area.label}: ${area.rationale}`)
+      : [`- ${t("discoverApplication.noAttackSurface")}`];
+
+  return buildTextResponse("application_discovery", t, [
+    discovery.projectSummary,
+    "",
+    t("discoverApplication.technologiesHeader"),
+    ...techLines,
+    "",
+    t("discoverApplication.attackSurfaceHeader"),
+    ...surfaceLines,
+    "",
+    t("discoverApplication.confidenceLine", {
+      score: String(Math.round(discovery.confidenceScore * 100)),
+      commit: discovery.commitSha.slice(0, 7),
+    }),
+    "",
+    t("discoverApplication.nextStep"),
+  ]);
+}

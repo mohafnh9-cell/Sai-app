@@ -24,6 +24,11 @@
     "validate:phase1-staging": "node scripts/staging-validate-phase1.mjs",
     "validate:phase1-6": "node scripts/staging-validate-phase1-6.mjs",
     "validate:migrations": "node scripts/migration-preflight.mjs",
+    "validate:red-team": "node scripts/validate-red-team.mjs",
+    "validate:platform-e2e": "vitest run server/ai-red-team/e2e-validation",
+    "validate:platform-convergence": "vitest run server/platform-convergence",
+    "validate:platform-convergence:staging": "node scripts/validate-platform-convergence-staging.mjs",
+    "validate:threat-model": "vitest run server/ai-red-team/threat-model",
     "load-test:staging": "node scripts/staging-load-test.mjs",
     "db:apply-migrations": "node scripts/apply-migrations.mjs",
     "mcp": "node mcp/stdio-bridge.mjs"
@@ -83,5 +88,8 @@
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.1.10"
+  },
+  "optionalDependencies": {
+    "playwright": "^1.52.0"
   }
 }

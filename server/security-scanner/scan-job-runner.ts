@@ -21,6 +21,7 @@ const ACTIVE_SCAN_UPDATE_STATUSES = [
 
 type ScanContext = {
   scanId: string;
+  scanJobId?: string;
   repositoryId: string;
   organizationId: string;
   githubRepo: string;
@@ -51,9 +52,10 @@ export interface ScanJobRunner {
   run(context: ScanContext): Promise<void>;
 }
 
-function logScan(level: "info" | "error", event: string, fields: Record<string, unknown>) {
+function logScan(level: "info" | "error" | "warn", event: string, fields: Record<string, unknown>) {
   const safe = { component: "scan-job-runner", event, ...fields };
   if (level === "error") console.error(safe);
+  else if (level === "warn") console.warn(safe);
   else console.info(safe);
 }
 
@@ -315,11 +317,56 @@ export class InlineScanJobRunner implements ScanJobRunner {
       });
 
       if (!reviewOnly) {
+        let securityDecisionReport: import("@/server/ai-red-team/decision/decision-model").SecurityDecisionReport | null =
+          null;
+        if (context.scanJobId) {
+          logScan("info", "platform_convergence_started", {
+            scanId: context.scanId,
+            scanJobId: context.scanJobId,
+            correlationId: context.scanId,
+            executionId: context.scanJobId,
+          });
+          try {
+            const { executeUnifiedScanRedTeamPhase } = await import(
+              "@/server/platform-convergence/execute-unified-scan-pipeline"
+            );
+            const unified = await executeUnifiedScanRedTeamPhase(this.supabase, {
+              scanId: context.scanId,
+              scanJobId: context.scanJobId,
+              organizationId: context.organizationId,
+              projectId: context.repositoryId,
+              commitSha: snapshot.commitSha,
+              files: snapshot.files,
+            });
+            securityDecisionReport = unified.redTeam.securityDecision;
+            logScan("info", "platform_convergence_completed", {
+              scanId: context.scanId,
+              scanJobId: context.scanJobId,
+              status: unified.redTeam.status,
+              durationMs: unified.redTeam.durationMs,
+            });
+          } catch (error) {
+            logScan("error", "platform_convergence_failed", {
+              scanId: context.scanId,
+              scanJobId: context.scanJobId,
+              message: error instanceof Error ? error.message : String(error),
+            });
+          }
+        } else {
+          logScan("warn", "platform_convergence_skipped_no_scan_job", {
+            scanId: context.scanId,
+            repositoryId: context.repositoryId,
+            persistMode: context.persistMode,
+          });
+        }
+
         try {
           await generateAndPersistProductionVerdict(this.supabase, {
             organizationId: context.organizationId,
             projectId: context.repositoryId,
             scanId: context.scanId,
+            scanJobId: context.scanJobId,
+            securityDecisionReport,
           });
         } catch (error) {
           await this.updateScan(context.scanId, {
@@ -476,7 +523,28 @@ export class InlineScanJobRunner implements ScanJobRunner {
       last_security_score: score,
     });
 
-    if (context.persistMode !== "review_only") {
+    if (context.persistMode !== "review_only" && context.scanJobId) {
+      try {
+        const { executeUnifiedScanRedTeamPhase } = await import(
+          "@/server/platform-convergence/execute-unified-scan-pipeline"
+        );
+        await executeUnifiedScanRedTeamPhase(this.supabase, {
+          scanId: context.scanId,
+          scanJobId: context.scanJobId,
+          organizationId: context.organizationId,
+          projectId: context.repositoryId,
+          commitSha: snapshot.commitSha,
+          files: "files" in snapshot && Array.isArray(snapshot.files) ? snapshot.files : [],
+        });
+      } catch {
+        // verdict path may still run without red team
+      }
+      await generateAndPersistProductionVerdict(this.supabase, {
+        organizationId: context.organizationId,
+        projectId: context.repositoryId,
+        scanId: context.scanId,
+      });
+    } else if (context.persistMode !== "review_only") {
       await generateAndPersistProductionVerdict(this.supabase, {
         organizationId: context.organizationId,
         projectId: context.repositoryId,

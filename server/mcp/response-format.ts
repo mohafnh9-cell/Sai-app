@@ -5,7 +5,8 @@ export type McpMode =
   | "production_review_request"
   | "safe_fix"
   | "continuous_review"
-  | "production_history";
+  | "production_history"
+  | "application_discovery";
 
 /**
  * Every SequrAI MCP response begins with the same two lines:

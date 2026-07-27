@@ -11,6 +11,7 @@ import { productionHistory } from "./tools/production-history";
 import { reviewNow } from "./tools/review-now";
 import { safeFix } from "./tools/safe-fix";
 import { whatChanged } from "./tools/what-changed";
+import { discoverApplication } from "./tools/discover-application";
 import type { VerdictStatus } from "@/brain/production-verdict/schema";
 import { deployAnswerFromVerdictStatus } from "@/server/production-memory/types";
 import {
@@ -48,10 +49,7 @@ function projectSelector(input: Record<string, unknown>) {
 
 /**
  * ADR-001 / MCP V1: this switch may only dispatch to the exactly-five
- * canonical public tools registered in ./tool-definitions.ts. Every handler
- * below only retrieves, compares, aggregates, formats, or translates
- * already-persisted Production Verdict Engine output — never independent
- * product truth. Enforced by server/mcp/__tests__/tool-surface.test.ts.
+ * canonical public tools registered in ./tool-definitions.ts.
  */
 export async function executeMcpTool(
   ctx: McpAuthContext,
@@ -194,6 +192,16 @@ async function dispatch(
           ...projectSelector(input),
           range: range(input.range),
           limit: num(input.limit),
+        },
+        t
+      );
+
+    case "discover_application":
+      return discoverApplication(
+        ctx,
+        {
+          ...projectSelector(input),
+          branch: str(input.branch),
         },
         t
       );

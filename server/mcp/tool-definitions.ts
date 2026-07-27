@@ -4,6 +4,7 @@ import {
   REVIEW_NOW_DESCRIPTION,
   SAFE_FIX_DESCRIPTION,
   WHAT_CHANGED_DESCRIPTION,
+  DISCOVER_APPLICATION_DESCRIPTION,
 } from "./tool-descriptions";
 
 export type McpToolDefinition = {
@@ -44,10 +45,7 @@ const PROJECT_SELECTOR_PROPERTIES: McpToolDefinition["inputSchema"]["properties"
 };
 
 /**
- * ADR-001 / MCP V1: the public MCP tool surface is capped at exactly five
- * canonical tools. No sixth tool, no legacy aliases. `list_projects` is now
- * purely internal plumbing used to resolve an ambiguous project reference —
- * it is never registered as a discoverable tool.
+ * ADR-001 / MCP V1 + RT2: six public tools (five production engine tools + discover_application).
  * Enforced by server/mcp/__tests__/tool-surface.test.ts.
  */
 export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
@@ -124,6 +122,21 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
       required: [],
     },
   },
+  {
+    name: "discover_application",
+    description: DISCOVER_APPLICATION_DESCRIPTION,
+    inputSchema: {
+      type: "object",
+      properties: {
+        ...PROJECT_SELECTOR_PROPERTIES,
+        branch: {
+          type: "string",
+          description: "Optional branch to analyze. Defaults to the repository default branch.",
+        },
+      },
+      required: [],
+    },
+  },
 ];
 
 export const MCP_PUBLIC_TOOL_NAMES = MCP_TOOL_DEFINITIONS.map((tool) => tool.name);
@@ -132,5 +145,5 @@ export const MCP_SERVER_INFO = {
   name: "sequrai",
   version: "2.2.0",
   description:
-    "SequrAI Production Engine — independent Production Engineer for AI-built software. Speak naturally; select tools by intent (review, deploy readiness, safe fix, changes, history). Five tools only; canonical verdict truth is never computed in the client.",
+    "SequrAI Production Engine — independent Production Engineer for AI-built software. Speak naturally; select tools by intent (review, deploy readiness, safe fix, changes, history, architecture discovery). Six public tools; canonical verdict truth is never computed in the client.",
 };

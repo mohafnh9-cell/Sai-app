@@ -5,7 +5,8 @@
     "production_review_request": "STARTING PROTECTION REVIEW",
     "safe_fix": "FIX FOR CURSOR",
     "continuous_review": "WHAT CHANGED",
-    "production_history": "YOUR PROGRESS"
+    "production_history": "YOUR PROGRESS",
+    "application_discovery": "APPLICATION DISCOVERY"
   },
   "blocks": {
     "worriesHeader": "What worries me most:",
@@ -108,6 +109,14 @@
     "noChange": "No change since your last valid review.",
     "noPreviousReview": "This is your first valid review — there's nothing to compare yet."
   },
+  "discoverApplication": {
+    "technologiesHeader": "Detected technologies:",
+    "attackSurfaceHeader": "Potential attack surface:",
+    "confidenceLine": "Discovery confidence: {score}% on commit {commit}.",
+    "nextStep": "When you're ready for a protection review, say \"Review my project\" — then ask \"Can I deploy?\"",
+    "noTechnologies": "No known technologies matched yet.",
+    "noAttackSurface": "No attack areas inferred yet."
+  },
   "productionHistory": {
     "recentSnapshot": "Recent checks: {scores}",
     "askDeployForToday": "Ask \"Can I deploy?\" for today's answer.",
@@ -143,6 +152,7 @@
     "blocker_not_found": "This blocker was not found in the latest Production Verdict. It may already be resolved.",
     "safe_fix_unavailable": "A Safe Fix Prompt could not be generated for this blocker.",
     "rate_limited": "Too many requests. Wait a moment before trying again.",
-    "internal_error": "Something went wrong while processing this request. Try again."
+    "internal_error": "Something went wrong while processing this request. Try again.",
+    "discovery_failed": "I couldn't analyze this repository architecture. Check the GitHub connection and try again."
   }
 }

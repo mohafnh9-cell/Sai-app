@@ -18,6 +18,7 @@ import type { ProjectSelector } from "../project-resolution";
 import { resolveMcpProject } from "../project-resolution";
 import { buildProjectReportUrl } from "../report-url";
 import { getStalenessInfo } from "../staleness";
+import { applyLatestSecurityDecisionToVerdict } from "../security-decision-overlay";
 
 export type CanIDeployInput = ProjectSelector;
 
@@ -65,10 +66,15 @@ export async function canIDeploy(
 ): Promise<CanIDeployResult> {
   const project = await resolveMcpProject(ctx, input, t);
 
-  const verdict = await getCurrentProductionVerdict(ctx.admin, project.id);
+  let verdict = await getCurrentProductionVerdict(ctx.admin, project.id);
   if (!verdict) {
     throw new McpError(404, "no_verdict_available", t("errors.no_verdict_available"));
   }
+
+  const securityOverlay = applyLatestSecurityDecisionToVerdict(project.id, verdict, {
+    organizationId: ctx.organizationId,
+  });
+  verdict = securityOverlay.verdict;
 
   const [staleness, latestReview] = await Promise.all([
     getStalenessInfo(ctx.admin, project.id, verdict.commitSha),
@@ -161,8 +167,12 @@ export async function canIDeploy(
   const engineDecision = mapVerdictStatusToDecision(verdict.status);
   const decision =
     staleness.reviewFailed && engineDecision === "deploy" ? "more_analysis_required" : engineDecision;
-  const deploymentRecommendation =
+  let deploymentRecommendation =
     decision === "deploy" ? "SHIP_IT" : decision === "do_not_deploy" ? "DO_NOT_DEPLOY" : "MORE_ANALYSIS_REQUIRED";
+
+  if (securityOverlay.applied && securityOverlay.deploymentRecommendation) {
+    deploymentRecommendation = securityOverlay.deploymentRecommendation;
+  }
 
   const nextAction = pickRecommendedAction(t, {
     decision,
@@ -174,7 +184,9 @@ export async function canIDeploy(
   const summary = formatCanIDeployResponse(t, {
     decision,
     status: verdict.status,
-    executiveSummary: verdict.executiveSummary,
+    executiveSummary: securityOverlay.executiveSummarySuffix
+      ? `${verdict.executiveSummary} ${securityOverlay.executiveSummarySuffix}`
+      : verdict.executiveSummary,
     worries,
     blockersCount: verdict.blockersCount,
     staleness: stalenessFootnotes,

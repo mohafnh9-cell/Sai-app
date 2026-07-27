@@ -8,7 +8,21 @@ export type FeatureFlagKey =
   | "protection_reports"
   | "safe_fix_v2"
   | "inngest_scheduler"
-  | "mcp_enrichment";
+  | "mcp_enrichment"
+  | "browser_team"
+  | "api_team"
+  | "authorization_team"
+  | "business_logic_team"
+  | "business_logic_persistence"
+  | "llm_team"
+  | "fix_strategy_engine"
+  | "universal_engineering_engine"
+  | "ai_adapters"
+  | "verification_engine"
+  | "autonomous_orchestrator"
+  | "parallel_execution"
+  | "adaptive_team_selection"
+  | "mission_control";
 
 const DEFAULTS: Record<FeatureFlagKey, FeatureRollout> = {
   continuous_protection: "ga",
@@ -17,6 +31,20 @@ const DEFAULTS: Record<FeatureFlagKey, FeatureRollout> = {
   safe_fix_v2: "ga",
   inngest_scheduler: "private_beta",
   mcp_enrichment: "ga",
+  browser_team: "internal",
+  api_team: "internal",
+  authorization_team: "internal",
+  business_logic_team: "internal",
+  business_logic_persistence: "internal",
+  llm_team: "internal",
+  fix_strategy_engine: "internal",
+  universal_engineering_engine: "internal",
+  ai_adapters: "internal",
+  verification_engine: "internal",
+  autonomous_orchestrator: "internal",
+  parallel_execution: "internal",
+  adaptive_team_selection: "internal",
+  mission_control: "internal",
 };
 
 function parseOverrides(): Partial<Record<FeatureFlagKey, FeatureRollout>> {

@@ -112,6 +112,12 @@ export const ProductionVerdictSchema = z.object({
   methodologyNote: z.string(),
 
   generatedAt: z.string().datetime(),
+
+  /** Unified platform convergence — authoritative decision linkage */
+  correlationId: z.string().uuid().optional(),
+  scanExecutionId: z.string().uuid().optional(),
+  securityDecisionId: z.string().uuid().optional(),
+  securityDeploymentVerdict: z.string().optional(),
 });
 
 export type ProductionVerdictV1 = z.infer<typeof ProductionVerdictSchema>;

@@ -67,8 +67,8 @@ describe("MCP natural language intent evaluation", () => {
     }
   });
 
-  it("keeps exactly five public MCP tools (ADR-001)", () => {
-    expect(MCP_TOOL_DEFINITIONS).toHaveLength(5);
+  it("keeps exactly six public MCP tools (ADR-001 + RT2)", () => {
+    expect(MCP_TOOL_DEFINITIONS).toHaveLength(6);
   });
 
   it("does not wire evaluation recommender into executeMcpTool", () => {
