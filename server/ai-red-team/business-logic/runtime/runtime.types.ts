@@ -1,6 +1,6 @@
 import type { DiscoveredBusinessWorkflowKind } from "../discovery/discovery.types";
 
-export type BusinessLogicExecutionMode =
+export type BusinessLogicRuntimeExecutionMode =
   | "static_validation"
   | "simulation_only"
   | "mock_runtime"
@@ -42,7 +42,7 @@ export type BusinessLogicRuntimeProfile = {
   label: string;
   /** Never allows production mutation — staging_candidate remains planning-only in Slice 6. */
   allowStagingCandidate: boolean;
-  defaultMode: BusinessLogicExecutionMode;
+  defaultMode: BusinessLogicRuntimeExecutionMode;
 };
 
 export type BusinessLogicRuntimeBudget = {
@@ -93,7 +93,7 @@ export type BusinessLogicExecutionPlan = {
   targetAbuseCaseId: string | null;
   assumptions: string[];
   requiredEvidenceRefIds: string[];
-  executionMode: BusinessLogicExecutionMode;
+  executionMode: BusinessLogicRuntimeExecutionMode;
   maxEvaluations: number;
   timeoutMs: number;
   rollbackStrategy: "mock_reset" | "none";
@@ -104,7 +104,7 @@ export type BusinessLogicExecutionResult = {
   planId: string;
   workflowId: string;
   specialistId: string;
-  executionMode: BusinessLogicExecutionMode;
+  executionMode: BusinessLogicRuntimeExecutionMode;
   status: BusinessLogicExecutionStatus;
   classification: BusinessLogicExecutionClassification;
   confidence: BusinessLogicExecutionClassification;

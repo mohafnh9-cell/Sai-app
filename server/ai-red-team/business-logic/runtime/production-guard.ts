@@ -1,8 +1,8 @@
-import type { BusinessLogicExecutionMode } from "./runtime.types";
+import type { BusinessLogicRuntimeExecutionMode } from "./runtime.types";
 import { BUSINESS_LOGIC_RUNTIME_PRODUCTION_FORBIDDEN } from "./runtime.config";
 
 /** RT9 must never perform live production mutation. */
-export function assertSafeBusinessLogicExecutionMode(mode: BusinessLogicExecutionMode): void {
+export function assertSafeBusinessLogicExecutionMode(mode: BusinessLogicRuntimeExecutionMode): void {
   if (!BUSINESS_LOGIC_RUNTIME_PRODUCTION_FORBIDDEN) {
     throw new Error("BUSINESS_LOGIC_RUNTIME_PRODUCTION_FORBIDDEN must remain true.");
   }
@@ -11,6 +11,6 @@ export function assertSafeBusinessLogicExecutionMode(mode: BusinessLogicExecutio
   }
 }
 
-export function isMockOnlyExecutionMode(mode: BusinessLogicExecutionMode): boolean {
+export function isMockOnlyExecutionMode(mode: BusinessLogicRuntimeExecutionMode): boolean {
   return mode === "mock_runtime" || mode === "simulation_only" || mode === "static_validation";
 }

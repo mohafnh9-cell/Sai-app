@@ -4,7 +4,7 @@ import type { BusinessInvariant } from "../invariants/invariant.types";
 import type { BusinessDomainModel } from "../model/domain.types";
 import type { BusinessLogicSpecialistExecutionSummary } from "../specialists/specialist.types";
 import type {
-  BusinessLogicExecutionMode,
+  BusinessLogicRuntimeExecutionMode,
   BusinessLogicExecutionPlan,
   BusinessLogicMockScenarioKind,
   BusinessLogicRuntimeLimits,
@@ -46,7 +46,7 @@ function scenarioForWorkflowKind(
 function resolveExecutionMode(input: {
   validationMode: "static_review" | "future_runtime" | "future_replay";
   profile: BusinessLogicRuntimeProfile;
-}): BusinessLogicExecutionMode {
+}): BusinessLogicRuntimeExecutionMode {
   if (input.validationMode === "static_review") return "static_validation";
   if (input.validationMode === "future_replay") return "simulation_only";
   if (input.profile.allowStagingCandidate) return "staging_candidate";
