@@ -5,19 +5,18 @@ import { createAdminClient } from "@/server/security-scanner/admin-client";
 import { requireProjectApiAccess } from "@/server/projects/project-access";
 import {
   CancelProductionReviewError,
-  cancelProductionReview,
+  cancelProductionReviewByScanJob,
 } from "@/server/review-cancel/cancel-production-review";
-import { getActiveProductionReviewForProject } from "@/server/review-cancel/get-active-production-review";
 import { enforceRateLimit } from "@/server/http/rate-limit";
 
 const paramsSchema = z.object({
   id: z.string().uuid(),
-  reviewId: z.string().uuid(),
+  scanJobId: z.string().uuid(),
 });
 
 export async function POST(
   request: Request,
-  { params }: { params: Promise<{ id: string; reviewId: string }> }
+  { params }: { params: Promise<{ id: string; scanJobId: string }> }
 ) {
   try {
     const rateLimited = enforceRateLimit(request);
@@ -25,10 +24,10 @@ export async function POST(
 
     const parsed = paramsSchema.safeParse(await params);
     if (!parsed.success) {
-      return NextResponse.json({ error: "Invalid project or review id" }, { status: 400 });
+      return NextResponse.json({ error: "Invalid project or scan job id" }, { status: 400 });
     }
 
-    const { id: projectId, reviewId } = parsed.data;
+    const { id: projectId, scanJobId } = parsed.data;
     const supabase = await createClient();
     const {
       data: { user },
@@ -37,26 +36,20 @@ export async function POST(
     if (!access.ok) return access.response;
 
     const admin = createAdminClient();
-    const active = await getActiveProductionReviewForProject(admin, {
+    const result = await cancelProductionReviewByScanJob(admin, {
       organizationId: access.project.organization_id,
       projectId,
-    });
-
-    const result = await cancelProductionReview(admin, {
-      reviewId,
-      projectId,
+      scanJobId,
       cancelledByUserId: access.userId,
-      organizationId: access.project.organization_id,
-      expectedScanJobId: active?.scanId === reviewId ? active.scanJobId : null,
     });
 
     return NextResponse.json({
       ok: true,
       cancelled: result.cancelled,
-      idempotent: result.idempotent,
-      reviewId: result.reviewId,
-      scanJobId: result.scanJobId,
+      alreadyCancelled: result.idempotent,
       status: result.status,
+      scanJobId: result.scanJobId,
+      scanId: result.reviewId,
     });
   } catch (error) {
     if (error instanceof CancelProductionReviewError) {
@@ -66,7 +59,7 @@ export async function POST(
       );
     }
     console.error({
-      component: "project-review-cancel-api",
+      component: "project-scan-job-cancel-api",
       event: "request_failed",
       errorType: error instanceof Error ? error.name : "unknown",
     });

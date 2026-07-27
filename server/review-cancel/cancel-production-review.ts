@@ -1,12 +1,11 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { isActiveReviewScanStatus } from "@/brain/automatic-review/review-status";
 import {
   CANCELLABLE_SCAN_STATUSES,
-  isCancellableScanStatus,
+  isProductionReviewCancellable,
   isScanCancellationTerminal,
-} from "@/lib/review/cancellation";
+} from "@/lib/review/production-review-cancellable";
 import { markScanJobCancelled } from "@/server/jobs/scan-job-store";
 import { logScanExecutionTrace } from "@/server/jobs/scan-execution/scan-execution-trace";
 import { emitOperationalEvent } from "@/server/observability/operational-events";
@@ -26,6 +25,7 @@ export class CancelProductionReviewError extends Error {
 export type CancelProductionReviewResult = {
   cancelled: boolean;
   reviewId: string;
+  scanJobId: string | null;
   idempotent: boolean;
   status: "cancelled" | "cancelling";
 };
@@ -166,17 +166,188 @@ async function finalizeCancelledScan(
   return true;
 }
 
+async function finalizeCancelledScanLegacy(
+  admin: SupabaseClient,
+  input: {
+    reviewId: string;
+    projectId: string;
+    organizationId: string;
+    cancelledByUserId?: string | null;
+    scanJobId?: string | null;
+  }
+): Promise<boolean> {
+  const now = new Date().toISOString();
+  const { data } = await admin
+    .from("scans")
+    .update({
+      status: "cancelled",
+      failed_at: now,
+      error_code: USER_CANCELLED,
+      error_message: "Review cancelled by user",
+      progress_message: "Production review cancelled",
+    })
+    .eq("id", input.reviewId)
+    .eq("repository_id", input.projectId)
+    .in("status", ["cancelling", ...CANCELLABLE_SCAN_STATUSES])
+    .select("id")
+    .maybeSingle();
+
+  if (!data) {
+    const existing = await loadScan(admin, input.reviewId, input.projectId);
+    return existing?.status === "cancelled";
+  }
+
+  await emitCancelTelemetry(admin, "production_review_cancel_completed", input);
+  await recordCancelAudit(admin, input);
+  logScanExecutionTrace("review_cancelled", {
+    reviewId: input.reviewId,
+    projectId: input.projectId,
+    organizationId: input.organizationId,
+    status: "cancelled",
+    stage: "user_cancelled",
+  });
+  return true;
+}
+
+async function signalAndFinalizeCancellation(
+  admin: SupabaseClient,
+  input: {
+    reviewId: string;
+    projectId: string;
+    organizationId: string;
+    cancelledByUserId?: string | null;
+    progressAtCancellation: number;
+    lastCompletedPhase: string | null;
+    scanJobId: string | null;
+    previousStatus: string;
+  }
+): Promise<CancelProductionReviewResult> {
+  await admin
+    .from("repository_scan_state")
+    .update({ active_scan_id: null })
+    .eq("repository_id", input.projectId)
+    .eq("active_scan_id", input.reviewId);
+
+  if (input.scanJobId) {
+    await emitCancelTelemetry(admin, "production_review_cancel_started", {
+      reviewId: input.reviewId,
+      projectId: input.projectId,
+      organizationId: input.organizationId,
+      cancelledByUserId: input.cancelledByUserId,
+      scanJobId: input.scanJobId,
+      metadata: { previousStatus: input.previousStatus },
+    });
+    await markScanJobCancelled(admin, input.scanJobId, {
+      failureCode: USER_CANCELLED,
+      failureMessage: "Review cancelled by user",
+    });
+  }
+
+  let finalized = await finalizeCancelledScan(admin, {
+    reviewId: input.reviewId,
+    projectId: input.projectId,
+    organizationId: input.organizationId,
+    cancelledByUserId: input.cancelledByUserId,
+    progressAtCancellation: input.progressAtCancellation,
+    lastCompletedPhase: input.lastCompletedPhase,
+    scanJobId: input.scanJobId,
+  });
+
+  if (!finalized) {
+    finalized = await finalizeCancelledScanLegacy(admin, {
+      reviewId: input.reviewId,
+      projectId: input.projectId,
+      organizationId: input.organizationId,
+      cancelledByUserId: input.cancelledByUserId,
+      scanJobId: input.scanJobId,
+    });
+  }
+
+  if (!finalized) {
+    await emitCancelTelemetry(admin, "production_review_cancel_failed", {
+      reviewId: input.reviewId,
+      projectId: input.projectId,
+      organizationId: input.organizationId,
+      cancelledByUserId: input.cancelledByUserId,
+      scanJobId: input.scanJobId,
+    });
+    throw new CancelProductionReviewError(
+      500,
+      "CANCEL_REQUEST_FAILED",
+      "Could not finalize review cancellation"
+    );
+  }
+
+  return {
+    cancelled: true,
+    reviewId: input.reviewId,
+    scanJobId: input.scanJobId,
+    idempotent: false,
+    status: "cancelled",
+  };
+}
+
+export async function cancelProductionReviewByScanJob(
+  admin: SupabaseClient,
+  input: {
+    organizationId: string;
+    projectId: string;
+    scanJobId: string;
+    cancelledByUserId?: string | null;
+  }
+): Promise<CancelProductionReviewResult> {
+  const { data: job } = await admin
+    .from("scan_jobs")
+    .select("id, scan_id, status, organization_id, project_id")
+    .eq("id", input.scanJobId)
+    .eq("project_id", input.projectId)
+    .eq("organization_id", input.organizationId)
+    .maybeSingle();
+
+  if (!job?.scan_id) {
+    throw new CancelProductionReviewError(404, "SCAN_NOT_FOUND", "Review not found");
+  }
+
+  if (job.status === "cancelled") {
+    return {
+      cancelled: true,
+      reviewId: job.scan_id as string,
+      scanJobId: job.id as string,
+      idempotent: true,
+      status: "cancelled",
+    };
+  }
+
+  return cancelProductionReview(admin, {
+    reviewId: job.scan_id as string,
+    projectId: input.projectId,
+    cancelledByUserId: input.cancelledByUserId,
+    expectedScanJobId: input.scanJobId,
+    organizationId: input.organizationId,
+  });
+}
+
 export async function cancelProductionReview(
   admin: SupabaseClient,
   input: {
     reviewId: string;
     projectId: string;
     cancelledByUserId?: string | null;
+    expectedScanJobId?: string | null;
+    organizationId?: string;
   }
 ): Promise<CancelProductionReviewResult> {
   const scan = await loadScan(admin, input.reviewId, input.projectId);
   if (!scan) {
-    throw new CancelProductionReviewError(404, "REVIEW_NOT_FOUND", "Review not found");
+    throw new CancelProductionReviewError(404, "SCAN_NOT_FOUND", "Review not found");
+  }
+
+  if (
+    input.organizationId &&
+    scan.organization_id &&
+    input.organizationId !== scan.organization_id
+  ) {
+    throw new CancelProductionReviewError(404, "SCAN_NOT_FOUND", "Review not found");
   }
 
   const telemetryBase = {
@@ -190,6 +361,7 @@ export async function cancelProductionReview(
     return {
       cancelled: true,
       reviewId: input.reviewId,
+      scanJobId: input.expectedScanJobId ?? null,
       idempotent: true,
       status: "cancelled",
     };
@@ -198,28 +370,78 @@ export async function cancelProductionReview(
   if (scan.status === "completed") {
     throw new CancelProductionReviewError(
       409,
-      "ALREADY_COMPLETED",
+      "SCAN_NOT_CANCELLABLE",
       "This review has already completed"
     );
   }
 
   if (scan.status === "failed") {
-    throw new CancelProductionReviewError(409, "NOT_CANCELLABLE", "This review cannot be cancelled");
+    throw new CancelProductionReviewError(
+      409,
+      "SCAN_NOT_CANCELLABLE",
+      "This review cannot be cancelled"
+    );
   }
 
   const progressAtCancellation = scan.progress ?? 0;
   const lastCompletedPhase = scan.progress_message ?? null;
+  const previousStatus = scan.status;
 
   const { data: job } = await admin
     .from("scan_jobs")
-    .select("id")
+    .select("id, status")
     .eq("scan_id", input.reviewId)
     .in("status", ["queued", "running"])
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
 
-  const scanJobId = (job?.id as string | undefined) ?? null;
+  let scanJobId = (job?.id as string | undefined) ?? null;
+
+  if (input.expectedScanJobId) {
+    if (!scanJobId || scanJobId !== input.expectedScanJobId) {
+      const { data: expectedJob } = await admin
+        .from("scan_jobs")
+        .select("id, scan_id, status")
+        .eq("id", input.expectedScanJobId)
+        .eq("project_id", input.projectId)
+        .maybeSingle();
+
+      if (!expectedJob || expectedJob.scan_id !== input.reviewId) {
+        await emitCancelTelemetry(admin, "production_review_cancel_failed", {
+          ...telemetryBase,
+          scanJobId: input.expectedScanJobId,
+          metadata: { reason: "stale_scan_job", uiStale: true },
+        });
+        throw new CancelProductionReviewError(
+          409,
+          "STALE_REVIEW",
+          "The active review changed before cancellation could complete"
+        );
+      }
+
+      if (expectedJob.status === "cancelled") {
+        return {
+          cancelled: true,
+          reviewId: input.reviewId,
+          scanJobId: input.expectedScanJobId,
+          idempotent: true,
+          status: "cancelled",
+        };
+      }
+
+      scanJobId = input.expectedScanJobId;
+    }
+  }
+
+  if (
+    !isProductionReviewCancellable({
+      scanStatus: scan.status,
+      scanJobStatus: (job?.status as string | undefined) ?? undefined,
+    })
+  ) {
+    throw new CancelProductionReviewError(409, "SCAN_NOT_CANCELLABLE", "Review is not active");
+  }
 
   if (scan.status === "cancelling") {
     await finalizeCancelledScan(admin, {
@@ -231,22 +453,19 @@ export async function cancelProductionReview(
     return {
       cancelled: true,
       reviewId: input.reviewId,
+      scanJobId,
       idempotent: true,
       status: "cancelled",
     };
   }
 
-  if (!isCancellableScanStatus(scan.status) && !isActiveReviewScanStatus(scan.status)) {
-    throw new CancelProductionReviewError(409, "NOT_CANCELLABLE", "Review is not active");
-  }
-
   await emitCancelTelemetry(admin, "production_review_cancel_requested", {
     ...telemetryBase,
     scanJobId,
+    metadata: { previousStatus },
   });
 
-  const now = new Date().toISOString();
-  const { data: marked } = await admin
+  const { data: marked, error: markingError } = await admin
     .from("scans")
     .update({
       status: "cancelling",
@@ -266,68 +485,48 @@ export async function cancelProductionReview(
       return {
         cancelled: true,
         reviewId: input.reviewId,
-        idempotent: true,
-        status: "cancelled",
-      };
-    }
-    if (isScanCancellationTerminal(latest?.status)) {
-      await finalizeCancelledScan(admin, {
-        ...telemetryBase,
-        progressAtCancellation: latest?.progress ?? progressAtCancellation,
-        lastCompletedPhase: latest?.progress_message ?? lastCompletedPhase,
         scanJobId,
-      });
-      return {
-        cancelled: true,
-        reviewId: input.reviewId,
         idempotent: true,
         status: "cancelled",
       };
     }
-    throw new CancelProductionReviewError(409, "NOT_CANCELLABLE", "Review is not active");
+    if (
+      latest &&
+      isProductionReviewCancellable({
+        scanStatus: latest.status,
+        scanJobStatus: job?.status as string | undefined,
+      })
+    ) {
+      return signalAndFinalizeCancellation(admin, {
+        reviewId: input.reviewId,
+        projectId: input.projectId,
+        organizationId: scan.organization_id,
+        cancelledByUserId: input.cancelledByUserId,
+        progressAtCancellation: latest.progress ?? progressAtCancellation,
+        lastCompletedPhase: latest.progress_message ?? lastCompletedPhase,
+        scanJobId,
+        previousStatus: latest.status,
+      });
+    }
+    if (markingError) {
+      console.error({
+        component: "production-review-cancel",
+        event: "cancelling_transition_failed",
+        reviewId: input.reviewId,
+        message: markingError.message,
+      });
+    }
+    throw new CancelProductionReviewError(409, "SCAN_NOT_CANCELLABLE", "Review is not active");
   }
 
-  await emitCancelTelemetry(admin, "production_review_cancel_started", {
-    ...telemetryBase,
-    scanJobId,
-  });
-
-  await admin
-    .from("repository_scan_state")
-    .update({ active_scan_id: null })
-    .eq("repository_id", input.projectId)
-    .eq("active_scan_id", input.reviewId);
-
-  if (scanJobId) {
-    await markScanJobCancelled(admin, scanJobId, {
-      failureCode: USER_CANCELLED,
-      failureMessage: "Review cancelled by user",
-    });
-  }
-
-  const finalized = await finalizeCancelledScan(admin, {
-    ...telemetryBase,
+  return signalAndFinalizeCancellation(admin, {
+    reviewId: input.reviewId,
+    projectId: input.projectId,
+    organizationId: scan.organization_id,
+    cancelledByUserId: input.cancelledByUserId,
     progressAtCancellation,
     lastCompletedPhase,
     scanJobId,
+    previousStatus,
   });
-
-  if (!finalized) {
-    await emitCancelTelemetry(admin, "production_review_cancel_failed", {
-      ...telemetryBase,
-      scanJobId,
-    });
-    throw new CancelProductionReviewError(
-      500,
-      "CANCEL_FAILED",
-      "Could not finalize review cancellation"
-    );
-  }
-
-  return {
-    cancelled: true,
-    reviewId: input.reviewId,
-    idempotent: false,
-    status: "cancelled",
-  };
 }

@@ -61,7 +61,23 @@ export function AnalyzeProjectButton({
   const [activeScanId, setActiveScanId] = useState<string | null>(
     initialContext.activeScan?.id ?? null
   );
-  const [scan, setScan] = useState<ScanPayload | null>(initialContext.activeScan);
+  const [activeScanJobId, setActiveScanJobId] = useState<string | null>(
+    initialContext.activeScan?.scanJobId ?? null
+  );
+  const [scanJobStatus, setScanJobStatus] = useState<string | null>(
+    initialContext.activeScan?.scanJobStatus ?? null
+  );
+  const [scan, setScan] = useState<ScanPayload | null>(
+    initialContext.activeScan
+      ? {
+          id: initialContext.activeScan.id,
+          status: initialContext.activeScan.status,
+          progress: initialContext.activeScan.progress,
+          progress_message: initialContext.activeScan.progressMessage,
+          commit_sha: initialContext.activeScan.commitSha,
+        }
+      : null
+  );
   const [error, setError] = useState("");
   const [errorRef, setErrorRef] = useState<string | null>(null);
   const [cancelError, setCancelError] = useState("");
@@ -109,7 +125,7 @@ export function AnalyzeProjectButton({
       case "cancelling":
         return t("cancellingReview");
       case "cancelled":
-        return t("reviewCancelled");
+        return t("newReview");
       case "completed":
         return t("reviewComplete");
       case "failed":
@@ -204,13 +220,52 @@ export function AnalyzeProjectButton({
     }
   }, [context.hasVerdict, phase, projectId, reconnectGitHub, scan, te, uiState]);
 
+  const refreshActiveProductionReview = useCallback(async () => {
+    const response = await fetch(`/api/projects/${projectId}/active-production-review`, {
+      cache: "no-store",
+    });
+    const body = (await response.json().catch(() => null)) as {
+      activeReview?: {
+        scanId: string;
+        scanJobId: string;
+        scanStatus: string;
+        scanJobStatus: string;
+      } | null;
+    } | null;
+    const active = body?.activeReview ?? null;
+    if (!active) {
+      setActiveScanId(null);
+      setActiveScanJobId(null);
+      setScanJobStatus(null);
+      setContext((prev) => ({ ...prev, activeScan: null }));
+      setPhase("idle");
+      return;
+    }
+    setActiveScanId(active.scanId);
+    setActiveScanJobId(active.scanJobId);
+    setScanJobStatus(active.scanJobStatus);
+    setScan((prev) => ({
+      id: active.scanId,
+      status: active.scanStatus,
+      progress: prev?.progress ?? null,
+      progress_message: prev?.progress_message ?? null,
+      commit_sha: prev?.commit_sha ?? null,
+    }));
+    setPhase("polling");
+  }, [projectId]);
+
   const pollScan = useCallback(async () => {
     if (!activeScanId) return;
     const response = await fetch(`/api/repositories/${projectId}/scans/${activeScanId}`, {
       cache: "no-store",
     });
     const body = (await response.json().catch(() => null)) as
-      | { scan?: ScanPayload; verdict?: unknown; error?: string }
+      | {
+          scan?: ScanPayload;
+          scanJob?: { id: string; status: string } | null;
+          verdict?: unknown;
+          error?: string;
+        }
       | null;
 
     if (!response.ok || !body?.scan) {
@@ -220,6 +275,10 @@ export function AnalyzeProjectButton({
     }
 
     setScan(body.scan);
+    if (body.scanJob?.id) {
+      setActiveScanJobId(body.scanJob.id);
+      setScanJobStatus(body.scanJob.status);
+    }
 
     if (scanWasCancelled(body.scan.status)) {
       setPhase("idle");
@@ -259,10 +318,11 @@ export function AnalyzeProjectButton({
 
   useEffect(() => {
     if (phase !== "polling" || !activeScanId) return;
+    queueMicrotask(() => void refreshActiveProductionReview());
     queueMicrotask(() => void pollScan());
     const timer = window.setInterval(() => void pollScan(), 4000);
     return () => window.clearInterval(timer);
-  }, [activeScanId, phase, pollScan]);
+  }, [activeScanId, phase, pollScan, refreshActiveProductionReview]);
 
   const busy =
     uiState === "requesting" ||
@@ -272,7 +332,12 @@ export function AnalyzeProjectButton({
     phase === "polling";
 
   const showCancel =
-    Boolean(activeScanId && scan && scanStatusShowsCancelButton(scan.status)) && !cancelInFlight;
+    Boolean(activeScanId && scan) &&
+    scanStatusShowsCancelButton({
+      scanStatus: scan?.status,
+      scanJobStatus,
+    }) &&
+    !cancelInFlight;
 
   const handleCancelError = useCallback((message: string) => {
     setCancelInFlight(false);
@@ -281,13 +346,21 @@ export function AnalyzeProjectButton({
 
   const handleCancelled = useCallback(() => {
     setCancelInFlight(false);
+    setActiveScanJobId(null);
+    setScanJobStatus(null);
     setScan((prev) =>
       prev ? { ...prev, status: "cancelled", progress_message: "Production review cancelled" } : prev
     );
     setPhase("idle");
     setActiveScanId(null);
     setContext((prev) => ({ ...prev, activeScan: null }));
-  }, []);
+    void refreshActiveProductionReview();
+  }, [refreshActiveProductionReview]);
+
+  const handleStaleCancel = useCallback(() => {
+    setCancelInFlight(false);
+    void refreshActiveProductionReview();
+  }, [refreshActiveProductionReview]);
 
   const handleCancelling = useCallback(() => {
     setCancelInFlight(true);
@@ -299,7 +372,7 @@ export function AnalyzeProjectButton({
     <div className={className}>
       <Button
         onClick={() => void requestReview()}
-        disabled={(busy && uiState !== "failed" && uiState !== "cancelled") || uiState === "cancelled"}
+        disabled={busy && uiState !== "failed" && uiState !== "cancelled"}
         size={size}
         variant={uiState === "failed" ? "destructive" : "default"}
         aria-busy={busy}
@@ -310,11 +383,13 @@ export function AnalyzeProjectButton({
       {showCancel && activeScanId ? (
         <CancelReviewButton
           projectId={projectId}
+          scanJobId={activeScanJobId}
           reviewId={activeScanId}
           disabled={uiState === "cancelling"}
           onCancelling={handleCancelling}
           onCancelled={handleCancelled}
           onError={handleCancelError}
+          onStale={handleStaleCancel}
         />
       ) : null}
       {uiState === "cancelled" && (

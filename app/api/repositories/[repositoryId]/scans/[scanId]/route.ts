@@ -45,6 +45,23 @@ export async function GET(
       .order("file_path", { ascending: true });
     if (findingsError) throw new Error(findingsError.message);
 
+    let scanJob: { id: string; status: string } | null = null;
+    try {
+      const admin = createAdminClient();
+      const { data: job } = await admin
+        .from("scan_jobs")
+        .select("id, status")
+        .eq("scan_id", scan.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (job?.id) {
+        scanJob = { id: job.id as string, status: job.status as string };
+      }
+    } catch {
+      scanJob = null;
+    }
+
     let verdict = null;
     if (scan.status === "completed") {
       const categoryCounts: Record<string, number> = {};
@@ -75,7 +92,7 @@ export async function GET(
       });
     }
 
-    return NextResponse.json({ scan, findings, verdict });
+    return NextResponse.json({ scan, scanJob, findings, verdict });
   } catch (error) {
     if (error instanceof ScanRequestError) {
       return NextResponse.json(

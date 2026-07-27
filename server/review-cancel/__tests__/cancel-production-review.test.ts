@@ -165,7 +165,7 @@ describe("cancelProductionReview", () => {
         reviewId: "missing",
         projectId: "project-1",
       })
-    ).rejects.toMatchObject({ code: "REVIEW_NOT_FOUND" });
+    ).rejects.toMatchObject({ code: "SCAN_NOT_FOUND" });
   });
 
   it("rejects already cancelled as idempotent success", async () => {
