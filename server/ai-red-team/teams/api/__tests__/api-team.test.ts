@@ -10,7 +10,7 @@ import {
 import { mockSafeApiRuntimeFactory } from "../runtime/mock-api-runtime";
 import { assertSafeApiRequest } from "../runtime/safe-api-runtime";
 import type { AttackAuthorizationRecord } from "../../authorization";
-import type { DiscoveryReport } from "../../discovery/types";
+import type { DiscoveryReport } from "../../../discovery/types";
 
 function auth(origin: string): AttackAuthorizationRecord {
   return {

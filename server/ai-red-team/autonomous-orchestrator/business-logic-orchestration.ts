@@ -1,4 +1,4 @@
-import type { DiscoveryReport } from "../../discovery/types";
+import type { DiscoveryReport } from "../discovery/types";
 import { buildBusinessLogicOrchestrationHintsFromDiscovery } from "./business-logic-aso-bridge";
 
 export type { BusinessLogicAsoOrchestrationHints } from "../business-logic/integration/platform-payload";

@@ -1,4 +1,4 @@
-import type { DiscoveryReport } from "../../discovery/types";
+import type { DiscoveryReport } from "../../../discovery/types";
 
 export type AuthorizationResourceNode = {
   id: string;

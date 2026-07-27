@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { DiscoveryReport } from "../../discovery/types";
+import type { DiscoveryReport } from "../../../discovery/types";
 import { runLlmDeclarativePipeline } from "../run-declarative-pipeline";
 
 function aiDiscovery(): DiscoveryReport {
