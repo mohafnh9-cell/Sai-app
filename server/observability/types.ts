@@ -15,7 +15,11 @@ export type OperationalEventType =
   | "notification_sent"
   | "notification_failed"
   | "invalid_transition"
-  | "recovery_exhausted";
+  | "recovery_exhausted"
+  | "production_review_cancel_requested"
+  | "production_review_cancel_started"
+  | "production_review_cancel_completed"
+  | "production_review_cancel_failed";
 
 export type OperationalEventInput = {
   eventType: OperationalEventType;

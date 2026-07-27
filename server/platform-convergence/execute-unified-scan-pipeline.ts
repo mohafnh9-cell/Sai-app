@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { runScanRedTeamPipeline } from "./run-scan-red-team";
 import { buildScanJobPlatformMetadata } from "./build-scan-metadata";
 import { persistScanJobPlatformMetadata, attachPlatformSummaryToScan } from "./persist-scan-platform";
+import { assertScanContinues } from "@/server/review-cancel/review-abort";
 
 export type UnifiedScanPipelineInput = {
   scanId: string;
@@ -38,7 +39,10 @@ export async function executeUnifiedScanRedTeamPhase(
     projectId: input.projectId,
   });
 
+  await assertScanContinues(admin, input.scanId);
+
   const redTeam = await runScanRedTeamPipeline(input);
+  await assertScanContinues(admin, input.scanId);
 
   if (!redTeam.report) {
     const platformMetadata = {

@@ -27,6 +27,7 @@ export async function getMissionControlView(
     completedJobsResult,
     latestScan,
     feedRows,
+    latestReviewScan,
   ] = await Promise.all([
     supabase.from("projects").select("id, name").eq("id", projectId).single(),
     getCurrentProductionVerdict(supabase, projectId),
@@ -59,9 +60,30 @@ export async function getMissionControlView(
       .eq("project_id", projectId)
       .order("occurred_at", { ascending: false })
       .limit(20),
+    supabase
+      .from("scans")
+      .select(
+        "status, cancelled_at, cancelled_by, last_completed_phase, progress_at_cancellation, created_at"
+      )
+      .eq("project_id", projectId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
   ]);
 
   const scanInProgress = Boolean(activeScanJob.data);
+  const cancelledReview =
+    latestReviewScan.data?.status === "cancelled" &&
+    latestReviewScan.data.cancelled_at &&
+    !scanInProgress
+      ? {
+          cancelledAt: latestReviewScan.data.cancelled_at as string,
+          cancelledByUserId: (latestReviewScan.data.cancelled_by as string | null) ?? null,
+          lastCompletedPhase: (latestReviewScan.data.last_completed_phase as string | null) ?? null,
+          progressAtCancellation:
+            (latestReviewScan.data.progress_at_cancellation as number | null) ?? 0,
+        }
+      : null;
   const feedFromDb: MissionFeedItem[] = (feedRows.data ?? []).map((row) => ({
     id: row.id,
     message: row.message,
@@ -95,6 +117,7 @@ export async function getMissionControlView(
     teamExecution: Object.keys(teamExecution).length > 0 ? teamExecution : undefined,
     businessLogicMetrics,
     llmMetrics,
+    cancelledReview,
   });
 
   return { view, verdict };

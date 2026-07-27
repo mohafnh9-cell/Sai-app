@@ -3,6 +3,14 @@
  * ADR-001: exactly five public tools — descriptions only, no new tools.
  */
 
+export const CANCEL_REVIEW_DESCRIPTION = `Cancel the active protection review (scan) for a repository.
+
+Purpose: Stop a queued or in-progress review so a new one can start on the latest commit.
+Use when: "Cancel the scan." | "Cancel the review." | "Stop the current review." | "Cancela el escaneo." | "Cancela la revisión."
+Do NOT use for deploy answers — use can_i_deploy.
+Compute: YES (updates scan state immediately).
+Result: cancelled or none active.`;
+
 export const REVIEW_NOW_DESCRIPTION = `Start a fresh SequrAI protection review (scan) for the connected repository.
 
 Purpose: Review latest work so SequrAI can protect the app in production.

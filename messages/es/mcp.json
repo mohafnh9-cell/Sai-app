@@ -55,6 +55,11 @@
     "insufficientData": "Aún no he revisado suficiente de tu repositorio para protegerte con responsabilidad.",
     "analysisFailed": "Tu última revisión no se completó. Di \"Revisa otra vez\" antes de confiar en esta respuesta."
   },
+  "cancel_review": {
+    "none_active": "SEQURAI\n\nNo hay ninguna revisión de protección activa que cancelar.",
+    "not_cancellable": "Esta revisión ya no se puede cancelar.",
+    "success": "SEQURAI\n\nRevisión cancelada ({reviewId}). Di \"Revisa mi proyecto\" para escanear el último commit."
+  },
   "reviewNow": {
     "queuedLead": "Estoy revisando tu aplicación ahora.",
     "queuedTiming": "Normalmente tarda unos dos minutos.",

@@ -81,6 +81,15 @@ export type MissionControlView = {
     currentVerdictStatus: VerdictStatus;
     currentScore: number;
   };
+  cancelledReview?: MissionCancelledReview | null;
+  hideProductionVerdict?: boolean;
+};
+
+export type MissionCancelledReview = {
+  cancelledAt: string;
+  cancelledByUserId: string | null;
+  lastCompletedPhase: string | null;
+  progressAtCancellation: number;
 };
 
 export type MissionControlBuildInput = {
@@ -99,6 +108,7 @@ export type MissionControlBuildInput = {
   businessLogicMetrics?: import("@/server/ai-red-team/business-logic/integration/platform-payload").BusinessLogicMissionControlMetrics;
   /** RT10 LLM metrics when available on scan metadata. */
   llmMetrics?: import("@/server/ai-red-team/llm-team/integration/platform-payload").LlmMissionControlMetrics;
+  cancelledReview?: MissionCancelledReview | null;
 };
 
 export const MISSION_TEAMS: Array<{ id: MissionTeamId; name: string }> = [

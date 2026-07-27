@@ -1,4 +1,5 @@
 import {
+  CANCEL_REVIEW_DESCRIPTION,
   CAN_I_DEPLOY_DESCRIPTION,
   PRODUCTION_HISTORY_DESCRIPTION,
   REVIEW_NOW_DESCRIPTION,
@@ -68,6 +69,21 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
           type: "string",
           description: "Why this review was requested. Analytics metadata only; never affects the result.",
           enum: ["before_deploy", "after_fix", "manual_check"],
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "cancel_review",
+    description: CANCEL_REVIEW_DESCRIPTION,
+    inputSchema: {
+      type: "object",
+      properties: {
+        ...PROJECT_SELECTOR_PROPERTIES,
+        reviewId: {
+          type: "string",
+          description: "Optional scan/review UUID. Defaults to the newest active review for the project.",
         },
       },
       required: [],
@@ -145,5 +161,5 @@ export const MCP_SERVER_INFO = {
   name: "sequrai",
   version: "2.2.0",
   description:
-    "SequrAI Production Engine — independent Production Engineer for AI-built software. Speak naturally; select tools by intent (review, deploy readiness, safe fix, changes, history, architecture discovery). Six public tools; canonical verdict truth is never computed in the client.",
+    "SequrAI Production Engine — independent Production Engineer for AI-built software. Speak naturally; select tools by intent (review, cancel review, deploy readiness, safe fix, changes, history, architecture discovery). Seven public tools; canonical verdict truth is never computed in the client.",
 };

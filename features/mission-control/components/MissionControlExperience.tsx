@@ -28,10 +28,21 @@ export function MissionControlExperience({
       <CurrentObjective
         objective={view.objective}
         projectId={view.projectId}
-        verdict={verdict}
-        fixPromptContext={fixPromptContext}
+        verdict={view.hideProductionVerdict ? null : verdict}
+        fixPromptContext={view.hideProductionVerdict ? undefined : fixPromptContext}
       />
-      <ProductionVerdictCardSection verdict={view.verdict} />
+      {view.cancelledReview ? (
+        <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+          <p className="font-medium text-foreground">Production review cancelled</p>
+          <p className="mt-1">
+            Last phase: {view.cancelledReview.lastCompletedPhase ?? "—"} ·{" "}
+            {new Date(view.cancelledReview.cancelledAt).toLocaleString()}
+          </p>
+        </div>
+      ) : null}
+      {!view.hideProductionVerdict ? (
+        <ProductionVerdictCardSection verdict={view.verdict} />
+      ) : null}
     </div>
   );
 }

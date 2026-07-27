@@ -25,6 +25,7 @@ export type ScanStatus =
   | "indexing"
   | "scanning"
   | "calculating_score"
+  | "cancelling"
   | "completed"
   | "failed"
   | "cancelled";
@@ -131,6 +132,11 @@ export type ScanRow = {
   started_at: string | null;
   completed_at: string | null;
   failed_at: string | null;
+  cancelled_at: string | null;
+  cancelled_by: string | null;
+  cancellation_reason: string | null;
+  progress_at_cancellation: number | null;
+  last_completed_phase: string | null;
   created_at: string;
   updated_at: string;
 };

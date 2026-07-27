@@ -112,6 +112,12 @@ export async function generateAndPersistProductionVerdict(
     return null;
   }
 
+  const scanStatus = String(scan.status ?? "");
+  if (scanStatus === "cancelled" || scanStatus === "cancelling") {
+    log("verdict_generation_skipped_cancelled", { scanId: input.scanId, status: scanStatus });
+    return null;
+  }
+
   const verdictKey = buildIdempotencyKey({
     organizationId: input.organizationId,
     projectId: input.projectId,

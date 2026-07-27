@@ -8,14 +8,15 @@ import { COPILOT_BRAIN_TOOLS } from "@/brain/copilot-contract";
  * ADR-001 / MCP V1 + RT2: six public tools including discover_application.
  */
 describe("MCP public tool surface", () => {
-  it("registers exactly six public tools", () => {
-    expect(MCP_TOOL_DEFINITIONS).toHaveLength(6);
+  it("registers exactly seven public tools", () => {
+    expect(MCP_TOOL_DEFINITIONS).toHaveLength(7);
   });
 
   it("registers the canonical MCP tools", () => {
     const registeredNames = MCP_TOOL_DEFINITIONS.map((tool) => tool.name);
     expect(registeredNames).toEqual([
       "review_now",
+      "cancel_review",
       "can_i_deploy",
       "safe_fix",
       "what_changed",

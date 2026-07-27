@@ -6,6 +6,10 @@ import { scanRepository as scanRepositoryFiles, scoreFindings } from "@/features
 import type { Confidence, Finding as ScannerFinding, Severity } from "@/features/security-scanner";
 import { generateAndPersistProductionVerdict } from "@/server/production-verdict/service";
 import {
+  assertScanContinues,
+  ScanCancelledError,
+} from "@/server/review-cancel/review-abort";
+import {
   GitHubRepositoryService,
   GitHubServiceError,
   parseGitHubRepository,
@@ -169,6 +173,8 @@ export class InlineScanJobRunner implements ScanJobRunner {
         scanType: isIncremental ? "incremental" : "full",
       });
 
+      await assertScanContinues(this.supabase, context.scanId);
+
       await Promise.all([
         this.updateScan(context.scanId, {
           status: "indexing",
@@ -317,6 +323,7 @@ export class InlineScanJobRunner implements ScanJobRunner {
       });
 
       if (!reviewOnly) {
+        await assertScanContinues(this.supabase, context.scanId);
         let securityDecisionReport: import("@/server/ai-red-team/decision/decision-model").SecurityDecisionReport | null =
           null;
         if (context.scanJobId) {
@@ -361,6 +368,7 @@ export class InlineScanJobRunner implements ScanJobRunner {
         }
 
         try {
+          await assertScanContinues(this.supabase, context.scanId);
           await generateAndPersistProductionVerdict(this.supabase, {
             organizationId: context.organizationId,
             projectId: context.repositoryId,
@@ -389,6 +397,13 @@ export class InlineScanJobRunner implements ScanJobRunner {
         durationMs: Date.now() - started,
       });
     } catch (error) {
+      if (error instanceof ScanCancelledError) {
+        logScan("info", "scan_aborted_cancelled", {
+          scanId: context.scanId,
+          repositoryId: context.repositoryId,
+        });
+        return;
+      }
       const code = error instanceof GitHubServiceError ? error.code : "SCAN_FAILED";
       const message =
         error instanceof GitHubServiceError
@@ -525,6 +540,7 @@ export class InlineScanJobRunner implements ScanJobRunner {
 
     if (context.persistMode !== "review_only" && context.scanJobId) {
       try {
+        await assertScanContinues(this.supabase, context.scanId);
         const { executeUnifiedScanRedTeamPhase } = await import(
           "@/server/platform-convergence/execute-unified-scan-pipeline"
         );
@@ -536,15 +552,18 @@ export class InlineScanJobRunner implements ScanJobRunner {
           commitSha: snapshot.commitSha,
           files: "files" in snapshot && Array.isArray(snapshot.files) ? snapshot.files : [],
         });
-      } catch {
+      } catch (error) {
+        if (error instanceof ScanCancelledError) return;
         // verdict path may still run without red team
       }
+      await assertScanContinues(this.supabase, context.scanId);
       await generateAndPersistProductionVerdict(this.supabase, {
         organizationId: context.organizationId,
         projectId: context.repositoryId,
         scanId: context.scanId,
       });
     } else if (context.persistMode !== "review_only") {
+      await assertScanContinues(this.supabase, context.scanId);
       await generateAndPersistProductionVerdict(this.supabase, {
         organizationId: context.organizationId,
         projectId: context.repositoryId,

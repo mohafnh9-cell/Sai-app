@@ -15,6 +15,7 @@ export type CopilotReadableContext = Pick<
 // ADR-001 / MCP V1 + RT2: mirrors server/mcp/tool-definitions.ts (6 public tools).
 export const COPILOT_BRAIN_TOOLS = [
   "review_now",
+  "cancel_review",
   "can_i_deploy",
   "safe_fix",
   "what_changed",

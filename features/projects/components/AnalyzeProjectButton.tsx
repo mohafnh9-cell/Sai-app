@@ -7,6 +7,8 @@ import { startGitHubOAuth } from "@/lib/github/oauth-client";
 import { trackEvent } from "@/lib/analytics/track";
 import { useI18n } from "@/lib/i18n/client";
 import { scanIsActive, scanIsCompleted } from "@/features/onboarding/onboarding-flow";
+import { scanStatusShowsCancelButton } from "@/lib/review/cancellation";
+import { CancelReviewButton } from "@/features/projects/components/CancelReviewButton";
 import type { ProjectReviewUiContext } from "@/server/projects/review-ui-context";
 
 type ReviewUiState =
@@ -16,6 +18,8 @@ type ReviewUiState =
   | "requesting"
   | "queued"
   | "processing"
+  | "cancelling"
+  | "cancelled"
   | "completed"
   | "failed"
   | "disconnected";
@@ -60,7 +64,12 @@ export function AnalyzeProjectButton({
   const [scan, setScan] = useState<ScanPayload | null>(initialContext.activeScan);
   const [error, setError] = useState("");
   const [errorRef, setErrorRef] = useState<string | null>(null);
+  const [cancelError, setCancelError] = useState("");
   const requestedRef = useRef(false);
+  const [cancelInFlight, setCancelInFlight] = useState(false);
+
+  const scanWasCancelled = (status?: string | null) => status?.toLowerCase() === "cancelled";
+  const scanIsCancelling = (status?: string | null) => status?.toLowerCase() === "cancelling";
 
   const reconnectGitHub = useCallback(async () => {
     localStorage.setItem(scanRetryKey(projectId), "1");
@@ -70,6 +79,8 @@ export function AnalyzeProjectButton({
   const uiState: ReviewUiState = useMemo(() => {
     if (context.githubNeedsReconnect || !context.githubConnected) return "disconnected";
     if (phase === "requesting") return "requesting";
+    if (scan && scanIsCancelling(scan.status)) return "cancelling";
+    if (scan && scanWasCancelled(scan.status)) return "cancelled";
     if (scan && scanIsActive(scan.status)) {
       if (scan.status.toLowerCase() === "queued") return "queued";
       return "processing";
@@ -95,6 +106,10 @@ export function AnalyzeProjectButton({
         return t("reviewQueued");
       case "processing":
         return t("analyzingProject");
+      case "cancelling":
+        return t("cancellingReview");
+      case "cancelled":
+        return t("reviewCancelled");
       case "completed":
         return t("reviewComplete");
       case "failed":
@@ -206,6 +221,13 @@ export function AnalyzeProjectButton({
 
     setScan(body.scan);
 
+    if (scanWasCancelled(body.scan.status)) {
+      setPhase("idle");
+      setActiveScanId(null);
+      setContext((prev) => ({ ...prev, activeScan: null }));
+      return;
+    }
+
     if (scanIsCompleted(body.scan.status)) {
       setPhase("idle");
       setContext((prev) => ({
@@ -246,13 +268,38 @@ export function AnalyzeProjectButton({
     uiState === "requesting" ||
     uiState === "queued" ||
     uiState === "processing" ||
+    uiState === "cancelling" ||
     phase === "polling";
+
+  const showCancel =
+    Boolean(activeScanId && scan && scanStatusShowsCancelButton(scan.status)) && !cancelInFlight;
+
+  const handleCancelError = useCallback((message: string) => {
+    setCancelInFlight(false);
+    setCancelError(message);
+  }, []);
+
+  const handleCancelled = useCallback(() => {
+    setCancelInFlight(false);
+    setScan((prev) =>
+      prev ? { ...prev, status: "cancelled", progress_message: "Production review cancelled" } : prev
+    );
+    setPhase("idle");
+    setActiveScanId(null);
+    setContext((prev) => ({ ...prev, activeScan: null }));
+  }, []);
+
+  const handleCancelling = useCallback(() => {
+    setCancelInFlight(true);
+    setCancelError("");
+    setScan((prev) => (prev ? { ...prev, status: "cancelling" } : prev));
+  }, []);
 
   return (
     <div className={className}>
       <Button
         onClick={() => void requestReview()}
-        disabled={busy && uiState !== "failed"}
+        disabled={(busy && uiState !== "failed" && uiState !== "cancelled") || uiState === "cancelled"}
         size={size}
         variant={uiState === "failed" ? "destructive" : "default"}
         aria-busy={busy}
@@ -260,6 +307,21 @@ export function AnalyzeProjectButton({
         {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
         {label}
       </Button>
+      {showCancel && activeScanId ? (
+        <CancelReviewButton
+          projectId={projectId}
+          reviewId={activeScanId}
+          disabled={uiState === "cancelling"}
+          onCancelling={handleCancelling}
+          onCancelled={handleCancelled}
+          onError={handleCancelError}
+        />
+      ) : null}
+      {uiState === "cancelled" && (
+        <p className="mt-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          {t("reviewCancelledBanner")}
+        </p>
+      )}
       {commitLabel && <p className="mt-2 text-xs text-muted-foreground">{commitLabel}</p>}
       {context.freshnessUnknown && (
         <p className="mt-2 text-xs text-muted-foreground">{t("freshnessUnknown")}</p>
@@ -272,6 +334,12 @@ export function AnalyzeProjectButton({
             {context.hasVerdict ? ` ${t("previousVerdictUnchanged")}` : ""}
             {errorRef ? ` (${t("supportReference", { id: errorRef })})` : ""}
           </span>
+        </p>
+      )}
+      {cancelError && (
+        <p className="mt-2 flex items-start gap-1.5 text-xs text-destructive" role="alert">
+          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>{cancelError}</span>
         </p>
       )}
     </div>

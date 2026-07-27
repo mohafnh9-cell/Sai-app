@@ -55,6 +55,11 @@
     "insufficientData": "I don't have enough of your repository reviewed yet to protect you responsibly.",
     "analysisFailed": "Your last review didn't complete. Say \"Review again\" before you trust this answer."
   },
+  "cancel_review": {
+    "none_active": "SEQURAI\n\nThere is no active protection review to cancel.",
+    "not_cancellable": "This review can no longer be cancelled.",
+    "success": "SEQURAI\n\nReview cancelled ({reviewId}). Say \"Review my project\" to scan the latest commit."
+  },
   "reviewNow": {
     "queuedLead": "I'm reviewing your application now.",
     "queuedTiming": "This usually takes about two minutes.",

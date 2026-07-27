@@ -2,12 +2,14 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { isActiveReviewScanStatus } from "@/brain/automatic-review/review-status";
+import { isScanCancellationTerminal } from "@/lib/review/cancellation";
 import { InlineScanJobRunner } from "@/server/security-scanner/scan-job-runner";
 import { resolveOrganizationGitHubToken } from "@/server/github-automation/token-resolver";
 import {
   getScanJob,
   markScanJobCompleted,
   markScanJobFailed,
+  markScanJobCancelled,
   markScanJobRunning,
   touchScanJobHeartbeat,
 } from "./scan-job-store";
@@ -17,6 +19,7 @@ import { finalizeWebhookAutomationScan } from "./finalize-webhook-scan";
 import { invalidateProjectCache } from "@/server/cache/read-cache";
 import { finalizeAutomaticReviewJob } from "./finalize-automatic-review-job";
 import { emitOperationalEvent } from "@/server/observability/operational-events";
+import { ScanCancelledError } from "@/server/review-cancel/review-abort";
 import { beginReviewProcessing } from "./scan-execution/review-lifecycle";
 import {
   appendScanJobExecutionTrace,
@@ -62,6 +65,19 @@ export async function executeScanRunJob(
     .select("status, commit_sha")
     .eq("id", payload.scanId)
     .maybeSingle();
+
+  if (scanBeforeRun?.status && isScanCancellationTerminal(scanBeforeRun.status as string)) {
+    await markScanJobCancelled(admin, payload.scanJobId, {
+      failureCode: "USER_CANCELLED",
+      failureMessage: "Review cancelled by user",
+    });
+    log("info", "scan_worker_stopped_cancelled_review", {
+      scanJobId: payload.scanJobId,
+      scanId: payload.scanId,
+      reviewStatus: scanBeforeRun.status,
+    });
+    return;
+  }
 
   if (scanBeforeRun?.status && !isActiveReviewScanStatus(scanBeforeRun.status as string)) {
     await markScanJobFailed(admin, payload.scanJobId, {
@@ -136,6 +152,13 @@ export async function executeScanRunJob(
         persistMode: payload.persistMode,
       });
     } catch (error) {
+      if (error instanceof ScanCancelledError) {
+        log("info", "scan_execution_aborted_cancelled", {
+          scanJobId: payload.scanJobId,
+          scanId: payload.scanId,
+        });
+        return;
+      }
       const message = error instanceof Error ? error.message : "Scan execution failed";
       await markScanJobFailed(admin, payload.scanJobId, {
         failureCode: "SCAN_EXECUTION_FAILED",
@@ -162,6 +185,15 @@ export async function executeScanRunJob(
     .select("status")
     .eq("id", payload.scanId)
     .single();
+
+  if (completed?.status === "cancelled" || completed?.status === "cancelling") {
+    log("info", "scan_job_finished_after_cancel", {
+      scanJobId: payload.scanJobId,
+      scanId: payload.scanId,
+      reviewStatus: completed.status,
+    });
+    return;
+  }
 
   if (completed?.status !== "completed") {
     await markScanJobFailed(admin, payload.scanJobId, {

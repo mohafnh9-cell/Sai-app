@@ -135,6 +135,21 @@ export async function beginReviewProcessing(
   return true;
 }
 
+export async function cancelReviewExecution(
+  admin: SupabaseClient,
+  input: {
+    reviewId: string;
+    projectId: string;
+    cancelledByUserId?: string | null;
+  }
+): Promise<{ cancelled: boolean; idempotent?: boolean }> {
+  const { cancelProductionReview } = await import(
+    "@/server/review-cancel/cancel-production-review"
+  );
+  const result = await cancelProductionReview(admin, input);
+  return { cancelled: result.cancelled, idempotent: result.idempotent };
+}
+
 export async function syncScanFailureFromJob(
   admin: SupabaseClient,
   scanJobId: string,

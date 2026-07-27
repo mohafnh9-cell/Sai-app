@@ -180,21 +180,25 @@ export function buildMissionControlView(input: MissionControlBuildInput): Missio
   );
 
   const progress =
+    input.cancelledReview?.progressAtCancellation ??
     input.sessionProgress ??
     (input.scanInProgress ? 42 : input.verdict ? 100 : 8);
   const runningTeam = teams.find((t) => t.status === "running");
   const currentPhase =
+    input.cancelledReview?.lastCompletedPhase ??
     input.sessionPhase ??
     runningTeam?.name ??
     (input.scanInProgress ? "Discovery" : input.verdict ? "Production Verdict" : "Awaiting analysis");
 
-  const headerStatus = input.scanInProgress
-    ? "Analyzing"
-    : input.verdict?.status === "ready_to_ship"
-      ? "Ready"
-      : input.verdict
-        ? "Review"
-        : "Idle";
+  const headerStatus = input.cancelledReview
+    ? "Cancelled"
+    : input.scanInProgress
+      ? "Analyzing"
+      : input.verdict?.status === "ready_to_ship"
+        ? "Ready"
+        : input.verdict
+          ? "Review"
+          : "Idle";
 
   const top = input.verdict?.topPriorities[0];
   const objective = {
@@ -212,6 +216,8 @@ export function buildMissionControlView(input: MissionControlBuildInput): Missio
       : defaultFeed(input);
 
   const verdictDisplay = mapVerdictDisplay(input.verdict);
+
+  const hideProductionVerdict = Boolean(input.cancelledReview);
 
   return {
     projectId: input.projectId,
@@ -250,6 +256,8 @@ export function buildMissionControlView(input: MissionControlBuildInput): Missio
           currentScore: input.verdict.score ?? 0,
         }
       : undefined,
+    cancelledReview: input.cancelledReview ?? null,
+    hideProductionVerdict,
   };
 }
 

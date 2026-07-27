@@ -6,6 +6,7 @@ import { getMcpTranslator, resolveMcpLocale } from "./i18n";
 import { logMcpCall } from "./observability";
 import { recordOperationDuration } from "@/server/observability/operation-timing";
 import { MCP_PUBLIC_TOOL_NAMES } from "./tool-definitions";
+import { cancelReview } from "./tools/cancel-review";
 import { canIDeploy } from "./tools/can-i-deploy";
 import { productionHistory } from "./tools/production-history";
 import { reviewNow } from "./tools/review-now";
@@ -112,6 +113,17 @@ async function dispatch(
   t: ReturnType<typeof getMcpTranslator>
 ): Promise<unknown> {
   switch (toolName) {
+    case "cancel_review": {
+      return cancelReview(
+        ctx,
+        {
+          ...projectSelector(input),
+          reviewId: str(input.reviewId),
+        },
+        t
+      );
+    }
+
     case "review_now": {
       const result = await reviewNow(
         ctx,
