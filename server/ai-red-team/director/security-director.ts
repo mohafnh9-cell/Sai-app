@@ -1,4 +1,4 @@
-import type { AttackRequest, RedTeamReport } from "../types";
+import type { ApplicationContext, AttackRequest, RedTeamReport } from "../types";
 import type { AgentRegistry } from "../agents/registry";
 import type { RedTeamLogger } from "../logging/red-team-logger";
 import { createRedTeamLogger } from "../logging/red-team-logger";
@@ -56,6 +56,19 @@ export type SecurityDirectorDeps = {
   autonomousOrchestrator?: AutonomousSecurityOrchestrator;
 };
 
+function mergeApplicationMetadata(
+  base: ApplicationContext["metadata"],
+  patch: Record<string, unknown>,
+): NonNullable<ApplicationContext["metadata"]> {
+  return { ...(base ?? {}), ...patch };
+}
+
+function fixStrategyReplayStatus(
+  status: import("../decision/decision-context").ReplayStatus | undefined,
+): "not_run" | "passed" | "failed" {
+  return status === "passed" || status === "failed" ? status : "not_run";
+}
+
 export class SecurityDirector {
   private readonly registry: AgentRegistry;
   private readonly planner: AttackPlanner;
@@ -95,7 +108,7 @@ export class SecurityDirector {
     try {
       const discovery = await this.runDiscovery(request);
 
-      let enrichedContext = {
+      let enrichedContext: ApplicationContext = {
         ...request.context,
         declaredCapabilities: [
           ...new Set([
@@ -103,12 +116,11 @@ export class SecurityDirector {
             ...attackSurfaceToCapabilities(discovery.potentialAttackSurface),
           ]),
         ],
-        metadata: {
-          ...(request.context.metadata ?? {}),
+        metadata: mergeApplicationMetadata(request.context.metadata, {
           discoveryReportId: discovery.reportId,
           discoveryCommitSha: discovery.commitSha,
           discoveryConfidence: discovery.confidenceScore,
-        },
+        }),
       };
 
       this.logger.log({ event: "planning_started", requestId: request.requestId });
@@ -148,10 +160,9 @@ export class SecurityDirector {
         runOptions.maxParallel = orchestratorDecision.executionPlan.maxParallel;
         enrichedContext = {
           ...enrichedContext,
-          metadata: {
-            ...(enrichedContext.metadata ?? {}),
+          metadata: mergeApplicationMetadata(enrichedContext.metadata, {
             orchestratorPlan: orchestratorDecision.executionPlan,
-          },
+          }),
         };
       }
 
@@ -218,8 +229,7 @@ export class SecurityDirector {
         }
         enrichedContext = {
           ...enrichedContext,
-          metadata: {
-            ...(enrichedContext.metadata ?? {}),
+          metadata: mergeApplicationMetadata(enrichedContext.metadata, {
             browserAttack: {
               targetUrl: request.attackSimulation.targetUrl,
               authorization: request.attackSimulation.authorization,
@@ -283,13 +293,12 @@ export class SecurityDirector {
                   },
                 }
               : {}),
-          },
+          }),
         };
       } else if (request.directorPipeline === true) {
         enrichedContext = {
           ...enrichedContext,
-          metadata: {
-            ...(enrichedContext.metadata ?? {}),
+          metadata: mergeApplicationMetadata(enrichedContext.metadata, {
             authenticationAttack: {
               discovery,
               plan,
@@ -317,7 +326,7 @@ export class SecurityDirector {
                   },
                 }
               : {}),
-          },
+          }),
         };
       }
 
@@ -399,7 +408,7 @@ export class SecurityDirector {
           results,
           securityDecision,
           productionVerdict,
-          replayStatus: decisionContext.replayStatus ?? "not_run",
+          replayStatus: fixStrategyReplayStatus(decisionContext.replayStatus),
           previousStrategyRevision: request.decisionContext?.fixStrategyRevision,
           preferredAI:
             request.decisionContext?.preferredAI ?? orch?.preferredAI ?? null,
