@@ -92,6 +92,10 @@ export function OnboardingReviewStep({
       | null;
 
     if (!response.ok || !body?.scan) {
+      if (response.status === 404) {
+        setScanId(null);
+        return;
+      }
       setError(body?.error || te("scanLoad"));
       return;
     }

@@ -6,6 +6,7 @@ import {
   parseLegacyStepParam,
   parseWizardStep,
   resolveInitialWizardStep,
+  resolveOnboardingProjectId,
   resolveProgressIndex,
   scanIsActive,
   scanIsCompleted,
@@ -198,6 +199,34 @@ describe("Block 6.4 First Production Verdict onboarding flow", () => {
     expect(
       resolveProgressIndex("finale", baseContext({ githubConnected: true, latestVerdict: readyToShip }))
     ).toBe(4);
+  });
+
+  it("prefers scan project over newest project list entry for onboarding resume", () => {
+    const scanProject = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const newestProject = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+    expect(
+      resolveOnboardingProjectId(
+        baseContext({
+          projects: [
+            {
+              id: newestProject,
+              name: "new",
+              githubRepo: null,
+              defaultBranch: null,
+              isPrivate: null,
+              updatedAt: new Date().toISOString(),
+            },
+          ],
+          activeScan: {
+            id: SCAN,
+            projectId: scanProject,
+            status: "SCANNING",
+            progress: 40,
+            progressMessage: null,
+          },
+        })
+      )
+    ).toBe(scanProject);
   });
 
   it("mobile and desktop layouts expose progress tracker steps", () => {

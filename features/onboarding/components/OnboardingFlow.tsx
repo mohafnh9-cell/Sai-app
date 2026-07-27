@@ -11,6 +11,7 @@ import {
   parseLegacyStepParam,
   parseWizardStep,
   resolveInitialWizardStep,
+  resolveOnboardingProjectId,
   shouldSkipGitHubStep,
 } from "../onboarding-flow";
 import { OnboardingProgressTracker } from "./OnboardingProgressTracker";
@@ -68,17 +69,10 @@ export function OnboardingFlow({ initialContext }: { initialContext: OnboardingC
   const [rawStep, setRawStep] = useState<WizardStep>(() =>
     resolveInitialWizardStep(initialContext, forcedStep)
   );
+  const initialProjectId = resolveOnboardingProjectId(initialContext, paramProjectId);
   const [flow, setFlow] = useState<FlowState>(() => ({
-    projectId:
-      paramProjectId ??
-      initialContext.projects[0]?.id ??
-      initialContext.latestCompletedScan?.projectId ??
-      initialContext.activeScan?.projectId ??
-      null,
-    projectName: resolveProjectName(
-      paramProjectId ?? initialContext.projects[0]?.id ?? null,
-      initialContext.projects
-    ),
+    projectId: initialProjectId,
+    projectName: resolveProjectName(initialProjectId, initialContext.projects),
     scanId: initialContext.latestCompletedScan?.id ?? initialContext.activeScan?.id ?? null,
     verdict: initialContext.latestVerdict,
   }));
@@ -112,15 +106,16 @@ export function OnboardingFlow({ initialContext }: { initialContext: OnboardingC
           ]
         : context.projects,
       activeScan: context.activeScan,
-      latestCompletedScan: flow.scanId
-        ? {
-            id: flow.scanId,
-            projectId: flow.projectId ?? "",
-            status: "completed",
-            progress: 100,
-            progressMessage: null,
-          }
-        : context.latestCompletedScan,
+      latestCompletedScan:
+        flow.scanId && (flow.verdict ?? context.latestVerdict)
+          ? {
+              id: flow.scanId,
+              projectId: flow.projectId ?? "",
+              status: "completed",
+              progress: 100,
+              progressMessage: null,
+            }
+          : context.latestCompletedScan,
       latestVerdict: flow.verdict ?? context.latestVerdict,
     }),
     [context, flow, step]

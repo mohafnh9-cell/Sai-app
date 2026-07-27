@@ -138,6 +138,17 @@ export function shouldSkipGitHubStep(ctx: Pick<OnboardingContext, "githubConnect
   return ctx.githubConnected;
 }
 
+/** Prefer the project that owns the active or latest scan — not merely the newest project row. */
+export function resolveOnboardingProjectId(
+  ctx: Pick<OnboardingContext, "projects" | "activeScan" | "latestCompletedScan">,
+  paramProjectId?: string | null
+): string | null {
+  if (paramProjectId) return paramProjectId;
+  if (ctx.activeScan?.projectId) return ctx.activeScan.projectId;
+  if (ctx.latestCompletedScan?.projectId) return ctx.latestCompletedScan.projectId;
+  return ctx.projects[0]?.id ?? null;
+}
+
 export function onboardingRedirectPath(ctx: Pick<OnboardingContext, "isComplete">): string {
   return ctx.isComplete ? "/dashboard" : "/onboarding";
 }
