@@ -132,7 +132,7 @@ export function buildGroupedFixes(input: {
       findingIds: cause.findingIds,
       dependsOnFixIds,
       priorityScore,
-      recommendedVariant: "production_fix",
+      recommendedVariant: "production_fix" as const,
       strategies: strategyOptions(cause.rootCauseId),
       likelyFiles: likelyFilesForCause(cause.rootCauseId, input.discoverySummary),
       replayPlanIds,

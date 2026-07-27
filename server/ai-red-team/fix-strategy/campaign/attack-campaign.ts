@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { AttackSeverity } from "../../types/attack-models";
 import type { AttackCampaign, AttackCampaignStep } from "../fix-strategy.types";
 import type { SecurityIntelligenceReport } from "../../intelligence/models";
 
@@ -27,12 +28,12 @@ export function buildAttackCampaignFromIntelligence(
     label: f.title,
     findingId: f.id,
   }));
-  const maxSeverity = findings.reduce(
+  const maxSeverity = findings.reduce<{ rank: number; sev: AttackSeverity }>(
     (max, f) => {
       const rank = { info: 0, low: 1, medium: 2, high: 3, critical: 4 }[f.severity] ?? 0;
       return rank > max.rank ? { rank, sev: f.severity } : max;
     },
-    { rank: 0, sev: "medium" as const }
+    { rank: 0, sev: "info" },
   );
 
   return {
@@ -40,7 +41,8 @@ export function buildAttackCampaignFromIntelligence(
     goal,
     steps,
     findingIds: findings.map((f) => f.id),
-    severity: maxSeverity.sev,
+    severity:
+      maxSeverity.sev === "info" ? "low" : maxSeverity.sev,
     source: "synthesized",
   };
 }
