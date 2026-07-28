@@ -103,27 +103,29 @@ export function AnalyzeProjectButton({
     if (!response.ok || !body?.state) {
       return null;
     }
-    setReviewState(body.state);
-    if (body.githubSync) {
+    const state = body.state;
+    const githubSync = body.githubSync;
+    setReviewState(state);
+    if (githubSync) {
       setContext((prev) => ({
         ...prev,
-        latestCommitSha: body.githubSync!.githubHeadSha ?? prev.latestCommitSha,
-        githubHeadSha: body.githubSync!.githubHeadSha,
-        repositoryOutOfSync: body.githubSync!.repositoryOutOfSync,
+        latestCommitSha: githubSync.githubHeadSha ?? prev.latestCommitSha,
+        githubHeadSha: githubSync.githubHeadSha,
+        repositoryOutOfSync: githubSync.repositoryOutOfSync,
         reviewedCommitSha:
-          body.githubSync!.analyzedCommitSha && !body.state.hasActiveReview
-            ? body.githubSync!.analyzedCommitSha
+          githubSync.analyzedCommitSha && !state.hasActiveReview
+            ? githubSync.analyzedCommitSha
             : prev.reviewedCommitSha,
         isStale:
-          Boolean(body.githubSync!.githubHeadSha) &&
-          Boolean(body.githubSync!.analyzedCommitSha) &&
-          body.githubSync!.repositoryOutOfSync,
+          Boolean(githubSync.githubHeadSha) &&
+          Boolean(githubSync.analyzedCommitSha) &&
+          githubSync.repositoryOutOfSync,
       }));
     }
-    if (!body.state.hasActiveReview) {
+    if (!state.hasActiveReview) {
       setContext((prev) => ({ ...prev, activeScan: null }));
     }
-    return body.state;
+    return state;
   }, [projectId]);
 
   const reconnectGitHub = useCallback(async () => {
