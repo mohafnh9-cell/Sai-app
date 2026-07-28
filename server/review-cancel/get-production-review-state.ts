@@ -13,6 +13,7 @@ import {
   isStaleActiveReviewScan,
   REVIEW_STALE_FAILURE_CODE,
 } from "@/server/review-recovery/stale-review";
+import { isScanJobsInfrastructureMissing } from "@/server/jobs/legacy-inline-scan-run";
 
 function idleState(): ProductionReviewState {
   return {
@@ -69,17 +70,25 @@ export async function getProductionReviewState(
     await expireStaleActiveReviewsForRepository(admin, input.projectId).catch(() => undefined);
   }
 
-  const { data: activeJob } = await admin
-    .from("scan_jobs")
-    .select(
-      "id, scan_id, status, created_at, started_at, heartbeat_at, updated_at, failure_message"
-    )
-    .eq("organization_id", input.organizationId)
-    .eq("project_id", input.projectId)
-    .in("status", ["queued", "running"])
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  let activeJob: Record<string, unknown> | null = null;
+  try {
+    const { data } = await admin
+      .from("scan_jobs")
+      .select(
+        "id, scan_id, status, created_at, started_at, heartbeat_at, updated_at, failure_message"
+      )
+      .eq("organization_id", input.organizationId)
+      .eq("project_id", input.projectId)
+      .in("status", ["queued", "running"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    activeJob = (data as Record<string, unknown> | null) ?? null;
+  } catch (error) {
+    if (!isScanJobsInfrastructureMissing(error)) {
+      throw error;
+    }
+  }
 
   if (activeJob?.scan_id) {
     const { data: scan } = await admin
@@ -179,13 +188,12 @@ export async function getProductionReviewState(
           });
         }
 
+        const uiStatusActive = mapScanStatusToProductionReviewUiStatus(scanStatus);
         return buildState({
           scan,
-          status: "stale",
-          hasActiveReview: false,
+          status: uiStatusActive,
+          hasActiveReview: true,
           isCancellable: false,
-          failureMessage:
-            "No active scan job is running for this review. Start a new review.",
         });
       }
     }

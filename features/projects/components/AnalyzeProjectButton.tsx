@@ -85,6 +85,7 @@ export function AnalyzeProjectButton({
   const [cancelError, setCancelError] = useState("");
   const [cancelInFlight, setCancelInFlight] = useState(false);
   const requestedRef = useRef(false);
+  const autoSyncForHeadRef = useRef(false);
 
   const disconnected = context.githubNeedsReconnect || !context.githubConnected;
 
@@ -237,6 +238,26 @@ export function AnalyzeProjectButton({
   useEffect(() => {
     queueMicrotask(() => void syncReviewState());
   }, [syncReviewState]);
+
+  useEffect(() => {
+    if (!context.repositoryOutOfSync) {
+      autoSyncForHeadRef.current = false;
+    }
+  }, [context.repositoryOutOfSync]);
+
+  useEffect(() => {
+    if (disconnected || reviewState.hasActiveReview || requesting) return;
+    if (!context.repositoryOutOfSync) return;
+    if (autoSyncForHeadRef.current) return;
+    autoSyncForHeadRef.current = true;
+    queueMicrotask(() => void requestReview());
+  }, [
+    context.repositoryOutOfSync,
+    disconnected,
+    requestReview,
+    requesting,
+    reviewState.hasActiveReview,
+  ]);
 
   useEffect(() => {
     if (!reviewState.hasActiveReview) return;

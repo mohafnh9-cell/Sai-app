@@ -24,6 +24,10 @@ import {
   ScanEnqueueError,
 } from "./scan-execution/enqueue-scan-run";
 import { logScanExecutionTrace } from "./scan-execution/scan-execution-trace";
+import {
+  executeLegacyInlineScanRun,
+  isScanJobsInfrastructureMissing,
+} from "./legacy-inline-scan-run";
 
 function log(event: string, fields: Record<string, unknown>) {
   console.info({ component: "schedule-scan", event, ...fields });
@@ -77,20 +81,47 @@ export async function scheduleScanRun(
     payload.jobType ??
     (payload.persistMode === "review_only" ? "automatic_review" : "manual_scan");
 
-  const { job, duplicate } = await createScanJob(admin, {
-    organizationId: payload.organizationId,
-    projectId: payload.projectId,
-    scanId: payload.scanId,
-    jobType,
-    metadata: {
-      scanType: payload.scanType ?? "full",
-      branch: payload.branch ?? null,
-      finalizeKind: payload.finalize?.kind ?? null,
-      userId: payload.userId,
-      persistMode: payload.persistMode ?? null,
-      finalize: payload.finalize ?? null,
-    },
-  });
+  let job: Awaited<ReturnType<typeof createScanJob>>["job"];
+  let duplicate: boolean;
+  try {
+    const created = await createScanJob(admin, {
+      organizationId: payload.organizationId,
+      projectId: payload.projectId,
+      scanId: payload.scanId,
+      jobType,
+      metadata: {
+        scanType: payload.scanType ?? "full",
+        branch: payload.branch ?? null,
+        finalizeKind: payload.finalize?.kind ?? null,
+        userId: payload.userId,
+        persistMode: payload.persistMode ?? null,
+        finalize: payload.finalize ?? null,
+      },
+    });
+    job = created.job;
+    duplicate = created.duplicate;
+  } catch (error) {
+    if (isScanJobsInfrastructureMissing(error)) {
+      log("scan_jobs_table_missing_legacy_inline", {
+        scanId: payload.scanId,
+        projectId: payload.projectId,
+        organizationId: payload.organizationId,
+      });
+      const inlineScheduler = options?.scheduler ?? defaultScheduler;
+      inlineScheduler(() => {
+        void executeLegacyInlineScanRun(createAdminClient(), payload).catch((runError) => {
+          console.error({
+            component: "legacy-inline-scan-run",
+            event: "execution_failed",
+            scanId: payload.scanId,
+            message: runError instanceof Error ? runError.message : String(runError),
+          });
+        });
+      });
+      return { scanJobId: "", duplicate: false };
+    }
+    throw error;
+  }
 
   if (duplicate || !job) {
     return { scanJobId: job?.id ?? payload.scanJobId, duplicate: true };
