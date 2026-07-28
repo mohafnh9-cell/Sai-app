@@ -9,6 +9,10 @@ import { createAdminClient, mapDatabaseError } from "@/server/security-scanner/a
 import { enforceRateLimit } from "@/server/http/rate-limit";
 import { scheduleScanRun } from "@/server/jobs/schedule-scan";
 import { expireStaleActiveReviewsForRepository } from "@/server/review-recovery/stale-review";
+import {
+  resolveLatestReviewCommit,
+  ReviewCommitResolutionError,
+} from "@/server/review-start/resolve-latest-review-commit";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -26,6 +30,16 @@ const historySchema = z.object({
 });
 
 function responseForError(error: unknown) {
+  if (error instanceof ReviewCommitResolutionError) {
+    return NextResponse.json(
+      {
+        error: error.message,
+        code: error.code,
+        needsReauth: error.code === "GITHUB_TOKEN_UNAVAILABLE",
+      },
+      { status: error.code === "GITHUB_HEAD_UNAVAILABLE" ? 502 : 403 }
+    );
+  }
   if (error instanceof ScanRequestError || error instanceof GitHubServiceError) {
     return NextResponse.json(
       {
@@ -107,6 +121,20 @@ export async function POST(
       );
     }
 
+    const { data: projectRow } = await admin
+      .from("projects")
+      .select("github_repository_id")
+      .eq("id", project.id)
+      .maybeSingle();
+
+    const resolvedCommit = await resolveLatestReviewCommit(admin, {
+      organizationId: project.organization_id,
+      projectId: project.id,
+      githubRepo: project.github_repo,
+      githubRepositoryId: (projectRow?.github_repository_id as number | null) ?? null,
+      branch: parsedBody.data.branch ?? null,
+    });
+
     const { data: scan, error: insertError } = await supabase
       .from("scans")
       .insert({
@@ -119,8 +147,9 @@ export async function POST(
         scan_type: parsedBody.data.scanType,
         status: "queued",
         progress: 0,
-        progress_message: "Scan queued",
-        branch: parsedBody.data.branch ?? null,
+        progress_message: "Production Review queued for latest GitHub commit",
+        branch: resolvedCommit.branch,
+        commit_sha: resolvedCommit.commitSha,
       })
       .select("*")
       .single();
@@ -181,7 +210,8 @@ export async function POST(
         organizationId: project.organization_id,
         projectId: project.id,
         userId: user.id,
-        branch: parsedBody.data.branch,
+        branch: resolvedCommit.branch,
+        headCommitSha: resolvedCommit.commitSha,
         scanType: parsedBody.data.scanType,
         jobType: "manual_scan",
       },

@@ -94,11 +94,32 @@ export function AnalyzeProjectButton({
     });
     const body = (await response.json().catch(() => null)) as {
       state?: ProductionReviewState;
+      githubSync?: {
+        githubHeadSha: string | null;
+        analyzedCommitSha: string | null;
+        repositoryOutOfSync: boolean;
+      };
     } | null;
     if (!response.ok || !body?.state) {
       return null;
     }
     setReviewState(body.state);
+    if (body.githubSync) {
+      setContext((prev) => ({
+        ...prev,
+        latestCommitSha: body.githubSync!.githubHeadSha ?? prev.latestCommitSha,
+        githubHeadSha: body.githubSync!.githubHeadSha,
+        repositoryOutOfSync: body.githubSync!.repositoryOutOfSync,
+        reviewedCommitSha:
+          body.githubSync!.analyzedCommitSha && !body.state.hasActiveReview
+            ? body.githubSync!.analyzedCommitSha
+            : prev.reviewedCommitSha,
+        isStale:
+          Boolean(body.githubSync!.githubHeadSha) &&
+          Boolean(body.githubSync!.analyzedCommitSha) &&
+          body.githubSync!.repositoryOutOfSync,
+      }));
+    }
     if (!body.state.hasActiveReview) {
       setContext((prev) => ({ ...prev, activeScan: null }));
     }
@@ -266,10 +287,26 @@ export function AnalyzeProjectButton({
   }, []);
 
   const commitLabel = useMemo(() => {
-    const sha = shortSha(
-      reviewState.commitSha ?? context.latestCommitSha ?? context.reviewedCommitSha
+    if (!showCommitHint) return null;
+
+    const githubSha = shortSha(context.githubHeadSha ?? context.latestCommitSha);
+    const analyzedSha = shortSha(
+      reviewState.commitSha ?? context.reviewedCommitSha
     );
-    if (!sha || !showCommitHint) return null;
+
+    if (githubSha && analyzedSha) {
+      const lines = [
+        t("latestAnalyzedCommit", { sha: analyzedSha }),
+        t("currentGitHubCommit", { sha: githubSha }),
+      ];
+      if (context.repositoryOutOfSync && !productionReviewShowsSpinner(uiStatus)) {
+        return `${lines.join(" · ")} — ${t("repositoryOutOfSync")}`;
+      }
+      return lines.join(" · ");
+    }
+
+    const sha = githubSha ?? analyzedSha;
+    if (!sha) return null;
     if (productionReviewShowsSpinner(uiStatus)) {
       return t("analyzingCommit", { sha });
     }

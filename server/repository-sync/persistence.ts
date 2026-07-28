@@ -59,6 +59,43 @@ export async function initializeRepositorySyncStatus(
  * event timestamp (`pushedAt`), which is the best ordering signal available
  * without fetching commit ancestry from GitHub.
  */
+export async function recordLiveHeadCommit(
+  admin: SupabaseClient,
+  input: {
+    organizationId: string;
+    projectId: string;
+    githubRepositoryId: number | null;
+    commitSha: string;
+    branch: string;
+    commitMessage?: string | null;
+  }
+): Promise<void> {
+  const detectedAt = new Date().toISOString();
+  const { error } = await admin.from("repository_sync_status").upsert(
+    {
+      project_id: input.projectId,
+      organization_id: input.organizationId,
+      github_repository_id: input.githubRepositoryId,
+      connection_status: "connected",
+      branch: input.branch,
+      commit_sha: input.commitSha,
+      commit_message: input.commitMessage ?? "Live GitHub HEAD",
+      pushed_at: detectedAt,
+      detected_at: detectedAt,
+      last_error: null,
+      updated_at: detectedAt,
+    },
+    { onConflict: "project_id" }
+  );
+
+  if (error) {
+    console.warn("repository_sync_live_head_failed", {
+      projectId: input.projectId,
+      message: error.message,
+    });
+  }
+}
+
 export async function recordPushDetection(
   admin: SupabaseClient,
   input: {

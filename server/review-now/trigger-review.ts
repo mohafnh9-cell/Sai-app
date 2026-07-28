@@ -15,6 +15,7 @@ import {
 import { getCurrentProductionVerdict } from "@/server/production-verdict/service";
 import { scheduleScanRun } from "@/server/jobs/schedule-scan";
 import { recoverStaleActiveReviewsForProject } from "@/server/review-recovery/stale-review";
+import { recordLiveHeadCommit } from "@/server/repository-sync/persistence";
 
 export type ResolveGitHubTokenFn = (
   admin: SupabaseClient,
@@ -35,6 +36,7 @@ export type RunScanFn = (context: {
   userId: string;
   scanType?: "full" | "incremental";
   branch?: string;
+  headCommitSha?: string;
 }) => Promise<void>;
 
 export class ReviewNowError extends Error {
@@ -157,6 +159,7 @@ export async function triggerProductionReview(
           projectId: context.projectId,
           userId: context.userId,
           branch: context.branch,
+          headCommitSha: context.headCommitSha,
           scanType: context.scanType ?? "full",
           jobType: "mcp_review",
         },
@@ -211,6 +214,23 @@ export async function triggerProductionReview(
     }
     throw new ReviewNowError("internal_error", "Could not resolve the commit to review.");
   }
+
+  await recordLiveHeadCommit(admin, {
+    organizationId: input.organizationId,
+    projectId: input.projectId,
+    githubRepositoryId: input.githubRepositoryId,
+    commitSha: resolvedCommitSha,
+    branch: resolvedBranch ?? "main",
+  }).catch(() => undefined);
+
+  await admin
+    .from("projects")
+    .update({
+      github_last_commit_sha: resolvedCommitSha,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", input.projectId)
+    .eq("organization_id", input.organizationId);
 
   const [hasActiveReview, currentVerdict] = await Promise.all([
     (async () => {
@@ -310,6 +330,7 @@ export async function triggerProductionReview(
       userId,
       branch: branchForRun,
       scanType: "full",
+      headCommitSha: resolvedCommitSha,
     }).catch((error) => {
       log("review_now_background_failed", {
         projectId,

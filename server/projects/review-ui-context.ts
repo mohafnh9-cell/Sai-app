@@ -6,6 +6,8 @@ import { getProductionReviewState } from "@/server/review-cancel/get-production-
 import { getCurrentProductionVerdict } from "@/server/production-verdict/service";
 import { getRepositorySyncStatus } from "@/server/repository-sync/get-repository-sync-status";
 import { createAdminClient } from "@/server/security-scanner/admin-client";
+import { refreshGitHubHeadForProject } from "@/server/repository-sync/refresh-github-head";
+import { commitsMatch } from "@/lib/repository-sync/commits-match";
 
 export type ProjectReviewUiContext = {
   githubConnected: boolean;
@@ -13,6 +15,8 @@ export type ProjectReviewUiContext = {
   hasVerdict: boolean;
   reviewedCommitSha: string | null;
   latestCommitSha: string | null;
+  githubHeadSha: string | null;
+  repositoryOutOfSync: boolean;
   isStale: boolean;
   freshnessUnknown: boolean;
   activeScan: {
@@ -33,7 +37,7 @@ export async function getProjectReviewUiContext(
 ): Promise<ProjectReviewUiContext | null> {
   const { data: project } = await supabase
     .from("projects")
-    .select("id, github_repo, organization_id")
+    .select("id, github_repo, github_repository_id, organization_id")
     .eq("id", projectId)
     .maybeSingle();
 
@@ -44,6 +48,15 @@ export async function getProjectReviewUiContext(
     admin = createAdminClient();
   } catch {
     admin = null;
+  }
+
+  if (admin && project.organization_id && project.github_repo) {
+    await refreshGitHubHeadForProject(admin, {
+      organizationId: project.organization_id as string,
+      projectId,
+      githubRepo: project.github_repo as string,
+      githubRepositoryId: (project.github_repository_id as number | null) ?? null,
+    }).catch(() => undefined);
   }
 
   const [syncStatus, currentVerdict] = await Promise.all([
@@ -92,6 +105,7 @@ export async function getProjectReviewUiContext(
   }
 
   const latestCommitSha = syncStatus?.commitSha ?? null;
+  const githubHeadSha = latestCommitSha;
   const reviewedCommitSha = currentVerdict?.commitSha ?? null;
   const githubConnected = Boolean(project.github_repo);
   const githubNeedsReconnect =
@@ -106,7 +120,14 @@ export async function getProjectReviewUiContext(
   const isStale =
     Boolean(reviewedCommitSha) &&
     Boolean(latestCommitSha) &&
-    reviewedCommitSha !== latestCommitSha;
+    !commitsMatch(reviewedCommitSha, latestCommitSha);
+
+  const analyzedForSync =
+    productionReviewState.commitSha ?? reviewedCommitSha;
+  const repositoryOutOfSync =
+    Boolean(githubHeadSha) &&
+    Boolean(analyzedForSync) &&
+    !commitsMatch(githubHeadSha, analyzedForSync);
 
   return {
     githubConnected,
@@ -114,6 +135,8 @@ export async function getProjectReviewUiContext(
     hasVerdict: Boolean(currentVerdict),
     reviewedCommitSha,
     latestCommitSha,
+    githubHeadSha,
+    repositoryOutOfSync,
     isStale,
     freshnessUnknown,
     activeScan,

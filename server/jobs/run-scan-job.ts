@@ -21,6 +21,7 @@ import { finalizeAutomaticReviewJob } from "./finalize-automatic-review-job";
 import { emitOperationalEvent } from "@/server/observability/operational-events";
 import { ScanCancelledError } from "@/server/review-cancel/review-abort";
 import { beginReviewProcessing } from "./scan-execution/review-lifecycle";
+import { alignScanWithRemoteHead } from "@/server/repository-sync/github-sync-snapshot";
 import {
   appendScanJobExecutionTrace,
   logScanExecutionTrace,
@@ -37,6 +38,7 @@ export async function executeScanRunJob(
   payload: ScanRunPayload,
   input?: { inngestRunId?: string; attempt?: number; lockedBy?: string }
 ): Promise<void> {
+  let runPayload = payload;
   const existingJob = await getScanJob(admin, payload.scanJobId);
   if (existingJob && isTerminalScanJobStatus(existingJob.status)) {
     log("info", "scan_job_already_terminal", {
@@ -137,19 +139,37 @@ export async function executeScanRunJob(
 
   if (scanBeforeRun?.status !== "completed") {
     try {
+      const githubRepo = await loadGithubRepo(admin, payload.projectId);
+      const aligned = await alignScanWithRemoteHead(admin, {
+        organizationId: payload.organizationId,
+        projectId: payload.projectId,
+        scanId: payload.scanId,
+        githubRepo,
+        branch: payload.branch ?? null,
+        expectedCommitSha:
+          (scanBeforeRun?.commit_sha as string | null) ?? payload.headCommitSha ?? null,
+      });
+      if (aligned) {
+        runPayload = {
+          ...runPayload,
+          headCommitSha: aligned.commitSha,
+          branch: aligned.branch,
+        };
+      }
+
       await touchScanJobHeartbeat(admin, payload.scanJobId);
       await runner.run({
-        scanId: payload.scanId,
-        scanJobId: payload.scanJobId,
-        repositoryId: payload.projectId,
-        organizationId: payload.organizationId,
-        githubRepo: await loadGithubRepo(admin, payload.projectId),
-        branch: payload.branch,
+        scanId: runPayload.scanId,
+        scanJobId: runPayload.scanJobId,
+        repositoryId: runPayload.projectId,
+        organizationId: runPayload.organizationId,
+        githubRepo,
+        branch: runPayload.branch,
         providerToken: tokenResult.token,
-        scanType: payload.scanType,
-        baseCommitSha: payload.baseCommitSha,
-        headCommitSha: payload.headCommitSha,
-        persistMode: payload.persistMode,
+        scanType: runPayload.scanType,
+        baseCommitSha: runPayload.baseCommitSha,
+        headCommitSha: runPayload.headCommitSha,
+        persistMode: runPayload.persistMode,
       });
     } catch (error) {
       if (error instanceof ScanCancelledError) {
