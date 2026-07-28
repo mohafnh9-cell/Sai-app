@@ -193,6 +193,21 @@ export async function resolveCommitReference(
   }
 }
 
+export type FetchSnapshotOptions = {
+  branch?: string;
+  /** When set, file tree is loaded at this commit (not branch tip). */
+  commitSha?: string;
+};
+
+function normalizeFetchSnapshotOptions(
+  requestedBranchOrOptions?: string | FetchSnapshotOptions
+): FetchSnapshotOptions {
+  if (typeof requestedBranchOrOptions === "string") {
+    return { branch: requestedBranchOrOptions };
+  }
+  return requestedBranchOrOptions ?? {};
+}
+
 export class GitHubRepositoryService {
   private readonly controller = new AbortController();
   private readonly deadline: ReturnType<typeof setTimeout>;
@@ -294,12 +309,19 @@ export class GitHubRepositoryService {
     }
   }
 
-  async fetchSnapshot(ref: GitHubRepositoryRef, requestedBranch?: string): Promise<RepositorySnapshot> {
+  async fetchSnapshot(
+    ref: GitHubRepositoryRef,
+    requestedBranchOrOptions?: string | FetchSnapshotOptions
+  ): Promise<RepositorySnapshot> {
     try {
+      const options = normalizeFetchSnapshotOptions(requestedBranchOrOptions);
       const base = `/repos/${encodeURIComponent(ref.owner)}/${encodeURIComponent(ref.repo)}`;
       const repository = await this.request<GitHubRepo>(base);
-      const branch = requestedBranch?.trim() || repository.default_branch;
-      const commit = await this.request<GitHubCommit>(`${base}/commits/${encodeURIComponent(branch)}`);
+      const branch = options.branch?.trim() || repository.default_branch;
+      const commitRef = options.commitSha?.trim() || branch;
+      const commit = await this.request<GitHubCommit>(
+        `${base}/commits/${encodeURIComponent(commitRef)}`
+      );
       const tree = await this.request<GitHubTree>(
         `${base}/git/trees/${encodeURIComponent(commit.commit.tree.sha)}?recursive=1`
       );

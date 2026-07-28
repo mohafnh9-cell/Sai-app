@@ -16,6 +16,7 @@ import { getCurrentProductionVerdict } from "@/server/production-verdict/service
 import { scheduleScanRun } from "@/server/jobs/schedule-scan";
 import { recoverStaleActiveReviewsForProject } from "@/server/review-recovery/stale-review";
 import { recordLiveHeadCommit } from "@/server/repository-sync/persistence";
+import { releaseActiveReviewForNewHead } from "@/server/review-start/release-active-review-for-new-head";
 
 export type ResolveGitHubTokenFn = (
   admin: SupabaseClient,
@@ -231,6 +232,13 @@ export async function triggerProductionReview(
     })
     .eq("id", input.projectId)
     .eq("organization_id", input.organizationId);
+
+  await releaseActiveReviewForNewHead(admin, {
+    organizationId: input.organizationId,
+    projectId: input.projectId,
+    targetCommitSha: resolvedCommitSha,
+    targetBranch: resolvedBranch,
+  });
 
   const [hasActiveReview, currentVerdict] = await Promise.all([
     (async () => {

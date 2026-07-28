@@ -124,6 +124,7 @@ describe("triggerProductionReview", () => {
           repository_id: PROJECT_1,
           organization_id: ORG_A,
           status: "scanning",
+          commit_sha: "new-sha",
           created_at: fresh,
           updated_at: fresh,
           started_at: fresh,
@@ -141,6 +142,35 @@ describe("triggerProductionReview", () => {
     expect(runScan).not.toHaveBeenCalled();
     // no second scan row was created
     expect(tables.scans).toHaveLength(1);
+  });
+
+  it("supersedes an active review on an older commit and queues a new review", async () => {
+    const fresh = new Date().toISOString();
+    const tables = baseTables({
+      scans: [
+        {
+          id: "scan-active",
+          repository_id: PROJECT_1,
+          organization_id: ORG_A,
+          status: "scanning",
+          commit_sha: "old-sha",
+          created_at: fresh,
+          updated_at: fresh,
+          started_at: fresh,
+        },
+      ],
+    });
+    const admin = createFakeAdmin(tables);
+    const runScan = vi.fn().mockResolvedValue(undefined);
+    const result = await triggerProductionReview(
+      admin as never,
+      { organizationId: ORG_A, projectId: PROJECT_1, githubRepo: "acme/alpha", githubRepositoryId: 42 },
+      { resolveToken: okToken, resolveCommit: okCommit("new-sha"), runScan, scheduleBackground: vi.fn() }
+    );
+    expect(result.outcome).toBe("queued");
+    expect(result.commitSha).toBe("new-sha");
+    expect(tables.scans.some((s) => s.status === "failed" && s.id === "scan-active")).toBe(true);
+    expect(tables.scans.filter((s) => s.status === "queued").length).toBeGreaterThanOrEqual(1);
   });
 
   it("reuses an already-completed verdict instead of rescanning an unchanged commit", async () => {

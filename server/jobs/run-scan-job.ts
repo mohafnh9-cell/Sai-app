@@ -155,6 +155,20 @@ export async function executeScanRunJob(
           headCommitSha: aligned.commitSha,
           branch: aligned.branch,
         };
+      } else {
+        const pinned =
+          (scanBeforeRun?.commit_sha as string | null) ?? runPayload.headCommitSha ?? null;
+        if (pinned) {
+          runPayload = { ...runPayload, headCommitSha: pinned };
+        }
+      }
+
+      if (!runPayload.headCommitSha) {
+        await markScanJobFailed(admin, payload.scanJobId, {
+          failureCode: "REVIEW_COMMIT_UNRESOLVED",
+          failureMessage: "Production Review has no target commit SHA",
+        });
+        throw new Error("REVIEW_COMMIT_UNRESOLVED");
       }
 
       await touchScanJobHeartbeat(admin, payload.scanJobId);

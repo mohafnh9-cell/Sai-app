@@ -163,7 +163,10 @@ export class InlineScanJobRunner implements ScanJobRunner {
             context.baseCommitSha!,
             context.headCommitSha!
           )
-        : await github.fetchSnapshot(ref, context.branch);
+        : await github.fetchSnapshot(ref, {
+            branch: context.branch,
+            commitSha: context.headCommitSha,
+          });
       logScan("info", "repository_fetched", {
         scanId: context.scanId,
         repositoryId: context.repositoryId,

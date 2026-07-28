@@ -13,6 +13,7 @@ import {
   resolveLatestReviewCommit,
   ReviewCommitResolutionError,
 } from "@/server/review-start/resolve-latest-review-commit";
+import { releaseActiveReviewForNewHead } from "@/server/review-start/release-active-review-for-new-head";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -135,6 +136,13 @@ export async function POST(
       branch: parsedBody.data.branch ?? null,
     });
 
+    await releaseActiveReviewForNewHead(admin, {
+      organizationId: project.organization_id,
+      projectId: project.id,
+      targetCommitSha: resolvedCommit.commitSha,
+      targetBranch: resolvedCommit.branch,
+    });
+
     const { data: scan, error: insertError } = await supabase
       .from("scans")
       .insert({
@@ -160,7 +168,7 @@ export async function POST(
       if (insertError.code === "23505") {
         const { data: active } = await supabase
           .from("scans")
-          .select("id, status, progress, progress_message, created_at")
+          .select("id, status, progress, progress_message, created_at, commit_sha")
           .eq("repository_id", repositoryId)
           .in("status", [
             "queued",
