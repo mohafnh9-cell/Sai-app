@@ -6,37 +6,58 @@ import { Button } from "@/components/ui/button";
 import { startGitHubOAuth } from "@/lib/github/oauth-client";
 import { trackEvent } from "@/lib/analytics/track";
 import { useI18n } from "@/lib/i18n/client";
-import { scanIsActive, scanIsCompleted } from "@/features/onboarding/onboarding-flow";
-import { scanStatusShowsCancelButton } from "@/lib/review/cancellation";
+import {
+  productionReviewHasActiveWork,
+  productionReviewShowsSpinner,
+  type ProductionReviewState,
+  type ProductionReviewUiStatus,
+} from "@/lib/review/production-review-state";
 import { CancelReviewButton } from "@/features/projects/components/CancelReviewButton";
 import type { ProjectReviewUiContext } from "@/server/projects/review-ui-context";
 
-type ReviewUiState =
-  | "ready_first"
-  | "ready_again"
-  | "ready_stale"
-  | "requesting"
-  | "queued"
-  | "processing"
-  | "cancelling"
-  | "cancelled"
-  | "completed"
-  | "failed"
-  | "disconnected";
-
-type ScanPayload = {
-  id: string;
-  status: string;
-  progress?: number | null;
-  progress_message?: string | null;
-  commit_sha?: string | null;
-};
-
 const scanRetryKey = (projectId: string) => `sequrai_github_scan_${projectId}`;
+
+const IDLE_STATE: ProductionReviewState = {
+  hasActiveReview: false,
+  scanId: null,
+  scanJobId: null,
+  status: "idle",
+  isCancellable: false,
+  commitSha: null,
+  createdAt: null,
+  startedAt: null,
+  completedAt: null,
+  cancelledAt: null,
+  failureMessage: null,
+};
 
 function shortSha(sha: string | null | undefined): string | null {
   if (!sha) return null;
   return sha.slice(0, 7);
+}
+
+function statusLabelKey(status: ProductionReviewUiStatus): string {
+  switch (status) {
+    case "idle":
+      return "startNewReview";
+    case "queued":
+      return "reviewQueued";
+    case "running":
+      return "reviewRunning";
+    case "analyzing":
+      return "reviewAnalyzing";
+    case "cancelling":
+      return "cancellingReview";
+    case "cancelled":
+      return "newReview";
+    case "completed":
+      return "reviewComplete";
+    case "failed":
+    case "stale":
+      return "startNewReview";
+    default:
+      return "analyzeProject";
+  }
 }
 
 export function AnalyzeProjectButton({
@@ -55,113 +76,82 @@ export function AnalyzeProjectButton({
   const { t } = useI18n("projects");
   const { t: te } = useI18n("errors");
   const [context, setContext] = useState(initialContext);
-  const [phase, setPhase] = useState<"idle" | "requesting" | "polling" | "failed">(() =>
-    initialContext.activeScan?.id ? "polling" : "idle"
+  const [reviewState, setReviewState] = useState<ProductionReviewState>(
+    initialContext.productionReviewState ?? IDLE_STATE
   );
-  const [activeScanId, setActiveScanId] = useState<string | null>(
-    initialContext.activeScan?.id ?? null
-  );
-  const [activeScanJobId, setActiveScanJobId] = useState<string | null>(
-    initialContext.activeScan?.scanJobId ?? null
-  );
-  const [scanJobStatus, setScanJobStatus] = useState<string | null>(
-    initialContext.activeScan?.scanJobStatus ?? null
-  );
-  const [scan, setScan] = useState<ScanPayload | null>(
-    initialContext.activeScan
-      ? {
-          id: initialContext.activeScan.id,
-          status: initialContext.activeScan.status,
-          progress: initialContext.activeScan.progress,
-          progress_message: initialContext.activeScan.progressMessage,
-          commit_sha: initialContext.activeScan.commitSha,
-        }
-      : null
-  );
+  const [requesting, setRequesting] = useState(false);
   const [error, setError] = useState("");
   const [errorRef, setErrorRef] = useState<string | null>(null);
   const [cancelError, setCancelError] = useState("");
-  const requestedRef = useRef(false);
   const [cancelInFlight, setCancelInFlight] = useState(false);
+  const requestedRef = useRef(false);
 
-  const scanWasCancelled = (status?: string | null) => status?.toLowerCase() === "cancelled";
-  const scanIsCancelling = (status?: string | null) => status?.toLowerCase() === "cancelling";
+  const disconnected = context.githubNeedsReconnect || !context.githubConnected;
+
+  const syncReviewState = useCallback(async () => {
+    const response = await fetch(`/api/projects/${projectId}/production-review-state`, {
+      cache: "no-store",
+    });
+    const body = (await response.json().catch(() => null)) as {
+      state?: ProductionReviewState;
+    } | null;
+    if (!response.ok || !body?.state) {
+      return null;
+    }
+    setReviewState(body.state);
+    if (!body.state.hasActiveReview) {
+      setContext((prev) => ({ ...prev, activeScan: null }));
+    }
+    return body.state;
+  }, [projectId]);
 
   const reconnectGitHub = useCallback(async () => {
     localStorage.setItem(scanRetryKey(projectId), "1");
     await startGitHubOAuth(`/projects/${projectId}`);
   }, [projectId]);
 
-  const uiState: ReviewUiState = useMemo(() => {
-    if (context.githubNeedsReconnect || !context.githubConnected) return "disconnected";
-    if (phase === "requesting") return "requesting";
-    if (scan && scanIsCancelling(scan.status)) return "cancelling";
-    if (scan && scanWasCancelled(scan.status)) return "cancelled";
-    if (scan && scanIsActive(scan.status)) {
-      if (scan.status.toLowerCase() === "queued") return "queued";
-      return "processing";
-    }
-    if (phase === "failed") return "failed";
-    if (scan && scanIsCompleted(scan.status)) return "completed";
-    if (context.isStale) return "ready_stale";
-    if (context.hasVerdict) return "ready_again";
-    return "ready_first";
-  }, [context, phase, scan]);
+  const uiStatus: ProductionReviewUiStatus = useMemo(() => {
+    if (disconnected) return "idle";
+    if (requesting) return "queued";
+    if (cancelInFlight || reviewState.status === "cancelling") return "cancelling";
+    return reviewState.status;
+  }, [cancelInFlight, disconnected, requesting, reviewState.status]);
 
   const label = useMemo(() => {
-    switch (uiState) {
-      case "ready_first":
-        return t("analyzeProject");
-      case "ready_again":
-        return t("analyzeAgain");
-      case "ready_stale":
-        return t("analyzeLatestCommit");
-      case "requesting":
-        return t("startingReview");
-      case "queued":
-        return t("reviewQueued");
-      case "processing":
-        return t("analyzingProject");
-      case "cancelling":
-        return t("cancellingReview");
-      case "cancelled":
-        return t("newReview");
-      case "completed":
-        return t("reviewComplete");
-      case "failed":
-        return t("analysisFailedTryAgain");
-      case "disconnected":
-        return t("reconnectGitHub");
-    }
-  }, [t, uiState]);
+    if (disconnected) return t("reconnectGitHub");
+    if (context.isStale && uiStatus === "idle") return t("analyzeLatestCommit");
+    if (context.hasVerdict && uiStatus === "idle") return t("analyzeAgain");
+    if (uiStatus === "idle" && !context.hasVerdict) return t("analyzeProject");
+    return t(statusLabelKey(uiStatus));
+  }, [context.hasVerdict, context.isStale, disconnected, t, uiStatus]);
 
-  const commitLabel = useMemo(() => {
-    const sha = shortSha(scan?.commit_sha ?? context.latestCommitSha ?? context.reviewedCommitSha);
-    if (!sha || !showCommitHint) return null;
-    if (uiState === "processing" || uiState === "queued" || uiState === "requesting") {
-      return t("analyzingCommit", { sha });
-    }
-    if (context.isStale && context.latestCommitSha) {
-      return t("latestCommitNotReviewed", { sha: shortSha(context.latestCommitSha) ?? sha });
-    }
-    if (context.reviewedCommitSha) {
-      return t("lastReviewedCommit", { sha: shortSha(context.reviewedCommitSha) ?? sha });
-    }
-    return null;
-  }, [context, scan, showCommitHint, t, uiState]);
+  const showSpinner =
+    requesting ||
+    productionReviewHasActiveWork(reviewState.status, reviewState.hasActiveReview) ||
+    (cancelInFlight && productionReviewShowsSpinner("cancelling"));
+
+  const showCancel =
+    reviewState.isCancellable && Boolean(reviewState.scanJobId) && !cancelInFlight;
+
+  const primaryDisabled =
+    disconnected
+      ? false
+      : requesting ||
+        (reviewState.hasActiveReview && uiStatus !== "cancelled" && uiStatus !== "failed");
 
   const requestReview = useCallback(async () => {
-    if (requestedRef.current || phase === "requesting" || phase === "polling") return;
-    if (uiState === "disconnected") {
+    if (requestedRef.current || requesting) return;
+    if (disconnected) {
       await reconnectGitHub();
       return;
     }
-    if (scan && scanIsActive(scan.status)) return;
+    if (reviewState.hasActiveReview) return;
 
     requestedRef.current = true;
-    setPhase("requesting");
+    setRequesting(true);
     setError("");
     setErrorRef(null);
+    setCancelError("");
 
     trackEvent(context.hasVerdict ? "analyze_again_clicked" : "first_review_requested", {
       projectId,
@@ -176,26 +166,20 @@ export function AnalyzeProjectButton({
       const body = (await response.json().catch(() => null)) as
         | {
             scan_id?: string;
-            scan?: ScanPayload;
+            scan?: { id: string; status: string };
             error?: string;
             code?: string;
             needsReauth?: boolean;
-            referenceId?: string;
           }
         | null;
 
       if (body?.needsReauth || body?.code === "GITHUB_REAUTH_REQUIRED") {
-        requestedRef.current = false;
-        setPhase("idle");
         await reconnectGitHub();
         return;
       }
 
       if (response.status === 409 && body?.scan?.id) {
-        setActiveScanId(body.scan.id);
-        setScan(body.scan);
-        setPhase("polling");
-        requestedRef.current = false;
+        await syncReviewState();
         return;
       }
 
@@ -203,111 +187,45 @@ export function AnalyzeProjectButton({
         throw new Error(body?.error || te("scanStart"));
       }
 
-      setActiveScanId(body.scan_id);
-      setScan(body.scan ?? { id: body.scan_id, status: "queued", progress: 0 });
-      setPhase("polling");
       trackEvent("first_review_started", { projectId, scanId: body.scan_id });
+      await syncReviewState();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : te("scanStart"));
       setErrorRef(crypto.randomUUID().slice(0, 8));
-      setPhase("failed");
       trackEvent("first_review_failed", {
         projectId,
         error: cause instanceof Error ? cause.message : "unknown",
       });
     } finally {
+      setRequesting(false);
       requestedRef.current = false;
     }
-  }, [context.hasVerdict, phase, projectId, reconnectGitHub, scan, te, uiState]);
+  }, [
+    context.hasVerdict,
+    disconnected,
+    projectId,
+    reconnectGitHub,
+    requesting,
+    reviewState.hasActiveReview,
+    syncReviewState,
+    te,
+  ]);
 
-  const refreshActiveProductionReview = useCallback(async () => {
-    const response = await fetch(`/api/projects/${projectId}/active-production-review`, {
-      cache: "no-store",
-    });
-    const body = (await response.json().catch(() => null)) as {
-      activeReview?: {
-        scanId: string;
-        scanJobId: string;
-        scanStatus: string;
-        scanJobStatus: string;
-      } | null;
-    } | null;
-    const active = body?.activeReview ?? null;
-    if (!active) {
-      setActiveScanId(null);
-      setActiveScanJobId(null);
-      setScanJobStatus(null);
-      setContext((prev) => ({ ...prev, activeScan: null }));
-      setPhase("idle");
-      return;
-    }
-    setActiveScanId(active.scanId);
-    setActiveScanJobId(active.scanJobId);
-    setScanJobStatus(active.scanJobStatus);
-    setScan((prev) => ({
-      id: active.scanId,
-      status: active.scanStatus,
-      progress: prev?.progress ?? null,
-      progress_message: prev?.progress_message ?? null,
-      commit_sha: prev?.commit_sha ?? null,
-    }));
-    setPhase("polling");
-  }, [projectId]);
+  useEffect(() => {
+    queueMicrotask(() => void syncReviewState());
+  }, [syncReviewState]);
 
-  const pollScan = useCallback(async () => {
-    if (!activeScanId) return;
-    const response = await fetch(`/api/repositories/${projectId}/scans/${activeScanId}`, {
-      cache: "no-store",
-    });
-    const body = (await response.json().catch(() => null)) as
-      | {
-          scan?: ScanPayload;
-          scanJob?: { id: string; status: string } | null;
-          verdict?: unknown;
-          error?: string;
-        }
-      | null;
+  useEffect(() => {
+    if (!reviewState.hasActiveReview) return;
+    const timer = window.setInterval(() => void syncReviewState(), 3000);
+    return () => window.clearInterval(timer);
+  }, [reviewState.hasActiveReview, syncReviewState]);
 
-    if (!response.ok || !body?.scan) {
-      setError(body?.error || te("scanLoad"));
-      setPhase("failed");
-      return;
-    }
-
-    setScan(body.scan);
-    if (body.scanJob?.id) {
-      setActiveScanJobId(body.scanJob.id);
-      setScanJobStatus(body.scanJob.status);
-    }
-
-    if (scanWasCancelled(body.scan.status)) {
-      setPhase("idle");
-      setActiveScanId(null);
-      setContext((prev) => ({ ...prev, activeScan: null }));
-      return;
-    }
-
-    if (scanIsCompleted(body.scan.status)) {
-      setPhase("idle");
-      setContext((prev) => ({
-        ...prev,
-        hasVerdict: Boolean(body.verdict) || prev.hasVerdict,
-        reviewedCommitSha:
-          (body.scan?.commit_sha as string | null | undefined) ?? prev.reviewedCommitSha,
-        isStale: false,
-        activeScan: null,
-      }));
-      trackEvent("first_review_completed", { projectId, scanId: activeScanId });
-      window.location.assign(`/projects/${projectId}?reviewComplete=1`);
-      return;
-    }
-
-    if (body.scan.status.toLowerCase() === "failed") {
-      setPhase("failed");
-      setError(body.error || t("analysisFailedTryAgain"));
-      trackEvent("first_review_failed", { projectId, scanId: activeScanId });
-    }
-  }, [activeScanId, projectId, t, te]);
+  useEffect(() => {
+    if (reviewState.status !== "completed" || !reviewState.scanId) return;
+    trackEvent("first_review_completed", { projectId, scanId: reviewState.scanId });
+    window.location.assign(`/projects/${projectId}?reviewComplete=1`);
+  }, [projectId, reviewState.scanId, reviewState.status]);
 
   useEffect(() => {
     const pending = localStorage.getItem(scanRetryKey(projectId));
@@ -316,85 +234,90 @@ export function AnalyzeProjectButton({
     queueMicrotask(() => void requestReview());
   }, [projectId, requestReview]);
 
-  useEffect(() => {
-    if (phase !== "polling" || !activeScanId) return;
-    queueMicrotask(() => void refreshActiveProductionReview());
-    queueMicrotask(() => void pollScan());
-    const timer = window.setInterval(() => void pollScan(), 4000);
-    return () => window.clearInterval(timer);
-  }, [activeScanId, phase, pollScan, refreshActiveProductionReview]);
-
-  const busy =
-    uiState === "requesting" ||
-    uiState === "queued" ||
-    uiState === "processing" ||
-    uiState === "cancelling" ||
-    phase === "polling";
-
-  const showCancel =
-    Boolean(activeScanId && scan) &&
-    scanStatusShowsCancelButton({
-      scanStatus: scan?.status,
-      scanJobStatus,
-    }) &&
-    !cancelInFlight;
-
-  const handleCancelError = useCallback((message: string) => {
-    setCancelInFlight(false);
-    setCancelError(message);
-  }, []);
+  const handleCancelError = useCallback(
+    (message: string) => {
+      setCancelInFlight(false);
+      setCancelError(message);
+      void syncReviewState();
+    },
+    [syncReviewState]
+  );
 
   const handleCancelled = useCallback(() => {
     setCancelInFlight(false);
-    setActiveScanJobId(null);
-    setScanJobStatus(null);
-    setScan((prev) =>
-      prev ? { ...prev, status: "cancelled", progress_message: "Production review cancelled" } : prev
-    );
-    setPhase("idle");
-    setActiveScanId(null);
-    setContext((prev) => ({ ...prev, activeScan: null }));
-    void refreshActiveProductionReview();
-  }, [refreshActiveProductionReview]);
+    void syncReviewState();
+  }, [syncReviewState]);
 
   const handleStaleCancel = useCallback(() => {
     setCancelInFlight(false);
-    void refreshActiveProductionReview();
-  }, [refreshActiveProductionReview]);
+    setCancelError(t("reviewNotActiveRefresh"));
+    void syncReviewState();
+  }, [syncReviewState, t]);
 
   const handleCancelling = useCallback(() => {
     setCancelInFlight(true);
     setCancelError("");
-    setScan((prev) => (prev ? { ...prev, status: "cancelling" } : prev));
+    setReviewState((prev) => ({
+      ...prev,
+      status: "cancelling",
+      isCancellable: false,
+      hasActiveReview: true,
+    }));
   }, []);
+
+  const commitLabel = useMemo(() => {
+    const sha = shortSha(
+      reviewState.commitSha ?? context.latestCommitSha ?? context.reviewedCommitSha
+    );
+    if (!sha || !showCommitHint) return null;
+    if (productionReviewShowsSpinner(uiStatus)) {
+      return t("analyzingCommit", { sha });
+    }
+    if (context.isStale && context.latestCommitSha) {
+      return t("latestCommitNotReviewed", { sha: shortSha(context.latestCommitSha) ?? sha });
+    }
+    if (context.reviewedCommitSha) {
+      return t("lastReviewedCommit", { sha: shortSha(context.reviewedCommitSha) ?? sha });
+    }
+    return null;
+  }, [context, reviewState.commitSha, showCommitHint, t, uiStatus]);
+
+  const bannerMessage = useMemo(() => {
+    if (uiStatus === "cancelled") return t("reviewCancelledBanner");
+    if (uiStatus === "stale") return t("reviewStaleBanner");
+    if (uiStatus === "failed" && reviewState.failureMessage) {
+      return reviewState.failureMessage;
+    }
+    return null;
+  }, [reviewState.failureMessage, t, uiStatus]);
 
   return (
     <div className={className}>
       <Button
         onClick={() => void requestReview()}
-        disabled={busy && uiState !== "failed" && uiState !== "cancelled"}
+        disabled={primaryDisabled}
         size={size}
-        variant={uiState === "failed" ? "destructive" : "default"}
-        aria-busy={busy}
+        variant={uiStatus === "failed" || uiStatus === "stale" ? "destructive" : "default"}
+        aria-busy={showSpinner}
       >
-        {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+        {showSpinner ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
         {label}
       </Button>
-      {showCancel && activeScanId ? (
+      {showCancel && reviewState.scanId && reviewState.scanJobId ? (
         <CancelReviewButton
           projectId={projectId}
-          scanJobId={activeScanJobId}
-          reviewId={activeScanId}
-          disabled={uiState === "cancelling"}
+          scanJobId={reviewState.scanJobId}
+          reviewId={reviewState.scanId}
+          disabled={uiStatus === "cancelling"}
           onCancelling={handleCancelling}
           onCancelled={handleCancelled}
           onError={handleCancelError}
           onStale={handleStaleCancel}
         />
       ) : null}
-      {uiState === "cancelled" && (
+      {bannerMessage && (
         <p className="mt-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-          {t("reviewCancelledBanner")}
+          {bannerMessage}
         </p>
       )}
       {commitLabel && <p className="mt-2 text-xs text-muted-foreground">{commitLabel}</p>}

@@ -35,10 +35,12 @@ export async function GET(
     projectId,
   });
 
-  return NextResponse.json({ activeReview: state.scanJobId ? {
-    scanId: state.scanId,
-    scanJobId: state.scanJobId,
-    scanStatus: state.status,
-    scanJobStatus: "running",
-  } : null, state });
+  return NextResponse.json(
+    { state },
+    {
+      headers: {
+        "Cache-Control": "no-store, max-age=0",
+      },
+    }
+  );
 }

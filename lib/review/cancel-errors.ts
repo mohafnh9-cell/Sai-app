@@ -22,7 +22,7 @@ export function cancelReviewMessageKey(code: string | undefined): string {
     case "ALREADY_COMPLETED":
       return "cancelReviewErrorNotCancellable";
     case "STALE_REVIEW":
-      return "cancelReviewErrorStaleReview";
+      return "reviewNotActiveRefresh";
     case "CANCEL_SIGNAL_FAILED":
       return "cancelReviewErrorSignalFailed";
     case "CANCEL_REQUEST_FAILED":
