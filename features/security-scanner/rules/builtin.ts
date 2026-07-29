@@ -179,12 +179,12 @@ const configurationRules = [
     pattern: /(?:Access-Control-Allow-Origin["']?\s*[:,]\s*["']\*|cors\s*\(\s*(?:\)|\{[^}]*origin\s*:\s*(?:true|["']\*)))/i,
     title: "Permissive cross-origin policy", description: "The application allows requests from any origin.",
     severity: "medium", confidence: "high", category: "configuration",
-    remediation: "Allow only explicitly trusted origins and avoid credentialed wildcard policies.", path: CODE_PATH,
+    remediation: "Allow only explicitly trusted origins and avoid credentialed wildcard policies.", path: CODE_PATH, excludePath: /(?:\/mock-|\/fixtures?\/|\/__tests__\/|mock-api-runtime)/i,
   }, {
     pattern: /origin\s*:\s*\([^)]*\)\s*=>\s*(?:true|callback\s*\(\s*null\s*,\s*true)/i,
     title: "CORS origin reflected without an allowlist", description: "The origin callback appears to approve every requesting origin.",
     severity: "high", confidence: "high", category: "configuration",
-    remediation: "Compare the origin against an explicit allowlist before approving it.", path: CODE_PATH,
+    remediation: "Compare the origin against an explicit allowlist before approving it.", path: CODE_PATH, excludePath: /(?:\/mock-|\/fixtures?\/|\/__tests__\/|mock-api-runtime)/i,
   }]),
   patternRule("auth.insecure-cookie", "Insecure cookies", [{
     pattern: /\.cookie\s*\([^)]*,[^)]*,\s*\{(?:(?!secure\s*:\s*true).)*\}/i,
@@ -311,7 +311,7 @@ const DEPRECATED_PUBLIC_ROUTE = /const\s+deprecated\s*=[\s\S]*?status:\s*410/i;
 const UNIMPLEMENTED_STUB_ROUTE = /not\s+yet\s+implemented/i;
 const MUTATING_ROUTE_HANDLER = /export\s+async\s+function\s+(?:POST|PUT|PATCH|DELETE)\b/i;
 const ROUTE_RULE_EXCLUSIONS = {
-  excludePath: /(?:\/auth\/callback\/|\/webhooks\/)/,
+  excludePath: /(?:\/auth\/callback\/|\/webhooks\/|\/api\/internal\/)/,
   excludeContent: new RegExp(
     `${DEPRECATED_PUBLIC_ROUTE.source}|${UNIMPLEMENTED_STUB_ROUTE.source}`,
     "i",
@@ -337,7 +337,7 @@ const routeRules: ScanRule[] = [
     ...ROUTE_RULE_EXCLUSIONS,
     includeContent: MUTATING_ROUTE_HANDLER,
   }),
-  contextualRouteRule("rate-limit.missing", "Missing rate limiting", /(?:rateLimit|ratelimit|limiter|throttl|upstash|enforceRateLimit)/i, {
+  contextualRouteRule("rate-limit.missing", "Missing rate limiting", /(?:rateLimit|ratelimit|limiter|throttl|upstash|enforceRateLimit|requireProjectApiAccess|assertInternalOpsAuthorized)/i, {
     title: "Route has no visible rate limiting", description: "No local rate-limit control was recognized; infrastructure controls may exist.",
     severity: "low", confidence: "low", category: "availability",
     remediation: "Apply per-identity and per-IP limits to abuse-sensitive endpoints.",

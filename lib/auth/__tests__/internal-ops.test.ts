@@ -1,7 +1,7 @@
 import { describe, expect, it, afterEach } from "vitest";
 import { NextRequest } from "next/server";
 import {
-  INTERNAL_OPS_TOKEN_HEADER,
+  INTERNAL_OPS_AUTH_HEADER,
   assertInternalOpsAuthorized,
   verifyInternalOpsRequest,
 } from "@/lib/auth/internal-ops";
@@ -25,7 +25,7 @@ describe("internal-ops auth", () => {
   it("accepts a matching ops token", () => {
     process.env.INTERNAL_OPS_TOKEN = "secret-ops-token";
     const request = new Request("https://app.example.com/api/internal/metrics", {
-      headers: { [INTERNAL_OPS_TOKEN_HEADER]: "secret-ops-token" },
+      headers: { [INTERNAL_OPS_AUTH_HEADER]: "secret-ops-token" },
     });
     expect(verifyInternalOpsRequest(request)).toBe(true);
     expect(assertInternalOpsAuthorized(request)).toBeNull();
@@ -34,7 +34,7 @@ describe("internal-ops auth", () => {
   it("rejects wrong token without treating missing config as open", () => {
     process.env.INTERNAL_OPS_TOKEN = "secret-ops-token";
     const request = new Request("https://app.example.com/api/internal/metrics", {
-      headers: { [INTERNAL_OPS_TOKEN_HEADER]: "wrong" },
+      headers: { [INTERNAL_OPS_AUTH_HEADER]: "wrong" },
     });
     expect(verifyInternalOpsRequest(request)).toBe(false);
   });
@@ -42,7 +42,7 @@ describe("internal-ops auth", () => {
   it("rejects all requests when INTERNAL_OPS_TOKEN is unset", () => {
     delete process.env.INTERNAL_OPS_TOKEN;
     const request = new Request("https://app.example.com/api/internal/metrics", {
-      headers: { [INTERNAL_OPS_TOKEN_HEADER]: "anything" },
+      headers: { [INTERNAL_OPS_AUTH_HEADER]: "anything" },
     });
     expect(verifyInternalOpsRequest(request)).toBe(false);
   });

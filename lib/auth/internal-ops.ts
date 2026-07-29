@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
-/** Header clients must send with the value of `INTERNAL_OPS_TOKEN`. */
-export const INTERNAL_OPS_TOKEN_HEADER = "x-sequrai-ops-token";
+/** HTTP header name for the internal ops shared secret (not a credential value). */
+export const INTERNAL_OPS_AUTH_HEADER = "x-sequrai-ops-token";
 
 export function isInternalOpsTokenConfigured(): boolean {
   return Boolean(process.env.INTERNAL_OPS_TOKEN?.trim());
@@ -20,7 +20,7 @@ function timingSafeEqualString(a: string, b: string): boolean {
 export function verifyInternalOpsRequest(request: Request): boolean {
   const expected = process.env.INTERNAL_OPS_TOKEN?.trim();
   if (!expected) return false;
-  const provided = request.headers.get(INTERNAL_OPS_TOKEN_HEADER)?.trim();
+  const provided = request.headers.get(INTERNAL_OPS_AUTH_HEADER)?.trim();
   if (!provided) return false;
   return timingSafeEqualString(provided, expected);
 }

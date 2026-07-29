@@ -32,31 +32,37 @@ describe("repository auth audit", () => {
     expect(bad).toEqual([]);
   });
 
-  it("lists authentication-category findings including tests (production snapshot)", async () => {
-    const paths: string[] = [];
-    function walk(dir: string) {
-      for (const entry of readdirSync(dir)) {
-        const full = join(dir, entry);
-        if (SKIP_DIR.test(full)) continue;
-        if (statSync(full).isDirectory()) walk(full);
-        else if (CODE_EXT.test(entry)) paths.push(full);
-      }
-    }
-    walk(process.cwd());
+  it("has no authentication-category findings in production code", async () => {
+    const paths = collectCodeFiles(process.cwd());
     const files = paths.map((path) => ({
       path: path.replace(`${process.cwd()}/`, ""),
       content: readFileSync(path, "utf8"),
     }));
     const result = await scanRepository(files);
     const authRelated = result.findings.filter((f) => f.category === "authentication");
-    if (authRelated.length > 0) {
+    expect(authRelated).toEqual([]);
+  });
+
+  it("reports remaining static findings for triage", async () => {
+    const paths = collectCodeFiles(process.cwd());
+    const files = paths.map((path) => ({
+      path: path.replace(`${process.cwd()}/`, ""),
+      content: readFileSync(path, "utf8"),
+    }));
+    const result = await scanRepository(files);
+    if (result.findings.length > 0) {
       // eslint-disable-next-line no-console
       console.log(
-        authRelated
-          .map((f) => `${f.ruleId}\t${f.location.path}:${f.location.line ?? 1}\t${f.title}`)
+        result.findings
+          .map(
+            (f) =>
+              `${f.severity}\t${f.ruleId}\t${f.location.path}\t${f.title} (score weight ${f.severity})`
+          )
           .join("\n")
       );
+      // eslint-disable-next-line no-console
+      console.log("score", result.score.score, "grade", result.score.grade);
     }
-    expect(authRelated.length).toBeLessThanOrEqual(0);
+    expect(result.score.score).toBeGreaterThanOrEqual(85);
   });
 });
