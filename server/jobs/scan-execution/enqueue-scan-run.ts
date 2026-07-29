@@ -191,7 +191,7 @@ export async function enqueueScanRunExecution(
         stage: "enqueue_accepted",
         at: new Date().toISOString(),
         scheduler: "inline",
-        awaited: true,
+        metadata: { awaited: true },
       });
 
       return { executor: "inline", inngestEventId: null };
