@@ -19,6 +19,7 @@ export type ScanRunPayload = {
   branch?: string;
   baseCommitSha?: string;
   headCommitSha?: string;
+  correlationId?: string;
   persistMode?: "full" | "review_only";
   finalize?:
     | {

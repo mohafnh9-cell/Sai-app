@@ -188,7 +188,9 @@ export function OnboardingReviewStep({
               <p className="text-xs text-muted-foreground">
                 {starting
                   ? t("startingReview")
-                  : scan?.progress_message || t("analyzingRepo")}
+                  : scan?.status?.toLowerCase() === "queued"
+                    ? t("reviewQueued")
+                    : scan?.progress_message || t("analyzingRepo")}
               </p>
             </div>
           </div>

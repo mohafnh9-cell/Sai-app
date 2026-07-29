@@ -8,6 +8,7 @@ import {
   SCAN_JOB_TIMEOUT_MS,
 } from "@/server/jobs/types";
 import { scanJobIdFromInngestFailure } from "@/inngest/failure-scan-job-id";
+import { parseScanRunInngestEvent } from "@/server/jobs/inngest-payload";
 
 async function markScanJobFailureFromInngest(
   scanJobId: string | undefined,
@@ -54,10 +55,33 @@ export const scanRunFunction = inngest.createFunction(
   { event: INNGEST_EVENTS.SCAN_RUN },
   async ({ event, attempt, runId }) => {
     const admin = createAdminClient();
-    await executeScanRunJob(admin, event.data, {
+    let payload;
+    try {
+      payload = parseScanRunInngestEvent(event.data);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Invalid scan/run payload";
+      await markScanJobFailureFromInngest(
+        (event.data as { scanJobId?: string })?.scanJobId,
+        "INNGEST_PAYLOAD_INVALID",
+        message
+      );
+      throw error;
+    }
+
+    console.info({
+      component: "inngest-scan-run",
+      event: "scan_job_worker_started",
+      scanJobId: payload.scanJobId,
+      scanId: payload.scanId,
+      inngestRunId: runId,
+      attempt,
+      correlationId: payload.correlationId ?? null,
+    });
+
+    await executeScanRunJob(admin, payload, {
       inngestRunId: runId,
       attempt,
     });
-    return { scanJobId: event.data.scanJobId, scanId: event.data.scanId };
+    return { scanJobId: payload.scanJobId, scanId: payload.scanId };
   }
 );

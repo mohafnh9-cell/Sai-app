@@ -50,6 +50,9 @@ async function reenqueueScanJob(admin: SupabaseClient, job: ScanJobRow): Promise
     jobType: job.job_type,
     scanType: (job.metadata.scanType as "full" | "incremental" | undefined) ?? undefined,
     branch: (job.metadata.branch as string | undefined) ?? undefined,
+    headCommitSha: (job.metadata.headCommitSha as string | undefined) ?? undefined,
+    baseCommitSha: (job.metadata.baseCommitSha as string | undefined) ?? undefined,
+    correlationId: (job.metadata.correlationId as string | undefined) ?? undefined,
     persistMode: job.metadata.persistMode as "full" | "review_only" | undefined,
     finalize: job.metadata.finalize as ScanRunPayload["finalize"],
   };

@@ -61,13 +61,20 @@ export function assertProductionScanSchedulerConfiguration(): void {
   }
 }
 
+export function shouldForceInlineUserReview(): boolean {
+  return process.env.SCAN_USER_REVIEW_FORCE_INLINE === "1";
+}
+
 export function resolveScanSchedulerPlan(
   organizationId: string,
   options?: { preferInlineExecutor?: boolean }
 ): ScanSchedulerPlan {
   const { mode, invalidRaw } = parseConfiguredScanSchedulerMode();
 
-  if (options?.preferInlineExecutor) {
+  const preferInline =
+    options?.preferInlineExecutor ?? shouldForceInlineUserReview();
+
+  if (preferInline) {
     return {
       ok: true,
       configuredMode: mode ?? "inline",

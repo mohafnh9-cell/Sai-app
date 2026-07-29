@@ -19,7 +19,10 @@ import {
   ReviewCommitResolutionError,
 } from "@/server/review-start/resolve-latest-review-commit";
 import { releaseActiveReviewForNewHead } from "@/server/review-start/release-active-review-for-new-head";
+import { getScanSchedulerMode } from "@/lib/env/scan-scheduler";
+import { INNGEST_NOT_CONFIGURED } from "@/lib/env/inngest-config";
 import { commitsMatch } from "@/lib/repository-sync/commits-match";
+import { randomUUID } from "crypto";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -62,9 +65,13 @@ function responseForError(error: unknown) {
     );
   }
   if (error instanceof ScanEnqueueError) {
+    const userMessage =
+      error.code === INNGEST_NOT_CONFIGURED
+        ? "No se pudo iniciar el procesamiento de la revisión."
+        : error.message;
     return NextResponse.json(
       {
-        error: error.message,
+        error: userMessage,
         code: error.code,
       },
       { status: 503 }
@@ -175,6 +182,8 @@ export async function POST(
     let scan: { id: string; [key: string]: unknown } | null = null;
     let insertError: { code?: string; message: string } | null = null;
 
+    const correlationId = randomUUID();
+
     const scanInsertPayload = {
       organization_id: project.organization_id,
       project_id: project.id,
@@ -185,7 +194,7 @@ export async function POST(
       scan_type: parsedBody.data.scanType,
       status: "queued",
       progress: 0,
-      progress_message: "Production Review queued for latest GitHub commit",
+      progress_message: "Review queued",
       branch: resolvedCommit.branch,
       commit_sha: resolvedCommit.commitSha,
     };
@@ -289,9 +298,10 @@ export async function POST(
           headCommitSha: resolvedCommit.commitSha,
           scanType: parsedBody.data.scanType,
           jobType: "manual_scan",
+          correlationId,
         },
         {
-          awaitInlineExecution: true,
+          awaitInlineExecution: getScanSchedulerMode() === "inline",
         }
       );
     } catch (scheduleError) {
@@ -342,6 +352,7 @@ export async function POST(
       commitSha: resolvedCommit.commitSha,
       organizationId: project.organization_id,
       projectId: project.id,
+      correlationId,
       duplicate: scheduled.duplicate,
     });
 

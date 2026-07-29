@@ -2,7 +2,8 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { INNGEST_EVENTS } from "@/inngest/events";
-import { resolveScanSchedulerPlan, isUserTriggeredProductionReview } from "@/lib/env/scan-scheduler-plan";
+import { resolveScanSchedulerPlan } from "@/lib/env/scan-scheduler-plan";
+import { assertInngestReadyForScanDispatch, mapInngestPlanErrorCode } from "@/lib/env/inngest-config";
 import { createAdminClient } from "@/server/security-scanner/admin-client";
 import type { ScanJobRow } from "../scan-job-store";
 import { executeScanRunJob } from "../run-scan-job";
@@ -52,12 +53,47 @@ async function persistSchedulerMetadata(
 }
 
 async function sendInngestScanRunEvent(payload: ScanRunPayload): Promise<string[]> {
+  assertInngestReadyForScanDispatch();
+  const safePayload = buildInngestScanRunPayload(payload);
+
+  console.info({
+    component: "scan-job-dispatch",
+    event: "scan_job_dispatch_attempted",
+    scanJobId: safePayload.scanJobId,
+    scanId: safePayload.scanId,
+    projectId: safePayload.projectId,
+    organizationId: safePayload.organizationId,
+    eventName: INNGEST_EVENTS.SCAN_RUN,
+    correlationId: safePayload.correlationId ?? null,
+  });
+
   const { inngest } = await import("@/inngest/client");
   const result = await inngest.send({
     name: INNGEST_EVENTS.SCAN_RUN,
-    data: buildInngestScanRunPayload(payload),
+    data: safePayload,
   });
-  return extractInngestEventIds(result);
+  const eventIds = extractInngestEventIds(result);
+
+  if (eventIds.length === 0) {
+    console.error({
+      component: "scan-job-dispatch",
+      event: "scan_job_dispatch_failed",
+      scanJobId: safePayload.scanJobId,
+      scanId: safePayload.scanId,
+      reason: "missing_event_id",
+    });
+  } else {
+    console.info({
+      component: "scan-job-dispatch",
+      event: "scan_job_dispatch_succeeded",
+      scanJobId: safePayload.scanJobId,
+      scanId: safePayload.scanId,
+      inngestEventId: eventIds[0] ?? null,
+      correlationId: safePayload.correlationId ?? null,
+    });
+  }
+
+  return eventIds;
 }
 
 export async function enqueueScanRunExecution(
@@ -71,8 +107,17 @@ export async function enqueueScanRunExecution(
   }
 ): Promise<{ executor: "inngest" | "inline"; inngestEventId?: string | null }> {
   const runPayload = { ...payload, scanJobId: job.id };
-  const plan = resolveScanSchedulerPlan(payload.organizationId, {
-    preferInlineExecutor: isUserTriggeredProductionReview(payload.jobType),
+  const plan = resolveScanSchedulerPlan(payload.organizationId);
+
+  console.info({
+    component: "scan-job-dispatch",
+    event: "production_review_requested",
+    scanJobId: job.id,
+    scanId: payload.scanId,
+    projectId: payload.projectId,
+    organizationId: payload.organizationId,
+    correlationId: payload.correlationId ?? null,
+    plannedExecutor: plan.ok ? plan.executor : null,
   });
 
   logScanExecutionTrace("enqueue_attempt", {
@@ -87,17 +132,18 @@ export async function enqueueScanRunExecution(
   });
 
   if (!plan.ok) {
+    const failureCode = mapInngestPlanErrorCode(plan.code);
     await failReviewExecution(admin, {
       reviewId: payload.scanId,
       projectId: payload.projectId,
       organizationId: payload.organizationId,
       scanJobId: job.id,
       commitSha: options?.commitSha ?? null,
-      failureCode: plan.code,
+      failureCode,
       failureMessage: plan.message,
       scheduler: plan.configuredMode,
     });
-    throw new ScanEnqueueError(plan.code, plan.message);
+    throw new ScanEnqueueError(failureCode, plan.message);
   }
 
   await persistSchedulerMetadata(admin, job.id, {
@@ -267,11 +313,9 @@ export async function reenqueueExistingScanRunJob(
   job: ScanJobRow,
   payload: ScanRunPayload
 ): Promise<void> {
-  const plan = resolveScanSchedulerPlan(payload.organizationId, {
-    preferInlineExecutor: isUserTriggeredProductionReview(payload.jobType),
-  });
+  const plan = resolveScanSchedulerPlan(payload.organizationId);
   if (!plan.ok) {
-    throw new ScanEnqueueError(plan.code, plan.message);
+    throw new ScanEnqueueError(mapInngestPlanErrorCode(plan.code), plan.message);
   }
 
   if (plan.executor === "inngest") {

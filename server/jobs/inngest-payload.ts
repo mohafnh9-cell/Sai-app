@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type { ScanRunPayload, WebhookProcessPayload } from "./types";
 
 const FORBIDDEN_INNGEST_KEYS = [
@@ -11,6 +12,32 @@ const FORBIDDEN_INNGEST_KEYS = [
   "rawBody",
 ] as const;
 
+export const scanRunInngestEventSchema = z.object({
+  scanJobId: z.string().uuid(),
+  scanId: z.string().uuid(),
+  organizationId: z.string().uuid(),
+  projectId: z.string().uuid(),
+  userId: z.string().min(1),
+  jobType: z
+    .enum([
+      "webhook_process",
+      "manual_scan",
+      "mcp_review",
+      "webhook_push_scan",
+      "webhook_pr_scan",
+      "automatic_review",
+    ])
+    .optional(),
+  scanType: z.enum(["full", "incremental"]).optional(),
+  branch: z.string().optional(),
+  baseCommitSha: z.string().optional(),
+  headCommitSha: z.string().min(7).optional(),
+  correlationId: z.string().uuid().optional(),
+  persistMode: z.enum(["full", "review_only"]).optional(),
+});
+
+export type ScanRunInngestEvent = z.infer<typeof scanRunInngestEventSchema>;
+
 export function assertSafeInngestScanRunPayload(payload: ScanRunPayload): void {
   for (const key of FORBIDDEN_INNGEST_KEYS) {
     if (key in (payload as Record<string, unknown>)) {
@@ -19,9 +46,24 @@ export function assertSafeInngestScanRunPayload(payload: ScanRunPayload): void {
   }
 }
 
+export function parseScanRunInngestEvent(data: unknown): ScanRunInngestEvent {
+  const parsed = scanRunInngestEventSchema.safeParse(data);
+  if (!parsed.success) {
+    throw new Error(`Invalid scan/run Inngest payload: ${parsed.error.message}`);
+  }
+  return parsed.data;
+}
+
 export function buildInngestScanRunPayload(payload: ScanRunPayload): ScanRunPayload {
   assertSafeInngestScanRunPayload(payload);
-  return payload;
+  const built: ScanRunPayload = {
+    ...payload,
+    projectId: payload.projectId,
+    headCommitSha: payload.headCommitSha,
+    branch: payload.branch,
+  };
+  parseScanRunInngestEvent(built);
+  return built;
 }
 
 export type SafeWebhookProcessPayload = {

@@ -51,10 +51,11 @@ describe("scan scheduler plan", () => {
     }
   });
 
-  it("forces inline executor for user-triggered production reviews", () => {
+  it("forces inline executor for user-triggered production reviews when forced by env", () => {
     process.env.SCAN_SCHEDULER = "inngest";
     process.env.INNGEST_EVENT_KEY = "test-key";
     process.env.INNGEST_ASYNC_ORG_ALLOWLIST = "org-b";
+    process.env.SCAN_USER_REVIEW_FORCE_INLINE = "1";
     const plan = resolveScanSchedulerPlan("org-b", { preferInlineExecutor: true });
     expect(plan.ok).toBe(true);
     if (plan.ok) {

@@ -100,6 +100,7 @@ export async function scheduleScanRun(
         scanType: payload.scanType ?? "full",
         branch: payload.branch ?? null,
         headCommitSha: payload.headCommitSha ?? null,
+        correlationId: payload.correlationId ?? null,
         finalizeKind: payload.finalize?.kind ?? null,
         userId: payload.userId,
         persistMode: payload.persistMode ?? null,

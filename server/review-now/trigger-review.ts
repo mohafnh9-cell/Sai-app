@@ -13,6 +13,7 @@ import {
   type ResolvedCommitReference,
 } from "@/lib/github/repository-service";
 import { getCurrentProductionVerdict } from "@/server/production-verdict/service";
+import { getScanSchedulerMode } from "@/lib/env/scan-scheduler";
 import { scheduleScanRun } from "@/server/jobs/schedule-scan";
 import { recoverStaleActiveReviewsForProject } from "@/server/review-recovery/stale-review";
 import { recordLiveHeadCommit } from "@/server/repository-sync/persistence";
@@ -166,7 +167,7 @@ export async function triggerProductionReview(
         },
         {
           jobType: "mcp_review",
-          awaitInlineExecution: true,
+          awaitInlineExecution: getScanSchedulerMode() === "inline",
         }
       );
     });
