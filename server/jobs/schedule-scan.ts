@@ -28,6 +28,9 @@ import {
   executeLegacyInlineScanRun,
   isScanJobsInfrastructureMissing,
 } from "./legacy-inline-scan-run";
+import {
+  assertScanJobsAvailableOrThrow,
+} from "./scan-job-infrastructure";
 
 function log(event: string, fields: Record<string, unknown>) {
   console.info({ component: "schedule-scan", event, ...fields });
@@ -92,6 +95,7 @@ export async function scheduleScanRun(
       metadata: {
         scanType: payload.scanType ?? "full",
         branch: payload.branch ?? null,
+        headCommitSha: payload.headCommitSha ?? null,
         finalizeKind: payload.finalize?.kind ?? null,
         userId: payload.userId,
         persistMode: payload.persistMode ?? null,
@@ -101,12 +105,13 @@ export async function scheduleScanRun(
     job = created.job;
     duplicate = created.duplicate;
   } catch (error) {
+    assertScanJobsAvailableOrThrow({
+      error,
+      organizationId: payload.organizationId,
+      projectId: payload.projectId,
+      scanId: payload.scanId,
+    });
     if (isScanJobsInfrastructureMissing(error)) {
-      log("scan_jobs_table_missing_legacy_inline", {
-        scanId: payload.scanId,
-        projectId: payload.projectId,
-        organizationId: payload.organizationId,
-      });
       const inlineScheduler = options?.scheduler ?? defaultScheduler;
       inlineScheduler(() => {
         void executeLegacyInlineScanRun(createAdminClient(), payload).catch((runError) => {

@@ -6,7 +6,7 @@ import { requireProjectApiAccess } from "@/server/projects/project-access";
 import { getProductionReviewState } from "@/server/review-cancel/get-production-review-state";
 import { getCurrentProductionVerdict } from "@/server/production-verdict/service";
 import { refreshGitHubHeadForProject } from "@/server/repository-sync/refresh-github-head";
-import { computeGithubSyncDisplay } from "@/lib/repository-sync/compute-sync-display";
+import { buildProductionReviewUiContract } from "@/server/projects/build-production-review-ui-contract";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -40,6 +40,11 @@ export async function GET(
     .eq("organization_id", access.project.organization_id)
     .maybeSingle();
 
+  const contract = await buildProductionReviewUiContract(admin, {
+    organizationId: access.project.organization_id,
+    projectId,
+  });
+
   const state = await getProductionReviewState(admin, {
     organizationId: access.project.organization_id,
     projectId,
@@ -48,8 +53,8 @@ export async function GET(
   const verdict = await getCurrentProductionVerdict(admin, projectId);
   const lastVerdictCommitSha = verdict?.commitSha ?? null;
 
-  let githubHeadSha: string | null = null;
-  if (projectRow?.github_repo) {
+  let githubHeadSha: string | null = contract?.github.headCommitSha ?? null;
+  if (!githubHeadSha && projectRow?.github_repo) {
     const head = await refreshGitHubHeadForProject(admin, {
       organizationId: access.project.organization_id,
       projectId,
@@ -59,24 +64,23 @@ export async function GET(
     githubHeadSha = head?.commitSha ?? null;
   }
 
-  const githubSync = computeGithubSyncDisplay({
+  const githubSync = {
     githubHeadSha,
+    analyzedCommitSha:
+      contract?.latestCompletedReview?.commitSha ??
+      (contract?.reviewInProgress ? contract.activeReview?.commitSha : null) ??
+      lastVerdictCommitSha,
     lastVerdictCommitSha,
-    activeReviewCommitSha: state.commitSha,
-    hasActiveReview: state.hasActiveReview,
-  });
+    activeReviewCommitSha: contract?.activeReview?.commitSha ?? state.commitSha,
+    repositoryOutOfSync: contract?.repositoryOutOfSync ?? false,
+    syncInProgress: contract?.reviewInProgress ?? false,
+  };
 
   return NextResponse.json(
     {
+      contract,
       state,
-      githubSync: {
-        githubHeadSha: githubSync.githubHeadSha,
-        analyzedCommitSha: githubSync.displayAnalyzedCommitSha,
-        lastVerdictCommitSha: githubSync.lastVerdictCommitSha,
-        activeReviewCommitSha: githubSync.activeReviewCommitSha,
-        repositoryOutOfSync: githubSync.repositoryOutOfSync,
-        syncInProgress: githubSync.syncInProgress,
-      },
+      githubSync,
     },
     {
       headers: {

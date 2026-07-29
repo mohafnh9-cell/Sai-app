@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { after } from "next/server";
 import { z } from "zod";
 import {
   getScanRequestContext,
@@ -8,6 +9,11 @@ import { GitHubServiceError, parseGitHubRepository } from "@/lib/github/reposito
 import { createAdminClient, mapDatabaseError } from "@/server/security-scanner/admin-client";
 import { enforceRateLimit } from "@/server/http/rate-limit";
 import { scheduleScanRun } from "@/server/jobs/schedule-scan";
+import { ScanEnqueueError } from "@/server/jobs/scan-execution/enqueue-scan-run";
+import {
+  ScanJobInfrastructureError,
+  SCAN_JOB_INFRASTRUCTURE_MISSING,
+} from "@/server/jobs/scan-job-infrastructure";
 import { expireStaleActiveReviewsForRepository } from "@/server/review-recovery/stale-review";
 import {
   resolveLatestReviewCommit,
@@ -40,6 +46,29 @@ function responseForError(error: unknown) {
         needsReauth: error.code === "GITHUB_TOKEN_UNAVAILABLE",
       },
       { status: error.code === "GITHUB_HEAD_UNAVAILABLE" ? 502 : 403 }
+    );
+  }
+  if (error instanceof ScanJobInfrastructureError) {
+    return NextResponse.json(
+      {
+        error: error.message,
+        code: SCAN_JOB_INFRASTRUCTURE_MISSING,
+        migrationRequired: error.migrationRequired,
+        organizationId: error.details.organizationId,
+        projectId: error.details.projectId,
+        scanId: error.details.scanId,
+        environment: error.details.environment,
+      },
+      { status: 503 }
+    );
+  }
+  if (error instanceof ScanEnqueueError) {
+    return NextResponse.json(
+      {
+        error: error.message,
+        code: error.code,
+      },
+      { status: 503 }
     );
   }
   if (error instanceof ScanRequestError || error instanceof GitHubServiceError) {
@@ -247,28 +276,79 @@ export async function POST(
       throw mapDatabaseError(stateError, "Could not initialize scan state");
     }
 
-    // Queue the scan asynchronously so the HTTP response returns immediately.
-    await scheduleScanRun(
-      admin,
-      {
-        scanJobId: "",
-        scanId: scan.id,
-        organizationId: project.organization_id,
-        projectId: project.id,
-        userId: user.id,
-        branch: resolvedCommit.branch,
-        headCommitSha: resolvedCommit.commitSha,
-        scanType: parsedBody.data.scanType,
-        jobType: "manual_scan",
-      },
-      {
-        scheduler: (fn) => {
-          void fn();
+    let scheduled: { scanJobId: string; duplicate: boolean };
+    try {
+      scheduled = await scheduleScanRun(
+        admin,
+        {
+          scanJobId: "",
+          scanId: scan.id,
+          organizationId: project.organization_id,
+          projectId: project.id,
+          userId: user.id,
+          branch: resolvedCommit.branch,
+          headCommitSha: resolvedCommit.commitSha,
+          scanType: parsedBody.data.scanType,
+          jobType: "manual_scan",
         },
+        {
+          // Vercel must extend the lambda until inline scan work starts (after), not fire-and-forget.
+          scheduler: (fn) => {
+            after(fn);
+          },
+        }
+      );
+    } catch (scheduleError) {
+      if (scheduleError instanceof ScanJobInfrastructureError) {
+        await admin
+          .from("scans")
+          .update({
+            status: "failed",
+            failed_at: new Date().toISOString(),
+            error_code: SCAN_JOB_INFRASTRUCTURE_MISSING,
+            error_message: scheduleError.message,
+            progress_message: "Scan job infrastructure is not available",
+          })
+          .eq("id", scan.id);
+        await admin
+          .from("repository_scan_state")
+          .update({ active_scan_id: null })
+          .eq("repository_id", repositoryId)
+          .eq("active_scan_id", scan.id);
+        throw scheduleError;
       }
-    );
+      if (scheduleError instanceof ScanEnqueueError) {
+        await admin
+          .from("scans")
+          .update({
+            status: "failed",
+            failed_at: new Date().toISOString(),
+            error_code: scheduleError.code,
+            error_message: scheduleError.message,
+            progress_message: "Could not enqueue Production Review worker",
+          })
+          .eq("id", scan.id);
+        await admin
+          .from("repository_scan_state")
+          .update({ active_scan_id: null })
+          .eq("repository_id", repositoryId)
+          .eq("active_scan_id", scan.id);
+        throw scheduleError;
+      }
+      throw scheduleError;
+    }
 
-    return NextResponse.json({ scan_id: scan.id, scan }, { status: 202 });
+    return NextResponse.json(
+      {
+        scanId: scan.id,
+        scanJobId: scheduled.scanJobId,
+        branch: resolvedCommit.branch,
+        commitSha: resolvedCommit.commitSha,
+        scan_id: scan.id,
+        scan,
+      },
+      { status: 202 }
+    );
   } catch (error) {
     return responseForError(error);
   }

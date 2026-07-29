@@ -19,6 +19,7 @@ type ScanPayload = {
 };
 
 const STALL_MS = 8 * 60 * 1000;
+const QUEUE_STALL_MS = 2 * 60 * 1000;
 
 export function OnboardingReviewStep({
   projectId,
@@ -35,12 +36,14 @@ export function OnboardingReviewStep({
   const [scan, setScan] = useState<ScanPayload | null>(null);
   const [error, setError] = useState("");
   const [stalled, setStalled] = useState(false);
+  const [queueStalled, setQueueStalled] = useState(false);
   const [starting, setStarting] = useState(false);
   const startedAtRef = useRef<number | null>(null);
 
   const startScan = useCallback(async () => {
     setError("");
     setStalled(false);
+    setQueueStalled(false);
     setStarting(true);
     startedAtRef.current = Date.now();
     try {
@@ -60,6 +63,9 @@ export function OnboardingReviewStep({
       }
 
       if (!response.ok || !body?.scan_id) {
+        if (body?.code === "SCAN_JOB_INFRASTRUCTURE_MISSING") {
+          throw new Error(t("reviewInfrastructureMissing"));
+        }
         throw new Error(body?.error || te("scanStart"));
       }
 
@@ -69,7 +75,7 @@ export function OnboardingReviewStep({
     } finally {
       setStarting(false);
     }
-  }, [projectId, te]);
+  }, [projectId, t, te]);
 
   const pollScan = useCallback(async () => {
     if (!scanId) return;
@@ -86,6 +92,7 @@ export function OnboardingReviewStep({
     const body = (await response.json().catch(() => null)) as
       | {
           scan?: ScanPayload;
+          scanJob?: { id: string; status: string } | null;
           verdict?: { v1?: ProductionVerdictV1 | null } | null;
           error?: string;
         }
@@ -101,6 +108,18 @@ export function OnboardingReviewStep({
     }
 
     setScan(body.scan);
+
+    const elapsed = Date.now() - (startedAtRef.current ?? Date.now());
+    const scanStatus = body.scan.status?.toLowerCase() ?? "";
+    const jobStatus = body.scanJob?.status?.toLowerCase() ?? null;
+    if (
+      elapsed > QUEUE_STALL_MS &&
+      scanStatus === "queued" &&
+      (!body.scanJob || jobStatus === "queued")
+    ) {
+      setQueueStalled(true);
+      setStalled(true);
+    }
 
     if (body.scan.status === "failed") {
       setError(body.scan.error_message || te("scanStart"));
@@ -175,7 +194,9 @@ export function OnboardingReviewStep({
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 space-y-3">
           <div>
             <p className="text-sm font-medium">{t("reviewStalledTitle")}</p>
-            <p className="text-sm text-muted-foreground mt-1">{t("reviewStalledBody")}</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              {queueStalled ? t("reviewQueueStalledBody") : t("reviewStalledBody")}
+            </p>
           </div>
           <Button variant="outline" size="sm" className="gap-2" onClick={() => void startScan()}>
             <RefreshCw className="h-4 w-4" aria-hidden />

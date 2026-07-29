@@ -189,12 +189,12 @@ export async function getProductionReviewState(
           });
         }
 
-        const uiStatusActive = mapScanStatusToProductionReviewUiStatus(scanStatus);
         return buildState({
           scan,
-          status: uiStatusActive,
-          hasActiveReview: true,
+          status: "idle",
+          hasActiveReview: false,
           isCancellable: false,
+          failureMessage: null,
         });
       }
     }

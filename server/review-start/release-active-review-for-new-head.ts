@@ -31,6 +31,7 @@ export async function releaseActiveReviewForNewHead(
     projectId: string;
     targetCommitSha: string;
     targetBranch?: string | null;
+    supersededByScanId?: string | null;
   }
 ): Promise<ReleaseActiveReviewForNewHeadResult> {
   const { data: activeScans } = await admin
@@ -70,6 +71,13 @@ export async function releaseActiveReviewForNewHead(
         error_code: COMMIT_SUPERSEDED_CODE,
         error_message: "Review superseded because GitHub has a newer commit",
         progress_message: "Review stopped — repository moved to a newer commit",
+        metrics: {
+          supersededAt: now,
+          supersededByCommitSha: input.targetCommitSha,
+          ...(input.supersededByScanId
+            ? { supersededByScanId: input.supersededByScanId }
+            : {}),
+        },
       })
       .eq("id", scanId)
       .in("status", [...ACTIVE_SCAN_STATUSES])

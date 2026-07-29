@@ -14,6 +14,7 @@ import {
 } from "@/lib/review/production-review-state";
 import { CancelReviewButton } from "@/features/projects/components/CancelReviewButton";
 import type { ProjectReviewUiContext } from "@/server/projects/review-ui-context";
+import type { ProductionReviewUiContract } from "@/server/projects/build-production-review-ui-contract";
 
 const scanRetryKey = (projectId: string) => `sequrai_github_scan_${projectId}`;
 
@@ -84,6 +85,7 @@ export function AnalyzeProjectButton({
   const [errorRef, setErrorRef] = useState<string | null>(null);
   const [cancelError, setCancelError] = useState("");
   const [cancelInFlight, setCancelInFlight] = useState(false);
+  const [reviewInProgress, setReviewInProgress] = useState(false);
   const requestedRef = useRef(false);
 
   const disconnected = context.githubNeedsReconnect || !context.githubConnected;
@@ -94,6 +96,7 @@ export function AnalyzeProjectButton({
     });
     const body = (await response.json().catch(() => null)) as {
       state?: ProductionReviewState;
+      contract?: ProductionReviewUiContract | null;
       githubSync?: {
         githubHeadSha: string | null;
         analyzedCommitSha: string | null;
@@ -105,26 +108,50 @@ export function AnalyzeProjectButton({
       return null;
     }
     const state = body.state;
+    const contract = body.contract ?? null;
     const githubSync = body.githubSync;
-    setReviewState(state);
+    const inProgress = contract?.reviewInProgress ?? false;
+    setReviewInProgress(inProgress);
+    setReviewState({
+      ...state,
+      hasActiveReview: inProgress,
+      isCancellable: contract?.canCancelReview ?? state.isCancellable,
+      scanJobId: contract?.activeReview?.scanJobId ?? state.scanJobId,
+      commitSha: contract?.activeReview?.commitSha ?? state.commitSha,
+      status: inProgress ? state.status : state.hasActiveReview ? "idle" : state.status,
+    });
     if (githubSync) {
       setContext((prev) => ({
         ...prev,
         latestCommitSha: githubSync.githubHeadSha ?? prev.latestCommitSha,
         githubHeadSha: githubSync.githubHeadSha,
-        repositoryOutOfSync: githubSync.repositoryOutOfSync,
-        syncInProgress: githubSync.syncInProgress ?? false,
+        repositoryOutOfSync: contract?.repositoryOutOfSync ?? githubSync.repositoryOutOfSync,
+        syncInProgress: inProgress,
         reviewedCommitSha:
-          githubSync.analyzedCommitSha && !state.hasActiveReview
-            ? githubSync.analyzedCommitSha
-            : prev.reviewedCommitSha,
+          contract?.latestCompletedReview?.commitSha ??
+          githubSync.analyzedCommitSha ??
+          prev.reviewedCommitSha,
         isStale:
           Boolean(githubSync.githubHeadSha) &&
-          Boolean(githubSync.analyzedCommitSha) &&
-          githubSync.repositoryOutOfSync,
+          Boolean(
+            contract?.latestCompletedReview?.commitSha ?? githubSync.analyzedCommitSha
+          ) &&
+          (contract?.repositoryOutOfSync ?? githubSync.repositoryOutOfSync) &&
+          !inProgress,
+        activeScan:
+          inProgress && contract?.activeReview
+            ? {
+                id: contract.activeReview.scanId,
+                scanJobId: contract.activeReview.scanJobId,
+                scanJobStatus: null,
+                status: contract.activeReview.status,
+                progress: null,
+                progressMessage: null,
+                commitSha: contract.activeReview.commitSha,
+              }
+            : null,
       }));
-    }
-    if (!state.hasActiveReview) {
+    } else if (!inProgress) {
       setContext((prev) => ({ ...prev, activeScan: null }));
     }
     return state;
@@ -144,24 +171,30 @@ export function AnalyzeProjectButton({
 
   const label = useMemo(() => {
     if (disconnected) return t("reconnectGitHub");
+    if (requesting && !reviewInProgress) return t("startingReview");
     if (context.isStale && uiStatus === "idle") return t("analyzeLatestCommit");
     if (context.hasVerdict && uiStatus === "idle") return t("analyzeAgain");
     if (uiStatus === "idle" && !context.hasVerdict) return t("analyzeProject");
     return t(statusLabelKey(uiStatus));
-  }, [context.hasVerdict, context.isStale, disconnected, t, uiStatus]);
+  }, [context.hasVerdict, context.isStale, disconnected, requesting, reviewInProgress, t, uiStatus]);
 
   const showSpinner =
-    requesting ||
-    productionReviewHasActiveWork(reviewState.status, reviewState.hasActiveReview) ||
+    (reviewInProgress &&
+      productionReviewHasActiveWork(reviewState.status, true)) ||
     (cancelInFlight && productionReviewShowsSpinner("cancelling"));
 
   const showCancel =
-    reviewState.isCancellable && Boolean(reviewState.scanJobId) && !cancelInFlight;
+    reviewInProgress &&
+    (reviewState.isCancellable || Boolean(reviewState.scanJobId)) &&
+    Boolean(reviewState.scanId) &&
+    Boolean(reviewState.scanJobId) &&
+    !cancelInFlight;
 
   const primaryDisabled =
     disconnected
       ? false
       : requesting ||
+        reviewInProgress ||
         (reviewState.hasActiveReview && uiStatus !== "cancelled" && uiStatus !== "failed");
 
   const requestReview = useCallback(async () => {
@@ -170,7 +203,7 @@ export function AnalyzeProjectButton({
       await reconnectGitHub();
       return;
     }
-    if (reviewState.hasActiveReview) return;
+    if (reviewInProgress) return;
 
     requestedRef.current = true;
     setRequesting(true);
@@ -209,6 +242,9 @@ export function AnalyzeProjectButton({
       }
 
       if (!response.ok || !body?.scan_id) {
+        if (body?.code === "SCAN_JOB_INFRASTRUCTURE_MISSING") {
+          throw new Error(t("reviewInfrastructureMissing"));
+        }
         throw new Error(body?.error || te("scanStart"));
       }
 
@@ -231,8 +267,9 @@ export function AnalyzeProjectButton({
     projectId,
     reconnectGitHub,
     requesting,
-    reviewState.hasActiveReview,
+    reviewInProgress,
     syncReviewState,
+    t,
     te,
   ]);
 
@@ -241,10 +278,10 @@ export function AnalyzeProjectButton({
   }, [syncReviewState]);
 
   useEffect(() => {
-    if (!reviewState.hasActiveReview) return;
-    const timer = window.setInterval(() => void syncReviewState(), 3000);
+    if (!reviewInProgress) return;
+    const timer = window.setInterval(() => void syncReviewState(), 4000);
     return () => window.clearInterval(timer);
-  }, [reviewState.hasActiveReview, syncReviewState]);
+  }, [reviewInProgress, syncReviewState]);
 
   useEffect(() => {
     if (reviewState.status !== "completed" || !reviewState.scanId) return;
@@ -303,11 +340,15 @@ export function AnalyzeProjectButton({
         t("latestAnalyzedCommit", { sha: analyzedSha }),
         t("currentGitHubCommit", { sha: githubSha }),
       ];
-      if (context.repositoryOutOfSync && !productionReviewShowsSpinner(uiStatus)) {
-        return `${lines.join(" · ")} — ${t("repositoryOutOfSync")}`;
+      if (context.repositoryOutOfSync && !reviewInProgress && !productionReviewShowsSpinner(uiStatus)) {
+        return `${lines.join(" · ")} — ${t("repositoryPendingReview")}`;
       }
-      if (context.syncInProgress && productionReviewShowsSpinner(uiStatus)) {
-        return `${lines.join(" · ")} — ${t("syncInProgress")}`;
+      if (reviewInProgress) {
+        const activeSha = shortSha(reviewState.commitSha ?? context.githubHeadSha ?? githubSha);
+        return activeSha ? t("analyzingCommit", { sha: activeSha }) : t("reviewRunning");
+      }
+      if (!context.repositoryOutOfSync && githubSha && analyzedSha && githubSha === analyzedSha) {
+        return `${lines.join(" · ")} — ${t("repositoryInSync")}`;
       }
       return lines.join(" · ");
     }
@@ -324,7 +365,7 @@ export function AnalyzeProjectButton({
       return t("lastReviewedCommit", { sha: shortSha(context.reviewedCommitSha) ?? sha });
     }
     return null;
-  }, [context, reviewState.commitSha, showCommitHint, t, uiStatus]);
+  }, [context, reviewInProgress, reviewState.commitSha, showCommitHint, t, uiStatus]);
 
   const bannerMessage = useMemo(() => {
     if (uiStatus === "cancelled") return t("reviewCancelledBanner");

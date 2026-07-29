@@ -166,10 +166,8 @@ export async function triggerProductionReview(
         },
         {
           jobType: "mcp_review",
-          // Run inline work in the same `after()` continuation — nested `after()` from
-          // scheduleScanRun's default scheduler often never executes on serverless.
           scheduler: (fn) => {
-            void fn();
+            after(fn);
           },
         }
       );

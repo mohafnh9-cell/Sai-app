@@ -118,6 +118,8 @@
   "workspaceNameMax": "Name must be at most 80 characters",
   "reviewStalledTitle": "This is taking longer than expected",
   "reviewStalledBody": "Large repositories can take several minutes. You can wait or try again.",
+  "reviewQueueStalledBody": "The review stayed queued and the worker never started. Tap Try again, or wait a few minutes after the latest deploy.",
+  "reviewInfrastructureMissing": "The review could not start because a required database infrastructure update is missing.",
   "verdictSaving": "Almost there…",
   "mcpEyebrow": "SequrAI in Cursor",
   "mcpTitle": "Use SequrAI inside Cursor",

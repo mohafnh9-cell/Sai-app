@@ -14,6 +14,7 @@ import {
   GitHubServiceError,
   parseGitHubRepository,
 } from "@/lib/github/repository-service";
+import { commitsMatch } from "@/lib/repository-sync/commits-match";
 
 const ACTIVE_SCAN_UPDATE_STATUSES = [
   "queued",
@@ -167,6 +168,18 @@ export class InlineScanJobRunner implements ScanJobRunner {
             branch: context.branch,
             commitSha: context.headCommitSha,
           });
+
+      if (
+        context.headCommitSha &&
+        !commitsMatch(snapshot.commitSha, context.headCommitSha)
+      ) {
+        throw new GitHubServiceError(
+          "GITHUB_RESPONSE",
+          `COMMIT_SNAPSHOT_MISMATCH: expected ${context.headCommitSha}, got ${snapshot.commitSha}`,
+          409
+        );
+      }
+
       logScan("info", "repository_fetched", {
         scanId: context.scanId,
         repositoryId: context.repositoryId,
@@ -187,7 +200,12 @@ export class InlineScanJobRunner implements ScanJobRunner {
           commit_sha: snapshot.commitSha,
           files_discovered: snapshot.discoveredFiles,
           files_analyzed: snapshot.files.length,
-          metrics: { fetchedBytes: snapshot.totalBytes },
+          metrics: {
+            fetchedBytes: snapshot.totalBytes,
+            requestedCommitSha: context.headCommitSha ?? null,
+            resolvedSnapshotSha: snapshot.commitSha,
+            analyzedCommitSha: snapshot.commitSha,
+          },
           omissions: snapshot.omissions,
         }),
         this.supabase

@@ -4,11 +4,17 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { parseGitHubRepository } from "@/lib/github/repository-reference";
 import { GitHubRepositoryService } from "@/lib/github/repository-service";
 import { resolveOrganizationGitHubToken } from "@/server/github-automation/token-resolver";
+import { refreshGitHubHeadForProject } from "@/server/repository-sync/refresh-github-head";
 import type { DiscoveryRepositoryInput } from "../types";
 
 export async function loadDiscoveryRepositoryFromProject(
   admin: SupabaseClient,
-  input: { organizationId: string; projectId: string; branch?: string | null }
+  input: {
+    organizationId: string;
+    projectId: string;
+    branch?: string | null;
+    commitSha?: string | null;
+  }
 ): Promise<DiscoveryRepositoryInput> {
   const { data: project, error } = await admin
     .from("projects")
@@ -30,9 +36,29 @@ export async function loadDiscoveryRepositoryFromProject(
     throw new Error("No GitHub token available for discovery");
   }
 
+  let commitSha = input.commitSha?.trim() || null;
+  let branch = input.branch?.trim() || null;
+
+  if (!commitSha) {
+    const head = await refreshGitHubHeadForProject(admin, {
+      organizationId: input.organizationId,
+      projectId: input.projectId,
+      githubRepo: project.github_repo as string,
+      branch,
+    });
+    if (!head?.commitSha) {
+      throw new Error("Could not resolve GitHub HEAD for discovery");
+    }
+    commitSha = head.commitSha;
+    branch = head.branch;
+  }
+
   const ref = parseGitHubRepository(project.github_repo as string);
   const service = new GitHubRepositoryService(tokenResult.token);
-  const snapshot = await service.fetchSnapshot(ref, input.branch ?? undefined);
+  const snapshot = await service.fetchSnapshot(ref, {
+    branch: branch ?? undefined,
+    commitSha,
+  });
 
   return {
     projectId: project.id as string,

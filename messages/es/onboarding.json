@@ -118,6 +118,8 @@
   "workspaceNameMax": "El nombre debe tener como máximo 80 caracteres",
   "reviewStalledTitle": "Está tardando más de lo esperado",
   "reviewStalledBody": "Los repositorios grandes pueden tardar varios minutos. Puedes esperar o intentarlo de nuevo.",
+  "reviewQueueStalledBody": "La revisión se quedó en cola y el worker no arrancó. Pulsa «Intentar de nuevo» o espera unos minutos tras desplegar la última versión.",
+  "reviewInfrastructureMissing": "No se pudo iniciar la revisión porque falta una actualización de infraestructura en la base de datos.",
   "verdictSaving": "Casi listo…",
   "mcpEyebrow": "SequrAI en Cursor",
   "mcpTitle": "Usa SequrAI dentro de Cursor",
