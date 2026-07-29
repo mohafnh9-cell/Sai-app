@@ -27,7 +27,6 @@ export async function updateSession(request: NextRequest) {
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || supabaseUrl === "your_supabase_project_url" || !supabaseKey) {
-    const pathname = request.nextUrl.pathname;
     const isProtected = PROTECTED_PATHS.some((p) => pathname.startsWith(p));
     if (process.env.NODE_ENV === "production" && isProtected && !isAuthBypassEnabled()) {
       const url = request.nextUrl.clone();
@@ -57,8 +56,6 @@ export async function updateSession(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
-  const pathname = request.nextUrl.pathname;
 
   if (pathname.startsWith("/demo")) {
     supabaseResponse.headers.set("X-Robots-Tag", "noindex, nofollow");
