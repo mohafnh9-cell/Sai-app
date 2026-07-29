@@ -118,6 +118,11 @@ describe("critical deterministic rules", () => {
           'import { getCachedServerAuthContext } from "@/lib/server/request-cache";\nexport async function GET() {\n  const auth = await getCachedServerAuthContext();\n}',
       },
       {
+        path: "app/api/projects/[id]/production-memory/route.ts",
+        content:
+          'import { requireProjectApiAccess } from "@/server/projects/project-access";\nexport async function GET() {\n  const access = await requireProjectApiAccess(supabase, user?.id, projectId);\n}',
+      },
+      {
         path: "app/api/ai/fix/route.ts",
         content:
           'const deprecated = { error: "This endpoint is deprecated. Use AI analysis on scan reports via /api/scans/{scanId}/ai-analysis.", migration: "Block 5.5" };\nexport async function POST() {\n  return NextResponse.json(deprecated, { status: 410 });\n}',
