@@ -29,8 +29,17 @@ describe("scan rate limit env", () => {
   it("uses defaults in production when enabled", () => {
     process.env.NODE_ENV = "production";
     delete process.env.SCAN_RATE_LIMIT_DISABLED;
+    process.env.SCAN_RATE_LIMIT_ENABLED = "1";
     expect(isScanRateLimitDisabled()).toBe(false);
     expect(webScansPerRepositoryPerHourLimit()).toBe(5);
     expect(mcpReviewsPerOrganizationPerHourLimit()).toBe(10);
+  });
+
+  it("is unlimited in production during private beta (limits not enabled)", () => {
+    process.env.NODE_ENV = "production";
+    delete process.env.SCAN_RATE_LIMIT_DISABLED;
+    delete process.env.SCAN_RATE_LIMIT_ENABLED;
+    expect(isScanRateLimitDisabled()).toBe(true);
+    expect(webScansPerRepositoryPerHourLimit()).toBeNull();
   });
 });

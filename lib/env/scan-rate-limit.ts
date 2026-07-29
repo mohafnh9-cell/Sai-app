@@ -1,14 +1,28 @@
 /**
  * Scan / review rate limits (web manual scans + MCP review_now).
- * Set SCAN_RATE_LIMIT_DISABLED=1 while developing to skip hourly caps.
+ *
+ * Private beta default: unlimited (no hourly cap). Enable caps before public launch:
+ *   SCAN_RATE_LIMIT_ENABLED=1
+ *
+ * Or force unlimited explicitly:
+ *   SCAN_RATE_LIMIT_DISABLED=1
  */
 
 const TRUTHY = new Set(["1", "true", "yes", "on"]);
 
+function isExplicitlyTruthy(value: string | undefined): boolean {
+  const normalized = value?.trim().toLowerCase();
+  return normalized != null && TRUTHY.has(normalized);
+}
+
+export function isScanRateLimitEnabled(): boolean {
+  return isExplicitlyTruthy(process.env.SCAN_RATE_LIMIT_ENABLED);
+}
+
 export function isScanRateLimitDisabled(): boolean {
-  const explicit = process.env.SCAN_RATE_LIMIT_DISABLED?.trim().toLowerCase();
-  if (explicit && TRUTHY.has(explicit)) return true;
+  if (isExplicitlyTruthy(process.env.SCAN_RATE_LIMIT_DISABLED)) return true;
   if (process.env.NODE_ENV !== "production") return true;
+  if (!isScanRateLimitEnabled()) return true;
   return false;
 }
 
