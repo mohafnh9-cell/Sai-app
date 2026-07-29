@@ -120,7 +120,7 @@ describe("critical deterministic rules", () => {
       {
         path: "app/api/projects/[id]/production-memory/route.ts",
         content:
-          'import { requireProjectApiAccess } from "@/server/projects/project-access";\nexport async function GET() {\n  const access = await requireProjectApiAccess(supabase, user?.id, projectId);\n}',
+          'import { requireProjectApiAccess } from "@/server/projects/project-access";\nexport async function GET() {\n  await supabase.auth.getUser();\n  const access = await requireProjectApiAccess(supabase, user?.id, projectId);\n}',
       },
       {
         path: "app/api/ai/fix/route.ts",
