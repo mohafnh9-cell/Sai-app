@@ -20,6 +20,7 @@ import {
 } from "@/server/review-start/resolve-latest-review-commit";
 import { releaseActiveReviewForNewHead } from "@/server/review-start/release-active-review-for-new-head";
 import { getScanSchedulerMode } from "@/lib/env/scan-scheduler";
+import { webScansPerRepositoryPerHourLimit } from "@/lib/env/scan-rate-limit";
 import { INNGEST_NOT_CONFIGURED } from "@/lib/env/inngest-config";
 import { commitsMatch } from "@/lib/repository-sync/commits-match";
 import { randomUUID } from "crypto";
@@ -143,19 +144,22 @@ export async function POST(
     const now = Date.now();
     await expireStaleActiveReviewsForRepository(admin, repositoryId);
 
-    const rateWindow = new Date(now - 60 * 60 * 1000).toISOString();
-    const { count: recentScanCount } = await admin
-      .from("scans")
-      .select("id", { count: "exact", head: true })
-      .eq("repository_id", repositoryId)
-      .eq("triggered_by_user_id", user.id)
-      .gte("created_at", rateWindow);
-    if ((recentScanCount ?? 0) >= 5) {
-      throw new ScanRequestError(
-        429,
-        "SCAN_RATE_LIMITED",
-        "Maximum of five scans per repository per hour reached"
-      );
+    const webScanLimit = webScansPerRepositoryPerHourLimit();
+    if (webScanLimit != null) {
+      const rateWindow = new Date(now - 60 * 60 * 1000).toISOString();
+      const { count: recentScanCount } = await admin
+        .from("scans")
+        .select("id", { count: "exact", head: true })
+        .eq("repository_id", repositoryId)
+        .eq("triggered_by_user_id", user.id)
+        .gte("created_at", rateWindow);
+      if ((recentScanCount ?? 0) >= webScanLimit) {
+        throw new ScanRequestError(
+          429,
+          "SCAN_RATE_LIMITED",
+          `Maximum of ${webScanLimit} scans per repository per hour reached`
+        );
+      }
     }
 
     const { data: projectRow } = await admin

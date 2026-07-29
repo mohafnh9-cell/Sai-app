@@ -1,6 +1,10 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  isScanRateLimitDisabled,
+  mcpReviewsPerOrganizationPerHourLimit,
+} from "@/lib/env/scan-rate-limit";
 
 /**
  * Private Beta bound on MCP-triggered reviews per organization per hour.
@@ -10,6 +14,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * tenant regardless of how many API keys or IPs an organization uses.
  */
 export const MCP_REVIEWS_PER_ORGANIZATION_PER_HOUR = 10;
+
+export { isScanRateLimitDisabled };
 
 export async function countRecentMcpReviews(
   admin: SupabaseClient,
@@ -29,8 +35,9 @@ export async function countRecentMcpReviews(
 export async function isMcpReviewRateLimited(
   admin: SupabaseClient,
   organizationId: string,
-  limit = MCP_REVIEWS_PER_ORGANIZATION_PER_HOUR
+  limit = mcpReviewsPerOrganizationPerHourLimit() ?? MCP_REVIEWS_PER_ORGANIZATION_PER_HOUR
 ): Promise<boolean> {
+  if (isScanRateLimitDisabled() || limit == null) return false;
   const recentCount = await countRecentMcpReviews(admin, organizationId);
   return recentCount >= limit;
 }
