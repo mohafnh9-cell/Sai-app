@@ -2,6 +2,10 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { isAuthBypassEnabled } from "@/lib/auth/dev-bypass";
 import { safeNextPath } from "@/lib/auth/safe-next-path";
+import {
+  internalOpsUnauthorizedResponse,
+  verifyInternalOpsRequest,
+} from "@/lib/auth/internal-ops";
 
 const PROTECTED_PATHS = [
   "/dashboard",
@@ -20,6 +24,12 @@ const AUTH_PATHS = ["/login", "/signup"];
 export async function updateSession(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   if (pathname.startsWith("/api/inngest")) {
+    return NextResponse.next({ request });
+  }
+  if (pathname.startsWith("/api/internal")) {
+    if (!verifyInternalOpsRequest(request)) {
+      return internalOpsUnauthorizedResponse();
+    }
     return NextResponse.next({ request });
   }
 

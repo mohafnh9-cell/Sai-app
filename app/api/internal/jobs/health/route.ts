@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { assertInternalOpsAuthorized } from "@/lib/auth/internal-ops";
 import { createAdminClient } from "@/server/security-scanner/admin-client";
 import { buildJobsHealthSummary } from "@/server/observability/health-summary";
 import {
@@ -9,17 +10,9 @@ import {
 
 export const runtime = "nodejs";
 
-function authorized(request: Request): boolean {
-  const expected = process.env.INTERNAL_OPS_TOKEN?.trim();
-  if (!expected) return false;
-  const provided = request.headers.get("x-sequrai-ops-token");
-  return provided === expected;
-}
-
 export async function GET(request: Request) {
-  if (!authorized(request)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const unauthorized = assertInternalOpsAuthorized(request);
+  if (unauthorized) return unauthorized;
 
   try {
     const admin = createAdminClient();
