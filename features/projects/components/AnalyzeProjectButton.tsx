@@ -346,6 +346,9 @@ export function AnalyzeProjectButton({
     if (uiStatus === "cancelled") return t("reviewCancelledBanner");
     if (uiStatus === "stale") return t("reviewStaleBanner");
     if (uiStatus === "failed" && reviewState.failureMessage) {
+      if (reviewState.failureMessage.toLowerCase().includes("superseded")) {
+        return null;
+      }
       return reviewState.failureMessage;
     }
     return null;

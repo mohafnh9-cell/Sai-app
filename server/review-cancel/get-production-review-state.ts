@@ -14,6 +14,7 @@ import {
   REVIEW_STALE_FAILURE_CODE,
 } from "@/server/review-recovery/stale-review";
 import { isScanJobsInfrastructureMissing } from "@/server/jobs/legacy-inline-scan-run";
+import { COMMIT_SUPERSEDED_CODE } from "@/server/review-start/release-active-review-for-new-head";
 
 function idleState(): ProductionReviewState {
   return {
@@ -211,6 +212,10 @@ export async function getProductionReviewState(
     .maybeSingle();
 
   if (latestTerminal) {
+    const terminalCode = latestTerminal.error_code as string | null;
+    if (terminalCode === COMMIT_SUPERSEDED_CODE) {
+      return idleState();
+    }
     const uiStatus = mapScanStatusToProductionReviewUiStatus(String(latestTerminal.status));
     if (uiStatus === "cancelled" || uiStatus === "failed") {
       return buildState({
