@@ -51,6 +51,7 @@
   "latestAnalyzedCommit": "Latest analyzed commit: {sha}",
   "currentGitHubCommit": "Current GitHub commit: {sha}",
   "repositoryOutOfSync": "Repository out of sync — synchronizing with GitHub…",
+  "syncInProgress": "Syncing with GitHub HEAD",
   "freshnessUnknown": "SequrAI could not confirm whether this Verdict includes your latest commit.",
   "previousVerdictUnchanged": "Your previous valid Verdict has not been changed.",
   "supportReference": "Reference {id}",

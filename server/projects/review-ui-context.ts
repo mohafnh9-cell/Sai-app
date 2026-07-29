@@ -8,6 +8,7 @@ import { getRepositorySyncStatus } from "@/server/repository-sync/get-repository
 import { createAdminClient } from "@/server/security-scanner/admin-client";
 import { refreshGitHubHeadForProject } from "@/server/repository-sync/refresh-github-head";
 import { commitsMatch } from "@/lib/repository-sync/commits-match";
+import { computeGithubSyncDisplay } from "@/lib/repository-sync/compute-sync-display";
 
 export type ProjectReviewUiContext = {
   githubConnected: boolean;
@@ -17,6 +18,7 @@ export type ProjectReviewUiContext = {
   latestCommitSha: string | null;
   githubHeadSha: string | null;
   repositoryOutOfSync: boolean;
+  syncInProgress: boolean;
   isStale: boolean;
   freshnessUnknown: boolean;
   activeScan: {
@@ -122,12 +124,12 @@ export async function getProjectReviewUiContext(
     Boolean(latestCommitSha) &&
     !commitsMatch(reviewedCommitSha, latestCommitSha);
 
-  const analyzedForSync =
-    productionReviewState.commitSha ?? reviewedCommitSha;
-  const repositoryOutOfSync =
-    Boolean(githubHeadSha) &&
-    Boolean(analyzedForSync) &&
-    !commitsMatch(githubHeadSha, analyzedForSync);
+  const syncView = computeGithubSyncDisplay({
+    githubHeadSha,
+    lastVerdictCommitSha: reviewedCommitSha,
+    activeReviewCommitSha: productionReviewState.commitSha,
+    hasActiveReview: productionReviewState.hasActiveReview,
+  });
 
   return {
     githubConnected,
@@ -136,7 +138,8 @@ export async function getProjectReviewUiContext(
     reviewedCommitSha,
     latestCommitSha,
     githubHeadSha,
-    repositoryOutOfSync,
+    repositoryOutOfSync: syncView.repositoryOutOfSync,
+    syncInProgress: syncView.syncInProgress,
     isStale,
     freshnessUnknown,
     activeScan,

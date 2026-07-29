@@ -85,7 +85,6 @@ export function AnalyzeProjectButton({
   const [cancelError, setCancelError] = useState("");
   const [cancelInFlight, setCancelInFlight] = useState(false);
   const requestedRef = useRef(false);
-  const autoSyncForHeadRef = useRef(false);
 
   const disconnected = context.githubNeedsReconnect || !context.githubConnected;
 
@@ -99,6 +98,7 @@ export function AnalyzeProjectButton({
         githubHeadSha: string | null;
         analyzedCommitSha: string | null;
         repositoryOutOfSync: boolean;
+        syncInProgress?: boolean;
       };
     } | null;
     if (!response.ok || !body?.state) {
@@ -113,6 +113,7 @@ export function AnalyzeProjectButton({
         latestCommitSha: githubSync.githubHeadSha ?? prev.latestCommitSha,
         githubHeadSha: githubSync.githubHeadSha,
         repositoryOutOfSync: githubSync.repositoryOutOfSync,
+        syncInProgress: githubSync.syncInProgress ?? false,
         reviewedCommitSha:
           githubSync.analyzedCommitSha && !state.hasActiveReview
             ? githubSync.analyzedCommitSha
@@ -240,26 +241,6 @@ export function AnalyzeProjectButton({
   }, [syncReviewState]);
 
   useEffect(() => {
-    if (!context.repositoryOutOfSync) {
-      autoSyncForHeadRef.current = false;
-    }
-  }, [context.repositoryOutOfSync]);
-
-  useEffect(() => {
-    if (disconnected || reviewState.hasActiveReview || requesting) return;
-    if (!context.repositoryOutOfSync) return;
-    if (autoSyncForHeadRef.current) return;
-    autoSyncForHeadRef.current = true;
-    queueMicrotask(() => void requestReview());
-  }, [
-    context.repositoryOutOfSync,
-    disconnected,
-    requestReview,
-    requesting,
-    reviewState.hasActiveReview,
-  ]);
-
-  useEffect(() => {
     if (!reviewState.hasActiveReview) return;
     const timer = window.setInterval(() => void syncReviewState(), 3000);
     return () => window.clearInterval(timer);
@@ -324,6 +305,9 @@ export function AnalyzeProjectButton({
       ];
       if (context.repositoryOutOfSync && !productionReviewShowsSpinner(uiStatus)) {
         return `${lines.join(" · ")} — ${t("repositoryOutOfSync")}`;
+      }
+      if (context.syncInProgress && productionReviewShowsSpinner(uiStatus)) {
+        return `${lines.join(" · ")} — ${t("syncInProgress")}`;
       }
       return lines.join(" · ");
     }

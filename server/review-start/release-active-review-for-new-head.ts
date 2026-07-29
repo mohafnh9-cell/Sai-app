@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { isActiveReviewScanStatus } from "@/brain/automatic-review/review-status";
 import { commitsMatch } from "@/lib/repository-sync/commits-match";
 import { markScanJobCancelled } from "@/server/jobs/scan-job-store";
+import { isStaleActiveReviewScan } from "@/server/review-recovery/stale-review";
 
 const ACTIVE_SCAN_STATUSES = [
   "queued",
@@ -34,7 +35,7 @@ export async function releaseActiveReviewForNewHead(
 ): Promise<ReleaseActiveReviewForNewHeadResult> {
   const { data: activeScans } = await admin
     .from("scans")
-    .select("id, status, commit_sha, branch")
+    .select("id, status, commit_sha, branch, created_at, updated_at, started_at, queued_at")
     .eq("repository_id", input.projectId)
     .in("status", [...ACTIVE_SCAN_STATUSES]);
 
@@ -45,6 +46,19 @@ export async function releaseActiveReviewForNewHead(
     const scanCommit = (scan.commit_sha as string | null) ?? null;
     if (scanCommit && commitsMatch(scanCommit, input.targetCommitSha)) {
       continue;
+    }
+
+    if (!scanCommit) {
+      const stale = isStaleActiveReviewScan({
+        status: String(scan.status ?? ""),
+        created_at: (scan as { created_at?: string }).created_at ?? new Date().toISOString(),
+        updated_at: (scan as { updated_at?: string }).updated_at ?? new Date().toISOString(),
+        started_at: (scan as { started_at?: string | null }).started_at ?? null,
+        queued_at: (scan as { queued_at?: string | null }).queued_at ?? null,
+      });
+      if (!stale) {
+        continue;
+      }
     }
 
     const scanId = scan.id as string;

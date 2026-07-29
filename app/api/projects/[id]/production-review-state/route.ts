@@ -5,7 +5,8 @@ import { createAdminClient } from "@/server/security-scanner/admin-client";
 import { requireProjectApiAccess } from "@/server/projects/project-access";
 import { getProductionReviewState } from "@/server/review-cancel/get-production-review-state";
 import { getCurrentProductionVerdict } from "@/server/production-verdict/service";
-import { getGitHubSyncSnapshot } from "@/server/repository-sync/github-sync-snapshot";
+import { refreshGitHubHeadForProject } from "@/server/repository-sync/refresh-github-head";
+import { computeGithubSyncDisplay } from "@/lib/repository-sync/compute-sync-display";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -45,27 +46,38 @@ export async function GET(
   });
 
   const verdict = await getCurrentProductionVerdict(admin, projectId);
-  const analyzedCommitSha = state.commitSha ?? verdict?.commitSha ?? null;
+  const lastVerdictCommitSha = verdict?.commitSha ?? null;
 
-  let githubSync = {
-    githubHeadSha: null as string | null,
-    analyzedCommitSha,
-    repositoryOutOfSync: false,
-  };
-
+  let githubHeadSha: string | null = null;
   if (projectRow?.github_repo) {
-    githubSync = await getGitHubSyncSnapshot(admin, {
+    const head = await refreshGitHubHeadForProject(admin, {
       organizationId: access.project.organization_id,
       projectId,
       githubRepo: projectRow.github_repo as string,
       githubRepositoryId: (projectRow.github_repository_id as number | null) ?? null,
-      analyzedCommitSha,
-      refreshRemote: true,
-    });
+    }).catch(() => null);
+    githubHeadSha = head?.commitSha ?? null;
   }
 
+  const githubSync = computeGithubSyncDisplay({
+    githubHeadSha,
+    lastVerdictCommitSha,
+    activeReviewCommitSha: state.commitSha,
+    hasActiveReview: state.hasActiveReview,
+  });
+
   return NextResponse.json(
-    { state, githubSync },
+    {
+      state,
+      githubSync: {
+        githubHeadSha: githubSync.githubHeadSha,
+        analyzedCommitSha: githubSync.displayAnalyzedCommitSha,
+        lastVerdictCommitSha: githubSync.lastVerdictCommitSha,
+        activeReviewCommitSha: githubSync.activeReviewCommitSha,
+        repositoryOutOfSync: githubSync.repositoryOutOfSync,
+        syncInProgress: githubSync.syncInProgress,
+      },
+    },
     {
       headers: {
         "Cache-Control": "no-store, max-age=0",

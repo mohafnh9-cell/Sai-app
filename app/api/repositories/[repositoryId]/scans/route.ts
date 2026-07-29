@@ -14,6 +14,7 @@ import {
   ReviewCommitResolutionError,
 } from "@/server/review-start/resolve-latest-review-commit";
 import { releaseActiveReviewForNewHead } from "@/server/review-start/release-active-review-for-new-head";
+import { commitsMatch } from "@/lib/repository-sync/commits-match";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -143,28 +144,61 @@ export async function POST(
       targetBranch: resolvedCommit.branch,
     });
 
-    const { data: scan, error: insertError } = await supabase
-      .from("scans")
-      .insert({
-        organization_id: project.organization_id,
-        project_id: project.id,
-        repository_id: project.id,
-        triggered_by_user_id: user.id,
-        trigger_type: "manual",
-        review_type: "manual",
-        scan_type: parsedBody.data.scanType,
-        status: "queued",
-        progress: 0,
-        progress_message: "Production Review queued for latest GitHub commit",
-        branch: resolvedCommit.branch,
-        commit_sha: resolvedCommit.commitSha,
-      })
-      .select("*")
-      .single();
+    let scan: { id: string; [key: string]: unknown } | null = null;
+    let insertError: { code?: string; message: string } | null = null;
+
+    const scanInsertPayload = {
+      organization_id: project.organization_id,
+      project_id: project.id,
+      repository_id: project.id,
+      triggered_by_user_id: user.id,
+      trigger_type: "manual",
+      review_type: "manual",
+      scan_type: parsedBody.data.scanType,
+      status: "queued",
+      progress: 0,
+      progress_message: "Production Review queued for latest GitHub commit",
+      branch: resolvedCommit.branch,
+      commit_sha: resolvedCommit.commitSha,
+    };
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const result = await supabase.from("scans").insert(scanInsertPayload).select("*").single();
+      scan = result.data;
+      insertError = result.error;
+      if (!insertError) break;
+
+      if (insertError.code !== "23505" || attempt === 1) break;
+
+      const { data: active } = await supabase
+        .from("scans")
+        .select("id, status, commit_sha")
+        .eq("repository_id", repositoryId)
+        .in("status", [
+          "queued",
+          "fetching_repository",
+          "indexing",
+          "scanning",
+          "calculating_score",
+        ])
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const activeSha = (active?.commit_sha as string | null) ?? null;
+      if (activeSha && commitsMatch(activeSha, resolvedCommit.commitSha)) {
+        break;
+      }
+
+      await releaseActiveReviewForNewHead(admin, {
+        organizationId: project.organization_id,
+        projectId: project.id,
+        targetCommitSha: resolvedCommit.commitSha,
+        targetBranch: resolvedCommit.branch,
+      });
+    }
 
     if (insertError) {
-      // The partial unique index is the concurrency authority; querying first
-      // alone would race under simultaneous requests.
       if (insertError.code === "23505") {
         const { data: active } = await supabase
           .from("scans")
@@ -185,7 +219,11 @@ export async function POST(
           { status: 409 }
         );
       }
-      throw mapDatabaseError(insertError, "Could not create scan");
+      throw mapDatabaseError(insertError as never, "Could not create scan");
+    }
+
+    if (!scan) {
+      throw new ScanRequestError(500, "SCAN_CREATE_FAILED", "Could not create scan");
     }
 
     const { error: stateError } = await admin.from("repository_scan_state").upsert(
