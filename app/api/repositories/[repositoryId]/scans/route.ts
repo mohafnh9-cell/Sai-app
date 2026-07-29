@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { after } from "next/server";
 import { z } from "zod";
 import {
   getScanRequestContext,
@@ -292,10 +291,7 @@ export async function POST(
           jobType: "manual_scan",
         },
         {
-          // Vercel must extend the lambda until inline scan work starts (after), not fire-and-forget.
-          scheduler: (fn) => {
-            after(fn);
-          },
+          awaitInlineExecution: true,
         }
       );
     } catch (scheduleError) {

@@ -166,9 +166,7 @@ export async function triggerProductionReview(
         },
         {
           jobType: "mcp_review",
-          scheduler: (fn) => {
-            after(fn);
-          },
+          awaitInlineExecution: true,
         }
       );
     });

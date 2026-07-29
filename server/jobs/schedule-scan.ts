@@ -77,7 +77,11 @@ async function sendInngestEvent<T extends Record<string, unknown>>(
 export async function scheduleScanRun(
   admin: SupabaseClient,
   payload: ScanRunPayload,
-  options?: { scheduler?: BackgroundScheduler; jobType?: ScanJobType }
+  options?: {
+    scheduler?: BackgroundScheduler;
+    jobType?: ScanJobType;
+    awaitInlineExecution?: boolean;
+  }
 ): Promise<{ scanJobId: string; duplicate: boolean }> {
   const jobType =
     options?.jobType ??
@@ -150,6 +154,7 @@ export async function scheduleScanRun(
     const enqueued = await enqueueScanRunExecution(admin, job, runPayload, {
       scheduler: options?.scheduler ?? defaultScheduler,
       commitSha: payload.headCommitSha ?? payload.baseCommitSha ?? null,
+      awaitInline: options?.awaitInlineExecution,
     });
     log("scan_enqueued", {
       scanJobId: job.id,

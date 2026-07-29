@@ -10,6 +10,7 @@ export type ScanSchedulerPlan =
       organizationId: string;
       allowlistApplied: boolean;
       orgFallbackUsed: boolean;
+      userReviewInline?: boolean;
     }
   | {
       ok: false;
@@ -23,6 +24,10 @@ export type ScanSchedulerPlan =
     };
 
 export type ScanOrgFallbackMode = "inline" | "error";
+
+export function isUserTriggeredProductionReview(jobType?: string | null): boolean {
+  return jobType === "manual_scan" || jobType === "mcp_review";
+}
 
 export function getScanOrgFallbackMode(): ScanOrgFallbackMode {
   const raw = process.env.SCAN_SCHEDULER_ORG_FALLBACK?.trim().toLowerCase();
@@ -56,8 +61,24 @@ export function assertProductionScanSchedulerConfiguration(): void {
   }
 }
 
-export function resolveScanSchedulerPlan(organizationId: string): ScanSchedulerPlan {
+export function resolveScanSchedulerPlan(
+  organizationId: string,
+  options?: { preferInlineExecutor?: boolean }
+): ScanSchedulerPlan {
   const { mode, invalidRaw } = parseConfiguredScanSchedulerMode();
+
+  if (options?.preferInlineExecutor) {
+    return {
+      ok: true,
+      configuredMode: mode ?? "inline",
+      executor: "inline",
+      organizationId,
+      allowlistApplied: false,
+      orgFallbackUsed: false,
+      userReviewInline: true,
+    };
+  }
+
   if (!mode) {
     return {
       ok: false,

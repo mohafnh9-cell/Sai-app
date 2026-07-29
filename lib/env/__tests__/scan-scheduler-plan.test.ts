@@ -51,12 +51,15 @@ describe("scan scheduler plan", () => {
     }
   });
 
-  it("allows inngest executor for org on allowlist", () => {
+  it("forces inline executor for user-triggered production reviews", () => {
     process.env.SCAN_SCHEDULER = "inngest";
     process.env.INNGEST_EVENT_KEY = "test-key";
-    process.env.INNGEST_ASYNC_ORG_ALLOWLIST = "org-a,org-b";
-    const plan = resolveScanSchedulerPlan("org-b");
+    process.env.INNGEST_ASYNC_ORG_ALLOWLIST = "org-b";
+    const plan = resolveScanSchedulerPlan("org-b", { preferInlineExecutor: true });
     expect(plan.ok).toBe(true);
-    if (plan.ok) expect(plan.executor).toBe("inngest");
+    if (plan.ok) {
+      expect(plan.executor).toBe("inline");
+      expect(plan.userReviewInline).toBe(true);
+    }
   });
 });

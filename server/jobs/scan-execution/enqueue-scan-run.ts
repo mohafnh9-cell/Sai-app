@@ -2,7 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { INNGEST_EVENTS } from "@/inngest/events";
-import { resolveScanSchedulerPlan } from "@/lib/env/scan-scheduler-plan";
+import { resolveScanSchedulerPlan, isUserTriggeredProductionReview } from "@/lib/env/scan-scheduler-plan";
 import { createAdminClient } from "@/server/security-scanner/admin-client";
 import type { ScanJobRow } from "../scan-job-store";
 import { executeScanRunJob } from "../run-scan-job";
@@ -67,10 +67,13 @@ export async function enqueueScanRunExecution(
   options?: {
     scheduler?: BackgroundScheduler;
     commitSha?: string | null;
+    awaitInline?: boolean;
   }
 ): Promise<{ executor: "inngest" | "inline"; inngestEventId?: string | null }> {
   const runPayload = { ...payload, scanJobId: job.id };
-  const plan = resolveScanSchedulerPlan(payload.organizationId);
+  const plan = resolveScanSchedulerPlan(payload.organizationId, {
+    preferInlineExecutor: isUserTriggeredProductionReview(payload.jobType),
+  });
 
   logScanExecutionTrace("enqueue_attempt", {
     reviewId: payload.scanId,
@@ -163,14 +166,8 @@ export async function enqueueScanRunExecution(
     return { executor: "inngest", inngestEventId };
   }
 
-  const inlineScheduler =
-    options?.scheduler ??
-    ((fn: () => void | Promise<void>) => {
-      void fn();
-    });
-
-  try {
-    inlineScheduler(async () => {
+  if (plan.executor === "inline") {
+    if (options?.awaitInline) {
       try {
         await executeScanRunJob(createAdminClient(), runPayload, { lockedBy: "inline-worker" });
       } catch (error) {
@@ -187,9 +184,46 @@ export async function enqueueScanRunExecution(
           error: message,
           stage: "scan_failed",
         }).catch(() => undefined);
+        throw error;
       }
-    });
-  } catch (error) {
+
+      await appendScanJobExecutionTrace(admin, job.id, {
+        stage: "enqueue_accepted",
+        at: new Date().toISOString(),
+        scheduler: "inline",
+        awaited: true,
+      });
+
+      return { executor: "inline", inngestEventId: null };
+    }
+
+    const inlineScheduler =
+      options?.scheduler ??
+      ((fn: () => void | Promise<void>) => {
+        void fn();
+      });
+
+    try {
+      inlineScheduler(async () => {
+        try {
+          await executeScanRunJob(createAdminClient(), runPayload, { lockedBy: "inline-worker" });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Inline scan execution failed";
+          await failReviewExecution(createAdminClient(), {
+            reviewId: payload.scanId,
+            projectId: payload.projectId,
+            organizationId: payload.organizationId,
+            scanJobId: job.id,
+            commitSha: options?.commitSha ?? null,
+            failureCode: ENQUEUE_FAILED_CODE,
+            failureMessage: message,
+            scheduler: "inline",
+            error: message,
+            stage: "scan_failed",
+          }).catch(() => undefined);
+        }
+      });
+    } catch (error) {
     const message = error instanceof Error ? error.message : "Could not schedule inline scan worker";
     await failReviewExecution(admin, {
       reviewId: payload.scanId,
@@ -205,24 +239,27 @@ export async function enqueueScanRunExecution(
     throw new ScanEnqueueError(ENQUEUE_FAILED_CODE, message);
   }
 
-  await appendScanJobExecutionTrace(admin, job.id, {
-    stage: "enqueue_accepted",
-    at: new Date().toISOString(),
-    scheduler: "inline",
-  });
+    await appendScanJobExecutionTrace(admin, job.id, {
+      stage: "enqueue_accepted",
+      at: new Date().toISOString(),
+      scheduler: "inline",
+    });
 
-  logScanExecutionTrace("enqueue_accepted", {
-    reviewId: payload.scanId,
-    scanJobId: job.id,
-    projectId: payload.projectId,
-    organizationId: payload.organizationId,
-    commitSha: options?.commitSha ?? null,
-    scheduler: "inline",
-    status: "queued",
-    stage: "enqueue_accepted",
-  });
+    logScanExecutionTrace("enqueue_accepted", {
+      reviewId: payload.scanId,
+      scanJobId: job.id,
+      projectId: payload.projectId,
+      organizationId: payload.organizationId,
+      commitSha: options?.commitSha ?? null,
+      scheduler: "inline",
+      status: "queued",
+      stage: "enqueue_accepted",
+    });
 
-  return { executor: "inline", inngestEventId: null };
+    return { executor: "inline", inngestEventId: null };
+  }
+
+  throw new ScanEnqueueError(ENQUEUE_FAILED_CODE, `Unsupported executor: ${plan.executor}`);
 }
 
 export async function reenqueueExistingScanRunJob(
@@ -230,7 +267,9 @@ export async function reenqueueExistingScanRunJob(
   job: ScanJobRow,
   payload: ScanRunPayload
 ): Promise<void> {
-  const plan = resolveScanSchedulerPlan(payload.organizationId);
+  const plan = resolveScanSchedulerPlan(payload.organizationId, {
+    preferInlineExecutor: isUserTriggeredProductionReview(payload.jobType),
+  });
   if (!plan.ok) {
     throw new ScanEnqueueError(plan.code, plan.message);
   }
