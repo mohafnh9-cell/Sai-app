@@ -48,20 +48,6 @@ export async function executeScanRunJob(
     return;
   }
 
-  const running = await markScanJobRunning(admin, payload.scanJobId, {
-    inngestRunId: input?.inngestRunId,
-    attemptCount: input?.attempt ?? undefined,
-    lockedBy: input?.lockedBy,
-  });
-  if (!running.updated) {
-    const current = await getScanJob(admin, payload.scanJobId);
-    if (current && isTerminalScanJobStatus(current.status)) return;
-  }
-
-  const jobAfterClaim = (await getScanJob(admin, payload.scanJobId)) ?? existingJob;
-  const scheduler =
-    (jobAfterClaim?.metadata as { scheduler?: string } | null)?.scheduler ?? input?.lockedBy ?? null;
-
   const { data: scanBeforeRun } = await admin
     .from("scans")
     .select("status, commit_sha")
@@ -94,16 +80,41 @@ export async function executeScanRunJob(
     return;
   }
 
+  const jobAfterClaimPreview = existingJob;
+  const schedulerPreview =
+    (jobAfterClaimPreview?.metadata as { scheduler?: string } | null)?.scheduler ??
+    input?.lockedBy ??
+    null;
+
   if (scanBeforeRun?.status === "queued") {
-    await beginReviewProcessing(admin, {
+    const started = await beginReviewProcessing(admin, {
       reviewId: payload.scanId,
       scanJobId: payload.scanJobId,
       organizationId: payload.organizationId,
       projectId: payload.projectId,
       commitSha: (scanBeforeRun.commit_sha as string | null) ?? payload.headCommitSha ?? null,
-      scheduler,
+      scheduler: schedulerPreview,
+    });
+    log("info", "scan_worker_begin_processing", {
+      scanJobId: payload.scanJobId,
+      scanId: payload.scanId,
+      started,
     });
   }
+
+  const running = await markScanJobRunning(admin, payload.scanJobId, {
+    inngestRunId: input?.inngestRunId,
+    attemptCount: input?.attempt ?? undefined,
+    lockedBy: input?.lockedBy,
+  });
+  if (!running.updated) {
+    const current = await getScanJob(admin, payload.scanJobId);
+    if (current && isTerminalScanJobStatus(current.status)) return;
+  }
+
+  const jobAfterClaim = (await getScanJob(admin, payload.scanJobId)) ?? existingJob;
+  const scheduler =
+    (jobAfterClaim?.metadata as { scheduler?: string } | null)?.scheduler ?? input?.lockedBy ?? null;
 
   await appendScanJobExecutionTrace(admin, payload.scanJobId, {
     stage: "scan_started",

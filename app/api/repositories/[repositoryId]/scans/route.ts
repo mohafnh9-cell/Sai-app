@@ -334,6 +334,17 @@ export async function POST(
       throw scheduleError;
     }
 
+    console.info({
+      component: "repository-scans-api",
+      event: "production_review_scheduled",
+      scanId: scan.id,
+      scanJobId: scheduled.scanJobId,
+      commitSha: resolvedCommit.commitSha,
+      organizationId: project.organization_id,
+      projectId: project.id,
+      duplicate: scheduled.duplicate,
+    });
+
     return NextResponse.json(
       {
         scanId: scan.id,

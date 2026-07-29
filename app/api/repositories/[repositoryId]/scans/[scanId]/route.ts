@@ -7,7 +7,11 @@ import {
 import { createAdminClient } from "@/server/security-scanner/admin-client";
 import { buildScanProductionVerdict } from "@/server/brain/build-scan-verdict";
 import { enforceRateLimit } from "@/server/http/rate-limit";
-import { maybeKickStuckQueuedScanRun } from "@/server/jobs/kick-stuck-scan-run";
+import { recoverStuckProductionReviewOnPoll } from "@/server/jobs/kick-stuck-scan-run";
+
+export const runtime = "nodejs";
+export const maxDuration = 300;
+export const dynamic = "force-dynamic";
 
 const paramsSchema = z.object({
   repositoryId: z.string().uuid(),
@@ -46,12 +50,17 @@ export async function GET(
       .order("file_path", { ascending: true });
     if (findingsError) throw new Error(findingsError.message);
 
-    let scanJob: { id: string; status: string; created_at?: string | null } | null = null;
+    let scanJob: {
+      id: string;
+      status: string;
+      created_at?: string | null;
+      started_at?: string | null;
+    } | null = null;
     try {
       const admin = createAdminClient();
       const { data: job } = await admin
         .from("scan_jobs")
-        .select("id, status, created_at")
+        .select("id, status, created_at, started_at")
         .eq("scan_id", scan.id)
         .order("created_at", { ascending: false })
         .limit(1)
@@ -61,12 +70,14 @@ export async function GET(
           id: job.id as string,
           status: job.status as string,
           created_at: (job.created_at as string | null) ?? null,
+          started_at: (job.started_at as string | null) ?? null,
         };
       }
 
-      await maybeKickStuckQueuedScanRun(admin, { scan: scan as Record<string, unknown>, scanJob }).catch(
-        () => undefined
-      );
+      await recoverStuckProductionReviewOnPoll(admin, {
+        scan: scan as Record<string, unknown>,
+        scanJob,
+      }).catch(() => undefined);
 
       if (scanJob) {
         const { data: refreshed } = await admin
@@ -79,7 +90,7 @@ export async function GET(
         }
         const { data: jobRefresh } = await admin
           .from("scan_jobs")
-          .select("id, status, created_at")
+          .select("id, status, created_at, started_at")
           .eq("id", scanJob.id)
           .maybeSingle();
         if (jobRefresh?.id) {
@@ -87,6 +98,7 @@ export async function GET(
             id: jobRefresh.id as string,
             status: jobRefresh.status as string,
             created_at: (jobRefresh.created_at as string | null) ?? null,
+            started_at: (jobRefresh.started_at as string | null) ?? null,
           };
         }
       }

@@ -121,10 +121,15 @@ export function OnboardingReviewStep({
       setStalled(true);
     }
 
-    if (body.scan.status === "failed") {
-      setError(body.scan.error_message || te("scanStart"));
-      return;
-    }
+      if (body.scan.status === "failed") {
+        const code = (body.scan as { error_code?: string }).error_code;
+        if (code === "WORKER_NEVER_STARTED") {
+          setError(t("reviewQueueStalledBody"));
+          return;
+        }
+        setError(body.scan.error_message || te("scanStart"));
+        return;
+      }
 
     const verdict = body.verdict?.v1 ?? null;
     if (scanIsCompleted(body.scan.status) && verdict) {

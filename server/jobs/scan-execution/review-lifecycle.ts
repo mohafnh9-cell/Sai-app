@@ -102,7 +102,7 @@ export async function beginReviewProcessing(
     .update({
       status: "fetching_repository",
       progress: 5,
-      progress_message: "Fetching repository metadata",
+      progress_message: "Connecting to repository",
       started_at: now,
       processing_started_at: now,
     })
