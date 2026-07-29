@@ -126,6 +126,9 @@ function resolveAreaStatus(
   if (readiness === "evaluated") return "evaluated";
   const def = AREA_DEFINITIONS[area];
   if (def.defaultStatus === "not_evaluated" && evidenceCount === 0 && !readiness) {
+    // Full repository scans run readiness baselines; older scans without those findings still
+    // deserve partial credit once enough of the tree was analyzed statically.
+    if (filesAnalyzed >= 50) return "partial";
     return "not_evaluated";
   }
   if (readiness === "partial") return "partial";
