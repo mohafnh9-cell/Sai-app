@@ -304,9 +304,9 @@ function contextualRouteRule(
 }
 
 const RECOGNIZED_AUTH =
-  /(?:auth\(|getServerSession|getServerAuthContext|getScanRequestContext|getScanAccessContext|resolveMcpAuth|assertInternalOpsAuthorized|verifyInternalOpsRequest|verifyGitHubWebhookSignature|verifyStripeWebhookSignature|constructEvent|webhookSecret|exchangeCodeForSession|currentUser|getUser|verifyToken|requireAuth|Authorization|supabase\.auth\.getUser)/i;
+  /(?:auth\(|getServerSession|getServerAuthContext|getCachedServerAuthContext|getScanRequestContext|getScanAccessContext|resolveMcpAuth|assertInternalOpsAuthorized|verifyInternalOpsRequest|serve\s*\(|signingKey|verifyGitHubWebhookSignature|verifyStripeWebhookSignature|constructEvent|webhookSecret|exchangeCodeForSession|currentUser|getUser|verifyToken|requireAuth|Authorization|supabase\.auth\.getUser)/i;
 const RECOGNIZED_AUTHZ =
-  /(?:authorize|permission|role|ownerId|organizationId|userId\s*[=!]==?|can\w+\(|policy|getServerAuthContext|getScanRequestContext|getScanAccessContext|resolveMcpAuth|verifyGitHubWebhookSignature|verifyStripeWebhookSignature|constructEvent)/i;
+  /(?:authorize|permission|role|ownerId|organizationId|userId\s*[=!]==?|can\w+\(|policy|getServerAuthContext|getCachedServerAuthContext|getScanRequestContext|getScanAccessContext|resolveMcpAuth|assertInternalOpsAuthorized|verifyInternalOpsRequest|verifyGitHubWebhookSignature|verifyStripeWebhookSignature|constructEvent)/i;
 const DEPRECATED_PUBLIC_ROUTE = /const\s+deprecated\s*=[\s\S]*?status:\s*410/i;
 const UNIMPLEMENTED_STUB_ROUTE = /not\s+yet\s+implemented/i;
 const MUTATING_ROUTE_HANDLER = /export\s+async\s+function\s+(?:POST|PUT|PATCH|DELETE)\b/i;

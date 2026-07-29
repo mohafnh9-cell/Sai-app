@@ -113,6 +113,11 @@ describe("critical deterministic rules", () => {
           'import { assertInternalOpsAuthorized } from "@/lib/auth/internal-ops";\nexport async function GET(request) {\n  const unauthorized = assertInternalOpsAuthorized(request);\n}',
       },
       {
+        path: "app/api/projects/[id]/mission-control/route.ts",
+        content:
+          'import { getCachedServerAuthContext } from "@/lib/server/request-cache";\nexport async function GET() {\n  const auth = await getCachedServerAuthContext();\n}',
+      },
+      {
         path: "app/api/ai/fix/route.ts",
         content:
           'const deprecated = { error: "This endpoint is deprecated. Use AI analysis on scan reports via /api/scans/{scanId}/ai-analysis.", migration: "Block 5.5" };\nexport async function POST() {\n  return NextResponse.json(deprecated, { status: 410 });\n}',
