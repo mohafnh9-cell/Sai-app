@@ -108,6 +108,11 @@ describe("critical deterministic rules", () => {
           'import { resolveMcpAuth } from "@/server/mcp/auth";\nexport async function POST(request) {\n  const auth = await resolveMcpAuth(request);\n}',
       },
       {
+        path: "app/api/internal/metrics/route.ts",
+        content:
+          'import { assertInternalOpsAuthorized } from "@/lib/auth/internal-ops";\nexport async function GET(request) {\n  const unauthorized = assertInternalOpsAuthorized(request);\n}',
+      },
+      {
         path: "app/api/ai/fix/route.ts",
         content:
           'const deprecated = { error: "This endpoint is deprecated. Use AI analysis on scan reports via /api/scans/{scanId}/ai-analysis.", migration: "Block 5.5" };\nexport async function POST() {\n  return NextResponse.json(deprecated, { status: 410 });\n}',

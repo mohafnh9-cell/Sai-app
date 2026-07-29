@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { assertInternalOpsAuthorized } from "@/lib/auth/internal-ops";
 import { createAdminClient } from "@/server/security-scanner/admin-client";
 import { repairMalformedGitHubRepoUrls } from "@/server/github/repair-github-repo-urls";
 import {
@@ -22,16 +23,9 @@ const bodySchema = z
   })
   .strict();
 
-function authorized(request: Request): boolean {
-  const expected = process.env.INTERNAL_OPS_TOKEN?.trim();
-  if (!expected) return false;
-  return request.headers.get("x-sequrai-ops-token") === expected;
-}
-
 export async function POST(request: Request) {
-  if (!authorized(request)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const unauthorized = assertInternalOpsAuthorized(request);
+  if (unauthorized) return unauthorized;
 
   const parsed = bodySchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) {
