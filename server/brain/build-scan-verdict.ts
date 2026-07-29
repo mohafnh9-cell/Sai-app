@@ -58,7 +58,7 @@ export async function buildScanProductionVerdict(
 
   const { data: findings } = await admin
     .from("scan_findings")
-    .select("id, title, severity, category, rule_id, file_path, recommendation")
+    .select("id, title, severity, category, rule_id, file_path, recommendation, evidence")
     .eq("scan_id", input.scanId);
 
   const { data: previousScan } = await admin

@@ -1,5 +1,6 @@
 import { BUILTIN_RULES } from "./builtin";
 import { dependencyRule } from "./dependencies";
+import { readinessAreasRule } from "./readiness-areas";
 import type { ScanRule } from "./types";
 
 export class RuleRegistry {
@@ -21,5 +22,5 @@ export class RuleRegistry {
 }
 
 export function createDefaultRegistry(): RuleRegistry {
-  return new RuleRegistry([...BUILTIN_RULES, dependencyRule]);
+  return new RuleRegistry([...BUILTIN_RULES, dependencyRule, readinessAreasRule]);
 }

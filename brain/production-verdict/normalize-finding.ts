@@ -7,6 +7,7 @@ export type NormalizedFinding = {
   filePath?: string;
   recommendation?: string;
   confidence: "high" | "medium" | "low";
+  evidence?: string;
 };
 
 const HIGH_CONFIDENCE_RULES = new Set([
@@ -29,6 +30,7 @@ export function normalizeFinding(input: {
   file_path?: string | null;
   recommendation?: string | null;
   confidence?: string | number | null;
+  evidence?: string | null;
 }): NormalizedFinding {
   const severityRaw = (input.severity ?? "medium").toLowerCase();
   const severity = (
@@ -62,6 +64,7 @@ export function normalizeFinding(input: {
     filePath: input.file_path ?? undefined,
     recommendation: input.recommendation ?? undefined,
     confidence,
+    evidence: input.evidence ?? undefined,
   };
 }
 

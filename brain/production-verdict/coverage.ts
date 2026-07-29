@@ -31,7 +31,7 @@ const AREA_DEFINITIONS: Record<
   dependencies: {
     label: "Dependencies",
     defaultStatus: "not_evaluated",
-    methodology: "Dependency manifest analysis when lockfiles are scanned.",
+    methodology: "Manifest and lockfile analysis during repository scan.",
     limitations: "CVE database lookup not included in v1.",
   },
   architecture: {
@@ -43,13 +43,13 @@ const AREA_DEFINITIONS: Record<
   testing: {
     label: "Testing",
     defaultStatus: "not_evaluated",
-    methodology: "Not assessed in v1.",
-    limitations: "Test coverage and quality are not analyzed.",
+    methodology: "Detects automated test files and runner configuration in the repository.",
+    limitations: "Does not execute tests or measure coverage percentages.",
   },
   performance: {
     label: "Performance",
     defaultStatus: "not_evaluated",
-    methodology: "Not assessed in v1.",
+    methodology: "Static signals for caching, timing hooks, and framework config.",
     limitations: "No profiling or load testing.",
   },
   deployment: {
@@ -61,8 +61,8 @@ const AREA_DEFINITIONS: Record<
   observability: {
     label: "Observability",
     defaultStatus: "not_evaluated",
-    methodology: "Not assessed in v1.",
-    limitations: "Logging, metrics, and tracing not verified.",
+    methodology: "Detects metrics, health endpoints, and operational event instrumentation.",
+    limitations: "Does not verify external monitoring integrations.",
   },
   database: {
     label: "Database",
@@ -73,8 +73,8 @@ const AREA_DEFINITIONS: Record<
   reliability: {
     label: "Reliability",
     defaultStatus: "not_evaluated",
-    methodology: "Not assessed in v1.",
-    limitations: "Fault tolerance and resilience not tested.",
+    methodology: "Detects background workers, recovery jobs, and idempotency patterns.",
+    limitations: "Fault injection and chaos testing are not performed.",
   },
 };
 
@@ -89,6 +89,10 @@ const CATEGORY_TO_AREAS: Record<string, AreaKey[]> = {
   database: ["database", "security"],
   dependencies: ["dependencies"],
   architecture: ["architecture"],
+  testing: ["testing"],
+  performance: ["performance"],
+  observability: ["observability"],
+  reliability: ["reliability"],
 };
 
 function areaEvidenceCount(area: AreaKey, findings: NormalizedFinding[]): number {
@@ -98,15 +102,33 @@ function areaEvidenceCount(area: AreaKey, findings: NormalizedFinding[]): number
   }).length;
 }
 
+function readinessStatusFromFindings(
+  area: AreaKey,
+  findings: NormalizedFinding[]
+): ProductionAreaAssessment["status"] | null {
+  const hit = findings.find(
+    (finding) =>
+      finding.ruleId === "readiness.area-baseline" && finding.category === area
+  );
+  if (!hit) return null;
+  if (hit.evidence?.includes("level=evaluated")) return "evaluated";
+  if (hit.evidence?.includes("level=partial")) return "partial";
+  return "partial";
+}
+
 function resolveAreaStatus(
   area: AreaKey,
   evidenceCount: number,
-  filesAnalyzed: number
+  filesAnalyzed: number,
+  findings: NormalizedFinding[]
 ): ProductionAreaAssessment["status"] {
+  const readiness = readinessStatusFromFindings(area, findings);
+  if (readiness === "evaluated") return "evaluated";
   const def = AREA_DEFINITIONS[area];
-  if (def.defaultStatus === "not_evaluated" && evidenceCount === 0) {
+  if (def.defaultStatus === "not_evaluated" && evidenceCount === 0 && !readiness) {
     return "not_evaluated";
   }
+  if (readiness === "partial") return "partial";
   if (def.defaultStatus === "evaluated" && filesAnalyzed > 0) {
     return "evaluated";
   }
@@ -118,17 +140,26 @@ function resolveAreaStatus(
   return "not_evaluated";
 }
 
+function penalizingEvidenceCount(area: AreaKey, findings: NormalizedFinding[]): number {
+  return findings.filter((f) => {
+    const areas = CATEGORY_TO_AREAS[f.category] ?? ["security"];
+    if (!areas.includes(area)) return false;
+    if (f.ruleId === "readiness.area-baseline") return false;
+    return f.severity !== "info";
+  }).length;
+}
+
 function areaScore(
   area: AreaKey,
   status: ProductionAreaAssessment["status"],
   securityScore: number | null,
-  evidenceCount: number
+  findings: NormalizedFinding[]
 ): number | null {
   if (status === "not_evaluated") return null;
   if (securityScore === null) return null;
   if (area === "security") return securityScore;
 
-  const penalty = Math.min(40, evidenceCount * 8);
+  const penalty = Math.min(40, penalizingEvidenceCount(area, findings) * 8);
   if (status === "partial") {
     return Math.max(0, Math.min(100, Math.round(securityScore * 0.85 - penalty)));
   }
@@ -151,12 +182,14 @@ export function assessCoverage(input: {
   const assessments: ProductionAreaAssessment[] = allAreas.map((key) => {
     const def = AREA_DEFINITIONS[key];
     const evidenceCount = areaEvidenceCount(key, findings);
-    const status = resolveAreaStatus(key, evidenceCount, filesAnalyzed);
-    const score = areaScore(key, status, securityScore, evidenceCount);
+    const status = resolveAreaStatus(key, evidenceCount, filesAnalyzed, findings);
+    const score = areaScore(key, status, securityScore, findings);
 
     let confidence: ProductionAreaAssessment["confidence"] = "low";
     if (status === "evaluated") confidence = "high";
-    else if (status === "partial" && evidenceCount > 0) confidence = "medium";
+    else if (status === "partial" && (evidenceCount > 0 || readinessStatusFromFindings(key, findings))) {
+      confidence = "medium";
+    }
 
     return {
       key,

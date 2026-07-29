@@ -133,7 +133,7 @@ export async function generateAndPersistProductionVerdict(
   const [{ data: findings }, { data: previousScan }, { data: previousVerdict }] = await Promise.all([
     admin
       .from("scan_findings")
-      .select("id, title, severity, category, rule_id, file_path, recommendation, confidence")
+      .select("id, title, severity, category, rule_id, file_path, recommendation, confidence, evidence")
       .eq("scan_id", input.scanId),
     admin
       .from("scans")
