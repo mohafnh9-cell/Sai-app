@@ -2,11 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import type { AttackCenterSnapshot } from "./types";
+import type { AttackCenterSnapshot } from "../types";
 import {
   ATTACK_CENTER_POLL_INTERVAL_MS,
   ATTACK_CENTER_REALTIME_CHANNEL,
-} from "./constants";
+} from "../constants";
 
 type LiveOptions = {
   projectId: string;
