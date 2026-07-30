@@ -23,7 +23,7 @@ import {
 } from "../contracts/attack-execution-plan";
 import type { AttackExecutionStatus } from "../contracts/enums";
 import { TERMINAL_ATTACK_EXECUTION_STATUSES } from "../contracts/enums";
-import type { AttackExecutionStepStatus } from "../contracts/attack-execution-step";
+import type { AttackExecutionStepStatus } from "../contracts/enums";
 import {
   assertStepWeightsValid,
   calculateElapsedMs,

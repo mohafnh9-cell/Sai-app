@@ -1,7 +1,8 @@
 import type { AttackExecutionStatus } from "../contracts/enums";
 import type { AttackExecution } from "../contracts/attack-execution";
 import type { SafeRuntimeSession } from "../runtime/safe-runtime";
-import type { AttackExecutionStep, AttackExecutionStepStatus } from "../contracts/attack-execution-step";
+import type { AttackExecutionStepStatus } from "../contracts/enums";
+import type { AttackExecutionStep } from "../contracts/attack-execution-step";
 import type { AttackScenario } from "../contracts/attack-scenario";
 import type { AttackCampaign } from "../contracts/attack-campaign";
 import type { SafeRuntimeStepResult } from "../runtime/types";

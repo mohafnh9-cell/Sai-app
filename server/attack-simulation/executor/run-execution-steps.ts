@@ -1,4 +1,4 @@
-import type { AttackExecutionStepStatus } from "../contracts/attack-execution-step";
+import type { AttackExecutionStepStatus } from "../contracts/enums";
 import {
   executeSafeRuntimeStep,
   markSafeRuntimeCancelled,
