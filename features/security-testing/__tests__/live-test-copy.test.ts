@@ -52,7 +52,7 @@ describe("live-test-copy", () => {
     const display = deriveLiveTestDisplay(view);
     expect(display.progressPercent).toBe(25);
     expect(display.testsDone).toBe(1);
-    expect(display.primaryAction?.label).toBe("Show me how to fix it");
+    expect(display.primaryAction?.label).toBe("Protect my application");
     expect(display.primaryAction?.findingId).toBe("finding-1");
   });
 

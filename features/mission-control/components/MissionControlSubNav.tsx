@@ -12,7 +12,7 @@ export function MissionControlSubNav({ projectId }: { projectId: string }) {
   const tabs = [
     {
       href: missionHref,
-      label: "Mission Control",
+      label: "Overview",
       active: pathname.startsWith(missionHref) && !pathname.startsWith(attackHref),
     },
     {

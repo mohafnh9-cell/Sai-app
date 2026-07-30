@@ -1,50 +1,40 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
+import { useState } from "react";
 import type { AttackCenterFindingView } from "../types";
+import { PrimaryActionButton } from "@/features/security-testing/components/SecurityTestHero";
 
 export function AttackFindingViewPanel({
   view,
-  onReplay,
-  replaying,
+  onVerifyProtection,
+  verifying,
   onBack,
 }: {
   view: AttackCenterFindingView;
-  onReplay: () => void;
-  replaying: boolean;
+  onVerifyProtection: () => void;
+  verifying: boolean;
   onBack?: () => void;
 }) {
   const { finding, mitigation, safeFix, evidence, protection } = view;
+  const [copied, setCopied] = useState(false);
+  const isVerified = Boolean(protection);
+
+  const copyProtection = async () => {
+    if (!safeFix?.cursorPrompt) return;
+    await navigator.clipboard.writeText(safeFix.cursorPrompt);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 2000);
+  };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 max-w-2xl">
       <section className="surface-premium rounded-3xl p-8 sm:p-10 space-y-4">
         <div>
-          <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">How to fix it</p>
+          <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Problem found</p>
           <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight mt-2">{finding.title}</h1>
         </div>
         <p className="text-sm sm:text-base text-muted-foreground">{finding.description}</p>
-        <p className="text-sm">
-          <span className="font-medium">How bad is it?</span>{" "}
-          <span className="capitalize">{finding.severity}</span>
-        </p>
       </section>
-
-      {evidence ? (
-        <section className="space-y-3">
-          <h2 className="text-base font-semibold">What we saw</h2>
-          <div className="rounded-xl border border-border/60 p-5 space-y-4 text-sm">
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wider">Should happen</p>
-              <p className="mt-1">{evidence.expectedBehavior}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wider">What happened</p>
-              <p className="mt-1">{evidence.observedBehavior}</p>
-            </div>
-          </div>
-        </section>
-      ) : null}
 
       {mitigation ? (
         <section className="space-y-3">
@@ -61,39 +51,66 @@ export function AttackFindingViewPanel({
         </section>
       ) : null}
 
-      {safeFix ? (
-        <section className="space-y-3">
-          <h2 className="text-base font-semibold">Copy this into Cursor to fix it</h2>
-          <pre className="rounded-xl border border-border/60 p-4 text-xs overflow-x-auto whitespace-pre-wrap bg-muted/20">
-            {safeFix.cursorPrompt}
-          </pre>
+      {isVerified ? (
+        <section className="rounded-xl border border-primary/30 bg-primary/5 p-5 text-sm">
+          <p className="font-medium text-base">Protection verified</p>
+          <p className="mt-2 text-muted-foreground">{protection!.summary}</p>
         </section>
-      ) : null}
+      ) : (
+        <section className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Apply the protection above, then verify it works.
+          </p>
+          <PrimaryActionButton loading={verifying} onClick={onVerifyProtection}>
+            Verify protection
+          </PrimaryActionButton>
+        </section>
+      )}
 
-      <section className="space-y-3">
-        <h2 className="text-base font-semibold">Did the fix work?</h2>
-        <div className="rounded-xl border border-border/60 p-5 text-sm">
-          {protection ? (
-            <>
-              <p className="font-medium">{protection.summary}</p>
-            </>
-          ) : (
-            <p className="text-muted-foreground">
-              After you fix the problem, run the test again to check your app is protected.
-            </p>
-          )}
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button type="button" size="lg" onClick={onReplay} disabled={replaying}>
-            {replaying ? "Testing again…" : "Test my fix"}
-          </Button>
-          {onBack ? (
-            <Button type="button" variant="outline" size="lg" onClick={onBack}>
-              Back to all tests
-            </Button>
+      <details className="rounded-2xl border border-border/60">
+        <summary className="cursor-pointer px-5 py-4 text-sm font-medium text-muted-foreground">
+          Technical details
+        </summary>
+        <div className="px-5 pb-5 space-y-4 border-t border-border/40 pt-4 text-sm">
+          {evidence ? (
+            <div className="space-y-3">
+              <p className="text-xs uppercase tracking-wider text-muted-foreground">What we saw</p>
+              <p>
+                <span className="font-medium">Expected:</span> {evidence.expectedBehavior}
+              </p>
+              <p>
+                <span className="font-medium">Observed:</span> {evidence.observedBehavior}
+              </p>
+            </div>
           ) : null}
+          {safeFix ? (
+            <div className="space-y-2">
+              <p className="text-xs uppercase tracking-wider text-muted-foreground">Protection for Cursor</p>
+              <pre className="rounded-lg border border-border/60 p-3 text-xs overflow-x-auto whitespace-pre-wrap bg-muted/20">
+                {safeFix.cursorPrompt}
+              </pre>
+              <button
+                type="button"
+                className="text-sm text-primary underline-offset-4 hover:underline"
+                onClick={() => void copyProtection()}
+              >
+                {copied ? "Copied" : "Copy protection"}
+              </button>
+            </div>
+          ) : null}
+          <p className="text-xs text-muted-foreground font-mono">Reference: {finding.id.slice(0, 8)}</p>
         </div>
-      </section>
+      </details>
+
+      {onBack ? (
+        <button
+          type="button"
+          className="text-sm text-muted-foreground underline-offset-4 hover:underline hover:text-foreground"
+          onClick={onBack}
+        >
+          ← Back
+        </button>
+      ) : null}
     </div>
   );
 }

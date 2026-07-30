@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -15,8 +14,9 @@ import {
 import type { SecurityTestContext, SecurityTestOption } from "../types";
 import type { ProjectReviewUiContext } from "@/server/projects/review-ui-context";
 import { AnalyzeProjectButton } from "@/features/projects/components/AnalyzeProjectButton";
-import { SecurityTestProgressSteps } from "./SecurityTestProgressSteps";
+import { PrimaryActionButton, SecurityTestHero } from "./SecurityTestHero";
 import { DEFAULT_SECURITY_TEST_IDS } from "../user-test-catalog";
+import { copyForPhase, SAFETY_NOTE } from "../lib/product-copy";
 
 function recommendedTestIds(tests: SecurityTestOption[]): string[] {
   const picked = tests.filter((test) => test.recommended).map((test) => test.id);
@@ -40,6 +40,8 @@ export function SecurityTestPanel({
   const [selectedIds, setSelectedIds] = useState<string[]>(() => recommendedTestIds(context.availableTests));
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const screenCopy = copyForPhase(context.phase);
 
   const defaultTestIds = useMemo(
     () => recommendedTestIds(context.availableTests),
@@ -70,7 +72,7 @@ export function SecurityTestPanel({
         } | null;
 
         if (body?.code === "needs_review") {
-          setError(body.error ?? "Run a security review first.");
+          setError("Review your code first, then you can test your application.");
           return;
         }
 
@@ -95,135 +97,109 @@ export function SecurityTestPanel({
     );
   };
 
-  const showChooseTests =
-    context.secondaryActionLabel === "Choose tests" ||
-    context.secondaryActionLabel === "Test again";
+  const canCustomizeTests = context.phase === "ready";
 
-  const primaryIsReview = context.phase === "needs_review";
+  const primaryAction = (() => {
+    if (context.phase === "preparing") {
+      return (
+        <PrimaryActionButton disabled size={compact ? "sm" : "lg"}>
+          {screenCopy.primaryActionLabel}
+        </PrimaryActionButton>
+      );
+    }
 
-  const primaryIsPreparing = context.phase === "preparing";
+    if (context.phase === "needs_review") {
+      return (
+        <AnalyzeProjectButton
+          projectId={projectId}
+          initialContext={reviewContext}
+          showCommitHint={!compact}
+          size={compact ? "sm" : "default"}
+          className={compact ? undefined : "w-full sm:w-auto min-w-[220px] text-base h-11"}
+          labelOverride={screenCopy.primaryActionLabel}
+        />
+      );
+    }
 
-  const primaryIsStart =
-    context.phase === "ready" || context.secondaryActionLabel === "Test again";
+    if (context.phase === "ready") {
+      return (
+        <PrimaryActionButton
+          size={compact ? "sm" : "lg"}
+          loading={starting}
+          disabled={context.reviewInProgress}
+          onClick={() => void startTests(defaultTestIds)}
+        >
+          {screenCopy.primaryActionLabel}
+        </PrimaryActionButton>
+      );
+    }
 
-  const primaryIsLive =
-    context.phase === "running" ||
-    context.primaryActionLabel === "View live test" ||
-    context.primaryActionLabel === "View results" ||
-    context.primaryActionLabel === "Protect my application";
+    if (
+      context.phase === "running" ||
+      context.phase === "issues_found" ||
+      context.phase === "fix_ready"
+    ) {
+      return (
+        <PrimaryActionButton
+          size={compact ? "sm" : "lg"}
+          onClick={() => router.push(context.attackCenterHref)}
+        >
+          {screenCopy.primaryActionLabel}
+        </PrimaryActionButton>
+      );
+    }
+
+    if (context.phase === "protected" || context.phase === "completed_clean") {
+      return (
+        <PrimaryActionButton
+          size={compact ? "sm" : "lg"}
+          onClick={() => router.push(context.attackCenterHref)}
+        >
+          {screenCopy.primaryActionLabel}
+        </PrimaryActionButton>
+      );
+    }
+
+    return null;
+  })();
 
   return (
-    <section
-      className={
-        compact
-          ? "space-y-5"
-          : "rounded-3xl border border-primary/20 bg-gradient-to-b from-primary/5 to-transparent p-8 space-y-6"
-      }
-    >
-      <div className="flex items-start gap-3">
-        <div className="rounded-2xl bg-primary/10 p-3 text-primary">
-          <Shield className="h-5 w-5" />
-        </div>
-        <div className="space-y-2">
-          <p className="text-xs uppercase tracking-[0.22em] text-primary">Security test</p>
-          <h2 className="text-xl sm:text-2xl font-semibold tracking-tight">{context.headline}</h2>
-          <p className="text-sm text-muted-foreground max-w-2xl">{context.description}</p>
-        </div>
-      </div>
-
-      <SecurityTestProgressSteps steps={context.progressSteps} />
-
-      {context.phase === "ready" && context.latestScan ? (
-        <p className="text-sm text-muted-foreground">
-          Testing version <span className="font-mono">{context.latestScan.commitSha.slice(0, 7)}</span>
-          {" · "}
-          {context.availableTests.length} safe tests available
-        </p>
-      ) : null}
-
-      {context.phase === "needs_review" ? (
-        <p className="text-sm text-muted-foreground">
-          First, SequrAI reviews your latest code version. Then it runs the safe attack tests you choose.
-        </p>
-      ) : null}
-
-      {error ? <p className="text-sm text-destructive">{error}</p> : null}
-
-      <div className="flex flex-wrap gap-3">
-        {primaryIsPreparing ? (
-          <Button type="button" size={compact ? "sm" : "default"} disabled>
-            <Loader2 className="h-4 w-4 animate-spin" />
-            {context.primaryActionLabel}
-          </Button>
-        ) : null}
-
-        {primaryIsReview ? (
-          <AnalyzeProjectButton
-            projectId={projectId}
-            initialContext={reviewContext}
-            showCommitHint={!compact}
-            size={compact ? "sm" : "default"}
-            className={compact ? undefined : "min-w-[220px]"}
-            labelOverride="Test my application"
-          />
-        ) : null}
-
-        {primaryIsStart ? (
-          <Button
-            type="button"
-            size={compact ? "sm" : "default"}
-            disabled={starting || context.reviewInProgress}
-            onClick={() => void startTests(defaultTestIds)}
-          >
-            {starting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            {context.primaryActionLabel}
-          </Button>
-        ) : null}
-
-        {primaryIsLive ? (
-          <Button
-            type="button"
-            size={compact ? "sm" : "default"}
-            onClick={() => router.push(context.attackCenterHref)}
-          >
-            {context.primaryActionLabel}
-          </Button>
-        ) : null}
-
-        {showChooseTests ? (
-          <Button
-            type="button"
-            variant="outline"
-            size={compact ? "sm" : "default"}
-            disabled={starting || context.reviewInProgress}
-            onClick={() => {
-              setSelectedIds(defaultTestIds);
-              setChooseOpen(true);
-            }}
-          >
-            {context.secondaryActionLabel ?? "Choose tests"}
-          </Button>
-        ) : null}
-
-        {context.secondaryActionLabel === "View live test" && context.phase === "issues_found" ? (
-          <Button
-            type="button"
-            variant="outline"
-            size={compact ? "sm" : "default"}
-            onClick={() => router.push(context.attackCenterHref)}
-          >
-            View live test
-          </Button>
-        ) : null}
-      </div>
+    <>
+      <SecurityTestHero
+        compact={compact}
+        headline={screenCopy.headline}
+        description={screenCopy.description}
+        progressSteps={context.progressSteps}
+        waitMessage={screenCopy.waitMessage}
+        showEstimatedDuration={screenCopy.showEstimatedDuration}
+        showSafetyNote={screenCopy.showSafetyNote}
+        primaryAction={
+          <>
+            {error ? <p className="text-sm text-destructive mb-3">{error}</p> : null}
+            {primaryAction}
+            {canCustomizeTests ? (
+              <button
+                type="button"
+                className="block mt-3 text-sm text-muted-foreground underline-offset-4 hover:underline hover:text-foreground"
+                disabled={starting || context.reviewInProgress}
+                onClick={() => {
+                  setSelectedIds(defaultTestIds);
+                  setChooseOpen(true);
+                }}
+              >
+                Customize which tests to run
+              </button>
+            ) : null}
+          </>
+        }
+      />
 
       <Dialog open={chooseOpen} onOpenChange={setChooseOpen}>
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Choose tests</DialogTitle>
+            <DialogTitle>Customize your test</DialogTitle>
             <DialogDescription>
-              SequrAI will safely simulate only the scenarios you select. Nothing runs against real
-              users or production traffic.
+              Pick what SequrAI should check. {SAFETY_NOTE}
             </DialogDescription>
           </DialogHeader>
           <ul className="space-y-3 py-2">
@@ -241,7 +217,6 @@ export function SecurityTestPanel({
                     <span className="space-y-1">
                       <span className="block font-medium">{test.title}</span>
                       <span className="block text-sm text-muted-foreground">{test.description}</span>
-                      <span className="block text-xs text-muted-foreground">{test.categoryLabel}</span>
                     </span>
                   </label>
                 </li>
@@ -254,19 +229,18 @@ export function SecurityTestPanel({
               variant="outline"
               onClick={() => setSelectedIds(DEFAULT_SECURITY_TEST_IDS.slice() as unknown as string[])}
             >
-              Reset recommended
+              Use recommended
             </Button>
             <Button
               type="button"
               disabled={selectedIds.length === 0 || starting}
               onClick={() => void startTests(selectedIds)}
             >
-              {starting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              Start security test
+              {starting ? "Starting…" : "Test my application"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </section>
+    </>
   );
 }

@@ -24,9 +24,9 @@ interface PageProps {
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { id } = await params;
   const auth = await getCachedServerAuthContext();
-  if (!auth?.organizationId) return { title: "Attack Center" };
+  if (!auth?.organizationId) return { title: "Security test" };
   const { data } = await auth.supabase.from("projects").select("name").eq("id", id).maybeSingle();
-  return { title: data?.name ? `${data.name} — Attack Center` : "Attack Center" };
+  return { title: data?.name ? `${data.name} — Security test` : "Security test" };
 }
 
 export default async function AttackCenterPage({ params }: PageProps) {

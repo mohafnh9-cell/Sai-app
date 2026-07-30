@@ -22,7 +22,7 @@ export const USER_FRIENDLY_TEST_COPY: Record<
   },
   "idempotency-replay": {
     title: "Can the same action charge or mutate data twice?",
-    description: "Replays the same request to detect duplicate side effects.",
+    description: "Sends the same request twice to detect duplicate side effects.",
     categoryLabel: "Payment safety",
   },
   "double-credit-consumption": {

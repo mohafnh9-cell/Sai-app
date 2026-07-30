@@ -6,62 +6,16 @@ import {
   buildDefaultSecurityTestOptions,
   buildSecurityTestOptionsFromHypotheses,
 } from "./security-test-options";
-import type {
-  SecurityTestContext,
-  SecurityTestPhase,
-  SecurityTestProgressStep,
-} from "@/features/security-testing/types";
+import type { SecurityTestContext, SecurityTestPhase } from "@/features/security-testing/types";
+import {
+  buildProgressStepsForPhase,
+  copyForPhase,
+} from "@/features/security-testing/lib/product-copy";
 import { extractAttackHypothesesFromRedTeamReport } from "./integration/extract-hypotheses-from-report";
 import { listAttackCampaignsForProject } from "./persistence/campaign-repository";
 import type { AttackHypothesis } from "./contracts/attack-hypothesis";
 
 const TERMINAL_CAMPAIGN = new Set(["completed", "failed", "cancelled"]);
-
-function buildProgressSteps(phase: SecurityTestPhase): SecurityTestProgressStep[] {
-  const stepFor = (id: SecurityTestProgressStep["id"], current: SecurityTestPhase): SecurityTestProgressStep["status"] => {
-    const order: SecurityTestPhase[] = [
-      "needs_review",
-      "preparing",
-      "ready",
-      "running",
-      "issues_found",
-      "fix_ready",
-      "protected",
-      "completed_clean",
-    ];
-    const idx = order.indexOf(current);
-    const chooseIdx = order.indexOf("ready");
-    const runIdx = order.indexOf("running");
-    const fixIdx = order.indexOf("issues_found");
-    const verifyIdx = order.indexOf("protected");
-
-    if (id === "choose") {
-      if (idx >= runIdx) return "done";
-      if (idx >= chooseIdx) return "current";
-      return "upcoming";
-    }
-    if (id === "run") {
-      if (idx >= fixIdx || idx === order.indexOf("completed_clean")) return "done";
-      if (idx >= runIdx) return "current";
-      return "upcoming";
-    }
-    if (id === "fix") {
-      if (idx >= verifyIdx || idx === order.indexOf("completed_clean")) return "done";
-      if (idx >= fixIdx) return "current";
-      return "upcoming";
-    }
-    if (idx === order.indexOf("protected") || idx === order.indexOf("completed_clean")) return "done";
-    if (idx >= fixIdx) return "current";
-    return "upcoming";
-  };
-
-  return [
-    { id: "choose", label: "Choose tests", status: stepFor("choose", phase) },
-    { id: "run", label: "Run safe attacks", status: stepFor("run", phase) },
-    { id: "fix", label: "Fix problems", status: stepFor("fix", phase) },
-    { id: "verify", label: "Verify protection", status: stepFor("verify", phase) },
-  ];
-}
 
 function parseRedTeamReportFromMetadata(metadata: unknown): RedTeamReport | null {
   if (!metadata || typeof metadata !== "object") return null;
@@ -91,72 +45,6 @@ function derivePhase(input: {
   }
 
   return "completed_clean";
-}
-
-function copyForPhase(phase: SecurityTestPhase): Pick<
-  SecurityTestContext,
-  "headline" | "description" | "primaryActionLabel" | "secondaryActionLabel"
-> {
-  switch (phase) {
-    case "needs_review":
-      return {
-        headline: "Test my application",
-        description:
-          "SequrAI will safely simulate attacks against this version of your application.",
-        primaryActionLabel: "Test my application",
-        secondaryActionLabel: null,
-      };
-    case "preparing":
-      return {
-        headline: "Preparing your security test",
-        description: "We are reviewing your code and selecting safe attack scenarios.",
-        primaryActionLabel: "Preparing…",
-        secondaryActionLabel: null,
-      };
-    case "ready":
-      return {
-        headline: "Ready to test your application",
-        description:
-          "SequrAI will safely simulate attacks against this version of your application.",
-        primaryActionLabel: "Test my application",
-        secondaryActionLabel: "Choose tests",
-      };
-    case "running":
-      return {
-        headline: "Security test in progress",
-        description: "Safe attacks are running now. You can watch live progress at any time.",
-        primaryActionLabel: "View live test",
-        secondaryActionLabel: null,
-      };
-    case "issues_found":
-      return {
-        headline: "We found issues that need protection",
-        description: "Some simulated attacks succeeded. Review findings and apply protection.",
-        primaryActionLabel: "Protect my application",
-        secondaryActionLabel: "View live test",
-      };
-    case "fix_ready":
-      return {
-        headline: "Protection is ready to apply",
-        description: "SequrAI prepared fixes for the issues found during testing.",
-        primaryActionLabel: "Apply protection",
-        secondaryActionLabel: "View live test",
-      };
-    case "protected":
-      return {
-        headline: "Protection verified",
-        description: "Your fixes were replayed and the simulated attacks no longer succeed.",
-        primaryActionLabel: "View results",
-        secondaryActionLabel: "Test again",
-      };
-    case "completed_clean":
-      return {
-        headline: "No successful attacks in this test",
-        description: "The simulated attacks did not find exploitable issues in this version.",
-        primaryActionLabel: "View results",
-        secondaryActionLabel: "Test again",
-      };
-  }
 }
 
 export type SecurityTestContextPayload = SecurityTestContext & {
@@ -236,12 +124,15 @@ export async function getSecurityTestContext(
 
   return {
     phase,
-    ...copy,
+    headline: copy.headline,
+    description: copy.description,
+    primaryActionLabel: copy.primaryActionLabel,
+    secondaryActionLabel: null,
     reviewInProgress,
     latestScan,
     campaign: latestCampaign,
     availableTests,
-    progressSteps: buildProgressSteps(phase),
+    progressSteps: buildProgressStepsForPhase(phase),
     attackCenterHref,
     hypotheses,
   };
