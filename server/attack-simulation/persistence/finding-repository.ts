@@ -67,6 +67,32 @@ export async function getAttackFindingById(
   return attackFindingSchema.parse(mapAttackFindingRow(data));
 }
 
+export async function listAttackFindingsForExecutions(
+  admin: SupabaseClient,
+  executionIds: string[],
+  organizationId: string
+): Promise<Map<string, AttackFinding>> {
+  if (executionIds.length === 0) return new Map();
+
+  const { data, error } = await admin
+    .from("attack_simulation_findings")
+    .select("*")
+    .in("execution_id", executionIds)
+    .eq("organization_id", organizationId)
+    .order("created_at", { ascending: false });
+
+  if (error) throw new AttackSimulationRepositoryError(error.message, "database");
+
+  const byExecution = new Map<string, AttackFinding>();
+  for (const row of data ?? []) {
+    const finding = attackFindingSchema.parse(mapAttackFindingRow(row));
+    if (!byExecution.has(finding.executionId)) {
+      byExecution.set(finding.executionId, finding);
+    }
+  }
+  return byExecution;
+}
+
 export async function getAttackFindingForExecution(
   admin: SupabaseClient,
   executionId: string,

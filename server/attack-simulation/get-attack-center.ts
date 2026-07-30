@@ -11,7 +11,10 @@ import {
   listAttackExecutionSteps,
 } from "./persistence/execution-repository";
 import { getAttackEvidenceForExecution } from "./persistence/evidence-repository";
-import { getAttackFindingById } from "./persistence/finding-repository";
+import {
+  getAttackFindingById,
+  listAttackFindingsForExecutions,
+} from "./persistence/finding-repository";
 import { getAttackMitigationForFinding } from "./persistence/mitigation-repository";
 import { getAttackSafeFixForFinding } from "./persistence/attack-safe-fix-repository";
 import { getProtectionVerificationForReplay, getProtectionVerificationForFinding } from "./persistence/protection-verification-repository";
@@ -42,12 +45,23 @@ export async function getAttackCenterCampaignSnapshot(
     }),
   ]);
 
+  const findingsByExecution = await listAttackFindingsForExecutions(
+    client,
+    executions.map((execution) => execution.id),
+    input.organizationId
+  );
+  const findingIdByExecutionId = new Map<string, string>();
+  for (const [executionId, finding] of findingsByExecution) {
+    findingIdByExecutionId.set(executionId, finding.id);
+  }
+
   return buildAttackCenterCampaignView({
     projectId: input.projectId,
     campaign,
     executions,
     scenarios,
     events,
+    findingIdByExecutionId,
   });
 }
 

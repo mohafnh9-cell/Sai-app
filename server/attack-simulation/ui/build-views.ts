@@ -68,8 +68,10 @@ export function buildAttackCenterCampaignView(input: {
   executions: AttackExecution[];
   scenarios: AttackScenario[];
   events: AttackRuntimeEvent[];
+  findingIdByExecutionId?: ReadonlyMap<string, string>;
 }): AttackCenterCampaignView {
   const scenarioById = new Map(input.scenarios.map((scenario) => [scenario.id, scenario]));
+  const findingIdByExecutionId = input.findingIdByExecutionId ?? new Map<string, string>();
 
   return {
     kind: "campaign",
@@ -99,6 +101,7 @@ export function buildAttackCenterCampaignView(input: {
         progressPercent: execution.progressPercent,
         estimatedRemainingMs: execution.estimatedRemainingMs,
         currentStepTitle: execution.currentStepTitle,
+        findingId: findingIdByExecutionId.get(execution.id) ?? null,
       };
     }),
     feed: buildFeed(input.events),

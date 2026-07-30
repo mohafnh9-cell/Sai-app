@@ -18,6 +18,7 @@ export type AttackCenterExecutionSummary = {
   progressPercent: number;
   estimatedRemainingMs: number | null;
   currentStepTitle: string | null;
+  findingId: string | null;
 };
 
 export type AttackCenterStepItem = {
