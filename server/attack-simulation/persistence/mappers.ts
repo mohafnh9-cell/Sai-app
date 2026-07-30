@@ -34,6 +34,35 @@ function asNumber(value: unknown, fallback = 0): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
+/** PostgREST may return timestamptz with a space separator or offset without colon. */
+export function normalizeTimestamp(value: unknown): string {
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return new Date(value).toISOString();
+  }
+  if (typeof value === "string") {
+    let trimmed = value.trim();
+    if (!trimmed) return trimmed;
+
+    if (/^\d{4}-\d{2}-\d{2} /.test(trimmed)) {
+      trimmed = trimmed.replace(" ", "T");
+    }
+
+    trimmed = trimmed.replace(/([+-]\d{2})$/, "$1:00");
+
+    const parsed = new Date(trimmed);
+    if (!Number.isNaN(parsed.getTime())) return parsed.toISOString();
+
+    return trimmed;
+  }
+  return String(value);
+}
+
+function normalizeTimestampNullable(value: unknown): string | null {
+  if (value == null) return null;
+  return normalizeTimestamp(value);
+}
+
 export function mapAttackCampaignRow(row: Record<string, unknown>): AttackCampaign {
   return {
     id: row.id as string,
@@ -46,9 +75,9 @@ export function mapAttackCampaignRow(row: Record<string, unknown>): AttackCampai
     status: row.status as AttackCampaign["status"],
     correlationId: row.correlation_id as string,
     authorizationId: (row.authorization_id as string) ?? null,
-    startedAt: (row.started_at as string) ?? null,
-    completedAt: (row.completed_at as string) ?? null,
-    cancelledAt: (row.cancelled_at as string) ?? null,
+    startedAt: normalizeTimestampNullable(row.started_at),
+    completedAt: normalizeTimestampNullable(row.completed_at),
+    cancelledAt: normalizeTimestampNullable(row.cancelled_at),
     failureCode: (row.failure_code as string) ?? null,
     safeFailureMessage: (row.safe_failure_message as string) ?? null,
     totalScenarios: asNumber(row.total_scenarios),
@@ -59,8 +88,8 @@ export function mapAttackCampaignRow(row: Record<string, unknown>): AttackCampai
     progressPercent: asNumber(row.progress_percent),
     estimatedRemainingMs:
       row.estimated_remaining_ms == null ? null : asNumber(row.estimated_remaining_ms),
-    createdAt: row.created_at as string,
-    updatedAt: row.updated_at as string,
+    createdAt: normalizeTimestamp(row.created_at),
+    updatedAt: normalizeTimestamp(row.updated_at),
   };
 }
 
@@ -79,8 +108,8 @@ export function mapAttackScenarioRow(row: Record<string, unknown>): AttackScenar
     sortOrder: asNumber(row.sort_order),
     redTeamSource: (row.red_team_source as string) ?? null,
     metadata: asJsonObject(row.metadata),
-    createdAt: row.created_at as string,
-    updatedAt: row.updated_at as string,
+    createdAt: normalizeTimestamp(row.created_at),
+    updatedAt: normalizeTimestamp(row.updated_at),
   };
 }
 
@@ -106,13 +135,13 @@ export function mapAttackExecutionRow(row: Record<string, unknown>): AttackExecu
     progressPercent: asNumber(row.progress_percent),
     estimatedRemainingMs:
       row.estimated_remaining_ms == null ? null : asNumber(row.estimated_remaining_ms),
-    startedAt: (row.started_at as string) ?? null,
-    updatedAt: row.updated_at as string,
-    completedAt: (row.completed_at as string) ?? null,
-    cancelledAt: (row.cancelled_at as string) ?? null,
+    startedAt: normalizeTimestampNullable(row.started_at),
+    updatedAt: normalizeTimestamp(row.updated_at),
+    completedAt: normalizeTimestampNullable(row.completed_at),
+    cancelledAt: normalizeTimestampNullable(row.cancelled_at),
     failureCode: (row.failure_code as string) ?? null,
     safeFailureMessage: (row.safe_failure_message as string) ?? null,
-    createdAt: row.created_at as string,
+    createdAt: normalizeTimestamp(row.created_at),
   };
 }
 
@@ -128,13 +157,13 @@ export function mapAttackExecutionStepRow(row: Record<string, unknown>): AttackE
     label: row.label as string,
     weight: asNumber(row.weight),
     status: row.status as AttackExecutionStep["status"],
-    startedAt: (row.started_at as string) ?? null,
-    completedAt: (row.completed_at as string) ?? null,
+    startedAt: normalizeTimestampNullable(row.started_at),
+    completedAt: normalizeTimestampNullable(row.completed_at),
     durationMs: row.duration_ms == null ? null : asNumber(row.duration_ms),
     failureCode: (row.failure_code as string) ?? null,
     metadata: asJsonObject(row.metadata),
-    createdAt: row.created_at as string,
-    updatedAt: row.updated_at as string,
+    createdAt: normalizeTimestamp(row.created_at),
+    updatedAt: normalizeTimestamp(row.updated_at),
   };
 }
 
@@ -150,7 +179,7 @@ export function mapAttackExecutionPlanRow(row: Record<string, unknown>): AttackE
     totalWeight: asNumber(row.total_weight),
     planHash: row.plan_hash as string,
     metadata: asJsonObject(row.metadata),
-    createdAt: row.created_at as string,
+    createdAt: normalizeTimestamp(row.created_at),
   };
 }
 
@@ -176,8 +205,8 @@ export function mapAttackEvidenceRow(row: Record<string, unknown>): AttackEviden
     reproducibility: row.reproducibility as string,
     confidence: asNumber(row.confidence),
     replayInstructions: row.replay_instructions as string,
-    capturedAt: row.captured_at as string,
-    createdAt: row.created_at as string,
+    capturedAt: normalizeTimestamp(row.captured_at),
+    createdAt: normalizeTimestamp(row.created_at),
   };
 }
 
@@ -199,9 +228,9 @@ export function mapAttackFindingRow(row: Record<string, unknown>): AttackFinding
     impact: row.impact as string,
     rootCause: (row.root_cause as string) ?? null,
     metadata: asJsonObject(row.metadata),
-    confirmedAt: (row.confirmed_at as string) ?? null,
-    createdAt: row.created_at as string,
-    updatedAt: row.updated_at as string,
+    confirmedAt: normalizeTimestampNullable(row.confirmed_at),
+    createdAt: normalizeTimestamp(row.created_at),
+    updatedAt: normalizeTimestamp(row.updated_at),
   };
 }
 
@@ -224,8 +253,8 @@ export function mapAttackMitigationRow(row: Record<string, unknown>): AttackMiti
     rollbackGuidance: row.rollback_guidance as string,
     residualRisk: row.residual_risk as string,
     metadata: asJsonObject(row.metadata),
-    createdAt: row.created_at as string,
-    updatedAt: row.updated_at as string,
+    createdAt: normalizeTimestamp(row.created_at),
+    updatedAt: normalizeTimestamp(row.updated_at),
   };
 }
 
@@ -252,8 +281,8 @@ export function mapAttackSafeFixRow(row: Record<string, unknown>): AttackSafeFix
     implementationRisk: row.implementation_risk as AttackSafeFix["implementationRisk"],
     estimatedLoc: row.estimated_loc == null ? null : asNumber(row.estimated_loc),
     metadata: asJsonObject(row.metadata),
-    createdAt: row.created_at as string,
-    updatedAt: row.updated_at as string,
+    createdAt: normalizeTimestamp(row.created_at),
+    updatedAt: normalizeTimestamp(row.updated_at),
   };
 }
 
@@ -267,9 +296,9 @@ export function mapAttackReplayRow(row: Record<string, unknown>): AttackReplay {
     replayExecutionId: row.replay_execution_id as string,
     findingId: (row.finding_id as string) ?? null,
     safeFixId: (row.safe_fix_id as string) ?? null,
-    startedAt: (row.started_at as string) ?? null,
-    completedAt: (row.completed_at as string) ?? null,
-    createdAt: row.created_at as string,
+    startedAt: normalizeTimestampNullable(row.started_at),
+    completedAt: normalizeTimestampNullable(row.completed_at),
+    createdAt: normalizeTimestamp(row.created_at),
   };
 }
 
@@ -287,8 +316,8 @@ export function mapProtectionVerificationRow(row: Record<string, unknown>): Prot
     originalEvidenceId: (row.original_evidence_id as string) ?? null,
     replayEvidenceId: (row.replay_evidence_id as string) ?? null,
     comparison: asJsonObject(row.comparison),
-    verifiedAt: (row.verified_at as string) ?? null,
-    createdAt: row.created_at as string,
+    verifiedAt: normalizeTimestampNullable(row.verified_at),
+    createdAt: normalizeTimestamp(row.created_at),
   };
 }
 
@@ -303,8 +332,8 @@ export function mapAttackRuntimeEventRow(row: Record<string, unknown>): AttackRu
     correlationId: row.correlation_id as string,
     eventType: row.event_type as AttackRuntimeEvent["eventType"],
     payload: asJsonObject(row.payload),
-    occurredAt: row.occurred_at as string,
-    createdAt: row.created_at as string,
+    occurredAt: normalizeTimestamp(row.occurred_at),
+    createdAt: normalizeTimestamp(row.created_at),
   };
 }
 
