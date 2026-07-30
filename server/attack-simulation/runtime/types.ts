@@ -60,6 +60,8 @@ export type SafeRuntimeStepInput = {
   stepLabel: string;
   fixtures?: Record<string, unknown>;
   attackerProfile?: Record<string, unknown>;
+  adapterId?: string;
+  protectedAssets?: Record<string, unknown>[];
 };
 
 export type SafeRuntimeStepOutcome =

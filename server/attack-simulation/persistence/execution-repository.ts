@@ -22,6 +22,7 @@ import {
   type CreateAttackExecutionPlanInput,
 } from "../contracts/attack-execution-plan";
 import type { AttackExecutionStatus } from "../contracts/enums";
+import { TERMINAL_ATTACK_EXECUTION_STATUSES } from "../contracts/enums";
 import type { AttackExecutionStepStatus } from "../contracts/attack-execution-step";
 import {
   assertStepWeightsValid,
@@ -334,6 +335,35 @@ export async function finalizeAttackExecution(
   const { data, error } = await admin
     .from("attack_simulation_executions")
     .update(patch)
+    .eq("id", input.executionId)
+    .eq("organization_id", input.organizationId)
+    .select("*")
+    .single();
+
+  if (error) throw new AttackSimulationRepositoryError(error.message, "database");
+  return attackExecutionSchema.parse(mapAttackExecutionRow(data));
+}
+
+export async function cancelAttackExecutionRecord(
+  admin: SupabaseClient,
+  input: { executionId: string; organizationId: string }
+): Promise<AttackExecution> {
+  const existing = await getAttackExecutionById(admin, input.executionId, input.organizationId);
+  if (!existing) throw new AttackSimulationRepositoryError("Execution not found", "not_found");
+  if (TERMINAL_ATTACK_EXECUTION_STATUSES.has(existing.status)) {
+    return existing;
+  }
+
+  const now = new Date().toISOString();
+  const { data, error } = await admin
+    .from("attack_simulation_executions")
+    .update({
+      status: "cancelled",
+      current_stage: "cancelled",
+      cancelled_at: now,
+      estimated_remaining_ms: 0,
+      updated_at: now,
+    })
     .eq("id", input.executionId)
     .eq("organization_id", input.organizationId)
     .select("*")

@@ -5,6 +5,7 @@ import { runScanRedTeamPipeline } from "./run-scan-red-team";
 import { buildScanJobPlatformMetadata } from "./build-scan-metadata";
 import { persistScanJobPlatformMetadata, attachPlatformSummaryToScan } from "./persist-scan-platform";
 import { assertScanContinues } from "@/server/review-cancel/review-abort";
+import { runScanAttackSimulationPhase } from "@/server/attack-simulation/integration/run-scan-attack-simulation-phase";
 
 export type UnifiedScanPipelineInput = {
   scanId: string;
@@ -18,6 +19,7 @@ export type UnifiedScanPipelineInput = {
 export type UnifiedScanPipelineOutput = {
   redTeam: Awaited<ReturnType<typeof runScanRedTeamPipeline>>;
   platformMetadata: ReturnType<typeof buildScanJobPlatformMetadata> | null;
+  attackSimulation: Awaited<ReturnType<typeof runScanAttackSimulationPhase>> | null;
 };
 
 /**
@@ -60,7 +62,7 @@ export async function executeUnifiedScanRedTeamPhase(
       scanId: input.scanId,
       platform: platformMetadata,
     }).catch(() => undefined);
-    return { redTeam, platformMetadata };
+    return { redTeam, platformMetadata, attackSimulation: null };
   }
 
   const platformMetadata = buildScanJobPlatformMetadata(redTeam, redTeam.report);
@@ -73,5 +75,25 @@ export async function executeUnifiedScanRedTeamPhase(
   });
   await attachPlatformSummaryToScan(admin, { scanId: input.scanId, platform: platformMetadata });
 
-  return { redTeam, platformMetadata };
+  let attackSimulation: Awaited<ReturnType<typeof runScanAttackSimulationPhase>> | null = null;
+  try {
+    await assertScanContinues(admin, input.scanId);
+    attackSimulation = await runScanAttackSimulationPhase(admin, {
+      organizationId: input.organizationId,
+      projectId: input.projectId,
+      scanId: input.scanId,
+      scanJobId: input.scanJobId,
+      commitSha: input.commitSha,
+      report: redTeam.report,
+    });
+  } catch (error) {
+    console.error({
+      component: "platform-convergence",
+      event: "attack_simulation_phase_failed",
+      scanId: input.scanId,
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  return { redTeam, platformMetadata, attackSimulation };
 }

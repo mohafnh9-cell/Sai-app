@@ -22,7 +22,8 @@ export type FeatureFlagKey =
   | "autonomous_orchestrator"
   | "parallel_execution"
   | "adaptive_team_selection"
-  | "mission_control";
+  | "mission_control"
+  | "attack_simulation";
 
 const DEFAULTS: Record<FeatureFlagKey, FeatureRollout> = {
   continuous_protection: "ga",
@@ -45,6 +46,7 @@ const DEFAULTS: Record<FeatureFlagKey, FeatureRollout> = {
   parallel_execution: "internal",
   adaptive_team_selection: "internal",
   mission_control: "internal",
+  attack_simulation: "internal",
 };
 
 function parseOverrides(): Partial<Record<FeatureFlagKey, FeatureRollout>> {

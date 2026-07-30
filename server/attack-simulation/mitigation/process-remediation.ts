@@ -25,9 +25,10 @@ import { buildAttackFindingInput } from "./build-finding";
 import { buildAttackMitigationInput } from "./build-mitigation";
 import { buildAttackSafeFixInput } from "./build-safe-fix";
 import { evaluateAttackOutcome } from "./evaluate-outcome";
+import { bridgeAttackSafeFixToEngine } from "../integration/bridge-attack-safe-fix";
 
 export type ProcessAttackRemediationInput = {
-  campaign: Pick<AttackCampaign, "id" | "organizationId" | "projectId">;
+  campaign: Pick<AttackCampaign, "id" | "organizationId" | "projectId" | "scanId">;
   execution: Pick<AttackExecution, "id" | "correlationId">;
   scenario: Pick<
     AttackScenario,
@@ -175,6 +176,15 @@ export async function processAttackRemediation(
       })
     );
     attackSafeFixId = safeFix.id;
+
+    await bridgeAttackSafeFixToEngine(admin, {
+      organizationId: input.campaign.organizationId,
+      projectId: input.campaign.projectId,
+      scanId: input.campaign.scanId,
+      finding,
+      mitigation,
+      attackSafeFix: safeFix,
+    }).catch(() => undefined);
 
     await appendAttackRuntimeEvent(admin, {
       campaignId: input.campaign.id,

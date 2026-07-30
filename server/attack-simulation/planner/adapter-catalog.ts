@@ -10,7 +10,7 @@ export type AttackAdapterDefinition = {
   hypothesisKeywords: readonly string[];
 };
 
-/** MVP safe adapters — metadata only; adapter execution modules arrive in Slice 9. */
+/** MVP safe adapters — metadata in catalog; execution modules in `adapters/`. */
 export const ATTACK_ADAPTER_CATALOG: readonly AttackAdapterDefinition[] = [
   {
     id: "idor-cross-tenant",

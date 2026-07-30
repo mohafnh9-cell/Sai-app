@@ -54,6 +54,7 @@ export type AttackExecutionRunContext = {
     | "correlationId"
     | "status"
     | "attackerProfile"
+    | "protectedAssets"
   >;
   scenario: Pick<AttackScenario, "id" | "adapterId" | "metadata">;
   steps: AttackExecutionStepRun[];

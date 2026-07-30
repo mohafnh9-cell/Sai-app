@@ -9,4 +9,4 @@ export {
   validateAttackAuthorization,
   isDestructiveActionHint,
 } from "./types";
-export { getActiveAttackAuthorization, createAttackAuthorization } from "./store";
+export { getActiveAttackAuthorization, createAttackAuthorization, listAttackAuthorizationsForProject } from "./store";

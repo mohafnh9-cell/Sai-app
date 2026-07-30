@@ -74,3 +74,23 @@ export async function createAttackAuthorization(
   if (error || !data) throw new Error(`Could not create attack authorization: ${error?.message}`);
   return mapRow(data as Record<string, unknown>);
 }
+
+export async function listAttackAuthorizationsForProject(
+  admin: SupabaseClient,
+  input: { organizationId: string; projectId: string; limit?: number }
+): Promise<AttackAuthorizationRecord[]> {
+  let query = admin
+    .from("attack_authorizations")
+    .select("*")
+    .eq("organization_id", input.organizationId)
+    .eq("project_id", input.projectId)
+    .order("approved_at", { ascending: false });
+
+  if (input.limit) {
+    query = query.limit(input.limit);
+  }
+
+  const { data, error } = await query;
+  if (error) throw new Error(`Could not list attack authorizations: ${error.message}`);
+  return (data ?? []).map((row) => mapRow(row as Record<string, unknown>));
+}

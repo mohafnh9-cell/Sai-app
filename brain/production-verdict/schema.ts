@@ -118,6 +118,20 @@ export const ProductionVerdictSchema = z.object({
   scanExecutionId: z.string().uuid().optional(),
   securityDecisionId: z.string().uuid().optional(),
   securityDeploymentVerdict: z.string().optional(),
+  attackSimulation: z
+    .object({
+      campaignId: z.string().uuid().nullable(),
+      campaignStatus: z.string(),
+      totalExecutions: z.number().int().min(0),
+      confirmedFindings: z.number().int().min(0),
+      notExploitableFindings: z.number().int().min(0),
+      protectedExecutions: z.number().int().min(0),
+      stillVulnerableExecutions: z.number().int().min(0),
+      blockedExecutions: z.number().int().min(0),
+      pendingReplay: z.number().int().min(0),
+      headline: z.string(),
+    })
+    .optional(),
 });
 
 export type ProductionVerdictV1 = z.infer<typeof ProductionVerdictSchema>;

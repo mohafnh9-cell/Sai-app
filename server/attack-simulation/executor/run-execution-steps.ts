@@ -104,6 +104,8 @@ export async function runAttackExecutionSteps(input: {
       stepLabel: step.label,
       fixtures: input.fixtures,
       attackerProfile: input.context.execution.attackerProfile,
+      adapterId: input.context.scenario.adapterId,
+      protectedAssets: input.context.execution.protectedAssets,
     });
     session = nextSession;
     const row = buildStepResult(step.id, step.kind, result, startedAtMs, Date.now());

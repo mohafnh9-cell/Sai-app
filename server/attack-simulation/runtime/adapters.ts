@@ -1,4 +1,5 @@
 import type { AttackRuntimeMode } from "../contracts/enums";
+import { resolveAttackAdapterModule } from "../adapters/registry";
 import type {
   SafeRuntimeAdapter,
   SafeRuntimeCleanupInput,
@@ -41,12 +42,38 @@ function simulatedStep(input: SafeRuntimeStepInput, classification: SafeRuntimeS
   };
 }
 
+function executeWithAttackAdapter(input: SafeRuntimeStepInput): SafeRuntimeStepResult | null {
+  if (!input.adapterId) return null;
+  const module = resolveAttackAdapterModule(input.adapterId);
+  if (!module) return null;
+  return module.executeStep({
+    adapterId: input.adapterId,
+    stepKind: input.stepKind,
+    stepLabel: input.stepLabel,
+    guard: input.guard,
+    fixtures: input.fixtures,
+    attackerProfile: input.attackerProfile,
+    protectedAssets: input.protectedAssets,
+  });
+}
+
+function executeModeStep(
+  input: SafeRuntimeStepInput,
+  classification: SafeRuntimeStepResult["classification"],
+  sandboxRequest?: () => SafeRuntimeStepResult
+): SafeRuntimeStepResult {
+  const adapterResult = executeWithAttackAdapter(input);
+  if (adapterResult) return adapterResult;
+  if (sandboxRequest) return sandboxRequest();
+  return simulatedStep(input, classification);
+}
+
 export const staticRuntimeAdapter: SafeRuntimeAdapter = {
   mode: "static",
   async executeStep(input) {
     const blocked = guardOrProceed(input);
     if (blocked) return blocked;
-    return simulatedStep(input, "static_analysis");
+    return executeModeStep(input, "static_analysis");
   },
 };
 
@@ -55,7 +82,7 @@ export const mockRuntimeAdapter: SafeRuntimeAdapter = {
   async executeStep(input) {
     const blocked = guardOrProceed(input);
     if (blocked) return blocked;
-    return simulatedStep(input, "simulated");
+    return executeModeStep(input, "simulated");
   },
 };
 
@@ -64,19 +91,21 @@ export const sandboxRuntimeAdapter: SafeRuntimeAdapter = {
   async executeStep(input) {
     const blocked = guardOrProceed(input);
     if (blocked) return blocked;
-    if (input.stepKind === "execute_request" && input.guard.network.url) {
-      return {
-        outcome: "completed",
-        classification: "sandbox",
-        expectedBehavior: "Sandbox request stays within allowlisted hosts",
-        observedBehavior: `Sandbox fixture response for ${input.guard.network.url}`,
-        statusCode: 200,
-        sideEffects: { sandbox: true },
-        auditTrail: ["sandbox:fixture_response"],
-        durationMs: 2,
-      };
-    }
-    return simulatedStep(input, "sandbox");
+    return executeModeStep(input, "sandbox", () => {
+      if (input.stepKind === "execute_request" && input.guard.network.url) {
+        return {
+          outcome: "completed",
+          classification: "sandbox",
+          expectedBehavior: "Sandbox request stays within allowlisted hosts",
+          observedBehavior: `Sandbox fixture response for ${input.guard.network.url}`,
+          statusCode: 200,
+          sideEffects: { sandbox: true },
+          auditTrail: ["sandbox:fixture_response"],
+          durationMs: 2,
+        };
+      }
+      return simulatedStep(input, "sandbox");
+    });
   },
 };
 
@@ -85,6 +114,8 @@ export const authorizedStagingRuntimeAdapter: SafeRuntimeAdapter = {
   async executeStep(input) {
     const blocked = guardOrProceed(input);
     if (blocked) return blocked;
+    const adapterResult = executeWithAttackAdapter(input);
+    if (adapterResult) return adapterResult;
     return {
       outcome: "completed",
       classification: "authorized_staging",

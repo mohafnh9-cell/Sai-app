@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MissionControlExperience } from "@/features/mission-control/components/MissionControlExperience";
+import { MissionControlSubNav } from "@/features/mission-control/components/MissionControlSubNav";
 import { getMissionControlView } from "@/server/mission-control/get-mission-control";
 import { getCachedServerAuthContext } from "@/lib/server/request-cache";
 import { isFeatureEnabled } from "@/server/feature-flags";
@@ -29,6 +30,10 @@ export default async function MissionControlPage({ params }: PageProps) {
   if (!isFeatureEnabled("mission_control", { organizationId: auth.organizationId })) {
     redirect(`/projects/${projectId}`);
   }
+
+  const attackCenterEnabled = isFeatureEnabled("attack_simulation", {
+    organizationId: auth.organizationId,
+  });
 
   const { data: project } = await auth.supabase
     .from("projects")
@@ -71,6 +76,7 @@ export default async function MissionControlPage({ params }: PageProps) {
             Projects
           </Link>
         </Button>
+        {attackCenterEnabled ? <MissionControlSubNav projectId={projectId} /> : null}
         <MissionControlExperience view={view} verdict={verdict} fixPromptContext={fixPromptContext} />
       </div>
     </div>

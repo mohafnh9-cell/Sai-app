@@ -219,6 +219,54 @@ export async function getAttackScenarioById(
   return attackScenarioSchema.parse(mapAttackScenarioRow(data));
 }
 
+export async function listAttackCampaignsForProject(
+  admin: SupabaseClient,
+  input: { projectId: string; organizationId: string; limit?: number }
+): Promise<AttackCampaign[]> {
+  let query = admin
+    .from("attack_simulation_campaigns")
+    .select("*")
+    .eq("project_id", input.projectId)
+    .eq("organization_id", input.organizationId)
+    .order("updated_at", { ascending: false });
+
+  if (input.limit) {
+    query = query.limit(input.limit);
+  }
+
+  const { data, error } = await query;
+  if (error) throw new AttackSimulationRepositoryError(error.message, "database");
+  return (data ?? []).map((row) => attackCampaignSchema.parse(mapAttackCampaignRow(row)));
+}
+
+export async function cancelAttackCampaignRecord(
+  admin: SupabaseClient,
+  input: { campaignId: string; organizationId: string }
+): Promise<AttackCampaign> {
+  const now = new Date().toISOString();
+  const { data, error } = await admin
+    .from("attack_simulation_campaigns")
+    .update({
+      status: "cancelled",
+      cancelled_at: now,
+      estimated_remaining_ms: 0,
+      updated_at: now,
+    })
+    .eq("id", input.campaignId)
+    .eq("organization_id", input.organizationId)
+    .in("status", ["planned", "queued", "preparing", "running", "paused", "completing"])
+    .select("*")
+    .maybeSingle();
+
+  if (error) throw new AttackSimulationRepositoryError(error.message, "database");
+  if (!data) {
+    const existing = await getAttackCampaignById(admin, input.campaignId, input.organizationId);
+    if (!existing) throw new AttackSimulationRepositoryError("Campaign not found", "not_found");
+    return existing;
+  }
+  return attackCampaignSchema.parse(mapAttackCampaignRow(data));
+}
+
 export async function updateAttackCampaignStatus(
   admin: SupabaseClient,
   input: {

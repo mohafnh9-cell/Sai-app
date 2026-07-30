@@ -5,6 +5,10 @@ import {
 } from "@/brain/production-verdict/schema";
 import { generateProductionVerdict as runEngine } from "@/brain/production-verdict/engine";
 import { applySecurityDecisionToProductionVerdict } from "@/server/ai-red-team/decision/production-verdict-bridge";
+import {
+  applyAttackSimulationVerdictOverlay,
+  buildAttackSimulationVerdictOverlay,
+} from "@/server/attack-simulation/integration/build-verdict-overlay";
 import { emitOperationalEvent } from "@/server/observability/operational-events";
 import {
   buildIdempotencyKey,
@@ -187,12 +191,21 @@ export async function generateAndPersistProductionVerdict(
     verdict = applySecurityDecisionToProductionVerdict(verdict, input.securityDecisionReport);
   }
 
+  const attackOverlay = await buildAttackSimulationVerdictOverlay(admin, {
+    scanId: input.scanId,
+    organizationId: input.organizationId,
+    projectId: input.projectId,
+  });
+
   const correlationId = input.scanId;
-  verdict = {
-    ...verdict,
-    correlationId,
-    scanExecutionId: input.scanJobId ?? input.scanId,
-  } as ProductionVerdictV1;
+  verdict = applyAttackSimulationVerdictOverlay(
+    {
+      ...verdict,
+      correlationId,
+      scanExecutionId: input.scanJobId ?? input.scanId,
+    },
+    attackOverlay
+  ) as ProductionVerdictV1;
 
   log("verdict_generated", {
     scanId: input.scanId,
