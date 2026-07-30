@@ -2,7 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AttackEvidence } from "../contracts/attack-evidence";
-import type { AttackExecutionStatus } from "../contracts/enums";
+import type { AttackExecutionStatus, AttackFindingOutcome } from "../contracts/enums";
 import type { AttackCampaign } from "../contracts/attack-campaign";
 import type { AttackExecution } from "../contracts/attack-execution";
 import type { AttackScenario } from "../contracts/attack-scenario";
@@ -52,11 +52,10 @@ export type ProcessAttackRemediationResult =
     }
   | { ok: false; failureCode: string; safeFailureMessage: string };
 
-function executionStatusForOutcome(
-  outcome: "confirmed" | "not_exploitable" | "inconclusive"
-): AttackExecutionStatus {
+function executionStatusForOutcome(outcome: AttackFindingOutcome): AttackExecutionStatus {
   if (outcome === "confirmed") return "confirmed";
   if (outcome === "not_exploitable") return "not_exploitable";
+  if (outcome === "pending") return "completed";
   return "completed";
 }
 
