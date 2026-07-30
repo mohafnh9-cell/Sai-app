@@ -45,7 +45,7 @@ export type ProcessAttackRemediationResult =
   | {
       ok: true;
       findingId: string;
-      outcome: "confirmed" | "not_exploitable" | "inconclusive";
+      outcome: AttackFindingOutcome;
       mitigationId: string | null;
       attackSafeFixId: string | null;
       executionStatus: AttackExecutionStatus;
@@ -83,12 +83,10 @@ export async function processAttackRemediation(
       return {
         ok: true,
         findingId: existing.id,
-        outcome: existing.outcome as "confirmed" | "not_exploitable" | "inconclusive",
+        outcome: existing.outcome,
         mitigationId: mitigation?.id ?? null,
         attackSafeFixId: safeFix?.id ?? null,
-        executionStatus: executionStatusForOutcome(
-          existing.outcome as "confirmed" | "not_exploitable" | "inconclusive"
-        ),
+        executionStatus: executionStatusForOutcome(existing.outcome),
       };
     }
   }
