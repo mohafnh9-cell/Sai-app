@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/server/security-scanner/admin-client";
 import { getSafeFixById } from "@/server/safe-fix-engine/history";
@@ -9,11 +10,25 @@ import {
 } from "@/server/safe-fix-engine/verify";
 import { requireProjectApiAccess } from "@/server/projects/project-access";
 
+const paramsSchema = z.object({
+  id: z.string().uuid(),
+  safeFixId: z.string().uuid(),
+});
+
+const bodySchema = z.object({
+  action: z.enum(["approve", "applied", "verify"]).optional(),
+});
+
 export async function GET(
   _request: Request,
   context: { params: Promise<{ id: string; safeFixId: string }> }
 ) {
-  const { id: projectId, safeFixId } = await context.params;
+  const parsedParams = paramsSchema.safeParse(await context.params);
+  if (!parsedParams.success) {
+    return NextResponse.json({ error: "Invalid project or safe fix id" }, { status: 400 });
+  }
+
+  const { id: projectId, safeFixId } = parsedParams.data;
   const supabase = await createClient();
   const {
     data: { user },
@@ -37,8 +52,18 @@ export async function POST(
   request: Request,
   context: { params: Promise<{ id: string; safeFixId: string }> }
 ) {
-  const { id: projectId, safeFixId } = await context.params;
-  const body = (await request.json().catch(() => ({}))) as { action?: string };
+  const parsedParams = paramsSchema.safeParse(await context.params);
+  if (!parsedParams.success) {
+    return NextResponse.json({ error: "Invalid project or safe fix id" }, { status: 400 });
+  }
+
+  const parsedBody = bodySchema.safeParse(await request.json().catch(() => ({})));
+  if (!parsedBody.success) {
+    return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+  }
+
+  const { id: projectId, safeFixId } = parsedParams.data;
+  const action = parsedBody.data.action ?? "verify";
 
   const supabase = await createClient();
   const {
@@ -50,7 +75,6 @@ export async function POST(
 
   const admin = createAdminClient();
   const orgId = access.project.organization_id;
-  const action = body.action ?? "verify";
 
   const existing = await getSafeFixById(admin, safeFixId);
   if (!existing || existing.projectId !== projectId || existing.organizationId !== orgId) {

@@ -1,15 +1,35 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/server/security-scanner/admin-client";
 import { acknowledgeAlert, dismissAlert, markAlertRead } from "@/server/security-alerts/lifecycle";
 import { requireProjectApiAccess } from "@/server/projects/project-access";
 
+const paramsSchema = z.object({
+  id: z.string().uuid(),
+  alertId: z.string().uuid(),
+});
+
+const bodySchema = z.object({
+  action: z.enum(["dismiss", "read", "acknowledge"]).optional(),
+});
+
 export async function POST(
   request: Request,
   context: { params: Promise<{ id: string; alertId: string }> }
 ) {
-  const { id: projectId, alertId } = await context.params;
-  const body = (await request.json().catch(() => ({}))) as { action?: string };
+  const parsedParams = paramsSchema.safeParse(await context.params);
+  if (!parsedParams.success) {
+    return NextResponse.json({ error: "Invalid project or alert id" }, { status: 400 });
+  }
+
+  const parsedBody = bodySchema.safeParse(await request.json().catch(() => ({})));
+  if (!parsedBody.success) {
+    return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+  }
+
+  const { id: projectId, alertId } = parsedParams.data;
+  const { action: requestedAction } = parsedBody.data;
 
   const supabase = await createClient();
   const {
@@ -34,7 +54,7 @@ export async function POST(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const action = body.action ?? "acknowledge";
+  const action = requestedAction ?? "acknowledge";
 
   if (action === "dismiss") {
     await dismissAlert(admin, alertId, access.userId);

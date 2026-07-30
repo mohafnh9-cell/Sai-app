@@ -63,6 +63,6 @@ describe("repository auth audit", () => {
       // eslint-disable-next-line no-console
       console.log("score", result.score.score, "grade", result.score.grade);
     }
-    expect(result.score.score).toBeGreaterThanOrEqual(85);
+    expect(result.score.score).toBeGreaterThanOrEqual(100);
   });
 });

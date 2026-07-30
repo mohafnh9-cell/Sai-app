@@ -1,19 +1,36 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/server/security-scanner/admin-client";
 import { generateMonthlyProtectionReport } from "@/server/protection-reports/generate-monthly";
 import { generateWeeklyProtectionReport } from "@/server/protection-reports/generate-weekly";
 import { requireProjectApiAccess } from "@/server/projects/project-access";
 
+const paramsSchema = z.object({
+  id: z.string().uuid(),
+});
+
+const bodySchema = z.object({
+  type: z.enum(["weekly", "monthly"]).optional(),
+  regenerate: z.boolean().optional(),
+});
+
 export async function POST(
   request: Request,
   context: { params: Promise<{ id: string }> }
 ) {
-  const { id: projectId } = await context.params;
-  const body = (await request.json().catch(() => ({}))) as {
-    type?: "weekly" | "monthly";
-    regenerate?: boolean;
-  };
+  const parsedParams = paramsSchema.safeParse(await context.params);
+  if (!parsedParams.success) {
+    return NextResponse.json({ error: "Invalid project id" }, { status: 400 });
+  }
+
+  const parsedBody = bodySchema.safeParse(await request.json().catch(() => ({})));
+  if (!parsedBody.success) {
+    return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+  }
+
+  const { id: projectId } = parsedParams.data;
+  const { type: reportType = "weekly", regenerate = false } = parsedBody.data;
 
   const supabase = await createClient();
   const {
@@ -24,8 +41,6 @@ export async function POST(
   if (!access.ok) return access.response;
 
   const admin = createAdminClient();
-  const reportType = body.type ?? "weekly";
-  const regenerate = Boolean(body.regenerate);
 
   const result =
     reportType === "monthly"

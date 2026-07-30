@@ -1,7 +1,19 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { enforceRateLimit } from "@/server/http/rate-limit";
 
-export async function POST() {
+const bodySchema = z.object({}).strict();
+
+export async function POST(request: Request) {
+  const rateLimited = enforceRateLimit(request);
+  if (rateLimited) return rateLimited;
+
+  const parsedBody = bodySchema.safeParse(await request.json().catch(() => ({})));
+  if (!parsedBody.success) {
+    return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+  }
+
   const supabase = await createClient();
   const {
     data: { user },
