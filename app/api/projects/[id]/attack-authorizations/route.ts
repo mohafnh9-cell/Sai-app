@@ -20,7 +20,7 @@ const createBodySchema = z.object({
   targetOrigin: z.string().url(),
   environmentType: z.enum(["local", "preview", "staging"]),
   authorizationMethod: z.string().min(1).max(64).default("manual_staging_approval"),
-  approvedScope: z.record(z.unknown()).optional(),
+  approvedScope: z.record(z.string(), z.unknown()).optional(),
   expiresInHours: z.number().int().min(1).max(168).default(24),
   maxRequestBudget: z.number().int().min(1).max(500).default(50),
   maxDurationSeconds: z.number().int().min(30).max(3600).default(900),
