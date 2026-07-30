@@ -1,12 +1,12 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { AttackRuntimeEventType } from "../contracts/enums";
 import {
   attackRuntimeEventSchema,
   attackRuntimeEventPayloadSchema,
   createAttackRuntimeEventInputSchema,
   type AttackRuntimeEvent,
-  type AttackRuntimeEventType,
   type CreateAttackRuntimeEventInput,
 } from "../contracts/attack-runtime-event";
 import { mapAttackRuntimeEventRow } from "./mappers";
