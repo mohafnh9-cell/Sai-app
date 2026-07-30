@@ -21,6 +21,8 @@ import {
   type AttackExecutionPlan,
   type CreateAttackExecutionPlanInput,
 } from "../contracts/attack-execution-plan";
+import type { AttackExecutionStatus } from "../contracts/enums";
+import type { AttackExecutionStepStatus } from "../contracts/attack-execution-step";
 import {
   assertStepWeightsValid,
   calculateElapsedMs,
@@ -263,4 +265,110 @@ export async function listAttackExecutionStepsForCampaign(
 
   if (error) throw new AttackSimulationRepositoryError(error.message, "database");
   return (data ?? []).map((row) => attackExecutionStepSchema.parse(mapAttackExecutionStepRow(row)));
+}
+
+export async function updateAttackExecutionStepStatus(
+  admin: SupabaseClient,
+  input: {
+    stepId: string;
+    organizationId: string;
+    status: AttackExecutionStepStatus;
+    startedAt?: string | null;
+    completedAt?: string | null;
+    durationMs?: number | null;
+    failureCode?: string | null;
+  }
+): Promise<AttackExecutionStep> {
+  const now = new Date().toISOString();
+  const patch: Record<string, unknown> = {
+    status: input.status,
+    updated_at: now,
+  };
+  if (input.startedAt !== undefined) patch.started_at = input.startedAt;
+  if (input.completedAt !== undefined) patch.completed_at = input.completedAt;
+  if (input.durationMs !== undefined) patch.duration_ms = input.durationMs;
+  if (input.failureCode !== undefined) patch.failure_code = input.failureCode;
+
+  const { data, error } = await admin
+    .from("attack_simulation_execution_steps")
+    .update(patch)
+    .eq("id", input.stepId)
+    .eq("organization_id", input.organizationId)
+    .select("*")
+    .single();
+
+  if (error) throw new AttackSimulationRepositoryError(error.message, "database");
+  return attackExecutionStepSchema.parse(mapAttackExecutionStepRow(data));
+}
+
+export async function finalizeAttackExecution(
+  admin: SupabaseClient,
+  input: {
+    executionId: string;
+    organizationId: string;
+    status: AttackExecutionStatus;
+    currentStage: AttackExecutionStatus;
+    failureCode?: string | null;
+    safeFailureMessage?: string | null;
+    completedAt?: string | null;
+    cancelledAt?: string | null;
+  }
+): Promise<AttackExecution> {
+  const now = new Date().toISOString();
+  const patch: Record<string, unknown> = {
+    status: input.status,
+    current_stage: input.currentStage,
+    failure_code: input.failureCode ?? null,
+    safe_failure_message: input.safeFailureMessage ?? null,
+    completed_at: input.completedAt ?? null,
+    cancelled_at: input.cancelledAt ?? null,
+    updated_at: now,
+  };
+  if (input.status === "completed") {
+    patch.progress_percent = 100;
+    patch.estimated_remaining_ms = 0;
+  } else if (["failed", "blocked", "cancelled"].includes(input.status)) {
+    patch.estimated_remaining_ms = 0;
+  }
+
+  const { data, error } = await admin
+    .from("attack_simulation_executions")
+    .update(patch)
+    .eq("id", input.executionId)
+    .eq("organization_id", input.organizationId)
+    .select("*")
+    .single();
+
+  if (error) throw new AttackSimulationRepositoryError(error.message, "database");
+  return attackExecutionSchema.parse(mapAttackExecutionRow(data));
+}
+
+export async function markAttackExecutionRunning(
+  admin: SupabaseClient,
+  input: {
+    executionId: string;
+    organizationId: string;
+    currentStepId: string;
+    currentStepTitle: string;
+    currentStage: AttackExecutionStatus;
+  }
+): Promise<AttackExecution> {
+  const now = new Date().toISOString();
+  const { data, error } = await admin
+    .from("attack_simulation_executions")
+    .update({
+      status: "executing",
+      current_stage: input.currentStage,
+      current_step_id: input.currentStepId,
+      current_step_title: input.currentStepTitle,
+      started_at: now,
+      updated_at: now,
+    })
+    .eq("id", input.executionId)
+    .eq("organization_id", input.organizationId)
+    .select("*")
+    .single();
+
+  if (error) throw new AttackSimulationRepositoryError(error.message, "database");
+  return attackExecutionSchema.parse(mapAttackExecutionRow(data));
 }

@@ -201,3 +201,47 @@ export async function updateCampaignAfterPlanning(
   if (error) throw new AttackSimulationRepositoryError(error.message, "database");
   return attackCampaignSchema.parse(mapAttackCampaignRow(data));
 }
+
+export async function getAttackScenarioById(
+  admin: SupabaseClient,
+  scenarioId: string,
+  organizationId: string
+): Promise<AttackScenario | null> {
+  const { data, error } = await admin
+    .from("attack_simulation_scenarios")
+    .select("*")
+    .eq("id", scenarioId)
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+
+  if (error) throw new AttackSimulationRepositoryError(error.message, "database");
+  if (!data) return null;
+  return attackScenarioSchema.parse(mapAttackScenarioRow(data));
+}
+
+export async function updateAttackCampaignStatus(
+  admin: SupabaseClient,
+  input: {
+    campaignId: string;
+    organizationId: string;
+    status: AttackCampaign["status"];
+    startedAt?: string | null;
+  }
+): Promise<AttackCampaign> {
+  const patch: Record<string, unknown> = {
+    status: input.status,
+    updated_at: new Date().toISOString(),
+  };
+  if (input.startedAt !== undefined) patch.started_at = input.startedAt;
+
+  const { data, error } = await admin
+    .from("attack_simulation_campaigns")
+    .update(patch)
+    .eq("id", input.campaignId)
+    .eq("organization_id", input.organizationId)
+    .select("*")
+    .single();
+
+  if (error) throw new AttackSimulationRepositoryError(error.message, "database");
+  return attackCampaignSchema.parse(mapAttackCampaignRow(data));
+}
