@@ -367,7 +367,7 @@ export async function executeAttackExecution(
       eventType: "attack_cleanup_completed",
       payload: { metadata: { stepCount: runResult.stepResults.length } },
     });
-  } else if (!remediationFinalized) {
+  } else if (!runResult.ok && !remediationFinalized) {
     await finalizeAttackExecution(admin, {
       executionId: execution.id,
       organizationId: execution.organizationId,
