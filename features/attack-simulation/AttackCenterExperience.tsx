@@ -11,17 +11,21 @@ import { useAttackCenterLive } from "./hooks/useAttackCenterLive";
 import { AttackCampaignView } from "./components/AttackCampaignView";
 import { AttackExecutionViewPanel } from "./components/AttackExecutionViewPanel";
 import { AttackFindingViewPanel } from "./components/AttackFindingViewPanel";
+import { AnalyzeProjectButton } from "@/features/projects/components/AnalyzeProjectButton";
+import type { ProjectReviewUiContext } from "@/server/projects/review-ui-context";
 
 export function AttackCenterExperience({
   projectId,
   initialSnapshot,
   initialCampaignId,
   initialCapability = null,
+  reviewContext,
 }: {
   projectId: string;
   initialSnapshot: AttackCenterSnapshot | null;
   initialCampaignId?: string | null;
   initialCapability?: AttackCenterCapability | null;
+  reviewContext: ProjectReviewUiContext;
 }) {
   const [executionId, setExecutionId] = useState<string | null>(null);
   const [findingId, setFindingId] = useState<string | null>(null);
@@ -207,8 +211,25 @@ export function AttackCenterExperience({
       ) : null}
 
       {viewState.kind === "empty" ? (
-        <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-          No attack campaigns yet. Start a Production Review to plan safe attack scenarios.
+        <div className="rounded-xl border border-dashed border-border p-8 text-center space-y-4">
+          <div className="space-y-2 text-sm text-muted-foreground">
+            <p className="font-medium text-foreground">No attack campaigns yet</p>
+            <p>
+              Safe attack scenarios are created automatically when a Production Review completes
+              with Red Team findings.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <AnalyzeProjectButton
+              projectId={projectId}
+              initialContext={reviewContext}
+              showCommitHint={false}
+              size="sm"
+            />
+            <Button type="button" variant="outline" size="sm" asChild>
+              <Link href={`/projects/${projectId}/scans`}>View review history</Link>
+            </Button>
+          </div>
         </div>
       ) : null}
 

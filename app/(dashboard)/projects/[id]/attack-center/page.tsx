@@ -7,6 +7,7 @@ import { MissionControlSubNav } from "@/features/mission-control/components/Miss
 import { getCachedServerAuthContext } from "@/lib/server/request-cache";
 import { isFeatureEnabled } from "@/server/feature-flags";
 import { createAdminClient } from "@/server/security-scanner/admin-client";
+import { getProjectReviewUiContext } from "@/server/projects/review-ui-context";
 import { loadAttackCenterListState } from "@/server/attack-simulation/api/load-attack-center-list";
 import { buildAttackCenterCapability } from "@/server/attack-simulation/api/attack-center-contract";
 import { attackCenterErrorFromUnknown } from "@/server/attack-simulation/api/errors";
@@ -42,6 +43,9 @@ export default async function AttackCenterPage({ params }: PageProps) {
     .maybeSingle();
 
   if (!project) notFound();
+
+  const reviewContext = await getProjectReviewUiContext(auth.supabase, projectId);
+  if (!reviewContext) notFound();
 
   const admin = createAdminClient();
   let initialSnapshot: AttackCenterSnapshot | null = null;
@@ -81,6 +85,7 @@ export default async function AttackCenterPage({ params }: PageProps) {
           projectId={projectId}
           initialSnapshot={initialSnapshot}
           initialCapability={initialCapability}
+          reviewContext={reviewContext}
           initialCampaignId={
             initialSnapshot?.kind === "campaign" ? initialSnapshot.campaign.id : null
           }
