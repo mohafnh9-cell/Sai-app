@@ -6,6 +6,11 @@ import { requireProjectApiAccess } from "@/server/projects/project-access";
 import { isFeatureEnabled } from "@/server/feature-flags";
 import { enforceRateLimit } from "@/server/http/rate-limit";
 import { getAttackCenterExecutionSnapshot } from "@/server/attack-simulation/get-attack-center";
+import {
+  buildAttackCenterCapability,
+  buildAttackCenterDisabledResponse,
+} from "@/server/attack-simulation/api/attack-center-contract";
+import { attackCenterErrorResponse } from "@/server/attack-simulation/api/errors";
 
 const paramsSchema = z.object({
   id: z.string().uuid(),
@@ -33,19 +38,32 @@ export async function GET(
   if (!access.ok) return access.response;
 
   if (!isFeatureEnabled("attack_simulation", { organizationId: access.project.organization_id })) {
-    return NextResponse.json({ error: "Attack Simulation is not enabled" }, { status: 404 });
+    return NextResponse.json(
+      buildAttackCenterDisabledResponse({ organizationId: access.project.organization_id }),
+      { status: 200 }
+    );
   }
 
-  const admin = createAdminClient();
-  const snapshot = await getAttackCenterExecutionSnapshot(admin, {
-    projectId,
-    organizationId: access.project.organization_id,
-    executionId,
-  });
+  try {
+    const admin = createAdminClient();
+    const snapshot = await getAttackCenterExecutionSnapshot(admin, {
+      projectId,
+      organizationId: access.project.organization_id,
+      executionId,
+    });
 
-  if (!snapshot) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (!snapshot) {
+      return NextResponse.json({ error: "Not found", code: "not_found" }, { status: 404 });
+    }
+
+    return NextResponse.json({
+      ok: true,
+      snapshot,
+      capability: buildAttackCenterCapability({
+        organizationId: access.project.organization_id,
+      }),
+    });
+  } catch (error) {
+    return attackCenterErrorResponse(error);
   }
-
-  return NextResponse.json({ snapshot });
 }

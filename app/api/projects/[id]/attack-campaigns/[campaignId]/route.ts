@@ -6,6 +6,8 @@ import { requireProjectApiAccess } from "@/server/projects/project-access";
 import { isFeatureEnabled } from "@/server/feature-flags";
 import { enforceRateLimit } from "@/server/http/rate-limit";
 import { getAttackCenterCampaignSnapshot } from "@/server/attack-simulation/get-attack-center";
+import { attackCenterErrorResponse } from "@/server/attack-simulation/api/errors";
+import { buildAttackCenterCapability } from "@/server/attack-simulation/api/attack-center-contract";
 
 const paramsSchema = z.object({
   id: z.string().uuid(),
@@ -32,21 +34,47 @@ export async function GET(request: Request, { params }: RouteParams) {
   if (!access.ok) return access.response;
 
   if (!isFeatureEnabled("attack_simulation", { organizationId: access.project.organization_id })) {
-    return NextResponse.json({ error: "Attack Simulation is not enabled" }, { status: 404 });
+    return NextResponse.json(
+      {
+        ok: true,
+        snapshot: null,
+        capability: buildAttackCenterCapability({
+          organizationId: access.project.organization_id,
+        }),
+      },
+      { status: 200 }
+    );
   }
 
-  const admin = createAdminClient();
-  const snapshot = await getAttackCenterCampaignSnapshot(admin, {
-    projectId,
-    organizationId: access.project.organization_id,
-    campaignId,
-  });
+  try {
+    const admin = createAdminClient();
+    const snapshot = await getAttackCenterCampaignSnapshot(admin, {
+      projectId,
+      organizationId: access.project.organization_id,
+      campaignId,
+    });
 
-  if (!snapshot) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (!snapshot) {
+      return NextResponse.json({ error: "Not found", code: "not_found" }, { status: 404 });
+    }
+
+    return NextResponse.json({
+      ok: true,
+      snapshot,
+      capability: buildAttackCenterCapability({
+        organizationId: access.project.organization_id,
+      }),
+    });
+  } catch (error) {
+    console.error({
+      component: "attack-campaigns-api",
+      event: "detail_failed",
+      projectId,
+      campaignId,
+      errorType: error instanceof Error ? error.name : "unknown",
+    });
+    return attackCenterErrorResponse(error);
   }
-
-  return NextResponse.json({ snapshot });
 }
 
 export async function POST(

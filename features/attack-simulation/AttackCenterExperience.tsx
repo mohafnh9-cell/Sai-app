@@ -5,6 +5,8 @@ import Link from "next/link";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { AttackCenterSnapshot } from "./types";
+import type { AttackCenterCapability, AttackCenterRefreshError } from "./api-types";
+import { resolveViewState } from "./view-state";
 import { useAttackCenterLive } from "./hooks/useAttackCenterLive";
 import { AttackCampaignView } from "./components/AttackCampaignView";
 import { AttackExecutionViewPanel } from "./components/AttackExecutionViewPanel";
@@ -14,15 +16,18 @@ export function AttackCenterExperience({
   projectId,
   initialSnapshot,
   initialCampaignId,
+  initialCapability = null,
 }: {
   projectId: string;
   initialSnapshot: AttackCenterSnapshot | null;
   initialCampaignId?: string | null;
+  initialCapability?: AttackCenterCapability | null;
 }) {
   const [executionId, setExecutionId] = useState<string | null>(null);
   const [findingId, setFindingId] = useState<string | null>(null);
   const [replaying, setReplaying] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [showErrorDetails, setShowErrorDetails] = useState(false);
 
   const campaignId = useMemo(() => {
     if (initialCampaignId) return initialCampaignId;
@@ -31,12 +36,21 @@ export function AttackCenterExperience({
     return null;
   }, [initialCampaignId, initialSnapshot]);
 
-  const { snapshot, loading, error, transport, refresh, setSnapshot } = useAttackCenterLive({
-    projectId,
-    campaignId: findingId ? null : executionId ? null : campaignId,
-    executionId: findingId ? null : executionId,
-    findingId,
-    initialSnapshot,
+  const { snapshot, capability, loading, error, transport, refresh, setSnapshot } =
+    useAttackCenterLive({
+      projectId,
+      campaignId: findingId ? null : executionId ? null : campaignId,
+      executionId: findingId ? null : executionId,
+      findingId,
+      initialSnapshot,
+      initialCapability,
+    });
+
+  const viewState = resolveViewState({
+    loading,
+    capability,
+    error,
+    snapshot,
   });
 
   const handleCancelCampaign = useCallback(async () => {
@@ -92,8 +106,6 @@ export function AttackCenterExperience({
     }
   }, [findingId, projectId, setSnapshot]);
 
-  const activeView = snapshot ?? initialSnapshot;
-
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-3 text-sm">
@@ -110,60 +122,101 @@ export function AttackCenterExperience({
         </span>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <Button
-          type="button"
-          variant={!executionId && !findingId ? "default" : "outline"}
-          size="sm"
-          onClick={() => {
-            setExecutionId(null);
-            setFindingId(null);
-            void refresh();
-          }}
-        >
-          Campaign
-        </Button>
-        {executionId ? (
-          <Button type="button" variant="outline" size="sm" onClick={() => setFindingId(null)}>
-            Execution
+      {viewState.kind === "content" ? (
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant={!executionId && !findingId ? "default" : "outline"}
+            size="sm"
+            onClick={() => {
+              setExecutionId(null);
+              setFindingId(null);
+              void refresh();
+            }}
+          >
+            Campaign
           </Button>
-        ) : null}
-        {findingId ? (
-          <Button type="button" variant="default" size="sm">
-            Finding
-          </Button>
-        ) : null}
-        {!findingId && campaignId && !executionId ? (
-          <Button type="button" variant="outline" size="sm" onClick={() => void handleCancelCampaign()}>
-            Cancel campaign
-          </Button>
-        ) : null}
-        {executionId && !findingId ? (
-          <Button type="button" variant="outline" size="sm" onClick={() => void handleCancelExecution()}>
-            Cancel execution
-          </Button>
-        ) : null}
-      </div>
+          {executionId ? (
+            <Button type="button" variant="outline" size="sm" onClick={() => setFindingId(null)}>
+              Execution
+            </Button>
+          ) : null}
+          {findingId ? (
+            <Button type="button" variant="default" size="sm">
+              Finding
+            </Button>
+          ) : null}
+          {!findingId && campaignId && !executionId ? (
+            <Button type="button" variant="outline" size="sm" onClick={() => void handleCancelCampaign()}>
+              Cancel campaign
+            </Button>
+          ) : null}
+          {executionId && !findingId ? (
+            <Button type="button" variant="outline" size="sm" onClick={() => void handleCancelExecution()}>
+              Cancel execution
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
 
-      {loading && !activeView ? (
+      {viewState.kind === "loading" ? (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
           Loading attack center…
         </div>
       ) : null}
 
-      {error ? <p className="text-sm text-destructive">{error}</p> : null}
-      {actionError ? <p className="text-sm text-destructive">{actionError}</p> : null}
+      {viewState.kind === "disabled" ? (
+        <div className="rounded-xl border border-border/60 bg-muted/20 p-8 text-center text-sm">
+          <p className="font-medium text-foreground">Attack Simulation is not enabled for this project.</p>
+          <p className="mt-2 text-muted-foreground">
+            Enable the attack_simulation feature flag for your organization to run safe attack scenarios.
+          </p>
+        </div>
+      ) : null}
 
-      {!activeView ? (
+      {viewState.kind === "error" ? (
+        <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 space-y-3">
+          <p className="text-sm font-medium text-foreground">
+            {viewState.error.fatal
+              ? "Attack Center storage is unavailable."
+              : "Attack Center could not refresh."}
+          </p>
+          <p className="text-sm text-muted-foreground">{viewState.error.message}</p>
+          <div className="flex flex-wrap gap-2">
+            {!viewState.error.fatal ? (
+              <Button type="button" size="sm" variant="outline" onClick={() => void refresh()}>
+                Retry
+              </Button>
+            ) : null}
+            {viewState.error.details ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => setShowErrorDetails((value) => !value)}
+              >
+                {showErrorDetails ? "Hide details" : "View technical details"}
+              </Button>
+            ) : null}
+          </div>
+          {showErrorDetails && viewState.error.details ? (
+            <p className="text-xs text-muted-foreground font-mono">{viewState.error.details}</p>
+          ) : null}
+        </div>
+      ) : null}
+
+      {viewState.kind === "empty" ? (
         <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
           No attack campaigns yet. Start a Production Review to plan safe attack scenarios.
         </div>
       ) : null}
 
-      {activeView?.kind === "campaign" ? (
+      {actionError ? <p className="text-sm text-destructive">{actionError}</p> : null}
+
+      {viewState.kind === "content" && viewState.snapshot.kind === "campaign" ? (
         <AttackCampaignView
-          view={activeView}
+          view={viewState.snapshot}
           onSelectExecution={(id) => {
             setExecutionId(id);
             setFindingId(null);
@@ -171,10 +224,16 @@ export function AttackCenterExperience({
         />
       ) : null}
 
-      {activeView?.kind === "execution" ? <AttackExecutionViewPanel view={activeView} /> : null}
+      {viewState.kind === "content" && viewState.snapshot.kind === "execution" ? (
+        <AttackExecutionViewPanel view={viewState.snapshot} />
+      ) : null}
 
-      {activeView?.kind === "finding" ? (
-        <AttackFindingViewPanel view={activeView} onReplay={() => void handleReplay()} replaying={replaying} />
+      {viewState.kind === "content" && viewState.snapshot.kind === "finding" ? (
+        <AttackFindingViewPanel
+          view={viewState.snapshot}
+          onReplay={() => void handleReplay()}
+          replaying={replaying}
+        />
       ) : null}
     </div>
   );

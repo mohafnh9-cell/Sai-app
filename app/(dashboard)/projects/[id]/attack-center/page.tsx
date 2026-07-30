@@ -7,7 +7,11 @@ import { MissionControlSubNav } from "@/features/mission-control/components/Miss
 import { getCachedServerAuthContext } from "@/lib/server/request-cache";
 import { isFeatureEnabled } from "@/server/feature-flags";
 import { createAdminClient } from "@/server/security-scanner/admin-client";
-import { getLatestAttackCenterCampaignForProject } from "@/server/attack-simulation/get-attack-center";
+import { loadAttackCenterListState } from "@/server/attack-simulation/api/load-attack-center-list";
+import { buildAttackCenterCapability } from "@/server/attack-simulation/api/attack-center-contract";
+import { attackCenterErrorFromUnknown } from "@/server/attack-simulation/api/errors";
+import type { AttackCenterCapability } from "@/features/attack-simulation/api-types";
+import type { AttackCenterSnapshot } from "@/server/attack-simulation/ui/types";
 import type { Metadata } from "next";
 
 interface PageProps {
@@ -40,10 +44,28 @@ export default async function AttackCenterPage({ params }: PageProps) {
   if (!project) notFound();
 
   const admin = createAdminClient();
-  const initialSnapshot = await getLatestAttackCenterCampaignForProject(admin, {
-    projectId,
+  let initialSnapshot: AttackCenterSnapshot | null = null;
+  let initialCapability: AttackCenterCapability | null = buildAttackCenterCapability({
     organizationId: auth.organizationId,
   });
+
+  try {
+    const initialState = await loadAttackCenterListState(admin, {
+      projectId,
+      organizationId: auth.organizationId,
+    });
+    initialSnapshot = initialState.activeCampaign;
+    initialCapability = initialState.capability;
+  } catch (error) {
+    const mapped = attackCenterErrorFromUnknown(error);
+    console.error({
+      component: "attack-center-page",
+      event: "initial_load_failed",
+      projectId,
+      code: mapped.code,
+      message: mapped.message,
+    });
+  }
 
   return (
     <div className="app-cinematic-bg min-h-full">
@@ -58,6 +80,7 @@ export default async function AttackCenterPage({ params }: PageProps) {
         <AttackCenterExperience
           projectId={projectId}
           initialSnapshot={initialSnapshot}
+          initialCapability={initialCapability}
           initialCampaignId={
             initialSnapshot?.kind === "campaign" ? initialSnapshot.campaign.id : null
           }

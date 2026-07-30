@@ -2,11 +2,16 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import type { AttackCenterSnapshot } from "../types";
+import type { AttackCenterSnapshot } from "./types";
+import type {
+  AttackCenterCapability,
+  AttackCenterListApiResponse,
+  AttackCenterRefreshError,
+} from "./api-types";
 import {
   ATTACK_CENTER_POLL_INTERVAL_MS,
   ATTACK_CENTER_REALTIME_CHANNEL,
-} from "../constants";
+} from "./constants";
 
 type LiveOptions = {
   projectId: string;
@@ -14,11 +19,13 @@ type LiveOptions = {
   executionId?: string | null;
   findingId?: string | null;
   initialSnapshot?: AttackCenterSnapshot | null;
+  initialCapability?: AttackCenterCapability | null;
   enabled?: boolean;
 };
 
 function resolvePollUrl(options: LiveOptions): string | null {
   const { projectId, campaignId, executionId, findingId } = options;
+  if (!projectId) return null;
   if (findingId) {
     return `/api/projects/${projectId}/attack-findings/${findingId}`;
   }
@@ -51,6 +58,25 @@ function isActiveExecution(snapshot: AttackCenterSnapshot | null): boolean {
   ].includes(snapshot.execution.status);
 }
 
+function parseRefreshError(status: number, body: AttackCenterListApiResponse): AttackCenterRefreshError {
+  const fatal = status === 503 || body.code === "infrastructure_unavailable";
+  return {
+    status,
+    fatal,
+    code: body.code,
+    message:
+      body.error ??
+      (fatal
+        ? "Attack Center storage is unavailable. Apply ASE migrations in Supabase."
+        : "Attack Center could not refresh."),
+    details: body.details ?? null,
+  };
+}
+
+function snapshotFromResponse(body: AttackCenterListApiResponse): AttackCenterSnapshot | null {
+  return body.snapshot ?? body.activeCampaign ?? null;
+}
+
 export function useAttackCenterLive(options: LiveOptions) {
   const {
     projectId,
@@ -58,34 +84,69 @@ export function useAttackCenterLive(options: LiveOptions) {
     executionId,
     findingId,
     initialSnapshot = null,
+    initialCapability = null,
     enabled = true,
   } = options;
 
   const [snapshot, setSnapshot] = useState<AttackCenterSnapshot | null>(initialSnapshot);
-  const [loading, setLoading] = useState(!initialSnapshot);
-  const [error, setError] = useState<string | null>(null);
+  const [capability, setCapability] = useState<AttackCenterCapability | null>(initialCapability);
+  const [loading, setLoading] = useState(!initialSnapshot && enabled);
+  const [error, setError] = useState<AttackCenterRefreshError | null>(null);
   const [transport, setTransport] = useState<"poll" | "realtime">("poll");
+  const failureCountRef = useRef(0);
+  const pollDelayRef = useRef(ATTACK_CENTER_POLL_INTERVAL_MS);
   const snapshotRef = useRef(snapshot);
   snapshotRef.current = snapshot;
 
   const refresh = useCallback(async () => {
     const url = resolvePollUrl({ projectId, campaignId, executionId, findingId });
-    if (!url) return;
+    if (!url) return null;
 
     try {
-      const response = await fetch(url, { cache: "no-store" });
-      if (!response.ok) {
-        throw new Error(`Refresh failed (${response.status})`);
+      const response = await fetch(url, { cache: "no-store", credentials: "same-origin" });
+      const body = (await response.json().catch(() => ({}))) as AttackCenterListApiResponse;
+
+      if (body.capability) {
+        setCapability(body.capability);
+        if (!body.capability.enabled) {
+          setSnapshot(null);
+          setError(null);
+          failureCountRef.current = 0;
+          pollDelayRef.current = ATTACK_CENTER_POLL_INTERVAL_MS;
+          return null;
+        }
       }
-      const body = (await response.json()) as {
-        snapshot?: AttackCenterSnapshot;
-      };
-      const next = body.snapshot ?? null;
+
+      if (!response.ok) {
+        const refreshError = parseRefreshError(response.status, body);
+        setError(refreshError);
+        failureCountRef.current += 1;
+        pollDelayRef.current = Math.min(
+          ATTACK_CENTER_POLL_INTERVAL_MS * 2 ** failureCountRef.current,
+          30_000
+        );
+        return null;
+      }
+
+      const next = snapshotFromResponse(body);
       setSnapshot(next);
       setError(null);
+      failureCountRef.current = 0;
+      pollDelayRef.current = ATTACK_CENTER_POLL_INTERVAL_MS;
       return next;
     } catch (refreshError) {
-      setError(refreshError instanceof Error ? refreshError.message : "Refresh failed");
+      const message =
+        refreshError instanceof Error ? refreshError.message : "Attack Center could not refresh.";
+      setError({
+        status: 0,
+        fatal: false,
+        message,
+      });
+      failureCountRef.current += 1;
+      pollDelayRef.current = Math.min(
+        ATTACK_CENTER_POLL_INTERVAL_MS * 2 ** failureCountRef.current,
+        30_000
+      );
       return null;
     } finally {
       setLoading(false);
@@ -93,23 +154,36 @@ export function useAttackCenterLive(options: LiveOptions) {
   }, [projectId, campaignId, executionId, findingId]);
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || !projectId) return;
     void refresh();
-  }, [enabled, refresh]);
+  }, [enabled, projectId, refresh]);
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || !projectId) return;
+    if (error?.fatal) return;
 
     const active =
       isActiveCampaign(snapshotRef.current) || isActiveExecution(snapshotRef.current);
     if (!active && snapshotRef.current) return;
 
-    const timer = window.setInterval(() => {
-      void refresh();
-    }, ATTACK_CENTER_POLL_INTERVAL_MS);
+    let cancelled = false;
+    let timer: number | undefined;
 
-    return () => window.clearInterval(timer);
-  }, [enabled, refresh, snapshot?.kind, snapshot]);
+    const schedule = () => {
+      timer = window.setTimeout(async () => {
+        if (cancelled) return;
+        await refresh();
+        if (!cancelled && !error?.fatal) schedule();
+      }, pollDelayRef.current);
+    };
+
+    schedule();
+
+    return () => {
+      cancelled = true;
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [enabled, projectId, refresh, error?.fatal, snapshot?.kind, snapshot]);
 
   useEffect(() => {
     if (!enabled || !projectId) return;
@@ -143,6 +217,7 @@ export function useAttackCenterLive(options: LiveOptions) {
 
   return {
     snapshot,
+    capability,
     loading,
     error,
     transport,

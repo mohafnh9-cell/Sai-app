@@ -5,25 +5,23 @@ import { createAdminClient } from "@/server/security-scanner/admin-client";
 import { requireProjectApiAccess } from "@/server/projects/project-access";
 import { isFeatureEnabled } from "@/server/feature-flags";
 import { enforceRateLimit } from "@/server/http/rate-limit";
-import { listAttackCampaignsForProject } from "@/server/attack-simulation/persistence/campaign-repository";
-import {
-  getLatestAttackCenterCampaignForProject,
-  getAttackCenterCampaignSnapshot,
-} from "@/server/attack-simulation/get-attack-center";
 import {
   StartAttackCampaignError,
   startAttackCampaign,
 } from "@/server/attack-simulation/start-attack-campaign";
+import { getAttackCenterCampaignSnapshot } from "@/server/attack-simulation/get-attack-center";
+import {
+  buildAttackCenterDisabledResponse,
+  buildAttackCenterCapability,
+} from "@/server/attack-simulation/api/attack-center-contract";
+import { attackCenterErrorResponse } from "@/server/attack-simulation/api/errors";
+import { loadAttackCenterListState } from "@/server/attack-simulation/api/load-attack-center-list";
 
 const paramsSchema = z.object({
   id: z.string().uuid(),
 });
 
 type RouteParams = { params: Promise<{ id: string }> };
-
-function attackSimulationDisabled() {
-  return NextResponse.json({ error: "Attack Simulation is not enabled" }, { status: 404 });
-}
 
 export async function GET(request: Request, { params }: RouteParams) {
   const rateLimited = enforceRateLimit(request);
@@ -42,32 +40,33 @@ export async function GET(request: Request, { params }: RouteParams) {
   const access = await requireProjectApiAccess(supabase, user?.id, projectId);
   if (!access.ok) return access.response;
 
-  if (!isFeatureEnabled("attack_simulation", { organizationId: access.project.organization_id })) {
-    return attackSimulationDisabled();
+  const organizationId = access.project.organization_id;
+
+  if (!isFeatureEnabled("attack_simulation", { organizationId })) {
+    return NextResponse.json(
+      buildAttackCenterDisabledResponse({ organizationId }),
+      { status: 200 }
+    );
   }
 
-  const admin = createAdminClient();
-  const campaigns = await listAttackCampaignsForProject(admin, {
-    projectId,
-    organizationId: access.project.organization_id,
-    limit: 20,
-  });
-
-  const latest = await getLatestAttackCenterCampaignForProject(admin, {
-    projectId,
-    organizationId: access.project.organization_id,
-  });
-
-  return NextResponse.json({
-    campaigns: campaigns.map((campaign) => ({
-      id: campaign.id,
-      status: campaign.status,
-      commitSha: campaign.commitSha,
-      progressPercent: campaign.progressPercent,
-      updatedAt: campaign.updatedAt,
-    })),
-    snapshot: latest,
-  });
+  try {
+    const admin = createAdminClient();
+    const body = await loadAttackCenterListState(admin, {
+      projectId,
+      organizationId,
+    });
+    return NextResponse.json(body);
+  } catch (error) {
+    console.error({
+      component: "attack-campaigns-api",
+      event: "list_failed",
+      projectId,
+      organizationId,
+      errorType: error instanceof Error ? error.name : "unknown",
+      message: error instanceof Error ? error.message : String(error),
+    });
+    return attackCenterErrorResponse(error);
+  }
 }
 
 export async function POST(request: Request, { params }: RouteParams) {
@@ -88,7 +87,16 @@ export async function POST(request: Request, { params }: RouteParams) {
   if (!access.ok) return access.response;
 
   if (!isFeatureEnabled("attack_simulation", { organizationId: access.project.organization_id })) {
-    return attackSimulationDisabled();
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "Attack Simulation is not enabled for this organization.",
+        capability: buildAttackCenterCapability({
+          organizationId: access.project.organization_id,
+        }),
+      },
+      { status: 403 }
+    );
   }
 
   const body = await request.json().catch(() => null);
@@ -120,6 +128,6 @@ export async function POST(request: Request, { params }: RouteParams) {
       event: "create_failed",
       errorType: error instanceof Error ? error.name : "unknown",
     });
-    return NextResponse.json({ ok: false, error: "Could not start attack campaign" }, { status: 500 });
+    return attackCenterErrorResponse(error);
   }
 }

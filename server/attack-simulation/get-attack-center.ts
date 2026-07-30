@@ -23,6 +23,7 @@ import {
   buildAttackCenterFindingView,
 } from "./ui/build-views";
 import type { AttackCenterSnapshot } from "./ui/types";
+import { attackCenterErrorFromSupabase } from "./api/errors";
 
 export async function getAttackCenterCampaignSnapshot(
   client: SupabaseClient,
@@ -125,7 +126,10 @@ export async function getLatestAttackCenterCampaignForProject(
     .limit(1)
     .maybeSingle();
 
-  if (error || !data) return null;
+  if (error) {
+    throw attackCenterErrorFromSupabase(error);
+  }
+  if (!data) return null;
 
   return getAttackCenterCampaignSnapshot(client, {
     projectId: input.projectId,

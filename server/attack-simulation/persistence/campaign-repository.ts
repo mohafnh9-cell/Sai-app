@@ -21,15 +21,24 @@ import {
   mapAttackScenarioRow,
   toAttackCampaignInsertRow,
 } from "./mappers";
+import { isInfrastructurePgCode } from "./database-errors";
 
 export class AttackSimulationRepositoryError extends Error {
   constructor(
     message: string,
-    readonly code: "validation" | "not_found" | "conflict" | "database" = "database"
+    readonly code: "validation" | "not_found" | "conflict" | "database" | "infrastructure" = "database",
+    readonly pgCode?: string
   ) {
     super(message);
     this.name = "AttackSimulationRepositoryError";
   }
+}
+
+function throwRepositoryDatabaseError(error: { code?: string; message?: string }): never {
+  if (isInfrastructurePgCode(error.code)) {
+    throw new AttackSimulationRepositoryError(error.message ?? "Infrastructure unavailable", "infrastructure", error.code);
+  }
+  throw new AttackSimulationRepositoryError(error.message ?? "Database error", "database", error.code);
 }
 
 export async function createAttackCampaign(
@@ -76,7 +85,7 @@ export async function getAttackCampaignById(
     .eq("organization_id", organizationId)
     .maybeSingle();
 
-  if (error) throw new AttackSimulationRepositoryError(error.message, "database");
+  if (error) throwRepositoryDatabaseError(error);
   if (!data) return null;
   return attackCampaignSchema.parse(mapAttackCampaignRow(data));
 }
@@ -93,7 +102,7 @@ export async function getAttackCampaignByScanId(
     .eq("organization_id", organizationId)
     .maybeSingle();
 
-  if (error) throw new AttackSimulationRepositoryError(error.message, "database");
+  if (error) throwRepositoryDatabaseError(error);
   if (!data) return null;
   return attackCampaignSchema.parse(mapAttackCampaignRow(data));
 }
@@ -123,7 +132,7 @@ export async function updateAttackCampaignProgress(
     .select("*")
     .single();
 
-  if (error) throw new AttackSimulationRepositoryError(error.message, "database");
+  if (error) throwRepositoryDatabaseError(error);
   return attackCampaignSchema.parse(mapAttackCampaignRow(data));
 }
 
@@ -155,7 +164,7 @@ export async function createAttackScenario(
     .select("*")
     .single();
 
-  if (error) throw new AttackSimulationRepositoryError(error.message, "database");
+  if (error) throwRepositoryDatabaseError(error);
   return attackScenarioSchema.parse(mapAttackScenarioRow(data));
 }
 
@@ -171,7 +180,7 @@ export async function listAttackScenariosForCampaign(
     .eq("organization_id", organizationId)
     .order("sort_order", { ascending: true });
 
-  if (error) throw new AttackSimulationRepositoryError(error.message, "database");
+  if (error) throwRepositoryDatabaseError(error);
   return (data ?? []).map((row) => attackScenarioSchema.parse(mapAttackScenarioRow(row)));
 }
 
@@ -198,7 +207,7 @@ export async function updateCampaignAfterPlanning(
     .select("*")
     .single();
 
-  if (error) throw new AttackSimulationRepositoryError(error.message, "database");
+  if (error) throwRepositoryDatabaseError(error);
   return attackCampaignSchema.parse(mapAttackCampaignRow(data));
 }
 
@@ -214,7 +223,7 @@ export async function getAttackScenarioById(
     .eq("organization_id", organizationId)
     .maybeSingle();
 
-  if (error) throw new AttackSimulationRepositoryError(error.message, "database");
+  if (error) throwRepositoryDatabaseError(error);
   if (!data) return null;
   return attackScenarioSchema.parse(mapAttackScenarioRow(data));
 }
@@ -235,7 +244,7 @@ export async function listAttackCampaignsForProject(
   }
 
   const { data, error } = await query;
-  if (error) throw new AttackSimulationRepositoryError(error.message, "database");
+  if (error) throwRepositoryDatabaseError(error);
   return (data ?? []).map((row) => attackCampaignSchema.parse(mapAttackCampaignRow(row)));
 }
 
@@ -258,7 +267,7 @@ export async function cancelAttackCampaignRecord(
     .select("*")
     .maybeSingle();
 
-  if (error) throw new AttackSimulationRepositoryError(error.message, "database");
+  if (error) throwRepositoryDatabaseError(error);
   if (!data) {
     const existing = await getAttackCampaignById(admin, input.campaignId, input.organizationId);
     if (!existing) throw new AttackSimulationRepositoryError("Campaign not found", "not_found");
@@ -290,6 +299,6 @@ export async function updateAttackCampaignStatus(
     .select("*")
     .single();
 
-  if (error) throw new AttackSimulationRepositoryError(error.message, "database");
+  if (error) throwRepositoryDatabaseError(error);
   return attackCampaignSchema.parse(mapAttackCampaignRow(data));
 }
