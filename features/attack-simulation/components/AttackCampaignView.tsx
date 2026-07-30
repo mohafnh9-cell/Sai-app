@@ -24,8 +24,8 @@ export function AttackCampaignView({
     <div className="space-y-10">
       <section className="surface-premium rounded-3xl p-8 sm:p-10 space-y-6">
         <div>
-          <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Attack Center</p>
-          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight mt-2">Campaign</h1>
+          <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Security test</p>
+          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight mt-2">Live test</h1>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 text-sm">
           <div>
@@ -72,7 +72,7 @@ export function AttackCampaignView({
 
       <section className="space-y-4">
         <h2 className="text-sm font-medium uppercase tracking-[0.18em] text-muted-foreground">
-          Attack Executions
+          Tests running
         </h2>
         <ul className="space-y-2">
           {executions.map((execution) => (
@@ -102,7 +102,7 @@ export function AttackCampaignView({
 
       <section className="space-y-4">
         <h2 className="text-sm font-medium uppercase tracking-[0.18em] text-muted-foreground">
-          Live Feed
+          What is happening now
         </h2>
         <ul className="space-y-2 max-h-64 overflow-y-auto pr-1">
           {feed.map((item) => (

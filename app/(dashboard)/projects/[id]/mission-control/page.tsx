@@ -8,6 +8,10 @@ import { getMissionControlView } from "@/server/mission-control/get-mission-cont
 import { getCachedServerAuthContext } from "@/lib/server/request-cache";
 import { isFeatureEnabled } from "@/server/feature-flags";
 import { fixPromptContextFromScan } from "@/features/production-verdict/fix-prompt-context";
+import { createAdminClient } from "@/server/security-scanner/admin-client";
+import { getProjectReviewUiContext } from "@/server/projects/review-ui-context";
+import { getSecurityTestContext } from "@/server/attack-simulation/get-security-test-context";
+import type { SecurityTestContext } from "@/features/security-testing/types";
 import type { Metadata } from "next";
 
 interface PageProps {
@@ -67,6 +71,26 @@ export default async function MissionControlPage({ params }: PageProps) {
       })
     : undefined;
 
+  let securityTestContext: SecurityTestContext | null = null;
+  let reviewContext = null;
+
+  if (attackCenterEnabled) {
+    reviewContext = await getProjectReviewUiContext(auth.supabase, projectId);
+    if (reviewContext) {
+      try {
+        const admin = createAdminClient();
+        const fullContext = await getSecurityTestContext(admin, {
+          projectId,
+          organizationId: auth.organizationId,
+        });
+        const { hypotheses: _hypotheses, ...publicContext } = fullContext;
+        securityTestContext = publicContext;
+      } catch {
+        securityTestContext = null;
+      }
+    }
+  }
+
   return (
     <div className="app-cinematic-bg min-h-full">
       <div className="mx-auto max-w-4xl px-4 sm:px-8 pb-24 pt-6 sm:pt-10">
@@ -77,7 +101,13 @@ export default async function MissionControlPage({ params }: PageProps) {
           </Link>
         </Button>
         {attackCenterEnabled ? <MissionControlSubNav projectId={projectId} /> : null}
-        <MissionControlExperience view={view} verdict={verdict} fixPromptContext={fixPromptContext} />
+        <MissionControlExperience
+          view={view}
+          verdict={verdict}
+          fixPromptContext={fixPromptContext}
+          securityTestContext={securityTestContext}
+          reviewContext={reviewContext}
+        />
       </div>
     </div>
   );

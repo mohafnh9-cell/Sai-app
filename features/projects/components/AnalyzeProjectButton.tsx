@@ -67,12 +67,14 @@ export function AnalyzeProjectButton({
   showCommitHint = true,
   className,
   size = "default",
+  labelOverride,
 }: {
   projectId: string;
   initialContext: ProjectReviewUiContext;
   showCommitHint?: boolean;
   className?: string;
   size?: "default" | "sm" | "lg";
+  labelOverride?: string;
 }) {
   const { t } = useI18n("projects");
   const { t: te } = useI18n("errors");
@@ -170,13 +172,19 @@ export function AnalyzeProjectButton({
   }, [cancelInFlight, disconnected, requesting, reviewState.status]);
 
   const label = useMemo(() => {
+    if (labelOverride && (uiStatus === "idle" || uiStatus === "queued" || uiStatus === "running" || uiStatus === "analyzing")) {
+      if (disconnected) return t("reconnectGitHub");
+      if (requesting && !reviewInProgress) return t("startingReview");
+      if (uiStatus !== "idle") return t(statusLabelKey(uiStatus));
+      return labelOverride;
+    }
     if (disconnected) return t("reconnectGitHub");
     if (requesting && !reviewInProgress) return t("startingReview");
     if (context.isStale && uiStatus === "idle") return t("analyzeLatestCommit");
     if (context.hasVerdict && uiStatus === "idle") return t("analyzeAgain");
     if (uiStatus === "idle" && !context.hasVerdict) return t("analyzeProject");
     return t(statusLabelKey(uiStatus));
-  }, [context.hasVerdict, context.isStale, disconnected, requesting, reviewInProgress, t, uiStatus]);
+  }, [context.hasVerdict, context.isStale, disconnected, labelOverride, requesting, reviewInProgress, t, uiStatus]);
 
   const showSpinner =
     (reviewInProgress &&

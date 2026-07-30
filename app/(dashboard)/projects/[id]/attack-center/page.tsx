@@ -11,7 +11,9 @@ import { getProjectReviewUiContext } from "@/server/projects/review-ui-context";
 import { loadAttackCenterListState } from "@/server/attack-simulation/api/load-attack-center-list";
 import { buildAttackCenterCapability } from "@/server/attack-simulation/api/attack-center-contract";
 import { attackCenterErrorFromUnknown } from "@/server/attack-simulation/api/errors";
+import { getSecurityTestContext } from "@/server/attack-simulation/get-security-test-context";
 import type { AttackCenterCapability } from "@/features/attack-simulation/api-types";
+import type { SecurityTestContext } from "@/features/security-testing/types";
 import type { AttackCenterSnapshot } from "@/server/attack-simulation/ui/types";
 import type { Metadata } from "next";
 
@@ -52,6 +54,7 @@ export default async function AttackCenterPage({ params }: PageProps) {
   let initialCapability: AttackCenterCapability | null = buildAttackCenterCapability({
     organizationId: auth.organizationId,
   });
+  let securityTestContext: SecurityTestContext | null = null;
 
   try {
     const initialState = await loadAttackCenterListState(admin, {
@@ -71,6 +74,17 @@ export default async function AttackCenterPage({ params }: PageProps) {
     });
   }
 
+  try {
+    const fullContext = await getSecurityTestContext(admin, {
+      projectId,
+      organizationId: auth.organizationId,
+    });
+    const { hypotheses: _hypotheses, ...publicContext } = fullContext;
+    securityTestContext = publicContext;
+  } catch {
+    securityTestContext = null;
+  }
+
   return (
     <div className="app-cinematic-bg min-h-full">
       <div className="mx-auto max-w-4xl px-4 sm:px-8 pb-24 pt-6 sm:pt-10">
@@ -86,6 +100,7 @@ export default async function AttackCenterPage({ params }: PageProps) {
           initialSnapshot={initialSnapshot}
           initialCapability={initialCapability}
           reviewContext={reviewContext}
+          securityTestContext={securityTestContext}
           initialCampaignId={
             initialSnapshot?.kind === "campaign" ? initialSnapshot.campaign.id : null
           }

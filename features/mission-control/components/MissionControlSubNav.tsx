@@ -17,7 +17,7 @@ export function MissionControlSubNav({ projectId }: { projectId: string }) {
     },
     {
       href: attackHref,
-      label: "Attack Center",
+      label: "Security test",
       active: pathname.startsWith(attackHref),
     },
   ];

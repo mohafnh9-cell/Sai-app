@@ -11,7 +11,9 @@ import { useAttackCenterLive } from "./hooks/useAttackCenterLive";
 import { AttackCampaignView } from "./components/AttackCampaignView";
 import { AttackExecutionViewPanel } from "./components/AttackExecutionViewPanel";
 import { AttackFindingViewPanel } from "./components/AttackFindingViewPanel";
-import { AnalyzeProjectButton } from "@/features/projects/components/AnalyzeProjectButton";
+import { SecurityTestPanel } from "@/features/security-testing/components/SecurityTestPanel";
+import type { SecurityTestContext } from "@/features/security-testing/types";
+import { SecurityTestProgressSteps } from "@/features/security-testing/components/SecurityTestProgressSteps";
 import type { ProjectReviewUiContext } from "@/server/projects/review-ui-context";
 
 export function AttackCenterExperience({
@@ -20,12 +22,14 @@ export function AttackCenterExperience({
   initialCampaignId,
   initialCapability = null,
   reviewContext,
+  securityTestContext = null,
 }: {
   projectId: string;
   initialSnapshot: AttackCenterSnapshot | null;
   initialCampaignId?: string | null;
   initialCapability?: AttackCenterCapability | null;
-  reviewContext: ProjectReviewUiContext;
+  reviewContext?: ProjectReviewUiContext | null;
+  securityTestContext?: SecurityTestContext | null;
 }) {
   const [executionId, setExecutionId] = useState<string | null>(null);
   const [findingId, setFindingId] = useState<string | null>(null);
@@ -120,11 +124,13 @@ export function AttackCenterExperience({
           Mission Control
         </Link>
         <span className="text-muted-foreground">/</span>
-        <span className="font-medium">Attack Center</span>
+        <span className="font-medium">Security test</span>
         <span className="ml-auto text-xs text-muted-foreground capitalize">
           Live via {transport}
         </span>
       </div>
+
+      {securityTestContext ? <SecurityTestProgressSteps steps={securityTestContext.progressSteps} /> : null}
 
       {viewState.kind === "content" ? (
         <div className="flex flex-wrap gap-2">
@@ -211,26 +217,18 @@ export function AttackCenterExperience({
       ) : null}
 
       {viewState.kind === "empty" ? (
-        <div className="rounded-xl border border-dashed border-border p-8 text-center space-y-4">
-          <div className="space-y-2 text-sm text-muted-foreground">
-            <p className="font-medium text-foreground">No attack campaigns yet</p>
-            <p>
-              Safe attack scenarios are created automatically when a Production Review completes
-              with Red Team findings.
-            </p>
+        securityTestContext && reviewContext ? (
+          <SecurityTestPanel
+            projectId={projectId}
+            context={securityTestContext}
+            reviewContext={reviewContext}
+            compact
+          />
+        ) : (
+          <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+            No security tests yet. Start a test from Mission Control.
           </div>
-          <div className="flex flex-wrap items-center justify-center gap-3">
-            <AnalyzeProjectButton
-              projectId={projectId}
-              initialContext={reviewContext}
-              showCommitHint={false}
-              size="sm"
-            />
-            <Button type="button" variant="outline" size="sm" asChild>
-              <Link href={`/projects/${projectId}/scans`}>View review history</Link>
-            </Button>
-          </div>
-        </div>
+        )
       ) : null}
 
       {actionError ? <p className="text-sm text-destructive">{actionError}</p> : null}
