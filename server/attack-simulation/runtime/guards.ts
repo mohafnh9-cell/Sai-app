@@ -1,7 +1,7 @@
 import type { AttackAuthorizationRecord } from "@/server/ai-red-team/authorization/types";
 import { validateAttackAuthorization } from "@/server/ai-red-team/authorization/types";
 import type { AttackRuntimeMode } from "../contracts/enums";
-import type { SafeRuntimeGuardContext, SafeRuntimeGuardResult, SafeRuntimeNetworkIntent } from "./types";
+import type { SafeRuntimeGuardContext, SafeRuntimeGuardLimits, SafeRuntimeGuardResult, SafeRuntimeNetworkIntent } from "./types";
 
 const NO_EXTERNAL_TARGET_MODES: AttackRuntimeMode[] = ["static", "mock"];
 
