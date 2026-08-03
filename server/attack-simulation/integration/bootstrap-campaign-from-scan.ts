@@ -14,6 +14,7 @@ import {
   type RepositoryModel,
   type RepositoryModelSummary,
 } from "@/brain/repository-model";
+import { planAndPersistCampaignFromHypotheses } from "../planner/plan-and-persist-campaign";
 import { enqueueAttackExecutionRun } from "../executor/enqueue-attack-execution";
 import { appendAttackRuntimeEvent } from "../persistence/runtime-event-repository";
 import { extractAttackHypothesesFromRedTeamReport } from "./extract-hypotheses-from-report";
