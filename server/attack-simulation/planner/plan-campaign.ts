@@ -3,6 +3,7 @@ import type { AttackCampaign } from "../contracts/attack-campaign";
 import type { AttackHypothesis } from "../contracts/attack-hypothesis";
 import type { AttackScenario } from "../contracts/attack-scenario";
 import type { AttackAuthorizationRecord } from "@/server/ai-red-team/authorization/types";
+import type { RepositoryModel } from "@/brain/repository-model";
 import { planScenariosFromHypotheses } from "./plan-scenarios";
 import {
   validateAttackPreconditions,
@@ -73,6 +74,7 @@ export function planAttackCampaign(input: {
   authorization?: AttackAuthorizationRecord | null;
   targetUrl?: string | null;
   scenarios?: AttackScenario[];
+  repositoryModel?: RepositoryModel | null;
 }): AttackCampaignPlan {
   const precondition = validateAttackPreconditions({
     campaign: input.campaign,
