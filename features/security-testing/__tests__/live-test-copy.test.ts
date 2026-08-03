@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { AttackCenterCampaignView } from "@/features/attack-simulation/types";
 import { deriveLiveTestDisplay, deriveLiveTestPhase } from "../lib/live-test-copy";
+import { namespaceTranslator } from "@/lib/i18n/review-progress";
+
+const t = namespaceTranslator("en", "securityTest");
 
 function campaignView(
   overrides: Partial<AttackCenterCampaignView> & {
@@ -49,7 +52,7 @@ describe("live-test-copy", () => {
       ],
     });
 
-    const display = deriveLiveTestDisplay(view);
+    const display = deriveLiveTestDisplay(view, t);
     expect(display.progressPercent).toBe(25);
     expect(display.testsDone).toBe(1);
     expect(display.primaryAction?.label).toBe("Protect my application");

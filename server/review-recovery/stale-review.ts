@@ -90,7 +90,7 @@ async function markReviewStaleTimedOut(
         reason === "queued_stale"
           ? "Review remained queued beyond the allowed window"
           : "Review remained in progress beyond the allowed window",
-      progress_message: "Review timed out and was recovered",
+      progress_message: "timedOut",
     })
     .eq("id", scan.id)
     .in("status", ["queued", ...PROCESSING_SCAN_STATUSES])

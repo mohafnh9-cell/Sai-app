@@ -1,9 +1,12 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n/client";
 import type { SecurityTestProgressStep } from "../types";
 
 export function SecurityTestProgressSteps({ steps }: { steps: SecurityTestProgressStep[] }) {
+  const { t } = useI18n("securityTest");
+
   return (
     <ol className="grid gap-3 sm:grid-cols-4">
       {steps.map((step, index) => (
@@ -16,7 +19,9 @@ export function SecurityTestProgressSteps({ steps }: { steps: SecurityTestProgre
             step.status === "upcoming" && "border-border/40 text-muted-foreground"
           )}
         >
-          <p className="text-xs uppercase tracking-wider text-muted-foreground">Step {index + 1}</p>
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">
+            {t("stepLabel", { n: index + 1 })}
+          </p>
           <p className="mt-1 font-medium">{step.label}</p>
         </li>
       ))}

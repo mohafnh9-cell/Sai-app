@@ -229,7 +229,7 @@ export async function POST(
       scan_type: parsedBody.data.scanType,
       status: "queued",
       progress: 0,
-      progress_message: "Review queued",
+      progress_message: "queued",
       branch: resolvedCommit.branch,
       commit_sha: resolvedCommit.commitSha,
     };
@@ -348,7 +348,7 @@ export async function POST(
             failed_at: new Date().toISOString(),
             error_code: SCAN_JOB_INFRASTRUCTURE_MISSING,
             error_message: scheduleError.message,
-            progress_message: "Scan job infrastructure is not available",
+            progress_message: "infrastructureUnavailable",
           })
           .eq("id", scan.id);
         await admin
@@ -366,7 +366,7 @@ export async function POST(
             failed_at: new Date().toISOString(),
             error_code: scheduleError.code,
             error_message: scheduleError.message,
-            progress_message: "Could not enqueue Production Review worker",
+            progress_message: "enqueueFailed",
           })
           .eq("id", scan.id);
         await admin

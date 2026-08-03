@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { EvidenceItem, EvidenceReport, RuleInfo } from "@/brain/evidence-finding/schema";
+import { useI18n } from "@/lib/i18n/client";
 
 function EvidenceList({ title, items }: { title: string; items: EvidenceItem[] }) {
   if (items.length === 0) return null;
@@ -34,37 +35,50 @@ function EvidenceList({ title, items }: { title: string; items: EvidenceItem[] }
 }
 
 function RuleBlock({ rule }: { rule: RuleInfo }) {
+  const { t } = useI18n("evidenceFinding");
+
   return (
     <div className="rounded-lg border border-border/50 px-3 py-2 text-xs space-y-1">
       <p className="font-medium">{rule.ruleName}</p>
       {rule.ruleDescription ? <p className="text-muted-foreground">{rule.ruleDescription}</p> : null}
-      <p className="text-muted-foreground">Rule ID: {rule.ruleId}</p>
-      {rule.cwe?.length ? <p className="text-muted-foreground">CWE: {rule.cwe.join(", ")}</p> : null}
-      {rule.owasp?.length ? <p className="text-muted-foreground">OWASP: {rule.owasp.join(", ")}</p> : null}
+      <p className="text-muted-foreground">
+        {t("ruleId")} {rule.ruleId}
+      </p>
+      {rule.cwe?.length ? (
+        <p className="text-muted-foreground">
+          {t("cwe")} {rule.cwe.join(", ")}
+        </p>
+      ) : null}
+      {rule.owasp?.length ? (
+        <p className="text-muted-foreground">
+          {t("owasp")} {rule.owasp.join(", ")}
+        </p>
+      ) : null}
     </div>
   );
 }
 
 export function EvidenceReportPanel({ report }: { report: EvidenceReport }) {
+  const { t } = useI18n("evidenceFinding");
   const [showTechnical, setShowTechnical] = useState(false);
 
   return (
     <div className="space-y-6">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-sm">
         <div className="rounded-xl border border-border/60 px-4 py-3">
-          <p className="text-xs text-muted-foreground uppercase tracking-wider">Confidence</p>
+          <p className="text-xs text-muted-foreground uppercase tracking-wider">{t("confidence")}</p>
           <p className="mt-1 font-semibold tabular-nums">{report.confidencePercent}%</p>
         </div>
         <div className="rounded-xl border border-border/60 px-4 py-3">
-          <p className="text-xs text-muted-foreground uppercase tracking-wider">False positive</p>
+          <p className="text-xs text-muted-foreground uppercase tracking-wider">{t("falsePositive")}</p>
           <p className="mt-1 font-semibold tabular-nums">{report.falsePositivePercent}%</p>
         </div>
         <div className="rounded-xl border border-border/60 px-4 py-3">
-          <p className="text-xs text-muted-foreground uppercase tracking-wider">Detection</p>
+          <p className="text-xs text-muted-foreground uppercase tracking-wider">{t("detection")}</p>
           <p className="mt-1 font-medium">{report.detectionMethod.replaceAll("_", " ")}</p>
         </div>
         <div className="rounded-xl border border-border/60 px-4 py-3">
-          <p className="text-xs text-muted-foreground uppercase tracking-wider">Status</p>
+          <p className="text-xs text-muted-foreground uppercase tracking-wider">{t("status")}</p>
           <p className="mt-1 font-medium">{report.statusLabel}</p>
         </div>
       </div>
@@ -72,17 +86,17 @@ export function EvidenceReportPanel({ report }: { report: EvidenceReport }) {
       <p className="text-sm text-muted-foreground">{report.confidenceExplanation}</p>
       <p className="text-sm text-muted-foreground">{report.falsePositiveExplanation}</p>
 
-      <EvidenceList title="Evidence" items={report.evidence} />
-      <EvidenceList title="Counter evidence" items={report.counterEvidence} />
+      <EvidenceList title={t("evidence")} items={report.evidence} />
+      <EvidenceList title={t("counterEvidence")} items={report.counterEvidence} />
 
       <section className="space-y-2">
-        <h3 className="text-sm font-semibold">Reasoning</h3>
+        <h3 className="text-sm font-semibold">{t("reasoning")}</h3>
         <p className="text-sm text-muted-foreground">{report.reasoning}</p>
       </section>
 
       {report.recommendedFix ? (
         <section className="space-y-2">
-          <h3 className="text-sm font-semibold">Recommended fix</h3>
+          <h3 className="text-sm font-semibold">{t("recommendedFix")}</h3>
           <p className="text-sm">{report.recommendedFix}</p>
         </section>
       ) : null}
@@ -92,14 +106,14 @@ export function EvidenceReportPanel({ report }: { report: EvidenceReport }) {
         className="text-sm text-muted-foreground underline-offset-4 hover:underline"
         onClick={() => setShowTechnical((value) => !value)}
       >
-        {showTechnical ? "Hide technical details" : "Show technical details"}
+        {showTechnical ? t("hideDetails") : t("showDetails")}
       </button>
 
       {showTechnical ? (
         <div className="space-y-4 rounded-xl border border-border/60 p-4 text-sm">
           {report.affectedFiles.length > 0 ? (
             <div className="space-y-2">
-              <p className="font-medium">Affected files</p>
+              <p className="font-medium">{t("affectedFiles")}</p>
               <ul className="space-y-1 text-muted-foreground">
                 {report.affectedFiles.map((file) => (
                   <li key={`${file.path}:${file.line ?? 0}`}>
@@ -114,7 +128,7 @@ export function EvidenceReportPanel({ report }: { report: EvidenceReport }) {
           ) : null}
           {report.matchedRules.length > 0 ? (
             <div className="space-y-2">
-              <p className="font-medium">Rules</p>
+              <p className="font-medium">{t("rules")}</p>
               <div className="space-y-2">
                 {report.matchedRules.map((rule) => (
                   <RuleBlock key={rule.ruleId} rule={rule} />
@@ -123,16 +137,20 @@ export function EvidenceReportPanel({ report }: { report: EvidenceReport }) {
             </div>
           ) : null}
           {report.runtimeEvidence?.length ? (
-            <EvidenceList title="Runtime evidence" items={report.runtimeEvidence} />
+            <EvidenceList title={t("runtimeEvidence")} items={report.runtimeEvidence} />
           ) : null}
           {report.replayEvidence?.length ? (
-            <EvidenceList title="Replay evidence" items={report.replayEvidence} />
+            <EvidenceList title={t("replayEvidence")} items={report.replayEvidence} />
           ) : null}
           {report.verificationStatus ? (
-            <p className="text-muted-foreground">Verification: {report.verificationStatus}</p>
+            <p className="text-muted-foreground">
+              {t("verification")} {report.verificationStatus}
+            </p>
           ) : null}
           {report.projectType ? (
-            <p className="text-muted-foreground">Project type: {report.projectType.replaceAll("_", " ")}</p>
+            <p className="text-muted-foreground">
+              {t("projectType")} {report.projectType.replaceAll("_", " ")}
+            </p>
           ) : null}
         </div>
       ) : null}

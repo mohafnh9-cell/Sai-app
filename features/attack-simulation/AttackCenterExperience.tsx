@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useI18n } from "@/lib/i18n/client";
 import type { AttackCenterSnapshot } from "./types";
 import type { AttackCenterCapability } from "./api-types";
 import { resolveViewState } from "./view-state";
@@ -19,7 +20,7 @@ import {
   buildLiveProgressSteps,
   deriveLiveTestPhase,
 } from "@/features/security-testing/lib/live-test-copy";
-import { EMPTY_STATE_COPY } from "@/features/security-testing/lib/product-copy";
+import { emptyStateCopy } from "@/features/security-testing/lib/product-copy";
 import { PrimaryActionButton, SecurityTestHero } from "@/features/security-testing/components/SecurityTestHero";
 
 export function AttackCenterExperience({
@@ -38,6 +39,8 @@ export function AttackCenterExperience({
   securityTestContext?: SecurityTestContext | null;
 }) {
   const router = useRouter();
+  const { t: ts } = useI18n("securityTest");
+  const { t: ta } = useI18n("attackCenter");
   const [findingId, setFindingId] = useState<string | null>(null);
   const [verifying, setVerifying] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -66,15 +69,17 @@ export function AttackCenterExperience({
     snapshot,
   });
 
+  const emptyCopy = emptyStateCopy(ts);
+
   const liveProgressSteps = useMemo(() => {
     if (viewState.kind === "content" && viewState.snapshot.kind === "campaign") {
-      return buildLiveProgressSteps(deriveLiveTestPhase(viewState.snapshot));
+      return buildLiveProgressSteps(deriveLiveTestPhase(viewState.snapshot), ts);
     }
     if (findingId) {
-      return buildLiveProgressSteps("fix_ready");
+      return buildLiveProgressSteps("fix_ready", ts);
     }
     return securityTestContext?.progressSteps ?? null;
-  }, [viewState, findingId, securityTestContext?.progressSteps]);
+  }, [viewState, findingId, securityTestContext?.progressSteps, ts]);
 
   const handleOpenFinding = useCallback((nextFindingId: string) => {
     setFindingId(nextFindingId);
@@ -102,14 +107,14 @@ export function AttackCenterExperience({
         error?: string;
       };
       if (!response.ok) {
-        setActionError(body?.error ?? "Verification could not finish.");
+        setActionError(body?.error ?? ts("errors.verifyFailed"));
         return;
       }
       if (body.snapshot) setSnapshot(body.snapshot);
     } finally {
       setVerifying(false);
     }
-  }, [findingId, projectId, setSnapshot]);
+  }, [findingId, projectId, setSnapshot, ts]);
 
   const findingIsVerified =
     viewState.kind === "content" &&
@@ -123,27 +128,27 @@ export function AttackCenterExperience({
       {viewState.kind === "loading" ? (
         <div className="flex items-center gap-2 text-sm text-muted-foreground py-8">
           <Loader2 className="h-4 w-4 animate-spin" />
-          Loading…
+          {ta("loading")}
         </div>
       ) : null}
 
       {viewState.kind === "disabled" ? (
         <SecurityTestHero
-          headline="Security testing is not available"
-          description="Ask your admin to turn this on for your project."
+          headline={ta("disabled.headline")}
+          description={ta("disabled.description")}
           progressSteps={liveProgressSteps ?? []}
-          primaryAction={<PrimaryActionButton disabled>Not available</PrimaryActionButton>}
+          primaryAction={<PrimaryActionButton disabled>{ta("disabled.action")}</PrimaryActionButton>}
         />
       ) : null}
 
       {viewState.kind === "error" ? (
         <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 space-y-3">
-          <p className="text-sm font-medium">Something went wrong.</p>
+          <p className="text-sm font-medium">{ta("error.headline")}</p>
           <p className="text-sm text-muted-foreground">{viewState.error.message}</p>
           <div className="flex flex-wrap gap-2">
             {!viewState.error.fatal ? (
               <Button type="button" size="sm" variant="outline" onClick={() => void refresh()}>
-                Try again
+                {ta("error.tryAgain")}
               </Button>
             ) : null}
             {viewState.error.details ? (
@@ -153,7 +158,7 @@ export function AttackCenterExperience({
                 variant="ghost"
                 onClick={() => setShowErrorDetails((value) => !value)}
               >
-                {showErrorDetails ? "Hide details" : "Technical details"}
+                {showErrorDetails ? ta("error.hideDetails") : ta("error.showDetails")}
               </Button>
             ) : null}
           </div>
@@ -173,14 +178,14 @@ export function AttackCenterExperience({
           />
         ) : (
           <SecurityTestHero
-            headline={EMPTY_STATE_COPY.headline}
-            description={EMPTY_STATE_COPY.description}
+            headline={emptyCopy.headline}
+            description={emptyCopy.description}
             progressSteps={liveProgressSteps ?? []}
             showEstimatedDuration
             showSafetyNote
             primaryAction={
               <PrimaryActionButton onClick={() => router.push(`/projects/${projectId}/mission-control`)}>
-                {EMPTY_STATE_COPY.primaryActionLabel}
+                {emptyCopy.primaryActionLabel}
               </PrimaryActionButton>
             }
           />
@@ -207,7 +212,7 @@ export function AttackCenterExperience({
           />
           {findingIsVerified ? (
             <PrimaryActionButton onClick={() => router.push(`/projects/${projectId}/mission-control`)}>
-              Deploy with confidence
+              {ta("deployWithConfidence")}
             </PrimaryActionButton>
           ) : null}
         </>
@@ -219,7 +224,7 @@ export function AttackCenterExperience({
           className="text-sm text-muted-foreground underline-offset-4 hover:underline"
           onClick={handleBackToOverview}
         >
-          ← Back
+          {ta("back")}
         </button>
       ) : null}
     </div>

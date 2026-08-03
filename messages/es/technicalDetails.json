@@ -23,5 +23,21 @@
   "filesAnalyzed": "{count} archivos analizados",
   "repoCoverage": "{percent}% de cobertura del repositorio",
   "scoreMethodology": "Cómo funciona el Production Ready Score",
-  "scoreDisclaimer": "El Production Ready Score es una evaluación de preparación, no una certificación formal de seguridad. Las áreas no evaluadas pueden contener riesgos que el análisis estático no detecta."
+  "scoreDisclaimer": "El Production Ready Score es una evaluación de preparación, no una certificación formal de seguridad. Las áreas no evaluadas pueden contener riesgos que el análisis estático no detecta.",
+  "searchAriaLabel": "Buscar hallazgos técnicos",
+  "sortBySeverity": "Ordenar: Severidad",
+  "sortByFile": "Ordenar: Archivo",
+  "sortByTitle": "Ordenar: Título",
+  "showingCount": "Mostrando {shown} de {total}",
+  "confidenceLabel": "Confianza",
+  "falsePositiveLabel": "Falso positivo",
+  "detectionLabel": "Detección",
+  "evidenceLabel": "Evidencia",
+  "impactLabel": "Impacto",
+  "recommendationLabel": "Recomendación",
+  "sectionDescription": "{count} elementos del análisis estático — valida antes de cambiar código de producción.",
+  "filterAll": "Todos ({label})",
+  "filterByAria": "Filtrar por {label}",
+  "technicalSeverity": "Severidad técnica: {severity}",
+  "unknown": "Desconocido"
 }

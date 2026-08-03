@@ -3,8 +3,11 @@ import {
   buildMissionControlView,
   mapVerdictDisplay,
 } from "@/features/mission-control/lib/build-mission-control-view";
+import { namespaceTranslator } from "@/lib/i18n/review-progress";
 import { parseMissionTeamExecutionFromMetadata } from "@/features/mission-control/lib/parse-team-execution";
 import type { ProductionVerdictV1 } from "@/brain/production-verdict/schema";
+
+const t = namespaceTranslator("en", "missionControl");
 
 function minimalVerdict(overrides?: Partial<ProductionVerdictV1>): ProductionVerdictV1 {
   return {
@@ -90,9 +93,9 @@ describe("Mission Control view model", () => {
   });
 
   it("maps production verdict to mission display labels", () => {
-    expect(mapVerdictDisplay(minimalVerdict({ status: "ready_to_ship" }))).toBe("SAFE TO DEPLOY");
-    expect(mapVerdictDisplay(minimalVerdict({ status: "almost_ready" }))).toBe("DEPLOY WITH WARNINGS");
-    expect(mapVerdictDisplay(null)).toBe("INSUFFICIENT EVIDENCE");
+    expect(mapVerdictDisplay(minimalVerdict({ status: "ready_to_ship" }), t)).toBe("Ready for production");
+    expect(mapVerdictDisplay(minimalVerdict({ status: "almost_ready" }), t)).toBe("Minor improvements required");
+    expect(mapVerdictDisplay(null, t)).toBe("Insufficient evidence");
   });
 
   it("exposes a single current objective from top priority", () => {
@@ -147,7 +150,7 @@ describe("Mission Control sections", () => {
       scanInProgress: false,
       feedFromDb: [],
     });
-    expect(view.verdict.display).toBe("SAFE TO DEPLOY");
+    expect(view.verdict.display).toBe("Ready for production");
     expect(view.verdict.deploymentRecommendation.length).toBeGreaterThan(10);
   });
 

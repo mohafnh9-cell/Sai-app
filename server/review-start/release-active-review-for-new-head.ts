@@ -70,7 +70,7 @@ export async function releaseActiveReviewForNewHead(
         failed_at: now,
         error_code: COMMIT_SUPERSEDED_CODE,
         error_message: "Review superseded because GitHub has a newer commit",
-        progress_message: "Review stopped — repository moved to a newer commit",
+        progress_message: "superseded",
         metrics: {
           supersededAt: now,
           supersededByCommitSha: input.targetCommitSha,

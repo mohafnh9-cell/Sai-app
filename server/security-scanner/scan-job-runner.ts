@@ -153,7 +153,7 @@ export class InlineScanJobRunner implements ScanJobRunner {
       const accepted = await this.updateActiveScan(context.scanId, {
         status: "fetching_repository",
         progress: 5,
-        progress_message: "Fetching repository metadata",
+        progress_message: "fetchingRepository",
         started_at: new Date().toISOString(),
       });
       if (!accepted) {
@@ -207,7 +207,7 @@ export class InlineScanJobRunner implements ScanJobRunner {
         this.updateScan(context.scanId, {
           status: "indexing",
           progress: 45,
-          progress_message: "Analyzing repository files",
+          progress_message: "analyzingFiles",
           branch: context.branch ?? snapshot.defaultBranch,
           commit_sha: snapshot.commitSha,
           files_discovered: snapshot.discoveredFiles,
@@ -239,8 +239,8 @@ export class InlineScanJobRunner implements ScanJobRunner {
         status: "scanning",
         progress: 60,
         progress_message: isIncremental
-          ? "Running incremental security rules"
-          : "Running deterministic security rules",
+          ? "runningIncrementalRules"
+          : "runningRules",
       });
 
       if (isIncremental && snapshot.files.length === 0) {
@@ -310,7 +310,7 @@ export class InlineScanJobRunner implements ScanJobRunner {
       await this.updateScan(context.scanId, {
         status: "calculating_score",
         progress: 90,
-        progress_message: "Calculating security score",
+        progress_message: "calculatingScore",
       });
       const completedAt = new Date().toISOString();
       const score = Math.max(0, Math.min(100, Math.round(scoreBreakdown.score)));
@@ -318,7 +318,7 @@ export class InlineScanJobRunner implements ScanJobRunner {
       const completed = await this.updateActiveScan(context.scanId, {
         status: "completed",
         progress: 100,
-        progress_message: isIncremental ? "Incremental scan completed" : "Scan completed",
+        progress_message: isIncremental ? "incrementalCompleted" : "completed",
         security_score: score,
         score_breakdown: scoreBreakdown,
         metrics,
@@ -417,7 +417,7 @@ export class InlineScanJobRunner implements ScanJobRunner {
         } catch (error) {
           await this.updateScan(context.scanId, {
             status: "failed",
-            progress_message: "Production Verdict could not be saved",
+            progress_message: "verdictSaveFailed",
             error_code: "VERDICT_PERSISTENCE_FAILED",
             error_message:
               error instanceof Error ? error.message : "Production Verdict persistence failed",
@@ -449,7 +449,7 @@ export class InlineScanJobRunner implements ScanJobRunner {
           : "The scan could not be completed";
       await this.updateScan(context.scanId, {
         status: "failed",
-        progress_message: "Scan failed",
+        progress_message: "failed",
         error_code: code,
         error_message: message,
         failed_at: new Date().toISOString(),
@@ -553,7 +553,7 @@ export class InlineScanJobRunner implements ScanJobRunner {
     await this.updateScan(context.scanId, {
       status: "completed",
       progress: 100,
-      progress_message: "No scannable file changes detected",
+      progress_message: "noChanges",
       security_score: score,
       metrics: { scanType: "incremental", changedPaths: snapshot.changedPaths ?? [] },
       summary: "Incremental scan completed with no scannable file changes.",

@@ -20,6 +20,12 @@ import enAutopilotExperience from "@/messages/en/autopilotExperience.json";
 import enTechnicalDetails from "@/messages/en/technicalDetails.json";
 import enMcp from "@/messages/en/mcp.json";
 import enWorkspace from "@/messages/en/workspace.json";
+import enSecurityTest from "@/messages/en/securityTest.json";
+import enAttackCenter from "@/messages/en/attackCenter.json";
+import enMissionControl from "@/messages/en/missionControl.json";
+import enReviewProgress from "@/messages/en/reviewProgress.json";
+import enEvidenceFinding from "@/messages/en/evidenceFinding.json";
+import enLanding from "@/messages/en/landing.json";
 
 import esCommon from "@/messages/es/common.json";
 import esNavigation from "@/messages/es/navigation.json";
@@ -40,6 +46,12 @@ import esAutopilotExperience from "@/messages/es/autopilotExperience.json";
 import esTechnicalDetails from "@/messages/es/technicalDetails.json";
 import esMcp from "@/messages/es/mcp.json";
 import esWorkspace from "@/messages/es/workspace.json";
+import esSecurityTest from "@/messages/es/securityTest.json";
+import esAttackCenter from "@/messages/es/attackCenter.json";
+import esMissionControl from "@/messages/es/missionControl.json";
+import esReviewProgress from "@/messages/es/reviewProgress.json";
+import esEvidenceFinding from "@/messages/es/evidenceFinding.json";
+import esLanding from "@/messages/es/landing.json";
 
 const PACKAGES: Record<AppLocale, Record<MessageNamespace, Messages>> = {
   en: {
@@ -63,6 +75,12 @@ const PACKAGES: Record<AppLocale, Record<MessageNamespace, Messages>> = {
     technicalDetails: enTechnicalDetails,
     mcp: enMcp,
     workspace: enWorkspace,
+    securityTest: enSecurityTest,
+    attackCenter: enAttackCenter,
+    missionControl: enMissionControl,
+    reviewProgress: enReviewProgress,
+    evidenceFinding: enEvidenceFinding,
+    landing: enLanding,
   },
   es: {
     common: esCommon,
@@ -85,6 +103,12 @@ const PACKAGES: Record<AppLocale, Record<MessageNamespace, Messages>> = {
     technicalDetails: esTechnicalDetails,
     mcp: esMcp,
     workspace: esWorkspace,
+    securityTest: esSecurityTest,
+    attackCenter: esAttackCenter,
+    missionControl: esMissionControl,
+    reviewProgress: esReviewProgress,
+    evidenceFinding: esEvidenceFinding,
+    landing: esLanding,
   },
 };
 
@@ -112,6 +136,12 @@ export function loadAllMessages(locale: AppLocale): Messages {
     { autopilotExperience: PACKAGES[locale].autopilotExperience },
     { technicalDetails: PACKAGES[locale].technicalDetails },
     { mcp: PACKAGES[locale].mcp },
-    { workspace: PACKAGES[locale].workspace }
+    { workspace: PACKAGES[locale].workspace },
+    { securityTest: PACKAGES[locale].securityTest },
+    { attackCenter: PACKAGES[locale].attackCenter },
+    { missionControl: PACKAGES[locale].missionControl },
+    { reviewProgress: PACKAGES[locale].reviewProgress },
+    { evidenceFinding: PACKAGES[locale].evidenceFinding },
+    { landing: PACKAGES[locale].landing }
   );
 }

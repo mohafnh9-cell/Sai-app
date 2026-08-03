@@ -1,0 +1,186 @@
+{
+  "title": "Security test",
+  "estimatedTime": "Estimated time:",
+  "progressSteps": {
+    "choose": "Review code",
+    "run": "Test application",
+    "fix": "Protect app",
+    "verify": "Verify protection"
+  },
+  "estimatedDuration": "About 2 minutes",
+  "safetyNote": "Nothing in production will be modified. SequrAI only runs safe simulations.",
+  "stepLabel": "Step {n}",
+  "emptyState": {
+    "headline": "Your application hasn't been tested yet",
+    "description": "SequrAI will safely simulate the most important problems real attackers try.",
+    "primaryAction": "Start security test"
+  },
+  "phases": {
+    "needs_review": {
+      "headline": "Let's review your code first",
+      "description": "SequrAI reads your latest version so it knows what to test safely afterward.",
+      "primaryAction": "Review my code",
+      "waitMessage": ""
+    },
+    "preparing": {
+      "headline": "Preparing your test",
+      "description": "Please wait while SequrAI gets everything ready.",
+      "primaryAction": "Please wait…",
+      "waitMessage": "Checking login, permissions, APIs, and AI features…"
+    },
+    "ready": {
+      "headline": "Your code review is complete",
+      "description": "Now let's safely test how your application behaves in real situations.",
+      "primaryAction": "Test my application",
+      "waitMessage": ""
+    },
+    "running": {
+      "headline": "Testing your application",
+      "description": "SequrAI is running safe tests. This usually takes a couple of minutes.",
+      "primaryAction": "View progress",
+      "waitMessage": "Please wait — your app is being tested now."
+    },
+    "issues_found": {
+      "headline": "We found a problem",
+      "description": "A user could reach data or actions they should not have access to.",
+      "primaryAction": "Protect my application",
+      "waitMessage": ""
+    },
+    "fix_ready": {
+      "headline": "Protection is ready",
+      "description": "SequrAI prepared steps to close the gap we found.",
+      "primaryAction": "Protect my application",
+      "waitMessage": ""
+    },
+    "protected": {
+      "headline": "Protection verified",
+      "description": "We tried again and your application blocked the problem.",
+      "primaryAction": "Deploy with confidence",
+      "waitMessage": ""
+    },
+    "completed_clean": {
+      "headline": "Your application looks good",
+      "description": "None of the safe tests found a way through in this version.",
+      "primaryAction": "Deploy with confidence",
+      "waitMessage": ""
+    }
+  },
+  "executionStatus": {
+    "queued": "Waiting",
+    "planned": "Getting ready",
+    "preparing": "Getting ready",
+    "validating_preconditions": "Getting ready",
+    "creating_fixtures": "Getting ready",
+    "executing": "Testing now",
+    "observing": "Testing now",
+    "collecting_evidence": "Testing now",
+    "evaluating": "Checking",
+    "generating_mitigation": "Checking",
+    "confirmed": "Problem found",
+    "fix_ready": "Needs protection",
+    "blocked": "Blocked",
+    "not_exploitable": "Looks safe",
+    "protected": "Protected",
+    "still_vulnerable": "Still open",
+    "applying_fix": "Verifying",
+    "replaying": "Verifying",
+    "cleaning_up": "Verifying",
+    "completed": "Done",
+    "failed": "Could not finish",
+    "cancelled": "Stopped",
+    "default": "Testing"
+  },
+  "liveStatus": {
+    "problemFound": "Problem found",
+    "testing": "Testing",
+    "protected": "Protected",
+    "allDone": "All done",
+    "inProgress": "In progress"
+  },
+  "feed": {
+    "scenariosPlanned": "Tests selected",
+    "executionStarted": "A test started",
+    "evidenceCollected": "Proof saved",
+    "vulnerabilityConfirmed": "Problem found",
+    "notExploitable": "This test passed",
+    "blockedByRuntime": "Your app blocked it",
+    "safeFixReady": "Protection ready",
+    "replayStarted": "Verifying protection",
+    "protectionVerified": "Protection verified",
+    "stillVulnerable": "Still needs a fix",
+    "attackFailed": "Test could not finish",
+    "attackCancelled": "Test stopped",
+    "stepStarted": "Now: {step}",
+    "stepCompleted": "Done: {step}"
+  },
+  "customize": {
+    "link": "Customize which tests to run",
+    "title": "Customize your test",
+    "description": "Pick what SequrAI should check.",
+    "useRecommended": "Use recommended",
+    "starting": "Starting…",
+    "start": "Test my application",
+    "reviewFirst": "Review your code first, then you can test your application."
+  },
+  "errors": {
+    "startFailed": "Could not start the security test.",
+    "verifyFailed": "Verification could not finish.",
+    "invalidProjectId": "Invalid project id",
+    "notEnabled": "Security testing is not enabled for this project.",
+    "selectAtLeastOne": "Select at least one test.",
+    "needsReviewFirst": "Run a security review first so SequrAI knows which version to test.",
+    "mapFailed": "Could not map selected tests to attack scenarios."
+  },
+  "tests": {
+    "idor-cross-tenant": {
+      "title": "Can someone access another user's data?",
+      "description": "Checks whether one account can read or change another account's records.",
+      "categoryLabel": "Data access"
+    },
+    "unauthenticated-endpoint": {
+      "title": "Can protected pages be opened without logging in?",
+      "description": "Tests whether sensitive routes accept requests without authentication.",
+      "categoryLabel": "Login protection"
+    },
+    "webhook-signature-bypass": {
+      "title": "Can fake webhook events be accepted?",
+      "description": "Simulates webhook calls with missing or invalid signatures.",
+      "categoryLabel": "Webhook security"
+    },
+    "idempotency-replay": {
+      "title": "Can the same action charge or mutate data twice?",
+      "description": "Sends the same request twice to detect duplicate side effects.",
+      "categoryLabel": "Payment safety"
+    },
+    "double-credit-consumption": {
+      "title": "Can credits or quotas be spent more than once?",
+      "description": "Attempts repeated consumption of the same balance.",
+      "categoryLabel": "Billing safety"
+    },
+    "workflow-bypass": {
+      "title": "Can a checkout or approval step be skipped?",
+      "description": "Tries to jump past required workflow states.",
+      "categoryLabel": "Business rules"
+    },
+    "rag-prompt-injection": {
+      "title": "Can uploaded content hijack AI answers?",
+      "description": "Uses safe mock documents to test retrieval-time manipulation.",
+      "categoryLabel": "AI safety"
+    },
+    "unauthorized-tool-invocation": {
+      "title": "Can the AI call tools it should not use?",
+      "description": "Simulates tool calls outside the allowed profile.",
+      "categoryLabel": "AI safety"
+    },
+    "memory-isolation": {
+      "title": "Can one user read another user's AI memory?",
+      "description": "Checks whether memory retrieval crosses user boundaries.",
+      "categoryLabel": "AI privacy"
+    },
+    "rag-poisoning": {
+      "title": "Can poisoned documents change AI behavior?",
+      "description": "Observes how the app handles untrusted retrieved content.",
+      "categoryLabel": "AI safety"
+    }
+  }
+}

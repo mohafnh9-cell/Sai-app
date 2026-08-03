@@ -103,7 +103,7 @@ export async function runAutomaticProductionReview(
       scan_type: "full",
       status: "queued",
       progress: 0,
-      progress_message: "Automatic production review queued",
+      progress_message: "automaticQueued",
       branch: input.detection.branch,
       commit_sha: input.detection.commitSha,
     })

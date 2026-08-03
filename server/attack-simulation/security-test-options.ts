@@ -5,11 +5,9 @@ import {
   ATTACK_ADAPTER_CATALOG,
   resolveAdapterForHypothesis,
 } from "./planner/adapter-catalog";
-import {
-  USER_FRIENDLY_TEST_COPY,
-  buildFallbackSecurityTestOptions,
-} from "@/features/security-testing/user-test-catalog";
+import { buildFallbackSecurityTestOptions, friendlyTestCopy } from "@/features/security-testing/user-test-catalog";
 import type { SecurityTestOption } from "@/features/security-testing/types";
+import type { Translator } from "@/lib/i18n/types";
 
 function severityFromConfidence(confidence: number): SecurityTestOption["severity"] {
   if (confidence >= 0.85) return "critical";
@@ -19,7 +17,8 @@ function severityFromConfidence(confidence: number): SecurityTestOption["severit
 }
 
 export function buildSecurityTestOptionsFromHypotheses(
-  hypotheses: AttackHypothesis[]
+  hypotheses: AttackHypothesis[],
+  t: Translator
 ): SecurityTestOption[] {
   return hypotheses.map((hypothesis) => {
     const adapter = resolveAdapterForHypothesis({
@@ -28,25 +27,26 @@ export function buildSecurityTestOptionsFromHypotheses(
       description: hypothesis.description,
       adapterHint: hypothesis.adapterHint,
     });
-    const friendly = USER_FRIENDLY_TEST_COPY[adapter.id];
+    const friendly = friendlyTestCopy(adapter.id, t);
     return {
       id: hypothesis.id,
       title: hypothesis.title,
-      description: friendly?.description ?? hypothesis.description,
+      description: friendly.description || hypothesis.description,
       severity: severityFromConfidence(hypothesis.confidence),
-      categoryLabel: friendly?.categoryLabel ?? hypothesis.category,
+      categoryLabel: friendly.categoryLabel || hypothesis.category,
       recommended: hypothesis.severity === "critical" || hypothesis.severity === "high",
     };
   });
 }
 
-export function buildDefaultSecurityTestOptions(): SecurityTestOption[] {
-  return buildFallbackSecurityTestOptions();
+export function buildDefaultSecurityTestOptions(t: Translator): SecurityTestOption[] {
+  return buildFallbackSecurityTestOptions(t);
 }
 
 export function mapSelectedTestsToHypotheses(
   selectedTestIds: string[],
-  hypotheses: AttackHypothesis[]
+  hypotheses: AttackHypothesis[],
+  t: Translator
 ): AttackHypothesis[] {
   if (hypotheses.length > 0) {
     const selected = hypotheses.filter((hypothesis) => selectedTestIds.includes(hypothesis.id));
@@ -57,11 +57,11 @@ export function mapSelectedTestsToHypotheses(
     .filter((id) => ATTACK_ADAPTER_CATALOG.some((adapter) => adapter.id === id))
     .map((adapterId) => {
       const adapter = ATTACK_ADAPTER_CATALOG.find((entry) => entry.id === adapterId)!;
-      const friendly = USER_FRIENDLY_TEST_COPY[adapterId];
+      const friendly = friendlyTestCopy(adapterId, t);
       return {
         id: adapterId,
-        title: friendly?.title ?? adapter.title,
-        description: friendly?.description ?? adapter.description,
+        title: friendly.title || adapter.title,
+        description: friendly.description || adapter.description,
         category: adapter.category,
         severity: "medium" as const,
         confidence: 0.7,

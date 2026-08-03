@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Loader2, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useI18n } from "@/lib/i18n/client";
 import { Progress } from "@/components/ui/progress";
 import type { AttackCenterCampaignView } from "../types";
 import {
@@ -22,9 +23,11 @@ export function AttackCampaignView({
   onOpenFinding: (findingId: string) => void;
 }) {
   const router = useRouter();
+  const { t: ts } = useI18n("securityTest");
+  const { t: ta } = useI18n("attackCenter");
   const [showDetails, setShowDetails] = useState(false);
   const { executions, feed } = view;
-  const display = deriveLiveTestDisplay(view);
+  const display = deriveLiveTestDisplay(view, ts);
   const hasPrimaryAction = Boolean(display.primaryAction);
 
   const handlePrimary = () => {
@@ -42,7 +45,7 @@ export function AttackCampaignView({
     <div className="space-y-6">
       <section className="surface-premium rounded-3xl p-8 sm:p-10 space-y-6">
         <div className="space-y-2">
-          <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Security test</p>
+          <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">{ta("campaign.title")}</p>
           <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">{display.headline}</h1>
           <p className="text-sm sm:text-base text-muted-foreground max-w-2xl">{display.description}</p>
         </div>
@@ -70,7 +73,7 @@ export function AttackCampaignView({
               <span>{display.statusLabel}</span>
             </div>
             <span className="text-muted-foreground tabular-nums">
-              {display.testsDone} of {display.testsTotal} checks done
+              {ta("campaign.checksDone", { done: display.testsDone, total: display.testsTotal })}
             </span>
           </div>
           <div className="space-y-2">
@@ -86,14 +89,14 @@ export function AttackCampaignView({
           onToggle={(event) => setShowDetails((event.target as HTMLDetailsElement).open)}
         >
           <summary className="cursor-pointer px-5 py-4 text-sm font-medium list-none flex items-center justify-between">
-            <span>Test details</span>
-            <span className="text-muted-foreground text-xs group-open:hidden">Show</span>
-            <span className="text-muted-foreground text-xs hidden group-open:inline">Hide</span>
+            <span>{ta("campaign.testDetails")}</span>
+            <span className="text-muted-foreground text-xs group-open:hidden">{ta("campaign.show")}</span>
+            <span className="text-muted-foreground text-xs hidden group-open:inline">{ta("campaign.hide")}</span>
           </summary>
           <ul className="space-y-2 px-5 pb-5 border-t border-border/40 pt-4">
             {executions.map((execution) => {
-              const title = friendlyScenarioTitle(execution.adapterId, execution.scenarioTitle);
-              const statusLabel = executionStatusLabel(execution.status);
+              const title = friendlyScenarioTitle(execution.adapterId, execution.scenarioTitle, ts);
+              const statusLabel = executionStatusLabel(execution.status, ts);
               return (
                 <li
                   key={execution.id}
@@ -116,12 +119,12 @@ export function AttackCampaignView({
       {feed.length > 0 ? (
         <details className="rounded-2xl border border-border/60">
           <summary className="cursor-pointer px-5 py-4 text-sm font-medium text-muted-foreground">
-            Technical details
+            {ta("campaign.technicalDetails")}
           </summary>
           <ul className="space-y-2 px-5 pb-5 border-t border-border/40 pt-4 max-h-48 overflow-y-auto">
             {feed.slice(0, 12).map((item) => (
               <li key={item.id} className="text-xs text-muted-foreground py-1.5 border-b border-border/20 last:border-0">
-                {humanFeedLabel(item.label)}
+                {humanFeedLabel(item.label, ts)}
               </li>
             ))}
           </ul>

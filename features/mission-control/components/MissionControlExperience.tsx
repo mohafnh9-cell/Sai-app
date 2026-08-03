@@ -1,5 +1,7 @@
 "use client";
 
+import { useI18n } from "@/lib/i18n/client";
+import { formatLocalizedDate } from "@/lib/i18n/format";
 import type { MissionControlView } from "../types";
 import type { ProductionVerdictV1 } from "@/brain/production-verdict/schema";
 import type { FixPromptContext } from "@/features/production-verdict/fix-prompt-context";
@@ -26,6 +28,7 @@ export function MissionControlExperience({
   securityTestContext?: SecurityTestContext | null;
   reviewContext?: ProjectReviewUiContext | null;
 }) {
+  const { t, locale } = useI18n("missionControl");
   const guidedFlowActive = Boolean(securityTestContext && reviewContext);
 
   return (
@@ -54,7 +57,7 @@ export function MissionControlExperience({
       ) : (
         <details className="rounded-2xl border border-border/60 group">
           <summary className="cursor-pointer px-5 py-4 text-sm font-medium text-muted-foreground list-none">
-            Technical details
+            {t("technicalDetails")}
           </summary>
           <div className="px-5 pb-8 space-y-12 border-t border-border/40 pt-8">
             <MissionHeader header={view.header} />
@@ -70,8 +73,8 @@ export function MissionControlExperience({
 
       {view.cancelledReview ? (
         <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
-          <p className="font-medium text-foreground">Review stopped</p>
-          <p className="mt-1">{new Date(view.cancelledReview.cancelledAt).toLocaleString()}</p>
+          <p className="font-medium text-foreground">{t("feed.reviewStopped")}</p>
+          <p className="mt-1">{formatLocalizedDate(locale, view.cancelledReview.cancelledAt)}</p>
         </div>
       ) : null}
 

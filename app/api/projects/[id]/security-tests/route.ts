@@ -7,6 +7,7 @@ import { isFeatureEnabled } from "@/server/feature-flags";
 import { enforceRateLimit } from "@/server/http/rate-limit";
 import { getSecurityTestContext } from "@/server/attack-simulation/get-security-test-context";
 import { mapSelectedTestsToHypotheses } from "@/server/attack-simulation/security-test-options";
+import { getTranslator } from "@/lib/i18n/server";
 import { startAttackCampaign, StartAttackCampaignError } from "@/server/attack-simulation/start-attack-campaign";
 import { getAttackCenterCampaignSnapshot } from "@/server/attack-simulation/get-attack-center";
 import { attackCenterErrorResponse } from "@/server/attack-simulation/api/errors";
@@ -26,8 +27,9 @@ export async function GET(
   if (rateLimited) return rateLimited;
 
   const parsed = paramsSchema.safeParse(await params);
+  const { t } = await getTranslator("securityTest");
   if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid project id" }, { status: 400 });
+    return NextResponse.json({ error: t("errors.invalidProjectId") }, { status: 400 });
   }
 
   const projectId = parsed.data.id;
@@ -63,8 +65,9 @@ export async function POST(
   if (rateLimited) return rateLimited;
 
   const parsed = paramsSchema.safeParse(await params);
+  const { t } = await getTranslator("securityTest");
   if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid project id" }, { status: 400 });
+    return NextResponse.json({ error: t("errors.invalidProjectId") }, { status: 400 });
   }
 
   const projectId = parsed.data.id;
@@ -77,14 +80,14 @@ export async function POST(
 
   if (!isFeatureEnabled("attack_simulation", { organizationId: access.project.organization_id })) {
     return NextResponse.json(
-      { ok: false, error: "Security testing is not enabled for this project." },
+      { ok: false, error: t("errors.notEnabled") },
       { status: 403 }
     );
   }
 
   const body = postBodySchema.safeParse(await request.json().catch(() => null));
   if (!body.success) {
-    return NextResponse.json({ ok: false, error: "Select at least one test." }, { status: 400 });
+    return NextResponse.json({ ok: false, error: t("errors.selectAtLeastOne") }, { status: 400 });
   }
 
   try {
@@ -98,17 +101,17 @@ export async function POST(
       return NextResponse.json(
         {
           ok: false,
-          error: "Run a security review first so SequrAI knows which version to test.",
+          error: t("errors.needsReviewFirst"),
           code: "needs_review",
         },
         { status: 409 }
       );
     }
 
-    const hypotheses = mapSelectedTestsToHypotheses(body.data.testIds, context.hypotheses);
+    const hypotheses = mapSelectedTestsToHypotheses(body.data.testIds, context.hypotheses, t);
     if (hypotheses.length === 0) {
       return NextResponse.json(
-        { ok: false, error: "Could not map selected tests to attack scenarios." },
+        { ok: false, error: t("errors.mapFailed") },
         { status: 422 }
       );
     }

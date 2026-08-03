@@ -23,5 +23,21 @@
   "filesAnalyzed": "{count} files analyzed",
   "repoCoverage": "{percent}% repository coverage",
   "scoreMethodology": "How the Production Ready Score works",
-  "scoreDisclaimer": "The Production Ready Score is a readiness assessment, not a formal security certification. Unevaluated areas may contain risks that static analysis cannot detect."
+  "scoreDisclaimer": "The Production Ready Score is a readiness assessment, not a formal security certification. Unevaluated areas may contain risks that static analysis cannot detect.",
+  "searchAriaLabel": "Search technical findings",
+  "sortBySeverity": "Sort: Severity",
+  "sortByFile": "Sort: File",
+  "sortByTitle": "Sort: Title",
+  "showingCount": "Showing {shown} of {total}",
+  "confidenceLabel": "Confidence",
+  "falsePositiveLabel": "False positive",
+  "detectionLabel": "Detection",
+  "evidenceLabel": "Evidence",
+  "impactLabel": "Impact",
+  "recommendationLabel": "Recommendation",
+  "sectionDescription": "{count} items from static analysis — validate before changing production code.",
+  "filterAll": "All {label}",
+  "filterByAria": "Filter by {label}",
+  "technicalSeverity": "Technical severity: {severity}",
+  "unknown": "Unknown"
 }

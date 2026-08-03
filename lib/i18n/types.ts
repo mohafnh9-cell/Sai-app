@@ -24,7 +24,13 @@ export type MessageNamespace =
   | "notifications"
   | "technicalDetails"
   | "mcp"
-  | "workspace";
+  | "workspace"
+  | "securityTest"
+  | "attackCenter"
+  | "missionControl"
+  | "reviewProgress"
+  | "evidenceFinding"
+  | "landing";
 
 export type Messages = Record<string, string | Record<string, unknown>>;
 

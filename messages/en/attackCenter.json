@@ -1,0 +1,58 @@
+{
+  "loading": "Loading…",
+  "disabled": {
+    "headline": "Security testing is not available",
+    "description": "Ask your admin to turn this on for your project.",
+    "action": "Not available"
+  },
+  "error": {
+    "headline": "Something went wrong.",
+    "tryAgain": "Try again",
+    "hideDetails": "Hide details",
+    "showDetails": "Technical details"
+  },
+  "back": "← Back",
+  "deployWithConfidence": "Deploy with confidence",
+  "campaign": {
+    "title": "Security test",
+    "checksDone": "{done} of {total} checks done",
+    "testDetails": "Test details",
+    "show": "Show",
+    "hide": "Hide",
+    "technicalDetails": "Technical details"
+  },
+  "execution": {
+    "title": "Security test",
+    "inProgress": "Testing in progress",
+    "waitMessage": "Please wait while this check finishes.",
+    "technicalDetails": "Technical details"
+  },
+  "finding": {
+    "problemFound": "Problem found",
+    "howToProtect": "How to protect your app",
+    "protectionVerified": "Protection verified",
+    "applyThenVerify": "Apply the protection above, then verify it works.",
+    "verifyProtection": "Verify protection",
+    "technicalDetails": "Technical details",
+    "whatWeSaw": "What we saw",
+    "expected": "Expected:",
+    "observed": "Observed:",
+    "protectionForCursor": "Protection for Cursor",
+    "copied": "Copied",
+    "copyProtection": "Copy protection",
+    "reference": "Reference:",
+    "back": "← Back"
+  },
+  "apiErrors": {
+    "storageUnavailable": "Attack Center storage is unavailable. Apply ASE migrations in Supabase.",
+    "refreshFailed": "Attack Center could not refresh.",
+    "simulationUnavailable": "Attack Simulation storage is not available in this environment.",
+    "loadFailed": "Attack Center could not load campaign data.",
+    "invalidData": "Attack Center received invalid persisted data.",
+    "requestFailed": "Attack Center request failed."
+  },
+  "page": {
+    "title": "Security test",
+    "backToMissionControl": "Mission Control"
+  }
+}

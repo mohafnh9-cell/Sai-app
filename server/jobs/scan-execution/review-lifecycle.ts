@@ -40,7 +40,7 @@ export async function failReviewExecution(
       failed_at: now,
       error_code: input.failureCode,
       error_message: input.failureMessage,
-      progress_message: "Review could not be executed",
+      progress_message: "reviewCouldNotExecute",
     })
     .eq("id", input.reviewId)
     .in("status", [...ACTIVE_SCAN_STATUSES]);
@@ -102,7 +102,7 @@ export async function beginReviewProcessing(
     .update({
       status: "fetching_repository",
       progress: 5,
-      progress_message: "Connecting to repository",
+      progress_message: "connectingRepository",
       started_at: now,
       processing_started_at: now,
     })

@@ -9,6 +9,7 @@ import { REVIEW_STAGE_KEYS, resolveReviewStageIndex } from "@/lib/onboarding/rev
 import { scanIsActive, scanIsCompleted } from "../onboarding-flow";
 import { startGitHubOAuth } from "@/lib/github/oauth-client";
 import { useI18n } from "@/lib/i18n/client";
+import { translateStoredProgressMessage } from "@/lib/i18n/review-progress";
 
 type ScanPayload = {
   id: string;
@@ -30,7 +31,7 @@ export function OnboardingReviewStep({
   existingScanId?: string | null;
   onComplete: (scanId: string, verdict: ProductionVerdictV1) => void;
 }) {
-  const { t } = useI18n("onboarding");
+  const { t, locale } = useI18n("onboarding");
   const { t: te } = useI18n("errors");
   const [scanId, setScanId] = useState<string | null>(existingScanId ?? null);
   const [scan, setScan] = useState<ScanPayload | null>(null);
@@ -190,7 +191,9 @@ export function OnboardingReviewStep({
                   ? t("startingReview")
                   : scan?.status?.toLowerCase() === "queued"
                     ? t("reviewQueued")
-                    : scan?.progress_message || t("analyzingRepo")}
+                    : scan?.progress_message
+                      ? translateStoredProgressMessage(locale, scan.progress_message)
+                      : t("analyzingRepo")}
               </p>
             </div>
           </div>

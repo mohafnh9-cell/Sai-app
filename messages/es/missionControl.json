@@ -1,0 +1,118 @@
+{
+  "page": {
+    "title": "Mission Control",
+    "backToProjects": "Proyectos"
+  },
+  "subNav": {
+    "overview": "Resumen",
+    "securityTest": "Prueba de seguridad",
+    "ariaLabel": "Secciones de la misión"
+  },
+  "header": {
+    "mission": "Misión",
+    "project": "Proyecto",
+    "status": "Estado",
+    "eta": "Tiempo restante",
+    "currentPhase": "Fase actual",
+    "progress": "Progreso",
+    "missionTitle": "Despliegue seguro a producción"
+  },
+  "status": {
+    "cancelled": "Cancelado",
+    "analyzing": "Analizando",
+    "ready": "Listo",
+    "review": "Revisión",
+    "idle": "Inactivo",
+    "queued": "En cola",
+    "done": "Listo",
+    "failed": "Fallido",
+    "running": "En curso",
+    "completed": "Completado",
+    "skipped": "Omitido"
+  },
+  "phases": {
+    "discovery": "Descubrimiento",
+    "productionVerdict": "Production Verdict",
+    "awaitingAnalysis": "Esperando análisis"
+  },
+  "teams": {
+    "activeTeams": "Equipos activos",
+    "whyTheseTeams": "Por qué estos equipos",
+    "confidence": "Confianza {level}",
+    "browser": "Equipo de frontend",
+    "authentication": "Equipo de autenticación",
+    "api": "Equipo de API",
+    "authorization": "Equipo de autorización",
+    "business_logic": "Equipo de lógica de negocio",
+    "llm": "Equipo de LLM",
+    "adversarial": "Equipo adversarial",
+    "reasons": {
+      "browser": "Aplicación frontend detectada.",
+      "authentication": "Proveedor de autenticación detectado.",
+      "api": "Endpoints REST o API detectados.",
+      "authorization": "Control de acceso o superficie admin detectada.",
+      "business_logic": "Flujo de suscripción o pagos detectado.",
+      "llm": "OpenAI o AI SDK detectado.",
+      "adversarial": "Superficie de riesgo de IA identificada.",
+      "notRequired": "No requerido para el perfil de este proyecto."
+    },
+    "duration": {
+      "estimate": "1–3 min",
+      "findings_one": "{count} hallazgo",
+      "findings_other": "{count} hallazgos"
+    }
+  },
+  "feed": {
+    "title": "Actividad de la misión",
+    "initialized": "Mission Control iniciado.",
+    "discoveryInProgress": "Descubrimiento en curso.",
+    "verdictUpdated": "Production Verdict actualizado.",
+    "reviewStopped": "Revisión detenida"
+  },
+  "objective": {
+    "title": "Objetivo actual",
+    "estimatedEffort": "Esfuerzo estimado",
+    "engineeringPlanReady": "Plan de ingeniería listo",
+    "engineeringPlanPending": "Plan de ingeniería pendiente",
+    "replayPassed": "Repetición exitosa",
+    "replayPending": "Repetición pendiente",
+    "generateFix": "Generar protección",
+    "startAnalysis": "Iniciar análisis",
+    "viewDetails": "Ver detalles",
+    "reviewVerdict": "Revisar Production Verdict",
+    "runAnalysis": "Ejecutar análisis de producción"
+  },
+  "verdict": {
+    "title": "Production Verdict",
+    "confidence": "Confianza",
+    "criticalCampaigns": "Campañas críticas",
+    "replay": "Repetir prueba",
+    "engineeringPlan": "Plan de ingeniería",
+    "score": "Puntuación",
+    "display": {
+      "safeToDeploy": "Listo para producción",
+      "deployWithWarnings": "Se requieren mejoras menores",
+      "insufficientEvidence": "Evidencia insuficiente",
+      "blocked": "No listo"
+    },
+    "replayStatus": {
+      "passed": "Aprobado",
+      "pending": "Pendiente"
+    },
+    "engineeringPlanStatus": {
+      "ready": "Listo",
+      "pending": "Pendiente"
+    },
+    "deploymentRecommendation": {
+      "safe": "Procede cuando tu proceso de release lo permita.",
+      "warnings": "Aborda las prioridades principales antes de un despliegue amplio.",
+      "blocked": "No despliegues hasta resolver los bloqueadores."
+    }
+  },
+  "technicalDetails": "Detalles técnicos",
+  "actions": {
+    "reviewAgain": "Analizar nuevamente",
+    "generateProtection": "Generar protección",
+    "deploy": "Desplegar"
+  }
+}

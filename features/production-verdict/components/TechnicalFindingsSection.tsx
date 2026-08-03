@@ -29,6 +29,8 @@ import {
   type ScanFinding,
 } from "@/features/security-scanner/components/types";
 import { EvidenceReportPanel } from "@/features/evidence-finding/components/EvidenceReportPanel";
+import { useI18n } from "@/lib/i18n/client";
+import type { Translator } from "@/lib/i18n/types";
 
 const SEVERITY_ORDER: Record<string, number> = {
   CRITICAL: 0,
@@ -48,22 +50,22 @@ function findingGroup(severity?: string): FindingGroup {
   return "informational";
 }
 
-function groupLabel(group: FindingGroup) {
+function groupLabel(group: FindingGroup, t: Translator) {
   switch (group) {
     case "blockers":
-      return "Production blockers";
+      return t("productionBlockers");
     case "warnings":
-      return "Warnings";
+      return t("warnings");
     case "improvements":
-      return "Improvements";
+      return t("improvements");
     case "informational":
-      return "Informational";
+      return t("informational");
   }
 }
 
-function severityDisplay(severity?: string, group?: FindingGroup) {
-  if (group === "blockers") return "Production blocker";
-  return severity ?? "Unknown";
+function severityDisplay(severity: string | undefined, group: FindingGroup | undefined, t: Translator) {
+  if (group === "blockers") return t("productionBlocker");
+  return severity ?? t("unknown");
 }
 
 function severityStyle(severity?: string) {
@@ -96,22 +98,28 @@ function FilterSelect({
   value,
   values,
   onChange,
+  valueLabels,
+  allLabel,
+  filterByAria,
 }: {
   label: string;
   value: string;
   values: string[];
   onChange: (value: string) => void;
+  valueLabels?: Record<string, string>;
+  allLabel: string;
+  filterByAria: string;
 }) {
   return (
     <Select value={value} onValueChange={onChange}>
-      <SelectTrigger aria-label={`Filter by ${label}`} className="min-w-32">
+      <SelectTrigger aria-label={filterByAria} className="min-w-32">
         <SelectValue placeholder={label} />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="all">All {label.toLowerCase()}</SelectItem>
+        <SelectItem value="all">{allLabel}</SelectItem>
         {values.map((item) => (
           <SelectItem key={item} value={item}>
-            {item}
+            {valueLabels?.[item] ?? item}
           </SelectItem>
         ))}
       </SelectContent>
@@ -128,6 +136,7 @@ function FindingCard({
   index: number;
   fixPromptContext?: FixPromptContext;
 }) {
+  const { t } = useI18n("technicalDetails");
   const path = findingFile(finding);
   const line = findingLine(finding);
   const snippet = findingSnippet(finding);
@@ -148,17 +157,17 @@ function FindingCard({
       <CardHeader className="space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="outline" className={severityStyle(finding.severity)}>
-            {severityDisplay(finding.severity, group)}
+            {severityDisplay(finding.severity, group, t)}
           </Badge>
           {group === "blockers" && finding.severity && (
             <span className="text-xs text-muted-foreground">
-              Technical severity: {finding.severity}
+              {t("technicalSeverity", { severity: finding.severity })}
             </span>
           )}
           {finding.category && <Badge variant="secondary">{finding.category}</Badge>}
           {findingStatus(finding) && <Badge variant="outline">{findingStatus(finding)}</Badge>}
         </div>
-        <CardTitle className="text-base">{finding.title || "Untitled finding"}</CardTitle>
+        <CardTitle className="text-base">{finding.title || t("untitledFinding")}</CardTitle>
         {(finding.rule_id || finding.rule) && (
           <code className="text-xs text-muted-foreground">{finding.rule_id ?? finding.rule}</code>
         )}
@@ -167,15 +176,15 @@ function FindingCard({
         {evidenceReport ? (
           <div className="grid gap-2 sm:grid-cols-3 text-xs">
             <div>
-              <p className="text-muted-foreground">Confidence</p>
+              <p className="text-muted-foreground">{t("confidenceLabel")}</p>
               <p className="font-semibold tabular-nums">{evidenceReport.confidencePercent}%</p>
             </div>
             <div>
-              <p className="text-muted-foreground">False positive</p>
+              <p className="text-muted-foreground">{t("falsePositiveLabel")}</p>
               <p className="font-semibold tabular-nums">{evidenceReport.falsePositivePercent}%</p>
             </div>
             <div>
-              <p className="text-muted-foreground">Detection</p>
+              <p className="text-muted-foreground">{t("detectionLabel")}</p>
               <p className="font-medium">{evidenceReport.detectionMethod.replaceAll("_", " ")}</p>
             </div>
           </div>
@@ -193,7 +202,7 @@ function FindingCard({
         {findingEvidence(finding) && (
           <div>
             <h3 className="mb-1 text-xs font-semibold uppercase text-muted-foreground">
-              Evidence
+              {t("evidenceLabel")}
             </h3>
             <p>{findingEvidence(finding)}</p>
           </div>
@@ -205,14 +214,14 @@ function FindingCard({
         )}
         {finding.impact && (
           <div>
-            <h3 className="mb-1 text-xs font-semibold uppercase text-muted-foreground">Impact</h3>
+            <h3 className="mb-1 text-xs font-semibold uppercase text-muted-foreground">{t("impactLabel")}</h3>
             <p>{finding.impact}</p>
           </div>
         )}
         {finding.recommendation && (
           <div>
             <h3 className="mb-1 text-xs font-semibold uppercase text-muted-foreground">
-              Recommendation
+              {t("recommendationLabel")}
             </h3>
             <p>{finding.recommendation}</p>
           </div>
@@ -240,6 +249,7 @@ export function TechnicalFindingsSection({
   findings: ScanFinding[];
   fixPromptContext?: FixPromptContext;
 }) {
+  const { t } = useI18n("technicalDetails");
   const [query, setQuery] = useState("");
   const [severity, setSeverity] = useState("all");
   const [category, setCategory] = useState("all");
@@ -305,8 +315,8 @@ export function TechnicalFindingsSection({
 
   return (
     <CollapsibleSection
-      title="Technical details"
-      description={`${findings.length} items from static analysis — validate before changing production code.`}
+      title={t("title")}
+      description={t("sectionDescription", { count: findings.length })}
       defaultOpen={false}
       onToggle={(open) => {
         if (open) trackEvent("technical_findings_opened", { count: findings.length });
@@ -319,46 +329,65 @@ export function TechnicalFindingsSection({
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search findings, rules, or files…"
+              placeholder={t("searchPlaceholder")}
               className="pl-9"
-              aria-label="Search technical findings"
+              aria-label={t("searchAriaLabel")}
             />
           </div>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             <FilterSelect
-              label="Group"
+              label={t("group")}
               value={groupFilter}
               values={["blockers", "warnings", "improvements", "informational"]}
+              valueLabels={{
+                blockers: t("productionBlockers"),
+                warnings: t("warnings"),
+                improvements: t("improvements"),
+                informational: t("informational"),
+              }}
+              allLabel={t("filterAll", { label: t("group").toLowerCase() })}
+              filterByAria={t("filterByAria", { label: t("group") })}
               onChange={setGroupFilter}
             />
             <FilterSelect
-              label="Severity"
+              label={t("severity")}
               value={severity}
               values={options.severities}
+              allLabel={t("filterAll", { label: t("severity").toLowerCase() })}
+              filterByAria={t("filterByAria", { label: t("severity") })}
               onChange={setSeverity}
             />
             <FilterSelect
-              label="Category"
+              label={t("category")}
               value={category}
               values={options.categories}
+              allLabel={t("filterAll", { label: t("category").toLowerCase() })}
+              filterByAria={t("filterByAria", { label: t("category") })}
               onChange={setCategory}
             />
-            <FilterSelect label="File" value={file} values={options.files} onChange={setFile} />
+            <FilterSelect
+              label={t("file")}
+              value={file}
+              values={options.files}
+              allLabel={t("filterAll", { label: t("file").toLowerCase() })}
+              filterByAria={t("filterByAria", { label: t("file") })}
+              onChange={setFile}
+            />
             <Select value={sort} onValueChange={setSort}>
-              <SelectTrigger aria-label="Sort findings">
+              <SelectTrigger aria-label={t("sort")}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="severity">Sort: Severity</SelectItem>
-                <SelectItem value="file">Sort: File</SelectItem>
-                <SelectItem value="title">Sort: Title</SelectItem>
+                <SelectItem value="severity">{t("sortBySeverity")}</SelectItem>
+                <SelectItem value="file">{t("sortByFile")}</SelectItem>
+                <SelectItem value="title">{t("sortByTitle")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
         </div>
 
         <p className="text-sm text-muted-foreground">
-          Showing {visibleFindings.length} of {findings.length}
+          {t("showingCount", { shown: visibleFindings.length, total: findings.length })}
         </p>
 
         {visibleFindings.length === 0 ? (
@@ -366,14 +395,14 @@ export function TechnicalFindingsSection({
             <CardContent className="flex flex-col items-center py-10 text-center">
               <ShieldAlert className="mb-3 h-8 w-8 text-muted-foreground" aria-hidden />
               <p className="font-medium">
-                {findings.length ? "No findings match these filters" : "No technical findings reported"}
+                {findings.length ? t("noFindingsFiltered") : t("noFindings")}
               </p>
             </CardContent>
           </Card>
         ) : (
           grouped.map(({ group, items }) => (
             <div key={group} className="space-y-3">
-              <h3 className="text-sm font-medium text-muted-foreground">{groupLabel(group)}</h3>
+              <h3 className="text-sm font-medium text-muted-foreground">{groupLabel(group, t)}</h3>
               {items.map((finding, index) => (
                 <FindingCard
                   key={finding.id ?? index}

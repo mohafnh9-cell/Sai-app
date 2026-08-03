@@ -1,23 +1,26 @@
+"use client";
+
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { PLANS } from "@/content/landing";
+import { PRICING_PLANS, PRICING_FEATURE_KEYS } from "@/content/landing";
+import { useI18n } from "@/lib/i18n/client";
 
 export function Pricing() {
+  const { t } = useI18n("landing");
+
   return (
     <section id="pricing" className="bg-background-deep py-24 md:py-32 lg:py-40">
       <div className="mx-auto max-w-[1200px] px-6">
-        <p className="text-[11px] uppercase tracking-[0.24em] text-text-muted">Pricing</p>
+        <p className="text-[11px] uppercase tracking-[0.24em] text-text-muted">{t("pricing.eyebrow")}</p>
         <h2 className="mt-4 max-w-lg text-2xl font-semibold tracking-[-0.03em] md:text-3xl">
-          Builder Edition
+          {t("pricing.title")}
         </h2>
-        <p className="mt-3 max-w-md text-sm text-muted-foreground">
-          One plan. Everything in V1. No teams, no enterprise tiers.
-        </p>
+        <p className="mt-3 max-w-md text-sm text-muted-foreground">{t("pricing.subtitle")}</p>
 
         <div className="mt-16 grid gap-6 md:grid-cols-2 md:gap-8">
-          {PLANS.map((plan) => (
+          {PRICING_PLANS.map((plan) => (
             <div
-              key={plan.phase}
+              key={plan.id}
               className={`rounded-[20px] border p-8 md:p-10 ${
                 plan.highlighted
                   ? "border-brand-violet/30 bg-surface"
@@ -33,21 +36,21 @@ export function Pricing() {
               }
             >
               <div className="flex items-baseline justify-between gap-4">
-                <h3 className="text-xl font-semibold tracking-[-0.02em]">{plan.name}</h3>
+                <h3 className="text-xl font-semibold tracking-[-0.02em]">{t("pricing.planName")}</h3>
                 <span className="text-[10px] uppercase tracking-[0.16em] text-text-muted">
-                  {plan.phase}
+                  {t(`pricing.${plan.id}.phase`)}
                 </span>
               </div>
-              <p className="mt-2 text-sm text-muted-foreground">{plan.positioning}</p>
+              <p className="mt-2 text-sm text-muted-foreground">{t(`pricing.${plan.id}.positioning`)}</p>
               <div className="mt-8 flex items-baseline gap-1">
                 <span className="text-5xl font-semibold tracking-[-0.04em]">€{plan.price}</span>
-                <span className="text-muted-foreground">/month</span>
+                <span className="text-muted-foreground">{t("pricing.perMonth")}</span>
               </div>
 
               <ul className="mt-8 space-y-3 border-t border-border pt-8">
-                {plan.features.map((feature) => (
-                  <li key={feature} className="text-sm text-muted-foreground">
-                    {feature}
+                {PRICING_FEATURE_KEYS.map((key) => (
+                  <li key={key} className="text-sm text-muted-foreground">
+                    {t(`features.${key}`)}
                   </li>
                 ))}
               </ul>
@@ -59,9 +62,7 @@ export function Pricing() {
                 variant={plan.highlighted ? "default" : "outline"}
                 asChild
               >
-                <Link href="/signup">
-                  {plan.highlighted ? "Start private beta" : "Join waitlist"}
-                </Link>
+                <Link href="/signup">{t(`pricing.${plan.id}.cta`)}</Link>
               </Button>
             </div>
           ))}

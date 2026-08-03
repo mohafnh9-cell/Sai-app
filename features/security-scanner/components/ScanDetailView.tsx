@@ -17,6 +17,7 @@ import { ProductionVerdictExperience } from "@/features/production-verdict/compo
 import { TechnicalFindingsSection } from "@/features/production-verdict/components/TechnicalFindingsSection";
 import type { ProductionVerdict } from "@/brain";
 import { useI18n } from "@/lib/i18n/client";
+import { translateStoredProgressMessage } from "@/lib/i18n/review-progress";
 import {
   formatScanDate,
   scanCommit,
@@ -44,7 +45,7 @@ export function ScanDetailView({
   projectId: string;
   scanId: string;
 }) {
-  const { t } = useI18n("projects");
+  const { t, locale } = useI18n("projects");
   const { t: tc } = useI18n("common");
   const { t: te } = useI18n("errors");
   const [scan, setScan] = useState<ScanRecord | null>(null);
@@ -177,7 +178,9 @@ export function ScanDetailView({
             </div>
             <Progress value={scan.progress === undefined ? 15 : progress} aria-label={tc("states.buildingVerdict")} />
             <p className="text-xs text-muted-foreground">
-              {scan.progress_message || tc("states.buildingVerdict")}
+              {scan.progress_message
+                ? translateStoredProgressMessage(locale, scan.progress_message)
+                : tc("states.buildingVerdict")}
             </p>
           </CardContent>
         </Card>

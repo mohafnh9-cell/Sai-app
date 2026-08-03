@@ -285,7 +285,7 @@ export async function triggerProductionReview(
       status: "queued",
       queued_at: new Date().toISOString(),
       progress: 0,
-      progress_message: "Production Review requested from MCP",
+      progress_message: "mcpReviewRequested",
       branch: resolvedBranch,
       commit_sha: resolvedCommitSha,
     })

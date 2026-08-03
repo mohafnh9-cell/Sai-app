@@ -13,6 +13,7 @@ import { getProjectReviewUiContext } from "@/server/projects/review-ui-context";
 import { getSecurityTestContext } from "@/server/attack-simulation/get-security-test-context";
 import type { SecurityTestContext } from "@/features/security-testing/types";
 import type { Metadata } from "next";
+import { getTranslator } from "@/lib/i18n/server";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -20,10 +21,11 @@ interface PageProps {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { id } = await params;
+  const { t } = await getTranslator("missionControl");
   const auth = await getCachedServerAuthContext();
-  if (!auth?.organizationId) return { title: "Mission Control" };
+  if (!auth?.organizationId) return { title: t("page.title") };
   const { data } = await auth.supabase.from("projects").select("name").eq("id", id).maybeSingle();
-  return { title: data?.name ? `${data.name} — Mission Control` : "Mission Control" };
+  return { title: data?.name ? `${data.name} — ${t("page.title")}` : t("page.title") };
 }
 
 export default async function MissionControlPage({ params }: PageProps) {
@@ -91,13 +93,15 @@ export default async function MissionControlPage({ params }: PageProps) {
     }
   }
 
+  const { t } = await getTranslator("missionControl");
+
   return (
     <div className="app-cinematic-bg min-h-full">
       <div className="mx-auto max-w-4xl px-4 sm:px-8 pb-24 pt-6 sm:pt-10">
         <Button variant="ghost" size="sm" asChild className="gap-1.5 -ml-2 text-muted-foreground mb-8">
           <Link href="/projects">
             <ArrowLeft className="h-4 w-4" />
-            Projects
+            {t("page.backToProjects")}
           </Link>
         </Button>
         {attackCenterEnabled ? <MissionControlSubNav projectId={projectId} /> : null}

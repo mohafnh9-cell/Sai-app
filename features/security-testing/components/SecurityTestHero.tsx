@@ -3,8 +3,9 @@
 import type { ReactNode } from "react";
 import { Loader2, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useI18n } from "@/lib/i18n/client";
 import { SecurityTestProgressSteps } from "./SecurityTestProgressSteps";
-import { ESTIMATED_TEST_DURATION, SAFETY_NOTE } from "../lib/product-copy";
+import { estimatedTestDuration, safetyNote } from "../lib/product-copy";
 import type { SecurityTestProgressStep } from "../types";
 
 export function SecurityTestHero({
@@ -26,6 +27,8 @@ export function SecurityTestHero({
   showSafetyNote?: boolean;
   compact?: boolean;
 }) {
+  const { t } = useI18n("securityTest");
+
   return (
     <section
       className={
@@ -39,7 +42,7 @@ export function SecurityTestHero({
           <Shield className="h-5 w-5" />
         </div>
         <div className="space-y-2 min-w-0">
-          <p className="text-xs uppercase tracking-[0.22em] text-primary">Security test</p>
+          <p className="text-xs uppercase tracking-[0.22em] text-primary">{t("title")}</p>
           <h2 className="text-xl sm:text-2xl font-semibold tracking-tight">{headline}</h2>
           <p className="text-sm text-muted-foreground max-w-2xl">{description}</p>
         </div>
@@ -49,11 +52,11 @@ export function SecurityTestHero({
         <div className="rounded-xl border border-border/50 bg-muted/10 px-4 py-3 text-sm text-muted-foreground space-y-1">
           {showEstimatedDuration ? (
             <p>
-              <span className="font-medium text-foreground">Estimated time:</span>{" "}
-              {ESTIMATED_TEST_DURATION}
+              <span className="font-medium text-foreground">{t("estimatedTime")}</span>{" "}
+              {estimatedTestDuration(t)}
             </p>
           ) : null}
-          {showSafetyNote ? <p>{SAFETY_NOTE}</p> : null}
+          {showSafetyNote ? <p>{safetyNote(t)}</p> : null}
         </div>
       ) : null}
 

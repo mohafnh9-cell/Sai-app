@@ -1,0 +1,118 @@
+{
+  "page": {
+    "title": "Mission Control",
+    "backToProjects": "Projects"
+  },
+  "subNav": {
+    "overview": "Overview",
+    "securityTest": "Security test",
+    "ariaLabel": "Mission sections"
+  },
+  "header": {
+    "mission": "Mission",
+    "project": "Project",
+    "status": "Status",
+    "eta": "ETA",
+    "currentPhase": "Current Phase",
+    "progress": "Progress",
+    "missionTitle": "Secure Production Deployment"
+  },
+  "status": {
+    "cancelled": "Cancelled",
+    "analyzing": "Analyzing",
+    "ready": "Ready",
+    "review": "Review",
+    "idle": "Idle",
+    "queued": "Queued",
+    "done": "Done",
+    "failed": "Failed",
+    "running": "Running",
+    "completed": "Completed",
+    "skipped": "Skipped"
+  },
+  "phases": {
+    "discovery": "Discovery",
+    "productionVerdict": "Production Verdict",
+    "awaitingAnalysis": "Awaiting analysis"
+  },
+  "teams": {
+    "activeTeams": "Active Teams",
+    "whyTheseTeams": "Why These Teams",
+    "confidence": "Confidence {level}",
+    "browser": "Browser Team",
+    "authentication": "Authentication Team",
+    "api": "API Team",
+    "authorization": "Authorization Team",
+    "business_logic": "Business Logic Team",
+    "llm": "LLM Team",
+    "adversarial": "Adversarial Team",
+    "reasons": {
+      "browser": "Frontend application detected.",
+      "authentication": "Authentication provider detected.",
+      "api": "REST or API endpoints detected.",
+      "authorization": "Access control or admin surface detected.",
+      "business_logic": "Subscription or payment workflow detected.",
+      "llm": "OpenAI or AI SDK detected.",
+      "adversarial": "High-risk AI attack surface identified.",
+      "notRequired": "Not required for this project profile."
+    },
+    "duration": {
+      "estimate": "1–3 min",
+      "findings_one": "{count} finding",
+      "findings_other": "{count} findings"
+    }
+  },
+  "feed": {
+    "title": "Mission Feed",
+    "initialized": "Mission Control initialized.",
+    "discoveryInProgress": "Discovery in progress.",
+    "verdictUpdated": "Production Verdict updated.",
+    "reviewStopped": "Review stopped"
+  },
+  "objective": {
+    "title": "Current Objective",
+    "estimatedEffort": "Estimated effort",
+    "engineeringPlanReady": "Engineering Plan Ready",
+    "engineeringPlanPending": "Engineering Plan Pending",
+    "replayPassed": "Replay Passed",
+    "replayPending": "Replay Pending",
+    "generateFix": "Generate Protection",
+    "startAnalysis": "Start Analysis",
+    "viewDetails": "View Details",
+    "reviewVerdict": "Review Production Verdict",
+    "runAnalysis": "Run production analysis"
+  },
+  "verdict": {
+    "title": "Production Verdict",
+    "confidence": "Confidence",
+    "criticalCampaigns": "Critical campaigns",
+    "replay": "Replay",
+    "engineeringPlan": "Engineering Plan",
+    "score": "Score",
+    "display": {
+      "safeToDeploy": "Ready for production",
+      "deployWithWarnings": "Minor improvements required",
+      "insufficientEvidence": "Insufficient evidence",
+      "blocked": "Not ready"
+    },
+    "replayStatus": {
+      "passed": "Passed",
+      "pending": "Pending"
+    },
+    "engineeringPlanStatus": {
+      "ready": "Ready",
+      "pending": "Pending"
+    },
+    "deploymentRecommendation": {
+      "safe": "Proceed when your release process allows.",
+      "warnings": "Address top priorities before wide rollout.",
+      "blocked": "Do not deploy until blockers are resolved."
+    }
+  },
+  "technicalDetails": "Technical details",
+  "actions": {
+    "reviewAgain": "Review again",
+    "generateProtection": "Generate protection",
+    "deploy": "Deploy"
+  }
+}

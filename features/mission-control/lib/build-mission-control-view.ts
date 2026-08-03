@@ -1,4 +1,7 @@
 import type { ProductionVerdictV1 } from "@/brain/production-verdict/schema";
+import type { Translator } from "@/lib/i18n/types";
+import { namespaceTranslator } from "@/lib/i18n/review-progress";
+import type { AppLocale } from "@/lib/i18n/types";
 import {
   MISSION_TEAMS,
   type MissionControlBuildInput,
@@ -49,22 +52,22 @@ function teamSelected(id: MissionTeamId, sig: ReturnType<typeof signals>): boole
   }
 }
 
-function teamReason(id: MissionTeamId, sig: ReturnType<typeof signals>): MissionTeamReason {
-  const base = MISSION_TEAMS.find((t) => t.id === id)!;
-  const map: Record<MissionTeamId, { reason: string; confidence: MissionTeamReason["confidence"] }> = {
-    browser: { reason: "Frontend application detected.", confidence: "high" },
-    authentication: { reason: "Authentication provider detected.", confidence: sig.auth ? "high" : "medium" },
-    api: { reason: "REST or API endpoints detected.", confidence: sig.api ? "high" : "medium" },
-    authorization: { reason: "Access control or admin surface detected.", confidence: "medium" },
-    business_logic: { reason: "Subscription or payment workflow detected.", confidence: sig.business ? "high" : "low" },
-    llm: { reason: "OpenAI or AI SDK detected.", confidence: sig.llm ? "high" : "low" },
-    adversarial: { reason: "High-risk AI attack surface identified.", confidence: "medium" },
+function teamReason(id: MissionTeamId, sig: ReturnType<typeof signals>, t: Translator): MissionTeamReason {
+  const teamKey = id as string;
+  const map: Record<MissionTeamId, { reasonKey: string; confidence: MissionTeamReason["confidence"] }> = {
+    browser: { reasonKey: "teams.reasons.browser", confidence: "high" },
+    authentication: { reasonKey: "teams.reasons.authentication", confidence: sig.auth ? "high" : "medium" },
+    api: { reasonKey: "teams.reasons.api", confidence: sig.api ? "high" : "medium" },
+    authorization: { reasonKey: "teams.reasons.authorization", confidence: "medium" },
+    business_logic: { reasonKey: "teams.reasons.business_logic", confidence: sig.business ? "high" : "low" },
+    llm: { reasonKey: "teams.reasons.llm", confidence: sig.llm ? "high" : "low" },
+    adversarial: { reasonKey: "teams.reasons.adversarial", confidence: "medium" },
   };
   const entry = map[id];
   return {
     teamId: id,
-    teamName: base.name,
-    reason: teamSelected(id, sig) ? entry.reason : "Not required for this project profile.",
+    teamName: t(`teams.${teamKey}`),
+    reason: teamSelected(id, sig) ? t(entry.reasonKey) : t("teams.reasons.notRequired"),
     confidence: entry.confidence,
   };
 }
@@ -74,9 +77,10 @@ function deriveTeamStatus(
   selected: boolean,
   input: MissionControlBuildInput,
   index: number,
-  selectedCount: number
+  selectedCount: number,
+  t: Translator
 ): MissionTeamCard {
-  const name = MISSION_TEAMS.find((t) => t.id === id)!.name;
+  const name = t(`teams.${id}`);
   const executionOverride = input.teamExecution?.[id];
 
   if (!selected) {
@@ -109,15 +113,15 @@ function deriveTeamStatus(
       status: executionOverride,
       estimatedDurationLabel:
         executionOverride === "running"
-          ? "1–3 min"
+          ? t("teams.duration.estimate")
           : executionOverride === "failed"
-            ? "Failed"
+            ? t("status.failed")
             : executionOverride === "completed"
               ? teamMetrics && "findingsCount" in teamMetrics
-                ? `${teamMetrics.findingsCount} finding(s)`
-                : "Done"
+                ? t("teams.duration.findings", { count: teamMetrics.findingsCount })
+                : t("status.done")
               : executionOverride === "queued"
-                ? "Queued"
+                ? t("status.queued")
                 : "—",
       progressPercent: progressFromMetrics,
     };
@@ -133,7 +137,7 @@ function deriveTeamStatus(
       id,
       name,
       status,
-      estimatedDurationLabel: status === "running" ? "1–3 min" : "Queued",
+      estimatedDurationLabel: status === "running" ? t("teams.duration.estimate") : t("status.queued"),
       progressPercent: status === "completed" ? 100 : status === "running" ? 55 : 0,
     };
   }
@@ -142,23 +146,23 @@ function deriveTeamStatus(
     id,
     name,
     status: "completed",
-    estimatedDurationLabel: "Done",
+    estimatedDurationLabel: t("status.done"),
     progressPercent: 100,
   };
 }
 
-export function mapVerdictDisplay(verdict: ProductionVerdictV1 | null): MissionVerdictDisplay {
-  if (!verdict) return "INSUFFICIENT EVIDENCE";
+export function mapVerdictDisplay(verdict: ProductionVerdictV1 | null, t: Translator): MissionVerdictDisplay {
+  if (!verdict) return t("verdict.display.insufficientEvidence") as MissionVerdictDisplay;
   switch (verdict.status) {
     case "ready_to_ship":
-      return "SAFE TO DEPLOY";
+      return t("verdict.display.safeToDeploy") as MissionVerdictDisplay;
     case "almost_ready":
-      return "DEPLOY WITH WARNINGS";
+      return t("verdict.display.deployWithWarnings") as MissionVerdictDisplay;
     case "insufficient_data":
     case "analysis_failed":
-      return "INSUFFICIENT EVIDENCE";
+      return t("verdict.display.insufficientEvidence") as MissionVerdictDisplay;
     default:
-      return "BLOCKED";
+      return t("verdict.display.blocked") as MissionVerdictDisplay;
   }
 }
 
@@ -169,13 +173,17 @@ function formatEta(seconds: number | null | undefined): string {
   return `${m}m ${s}s`;
 }
 
-export function buildMissionControlView(input: MissionControlBuildInput): MissionControlView {
+export function buildMissionControlView(
+  input: MissionControlBuildInput,
+  locale: AppLocale = "en"
+): MissionControlView {
+  const t = input.t ?? namespaceTranslator(locale, "missionControl");
   const sig = signals(input);
-  const selectedIds = MISSION_TEAMS.map((t) => t.id).filter((id) => teamSelected(id, sig));
-  const teams = MISSION_TEAMS.map((t, index) =>
-    deriveTeamStatus(t.id, teamSelected(t.id, sig), input, index, selectedIds.length)
+  const selectedIds = MISSION_TEAMS.map((team) => team.id).filter((id) => teamSelected(id, sig));
+  const teams = MISSION_TEAMS.map((team, index) =>
+    deriveTeamStatus(team.id, teamSelected(team.id, sig), input, index, selectedIds.length, t)
   );
-  const teamReasons = MISSION_TEAMS.map((t) => teamReason(t.id, sig)).filter((r) =>
+  const teamReasons = MISSION_TEAMS.map((team) => teamReason(team.id, sig, t)).filter((r) =>
     teamSelected(r.teamId, sig)
   );
 
@@ -188,21 +196,21 @@ export function buildMissionControlView(input: MissionControlBuildInput): Missio
     input.cancelledReview?.lastCompletedPhase ??
     input.sessionPhase ??
     runningTeam?.name ??
-    (input.scanInProgress ? "Discovery" : input.verdict ? "Production Verdict" : "Awaiting analysis");
+    (input.scanInProgress ? t("phases.discovery") : input.verdict ? t("phases.productionVerdict") : t("phases.awaitingAnalysis"));
 
   const headerStatus = input.cancelledReview
-    ? "Cancelled"
+    ? t("status.cancelled")
     : input.scanInProgress
-      ? "Analyzing"
+      ? t("status.analyzing")
       : input.verdict?.status === "ready_to_ship"
-        ? "Ready"
+        ? t("status.ready")
         : input.verdict
-          ? "Review"
-          : "Idle";
+          ? t("status.review")
+          : t("status.idle");
 
   const top = input.verdict?.topPriorities[0];
   const objective = {
-    title: top?.title ?? (input.verdict ? "Review Production Verdict" : "Run production analysis"),
+    title: top?.title ?? (input.verdict ? t("objective.reviewVerdict") : t("objective.runAnalysis")),
     estimatedEffortLabel: top?.estimatedTimeLabel ?? "—",
     engineeringPlanStatus: top ? ("ready" as const) : ("none" as const),
     replayStatus: input.verdict?.status === "ready_to_ship" ? ("passed" as const) : ("pending" as const),
@@ -213,16 +221,16 @@ export function buildMissionControlView(input: MissionControlBuildInput): Missio
   const feed =
     input.feedFromDb.length > 0
       ? input.feedFromDb
-      : defaultFeed(input);
+      : defaultFeed(input, t);
 
-  const verdictDisplay = mapVerdictDisplay(input.verdict);
+  const verdictDisplay = mapVerdictDisplay(input.verdict, t);
 
   const hideProductionVerdict = Boolean(input.cancelledReview);
 
   return {
     projectId: input.projectId,
     header: {
-      missionTitle: "Secure Production Deployment",
+      missionTitle: t("header.missionTitle"),
       projectName: input.projectName,
       statusLabel: headerStatus,
       progressPercent: progress,
@@ -237,14 +245,20 @@ export function buildMissionControlView(input: MissionControlBuildInput): Missio
       display: verdictDisplay,
       confidence: input.verdict?.confidence ?? "medium",
       criticalCampaigns: input.verdict?.topPriorities.filter((p) => p.severity === "critical").length ?? 0,
-      replayStatusLabel: objective.replayStatus === "passed" ? "Passed" : "Pending",
-      engineeringPlanStatusLabel: objective.engineeringPlanStatus === "ready" ? "Ready" : "Pending",
+      replayStatusLabel:
+        objective.replayStatus === "passed"
+          ? t("verdict.replayStatus.passed")
+          : t("verdict.replayStatus.pending"),
+      engineeringPlanStatusLabel:
+        objective.engineeringPlanStatus === "ready"
+          ? t("verdict.engineeringPlanStatus.ready")
+          : t("verdict.engineeringPlanStatus.pending"),
       deploymentRecommendation:
-        verdictDisplay === "SAFE TO DEPLOY"
-          ? "Proceed when your release process allows."
-          : verdictDisplay === "DEPLOY WITH WARNINGS"
-            ? "Address top priorities before wide rollout."
-            : "Do not deploy until blockers are resolved.",
+        verdictDisplay === t("verdict.display.safeToDeploy")
+          ? t("verdict.deploymentRecommendation.safe")
+          : verdictDisplay === t("verdict.display.deployWithWarnings")
+            ? t("verdict.deploymentRecommendation.warnings")
+            : t("verdict.deploymentRecommendation.blocked"),
       verdictStatus: input.verdict?.status ?? "insufficient_data",
       score: input.verdict?.score ?? 0,
     },
@@ -261,19 +275,19 @@ export function buildMissionControlView(input: MissionControlBuildInput): Missio
   };
 }
 
-function defaultFeed(input: MissionControlBuildInput) {
-  const items = [{ id: "1", message: "Mission Control initialized.", occurredAt: new Date().toISOString() }];
+function defaultFeed(input: MissionControlBuildInput, t: Translator) {
+  const items = [{ id: "1", message: t("feed.initialized"), occurredAt: new Date().toISOString() }];
   if (input.scanInProgress) {
     items.unshift({
       id: "2",
-      message: "Discovery in progress.",
+      message: t("feed.discoveryInProgress"),
       occurredAt: new Date().toISOString(),
     });
   }
   if (input.verdict) {
     items.unshift({
       id: "3",
-      message: "Production Verdict updated.",
+      message: t("feed.verdictUpdated"),
       occurredAt: input.verdict.generatedAt,
     });
   }

@@ -1,4 +1,5 @@
 import type { ProductionVerdictV1, VerdictStatus } from "@/brain/production-verdict/schema";
+import type { Translator } from "@/lib/i18n/types";
 
 export type MissionTeamId =
   | "browser"
@@ -50,11 +51,7 @@ export type MissionObjectiveState = {
   priorityId?: string;
 };
 
-export type MissionVerdictDisplay =
-  | "SAFE TO DEPLOY"
-  | "DEPLOY WITH WARNINGS"
-  | "BLOCKED"
-  | "INSUFFICIENT EVIDENCE";
+export type MissionVerdictDisplay = string;
 
 export type MissionVerdictCard = {
   display: MissionVerdictDisplay;
@@ -109,6 +106,7 @@ export type MissionControlBuildInput = {
   /** RT10 LLM metrics when available on scan metadata. */
   llmMetrics?: import("@/server/ai-red-team/llm-team/integration/platform-payload").LlmMissionControlMetrics;
   cancelledReview?: MissionCancelledReview | null;
+  t?: Translator;
 };
 
 export const MISSION_TEAMS: Array<{ id: MissionTeamId; name: string }> = [

@@ -3,27 +3,29 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n/client";
 
 export function MissionControlSubNav({ projectId }: { projectId: string }) {
   const pathname = usePathname();
+  const { t } = useI18n("missionControl");
   const missionHref = `/projects/${projectId}/mission-control`;
   const attackHref = `/projects/${projectId}/attack-center`;
 
   const tabs = [
     {
       href: missionHref,
-      label: "Overview",
+      label: t("subNav.overview"),
       active: pathname.startsWith(missionHref) && !pathname.startsWith(attackHref),
     },
     {
       href: attackHref,
-      label: "Security test",
+      label: t("subNav.securityTest"),
       active: pathname.startsWith(attackHref),
     },
   ];
 
   return (
-    <nav aria-label="Mission sections" className="flex flex-wrap gap-2 mb-8">
+    <nav aria-label={t("subNav.ariaLabel")} className="flex flex-wrap gap-2 mb-8">
       {tabs.map((tab) => (
         <Link
           key={tab.href}

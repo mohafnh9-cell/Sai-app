@@ -1,0 +1,58 @@
+{
+  "loading": "Cargando…",
+  "disabled": {
+    "headline": "Las pruebas de seguridad no están disponibles",
+    "description": "Pide a tu administrador que active esta función para tu proyecto.",
+    "action": "No disponible"
+  },
+  "error": {
+    "headline": "Algo salió mal.",
+    "tryAgain": "Reintentar",
+    "hideDetails": "Ocultar detalles",
+    "showDetails": "Detalles técnicos"
+  },
+  "back": "← Volver",
+  "deployWithConfidence": "Desplegar con confianza",
+  "campaign": {
+    "title": "Prueba de seguridad",
+    "checksDone": "{done} de {total} comprobaciones completadas",
+    "testDetails": "Detalles de la prueba",
+    "show": "Mostrar",
+    "hide": "Ocultar",
+    "technicalDetails": "Detalles técnicos"
+  },
+  "execution": {
+    "title": "Prueba de seguridad",
+    "inProgress": "Prueba en curso",
+    "waitMessage": "Espera mientras termina esta comprobación.",
+    "technicalDetails": "Detalles técnicos"
+  },
+  "finding": {
+    "problemFound": "Problema detectado",
+    "howToProtect": "Cómo proteger tu app",
+    "protectionVerified": "Protección verificada",
+    "applyThenVerify": "Aplica la protección de arriba y luego comprueba que funciona.",
+    "verifyProtection": "Comprobar protección",
+    "technicalDetails": "Detalles técnicos",
+    "whatWeSaw": "Lo que vimos",
+    "expected": "Esperado:",
+    "observed": "Observado:",
+    "protectionForCursor": "Protección para Cursor",
+    "copied": "Copiado",
+    "copyProtection": "Copiar protección",
+    "reference": "Referencia:",
+    "back": "← Volver"
+  },
+  "apiErrors": {
+    "storageUnavailable": "El almacenamiento del Attack Center no está disponible. Aplica las migraciones ASE en Supabase.",
+    "refreshFailed": "El Attack Center no pudo actualizarse.",
+    "simulationUnavailable": "El almacenamiento de simulación no está disponible en este entorno.",
+    "loadFailed": "El Attack Center no pudo cargar los datos de la campaña.",
+    "invalidData": "El Attack Center recibió datos persistidos inválidos.",
+    "requestFailed": "La solicitud al Attack Center falló."
+  },
+  "page": {
+    "title": "Prueba de seguridad",
+    "backToMissionControl": "Mission Control"
+  }
+}

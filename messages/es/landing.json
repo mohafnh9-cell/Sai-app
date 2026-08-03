@@ -1,0 +1,94 @@
+{
+  "hero": {
+    "eyebrow": "Para Cursor, Claude Code y builders con IA",
+    "headline": "Descubre si tu aplicación creada con IA está lista para producción antes de desplegarla.",
+    "subline": "Conecta GitHub. Cada push se revisa automáticamente. Obtén un veredicto de producción y recomendaciones claras para mejorar tu código.",
+    "ctaPrimary": "Conectar tu repositorio",
+    "ctaSecondary": "Ver cómo funciona",
+    "footnote": "Beta privada · Primer veredicto en minutos"
+  },
+  "features": {
+    "productionVerdict": "Veredicto de producción",
+    "continuousReviews": "Revisiones continuas",
+    "recommendations": "Recomendaciones",
+    "history": "Historial de veredictos",
+    "githubConnection": "Conexión con repositorio de GitHub"
+  },
+  "productProof": {
+    "eyebrow": "Producto",
+    "title": "Tu veredicto de producción, actualizado en cada push.",
+    "subtitle": "SequrAI vigila tu repositorio. Cuando tu código cambia, ves si puedes desplegar — y qué corregir primero."
+  },
+  "flow": {
+    "eyebrow": "Cómo funciona",
+    "title": "Conecta. Haz push. Obtén tu veredicto.",
+    "steps": {
+      "connect": {
+        "word": "Conecta",
+        "line": "Vincula tu repositorio de GitHub."
+      },
+      "push": {
+        "word": "Push",
+        "line": "SequrAI ejecuta una revisión continua en cada cambio de código."
+      },
+      "verdict": {
+        "word": "Veredicto",
+        "line": "Consulta tu veredicto de producción — listo o no."
+      },
+      "deploy": {
+        "word": "Despliega",
+        "line": "Sigue las recomendaciones y lanza con confianza."
+      }
+    }
+  },
+  "preview": {
+    "verdictLabel": "Veredicto de producción",
+    "verdictStatus": "Casi listo",
+    "verdictSummary": "Corrige 3 problemas antes de desplegar a producción.",
+    "score": "Puntuación",
+    "continuousReviews": "Revisiones continuas",
+    "reviewsState": "Al día",
+    "lastReview": "Última revisión: {time}",
+    "lastReviewTime": "hace 2 min",
+    "reviewsHint": "Cada vez que tu código cambia, SequrAI lo revisa automáticamente.",
+    "recommendations": "Recomendaciones",
+    "recommendation1": "Elimina la service role key del bundle del cliente",
+    "recommendation2": "Añade un guard de auth a la ruta API de admin",
+    "recommendation3": "Restringe CORS a dominios de producción"
+  },
+  "pricing": {
+    "eyebrow": "Precios",
+    "title": "Builder Edition",
+    "subtitle": "Un plan. Todo lo incluido en V1. Sin equipos ni tiers enterprise.",
+    "perMonth": "/mes",
+    "privateBeta": {
+      "phase": "Beta privada",
+      "positioning": "Para indie hackers y builders con IA que lanzan cada semana.",
+      "cta": "Empezar beta privada"
+    },
+    "publicBeta": {
+      "phase": "Beta pública",
+      "positioning": "El mismo producto. Se abre tras la beta privada.",
+      "cta": "Unirse a la lista de espera"
+    },
+    "planName": "Builder Edition"
+  },
+  "finalCta": {
+    "headline": "Obtén tu veredicto de producción",
+    "subline": "Conecta tu repositorio. SequrAI revisa cada push automáticamente.",
+    "button": "Conectar tu repositorio"
+  },
+  "footer": {
+    "tagline": "Descubre si tu aplicación creada con IA está lista para producción antes de desplegarla.",
+    "product": "Producto",
+    "company": "Empresa",
+    "legal": "Legal",
+    "contact": "Contacto",
+    "privacy": "Privacidad",
+    "terms": "Términos",
+    "copyright": "© 2026 SequrAI"
+  },
+  "brand": {
+    "name": "SequrAI"
+  }
+}

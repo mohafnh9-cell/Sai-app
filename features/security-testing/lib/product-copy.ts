@@ -1,19 +1,10 @@
+import type { Translator } from "@/lib/i18n/types";
 import type { SecurityTestPhase, SecurityTestProgressStep } from "../types";
 
-/** User-facing journey labels — never expose internal engine terms. */
-export const PROGRESS_STEP_LABELS = {
-  choose: "Review code",
-  run: "Test application",
-  fix: "Protect app",
-  verify: "Verify protection",
-} as const;
-
-export const ESTIMATED_TEST_DURATION = "About 2 minutes";
-
-export const SAFETY_NOTE =
-  "Nothing in production will be modified. SequrAI only runs safe simulations.";
-
-export function buildProgressStepsForPhase(phase: SecurityTestPhase): SecurityTestProgressStep[] {
+export function buildProgressStepsForPhase(
+  phase: SecurityTestPhase,
+  t: Translator
+): SecurityTestProgressStep[] {
   const stepFor = (id: SecurityTestProgressStep["id"]): SecurityTestProgressStep["status"] => {
     const order: SecurityTestPhase[] = [
       "needs_review",
@@ -52,10 +43,10 @@ export function buildProgressStepsForPhase(phase: SecurityTestPhase): SecurityTe
   };
 
   return [
-    { id: "choose", label: PROGRESS_STEP_LABELS.choose, status: stepFor("choose") },
-    { id: "run", label: PROGRESS_STEP_LABELS.run, status: stepFor("run") },
-    { id: "fix", label: PROGRESS_STEP_LABELS.fix, status: stepFor("fix") },
-    { id: "verify", label: PROGRESS_STEP_LABELS.verify, status: stepFor("verify") },
+    { id: "choose", label: t("progressSteps.choose"), status: stepFor("choose") },
+    { id: "run", label: t("progressSteps.run"), status: stepFor("run") },
+    { id: "fix", label: t("progressSteps.fix"), status: stepFor("fix") },
+    { id: "verify", label: t("progressSteps.verify"), status: stepFor("verify") },
   ];
 }
 
@@ -68,89 +59,98 @@ export type PhaseScreenCopy = {
   showSafetyNote: boolean;
 };
 
-export function copyForPhase(phase: SecurityTestPhase): PhaseScreenCopy {
+export function copyForPhase(phase: SecurityTestPhase, t: Translator): PhaseScreenCopy {
+  const waitRaw = t(`phases.${phase}.waitMessage`);
+  const waitMessage = waitRaw.trim().length > 0 ? waitRaw : null;
+
   switch (phase) {
     case "needs_review":
       return {
-        headline: "Let's review your code first",
-        description:
-          "SequrAI reads your latest version so it knows what to test safely afterward.",
-        primaryActionLabel: "Review my code",
-        waitMessage: null,
+        headline: t("phases.needs_review.headline"),
+        description: t("phases.needs_review.description"),
+        primaryActionLabel: t("phases.needs_review.primaryAction"),
+        waitMessage,
         showEstimatedDuration: true,
         showSafetyNote: true,
       };
     case "preparing":
       return {
-        headline: "Preparing your test",
-        description: "Please wait while SequrAI gets everything ready.",
-        primaryActionLabel: "Please wait…",
-        waitMessage: "Checking login, permissions, APIs, and AI features…",
+        headline: t("phases.preparing.headline"),
+        description: t("phases.preparing.description"),
+        primaryActionLabel: t("phases.preparing.primaryAction"),
+        waitMessage,
         showEstimatedDuration: false,
         showSafetyNote: true,
       };
     case "ready":
       return {
-        headline: "Your code review is complete",
-        description:
-          "Now let's safely test how your application behaves in real situations.",
-        primaryActionLabel: "Test my application",
-        waitMessage: null,
+        headline: t("phases.ready.headline"),
+        description: t("phases.ready.description"),
+        primaryActionLabel: t("phases.ready.primaryAction"),
+        waitMessage,
         showEstimatedDuration: true,
         showSafetyNote: true,
       };
     case "running":
       return {
-        headline: "Testing your application",
-        description: "SequrAI is running safe tests. This usually takes a couple of minutes.",
-        primaryActionLabel: "View progress",
-        waitMessage: "Please wait — your app is being tested now.",
+        headline: t("phases.running.headline"),
+        description: t("phases.running.description"),
+        primaryActionLabel: t("phases.running.primaryAction"),
+        waitMessage,
         showEstimatedDuration: false,
         showSafetyNote: false,
       };
     case "issues_found":
       return {
-        headline: "We found a problem",
-        description:
-          "A user could reach data or actions they should not have access to.",
-        primaryActionLabel: "Protect my application",
-        waitMessage: null,
+        headline: t("phases.issues_found.headline"),
+        description: t("phases.issues_found.description"),
+        primaryActionLabel: t("phases.issues_found.primaryAction"),
+        waitMessage,
         showEstimatedDuration: false,
         showSafetyNote: false,
       };
     case "fix_ready":
       return {
-        headline: "Protection is ready",
-        description: "SequrAI prepared steps to close the gap we found.",
-        primaryActionLabel: "Protect my application",
-        waitMessage: null,
+        headline: t("phases.fix_ready.headline"),
+        description: t("phases.fix_ready.description"),
+        primaryActionLabel: t("phases.fix_ready.primaryAction"),
+        waitMessage,
         showEstimatedDuration: false,
         showSafetyNote: false,
       };
     case "protected":
       return {
-        headline: "Protection verified",
-        description: "We tried again and your application blocked the problem.",
-        primaryActionLabel: "Deploy with confidence",
-        waitMessage: null,
+        headline: t("phases.protected.headline"),
+        description: t("phases.protected.description"),
+        primaryActionLabel: t("phases.protected.primaryAction"),
+        waitMessage,
         showEstimatedDuration: false,
         showSafetyNote: false,
       };
     case "completed_clean":
       return {
-        headline: "Your application looks good",
-        description: "None of the safe tests found a way through in this version.",
-        primaryActionLabel: "Deploy with confidence",
-        waitMessage: null,
+        headline: t("phases.completed_clean.headline"),
+        description: t("phases.completed_clean.description"),
+        primaryActionLabel: t("phases.completed_clean.primaryAction"),
+        waitMessage,
         showEstimatedDuration: false,
         showSafetyNote: false,
       };
   }
 }
 
-export const EMPTY_STATE_COPY = {
-  headline: "Your application hasn't been tested yet",
-  description:
-    "SequrAI will safely simulate the most important problems real attackers try.",
-  primaryActionLabel: "Start security test",
-} as const;
+export function emptyStateCopy(t: Translator) {
+  return {
+    headline: t("emptyState.headline"),
+    description: t("emptyState.description"),
+    primaryActionLabel: t("emptyState.primaryAction"),
+  };
+}
+
+export function estimatedTestDuration(t: Translator): string {
+  return t("estimatedDuration");
+}
+
+export function safetyNote(t: Translator): string {
+  return t("safetyNote");
+}

@@ -14,9 +14,10 @@ import {
 import type { SecurityTestContext, SecurityTestOption } from "../types";
 import type { ProjectReviewUiContext } from "@/server/projects/review-ui-context";
 import { AnalyzeProjectButton } from "@/features/projects/components/AnalyzeProjectButton";
+import { useI18n } from "@/lib/i18n/client";
 import { PrimaryActionButton, SecurityTestHero } from "./SecurityTestHero";
 import { DEFAULT_SECURITY_TEST_IDS } from "../user-test-catalog";
-import { copyForPhase, SAFETY_NOTE } from "../lib/product-copy";
+import { copyForPhase, safetyNote } from "../lib/product-copy";
 
 function recommendedTestIds(tests: SecurityTestOption[]): string[] {
   const picked = tests.filter((test) => test.recommended).map((test) => test.id);
@@ -36,12 +37,13 @@ export function SecurityTestPanel({
   compact?: boolean;
 }) {
   const router = useRouter();
+  const { t } = useI18n("securityTest");
   const [chooseOpen, setChooseOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>(() => recommendedTestIds(context.availableTests));
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const screenCopy = copyForPhase(context.phase);
+  const screenCopy = copyForPhase(context.phase, t);
 
   const defaultTestIds = useMemo(
     () => recommendedTestIds(context.availableTests),
@@ -72,12 +74,12 @@ export function SecurityTestPanel({
         } | null;
 
         if (body?.code === "needs_review") {
-          setError("Review your code first, then you can test your application.");
+          setError(t("customize.reviewFirst"));
           return;
         }
 
         if (!response.ok || !body?.ok) {
-          setError(body?.error ?? "Could not start the security test.");
+          setError(body?.error ?? t("errors.startFailed"));
           return;
         }
 
@@ -88,7 +90,7 @@ export function SecurityTestPanel({
         setChooseOpen(false);
       }
     },
-    [context.attackCenterHref, projectId, router]
+    [context.attackCenterHref, projectId, router, t]
   );
 
   const toggleTest = (testId: string) => {
@@ -187,7 +189,7 @@ export function SecurityTestPanel({
                   setChooseOpen(true);
                 }}
               >
-                Customize which tests to run
+                {t("customize.link")}
               </button>
             ) : null}
           </>
@@ -197,9 +199,9 @@ export function SecurityTestPanel({
       <Dialog open={chooseOpen} onOpenChange={setChooseOpen}>
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Customize your test</DialogTitle>
+            <DialogTitle>{t("customize.title")}</DialogTitle>
             <DialogDescription>
-              Pick what SequrAI should check. {SAFETY_NOTE}
+              {t("customize.description")} {safetyNote(t)}
             </DialogDescription>
           </DialogHeader>
           <ul className="space-y-3 py-2">
@@ -229,14 +231,14 @@ export function SecurityTestPanel({
               variant="outline"
               onClick={() => setSelectedIds(DEFAULT_SECURITY_TEST_IDS.slice() as unknown as string[])}
             >
-              Use recommended
+              {t("customize.useRecommended")}
             </Button>
             <Button
               type="button"
               disabled={selectedIds.length === 0 || starting}
               onClick={() => void startTests(selectedIds)}
             >
-              {starting ? "Starting…" : "Test my application"}
+              {starting ? t("customize.starting") : t("customize.start")}
             </Button>
           </DialogFooter>
         </DialogContent>

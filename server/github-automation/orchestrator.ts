@@ -131,7 +131,7 @@ async function createAutomationScan(
       scan_type: input.scanType,
       status: "queued",
       progress: 0,
-      progress_message: "Scan queued by GitHub automation",
+      progress_message: "githubQueued",
       branch: input.branch ?? null,
       commit_sha: input.commitSha ?? null,
     })

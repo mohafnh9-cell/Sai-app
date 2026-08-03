@@ -1,55 +1,61 @@
+"use client";
+
 import Link from "next/link";
 import { BrandLogo } from "@/components/landing/brand-logo";
-import { BRAND } from "@/content/landing";
+import { NAV_LINKS } from "@/content/landing";
+import { useI18n } from "@/lib/i18n/client";
 
 export function Footer() {
+  const { t: tl } = useI18n("landing");
+  const { t: tn } = useI18n("navigation");
+
   return (
     <footer className="border-t border-border bg-background-deep py-14 md:py-16">
       <div className="mx-auto max-w-[1200px] px-6">
         <div className="grid gap-10 md:grid-cols-4">
           <div className="md:col-span-1">
             <BrandLogo />
-            <p className="mt-4 max-w-xs text-sm text-text-muted">{BRAND.positioning}</p>
+            <p className="mt-4 max-w-xs text-sm text-text-muted">{tl("footer.tagline")}</p>
           </div>
 
           <div>
-            <p className="text-[11px] uppercase tracking-[0.18em] text-text-muted">Product</p>
+            <p className="text-[11px] uppercase tracking-[0.18em] text-text-muted">{tl("footer.product")}</p>
             <div className="mt-4 flex flex-col gap-2.5 text-sm text-muted-foreground">
-              <Link href="#product" className="hover:text-foreground transition-colors">
-                Product
-              </Link>
-              <Link href="#how-it-works" className="hover:text-foreground transition-colors">
-                How it works
-              </Link>
-              <Link href="#pricing" className="hover:text-foreground transition-colors">
-                Pricing
-              </Link>
+              {NAV_LINKS.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className="hover:text-foreground transition-colors"
+                >
+                  {tn(link.labelKey)}
+                </Link>
+              ))}
             </div>
           </div>
 
           <div>
-            <p className="text-[11px] uppercase tracking-[0.18em] text-text-muted">Company</p>
+            <p className="text-[11px] uppercase tracking-[0.18em] text-text-muted">{tl("footer.company")}</p>
             <div className="mt-4 flex flex-col gap-2.5 text-sm text-muted-foreground">
               <Link href="mailto:hi@sequrai.com" className="hover:text-foreground transition-colors">
-                Contact
+                {tl("footer.contact")}
               </Link>
             </div>
           </div>
 
           <div>
-            <p className="text-[11px] uppercase tracking-[0.18em] text-text-muted">Legal</p>
+            <p className="text-[11px] uppercase tracking-[0.18em] text-text-muted">{tl("footer.legal")}</p>
             <div className="mt-4 flex flex-col gap-2.5 text-sm text-muted-foreground">
               <Link href="/privacy" className="hover:text-foreground transition-colors">
-                Privacy
+                {tl("footer.privacy")}
               </Link>
               <Link href="/terms" className="hover:text-foreground transition-colors">
-                Terms
+                {tl("footer.terms")}
               </Link>
             </div>
           </div>
         </div>
 
-        <p className="mt-12 text-xs text-text-muted">© 2026 SequrAI</p>
+        <p className="mt-12 text-xs text-text-muted">{tl("footer.copyright")}</p>
       </div>
     </footer>
   );

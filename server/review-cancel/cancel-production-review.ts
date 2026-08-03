@@ -138,7 +138,7 @@ async function finalizeCancelledScan(
       cancellation_reason: USER_CANCELLED,
       progress_at_cancellation: input.progressAtCancellation,
       last_completed_phase: input.lastCompletedPhase,
-      progress_message: "Production review cancelled",
+      progress_message: "cancelled",
       error_code: USER_CANCELLED,
       error_message: "Review cancelled by user",
       failed_at: now,
@@ -184,7 +184,7 @@ async function finalizeCancelledScanLegacy(
       failed_at: now,
       error_code: USER_CANCELLED,
       error_message: "Review cancelled by user",
-      progress_message: "Production review cancelled",
+      progress_message: "cancelled",
     })
     .eq("id", input.reviewId)
     .eq("repository_id", input.projectId)
@@ -471,7 +471,7 @@ export async function cancelProductionReview(
       status: "cancelling",
       progress_at_cancellation: progressAtCancellation,
       last_completed_phase: lastCompletedPhase,
-      progress_message: "Cancelling production review",
+      progress_message: "cancelling",
     })
     .eq("id", input.reviewId)
     .eq("repository_id", input.projectId)

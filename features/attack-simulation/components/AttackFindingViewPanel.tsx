@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useI18n } from "@/lib/i18n/client";
 import type { AttackCenterFindingView } from "../types";
 import { PrimaryActionButton } from "@/features/security-testing/components/SecurityTestHero";
 import { EvidenceReportPanel } from "@/features/evidence-finding/components/EvidenceReportPanel";
@@ -16,6 +17,7 @@ export function AttackFindingViewPanel({
   verifying: boolean;
   onBack?: () => void;
 }) {
+  const { t } = useI18n("attackCenter");
   const { finding, mitigation, safeFix, evidence, protection, evidenceReport } = view;
   const [copied, setCopied] = useState(false);
   const isVerified = Boolean(protection);
@@ -31,7 +33,7 @@ export function AttackFindingViewPanel({
     <div className="space-y-8 max-w-2xl">
       <section className="surface-premium rounded-3xl p-8 sm:p-10 space-y-4">
         <div>
-          <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Problem found</p>
+          <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">{t("finding.problemFound")}</p>
           <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight mt-2">{finding.title}</h1>
         </div>
         <p className="text-sm sm:text-base text-muted-foreground">{finding.description}</p>
@@ -41,7 +43,7 @@ export function AttackFindingViewPanel({
 
       {mitigation ? (
         <section className="space-y-3">
-          <h2 className="text-base font-semibold">How to protect your app</h2>
+          <h2 className="text-base font-semibold">{t("finding.howToProtect")}</h2>
           <div className="rounded-xl border border-primary/30 bg-primary/5 p-5 space-y-3 text-sm">
             <p>{mitigation.plainLanguageExplanation}</p>
             <p className="font-medium text-base">{mitigation.recommendedProtection}</p>
@@ -56,39 +58,37 @@ export function AttackFindingViewPanel({
 
       {isVerified ? (
         <section className="rounded-xl border border-primary/30 bg-primary/5 p-5 text-sm">
-          <p className="font-medium text-base">Protection verified</p>
+          <p className="font-medium text-base">{t("finding.protectionVerified")}</p>
           <p className="mt-2 text-muted-foreground">{protection!.summary}</p>
         </section>
       ) : (
         <section className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            Apply the protection above, then verify it works.
-          </p>
+          <p className="text-sm text-muted-foreground">{t("finding.applyThenVerify")}</p>
           <PrimaryActionButton loading={verifying} onClick={onVerifyProtection}>
-            Verify protection
+            {t("finding.verifyProtection")}
           </PrimaryActionButton>
         </section>
       )}
 
       <details className="rounded-2xl border border-border/60">
         <summary className="cursor-pointer px-5 py-4 text-sm font-medium text-muted-foreground">
-          Technical details
+          {t("finding.technicalDetails")}
         </summary>
         <div className="px-5 pb-5 space-y-4 border-t border-border/40 pt-4 text-sm">
           {evidence ? (
             <div className="space-y-3">
-              <p className="text-xs uppercase tracking-wider text-muted-foreground">What we saw</p>
+              <p className="text-xs uppercase tracking-wider text-muted-foreground">{t("finding.whatWeSaw")}</p>
               <p>
-                <span className="font-medium">Expected:</span> {evidence.expectedBehavior}
+                <span className="font-medium">{t("finding.expected")}</span> {evidence.expectedBehavior}
               </p>
               <p>
-                <span className="font-medium">Observed:</span> {evidence.observedBehavior}
+                <span className="font-medium">{t("finding.observed")}</span> {evidence.observedBehavior}
               </p>
             </div>
           ) : null}
           {safeFix ? (
             <div className="space-y-2">
-              <p className="text-xs uppercase tracking-wider text-muted-foreground">Protection for Cursor</p>
+              <p className="text-xs uppercase tracking-wider text-muted-foreground">{t("finding.protectionForCursor")}</p>
               <pre className="rounded-lg border border-border/60 p-3 text-xs overflow-x-auto whitespace-pre-wrap bg-muted/20">
                 {safeFix.cursorPrompt}
               </pre>
@@ -97,11 +97,11 @@ export function AttackFindingViewPanel({
                 className="text-sm text-primary underline-offset-4 hover:underline"
                 onClick={() => void copyProtection()}
               >
-                {copied ? "Copied" : "Copy protection"}
+                {copied ? t("finding.copied") : t("finding.copyProtection")}
               </button>
             </div>
           ) : null}
-          <p className="text-xs text-muted-foreground font-mono">Reference: {finding.id.slice(0, 8)}</p>
+          <p className="text-xs text-muted-foreground font-mono">{t("finding.reference")} {finding.id.slice(0, 8)}</p>
         </div>
       </details>
 
@@ -111,7 +111,7 @@ export function AttackFindingViewPanel({
           className="text-sm text-muted-foreground underline-offset-4 hover:underline hover:text-foreground"
           onClick={onBack}
         >
-          ← Back
+          {t("finding.back")}
         </button>
       ) : null}
     </div>

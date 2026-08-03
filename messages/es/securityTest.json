@@ -1,0 +1,186 @@
+{
+  "title": "Prueba de seguridad",
+  "estimatedTime": "Tiempo estimado:",
+  "progressSteps": {
+    "choose": "Revisar código",
+    "run": "Probar aplicación",
+    "fix": "Proteger app",
+    "verify": "Comprobar protección"
+  },
+  "estimatedDuration": "Unos 2 minutos",
+  "safetyNote": "Nada en producción se modificará. SequrAI solo ejecuta simulaciones seguras.",
+  "stepLabel": "Paso {n}",
+  "emptyState": {
+    "headline": "Tu aplicación aún no ha sido probada",
+    "description": "SequrAI simulará de forma segura los problemas más importantes que intentan los atacantes reales.",
+    "primaryAction": "Iniciar prueba de seguridad"
+  },
+  "phases": {
+    "needs_review": {
+      "headline": "Primero revisemos tu código",
+      "description": "SequrAI lee tu última versión para saber qué probar de forma segura después.",
+      "primaryAction": "Revisar mi código",
+      "waitMessage": ""
+    },
+    "preparing": {
+      "headline": "Preparando tu prueba",
+      "description": "Espera mientras SequrAI prepara todo.",
+      "primaryAction": "Espera un momento…",
+      "waitMessage": "Comprobando login, permisos, APIs y funciones de IA…"
+    },
+    "ready": {
+      "headline": "La revisión de código está lista",
+      "description": "Ahora probemos de forma segura cómo se comporta tu aplicación en situaciones reales.",
+      "primaryAction": "Probar mi aplicación",
+      "waitMessage": ""
+    },
+    "running": {
+      "headline": "Probando tu aplicación",
+      "description": "SequrAI está ejecutando pruebas seguras. Suele tardar un par de minutos.",
+      "primaryAction": "Ver progreso",
+      "waitMessage": "Espera — tu app se está probando ahora."
+    },
+    "issues_found": {
+      "headline": "Encontramos un problema",
+      "description": "Un usuario podría acceder a datos o acciones que no debería.",
+      "primaryAction": "Proteger mi aplicación",
+      "waitMessage": ""
+    },
+    "fix_ready": {
+      "headline": "La protección está lista",
+      "description": "SequrAI preparó los pasos para cerrar la brecha que encontramos.",
+      "primaryAction": "Proteger mi aplicación",
+      "waitMessage": ""
+    },
+    "protected": {
+      "headline": "Protección verificada",
+      "description": "Lo intentamos de nuevo y tu aplicación bloqueó el problema.",
+      "primaryAction": "Desplegar con confianza",
+      "waitMessage": ""
+    },
+    "completed_clean": {
+      "headline": "Tu aplicación se ve bien",
+      "description": "Ninguna de las pruebas seguras encontró una vía de acceso en esta versión.",
+      "primaryAction": "Desplegar con confianza",
+      "waitMessage": ""
+    }
+  },
+  "executionStatus": {
+    "queued": "Esperando",
+    "planned": "Preparando",
+    "preparing": "Preparando",
+    "validating_preconditions": "Preparando",
+    "creating_fixtures": "Preparando",
+    "executing": "Probando ahora",
+    "observing": "Probando ahora",
+    "collecting_evidence": "Probando ahora",
+    "evaluating": "Comprobando",
+    "generating_mitigation": "Comprobando",
+    "confirmed": "Problema detectado",
+    "fix_ready": "Necesita protección",
+    "blocked": "Bloqueado",
+    "not_exploitable": "Parece seguro",
+    "protected": "Protegido",
+    "still_vulnerable": "Aún abierto",
+    "applying_fix": "Verificando",
+    "replaying": "Verificando",
+    "cleaning_up": "Verificando",
+    "completed": "Listo",
+    "failed": "No se pudo completar",
+    "cancelled": "Detenido",
+    "default": "Probando"
+  },
+  "liveStatus": {
+    "problemFound": "Problema detectado",
+    "testing": "Probando",
+    "protected": "Protegido",
+    "allDone": "Todo listo",
+    "inProgress": "En progreso"
+  },
+  "feed": {
+    "scenariosPlanned": "Pruebas seleccionadas",
+    "executionStarted": "Una prueba comenzó",
+    "evidenceCollected": "Prueba guardada",
+    "vulnerabilityConfirmed": "Problema detectado",
+    "notExploitable": "Esta prueba pasó",
+    "blockedByRuntime": "Tu app lo bloqueó",
+    "safeFixReady": "Protección lista",
+    "replayStarted": "Comprobando protección",
+    "protectionVerified": "Protección verificada",
+    "stillVulnerable": "Aún necesita corrección",
+    "attackFailed": "La prueba no pudo completarse",
+    "attackCancelled": "Prueba detenida",
+    "stepStarted": "Ahora: {step}",
+    "stepCompleted": "Hecho: {step}"
+  },
+  "customize": {
+    "link": "Personalizar qué pruebas ejecutar",
+    "title": "Personaliza tu prueba",
+    "description": "Elige qué debe comprobar SequrAI.",
+    "useRecommended": "Usar recomendadas",
+    "starting": "Iniciando…",
+    "start": "Probar mi aplicación",
+    "reviewFirst": "Revisa tu código primero; después podrás probar tu aplicación."
+  },
+  "errors": {
+    "startFailed": "No se pudo iniciar la prueba de seguridad.",
+    "verifyFailed": "No se pudo completar la verificación.",
+    "invalidProjectId": "ID de proyecto inválido",
+    "notEnabled": "Las pruebas de seguridad no están activadas para este proyecto.",
+    "selectAtLeastOne": "Selecciona al menos una prueba.",
+    "needsReviewFirst": "Ejecuta primero una revisión de seguridad para que SequrAI sepa qué versión probar.",
+    "mapFailed": "No se pudieron mapear las pruebas seleccionadas a escenarios."
+  },
+  "tests": {
+    "idor-cross-tenant": {
+      "title": "¿Puede alguien acceder a los datos de otro usuario?",
+      "description": "Comprueba si una cuenta puede leer o modificar registros de otra.",
+      "categoryLabel": "Acceso a datos"
+    },
+    "unauthenticated-endpoint": {
+      "title": "¿Se pueden abrir páginas protegidas sin iniciar sesión?",
+      "description": "Prueba si rutas sensibles aceptan solicitudes sin autenticación.",
+      "categoryLabel": "Protección de login"
+    },
+    "webhook-signature-bypass": {
+      "title": "¿Se pueden aceptar webhooks falsos?",
+      "description": "Simula llamadas webhook con firmas ausentes o inválidas.",
+      "categoryLabel": "Seguridad de webhooks"
+    },
+    "idempotency-replay": {
+      "title": "¿Puede la misma acción cobrar o mutar datos dos veces?",
+      "description": "Envía la misma solicitud dos veces para detectar efectos duplicados.",
+      "categoryLabel": "Seguridad de pagos"
+    },
+    "double-credit-consumption": {
+      "title": "¿Se pueden gastar créditos o cuotas más de una vez?",
+      "description": "Intenta consumir repetidamente el mismo saldo.",
+      "categoryLabel": "Seguridad de facturación"
+    },
+    "workflow-bypass": {
+      "title": "¿Se puede saltar un paso de checkout o aprobación?",
+      "description": "Intenta saltar estados obligatorios del flujo.",
+      "categoryLabel": "Reglas de negocio"
+    },
+    "rag-prompt-injection": {
+      "title": "¿Puede el contenido subido secuestrar respuestas de IA?",
+      "description": "Usa documentos simulados seguros para probar manipulación en recuperación.",
+      "categoryLabel": "Seguridad de IA"
+    },
+    "unauthorized-tool-invocation": {
+      "title": "¿Puede la IA invocar herramientas que no debería?",
+      "description": "Simula llamadas a herramientas fuera del perfil permitido.",
+      "categoryLabel": "Seguridad de IA"
+    },
+    "memory-isolation": {
+      "title": "¿Puede un usuario leer la memoria de IA de otro?",
+      "description": "Comprueba si la recuperación de memoria cruza límites entre usuarios.",
+      "categoryLabel": "Privacidad de IA"
+    },
+    "rag-poisoning": {
+      "title": "¿Pueden documentos envenenados cambiar el comportamiento de la IA?",
+      "description": "Observa cómo la app maneja contenido recuperado no confiable.",
+      "categoryLabel": "Seguridad de IA"
+    }
+  }
+}

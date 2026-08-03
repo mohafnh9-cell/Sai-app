@@ -11,6 +11,7 @@ import {
   buildProgressStepsForPhase,
   copyForPhase,
 } from "@/features/security-testing/lib/product-copy";
+import { getTranslator } from "@/lib/i18n/server";
 import { extractAttackHypothesesFromRedTeamReport } from "./integration/extract-hypotheses-from-report";
 import { listAttackCampaignsForProject } from "./persistence/campaign-repository";
 import type { AttackHypothesis } from "./contracts/attack-hypothesis";
@@ -100,12 +101,14 @@ export async function getSecurityTestContext(
       }
     : null;
 
+  const { t } = await getTranslator("securityTest");
+
   const report = parseRedTeamReportFromMetadata(latestScanJobForScan.data?.metadata);
   const hypotheses = extractAttackHypothesesFromRedTeamReport(report);
   const availableTests =
     hypotheses.length > 0
-      ? buildSecurityTestOptionsFromHypotheses(hypotheses)
-      : buildDefaultSecurityTestOptions();
+      ? buildSecurityTestOptionsFromHypotheses(hypotheses, t)
+      : buildDefaultSecurityTestOptions(t);
 
   const latestCampaign = campaigns[0]
     ? {
@@ -120,7 +123,7 @@ export async function getSecurityTestContext(
     : null;
 
   const phase = derivePhase({ reviewInProgress, latestScan, campaign: latestCampaign });
-  const copy = copyForPhase(phase);
+  const copy = copyForPhase(phase, t);
 
   return {
     phase,
@@ -132,7 +135,7 @@ export async function getSecurityTestContext(
     latestScan,
     campaign: latestCampaign,
     availableTests,
-    progressSteps: buildProgressStepsForPhase(phase),
+    progressSteps: buildProgressStepsForPhase(phase, t),
     attackCenterHref,
     hypotheses,
   };

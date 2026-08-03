@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { buildMissionControlView } from "@/features/mission-control/lib/build-mission-control-view";
+import { getTranslator } from "@/lib/i18n/server";
 import { parseMissionTeamExecutionFromMetadata } from "@/features/mission-control/lib/parse-team-execution";
 import {
   mergeTeamExecutionFromMetadata,
@@ -104,21 +105,27 @@ export async function getMissionControlView(
   const businessLogicMetrics = parseBusinessLogicMetricsFromMetadata(meta);
   const llmMetrics = parseLlmMetricsFromMetadata(meta);
 
-  const view = buildMissionControlView({
-    projectId,
-    projectName: project?.name ?? "Project",
-    verdict,
-    scanInProgress,
-    detectedStack: (latestScan.data?.detected_stack as Record<string, unknown>) ?? null,
-    feedFromDb,
-    sessionProgress: typeof meta.progress === "number" ? meta.progress : null,
-    sessionPhase: typeof meta.phase === "string" ? meta.phase : null,
-    sessionEtaSeconds: typeof meta.etaSeconds === "number" ? meta.etaSeconds : null,
-    teamExecution: Object.keys(teamExecution).length > 0 ? teamExecution : undefined,
-    businessLogicMetrics,
-    llmMetrics,
-    cancelledReview,
-  });
+  const { locale, t } = await getTranslator("missionControl");
+
+  const view = buildMissionControlView(
+    {
+      projectId,
+      projectName: project?.name ?? "Project",
+      verdict,
+      scanInProgress,
+      detectedStack: (latestScan.data?.detected_stack as Record<string, unknown>) ?? null,
+      feedFromDb,
+      sessionProgress: typeof meta.progress === "number" ? meta.progress : null,
+      sessionPhase: typeof meta.phase === "string" ? meta.phase : null,
+      sessionEtaSeconds: typeof meta.etaSeconds === "number" ? meta.etaSeconds : null,
+      teamExecution: Object.keys(teamExecution).length > 0 ? teamExecution : undefined,
+      businessLogicMetrics,
+      llmMetrics,
+      cancelledReview,
+      t,
+    },
+    locale
+  );
 
   return { view, verdict };
 }
