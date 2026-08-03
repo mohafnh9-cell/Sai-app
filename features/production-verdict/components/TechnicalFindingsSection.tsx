@@ -21,12 +21,14 @@ import { SafeFixMetrics } from "./SafeFixMetrics";
 import {
   findingConfidence,
   findingEvidence,
+  findingEvidenceReport,
   findingFile,
   findingLine,
   findingSnippet,
   findingStatus,
   type ScanFinding,
 } from "@/features/security-scanner/components/types";
+import { EvidenceReportPanel } from "@/features/evidence-finding/components/EvidenceReportPanel";
 
 const SEVERITY_ORDER: Record<string, number> = {
   CRITICAL: 0,
@@ -139,6 +141,7 @@ function FindingCard({
         currentScore: fixPromptContext?.currentScore,
       })
     : null;
+  const evidenceReport = findingEvidenceReport(finding);
 
   return (
     <Card key={finding.id || `${finding.rule_id}-${path}-${line}-${index}`}>
@@ -161,6 +164,22 @@ function FindingCard({
         )}
       </CardHeader>
       <CardContent className="space-y-4 text-sm">
+        {evidenceReport ? (
+          <div className="grid gap-2 sm:grid-cols-3 text-xs">
+            <div>
+              <p className="text-muted-foreground">Confidence</p>
+              <p className="font-semibold tabular-nums">{evidenceReport.confidencePercent}%</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">False positive</p>
+              <p className="font-semibold tabular-nums">{evidenceReport.falsePositivePercent}%</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">Detection</p>
+              <p className="font-medium">{evidenceReport.detectionMethod.replaceAll("_", " ")}</p>
+            </div>
+          </div>
+        ) : null}
         {finding.description && <p>{finding.description}</p>}
         {path && (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -198,6 +217,7 @@ function FindingCard({
             <p>{finding.recommendation}</p>
           </div>
         )}
+        {evidenceReport ? <EvidenceReportPanel report={evidenceReport} /> : null}
         {fixPromptInput && (
           <div className="space-y-3 border-t border-border/50 pt-3">
             <SafeFixMetrics input={fixPromptInput} />

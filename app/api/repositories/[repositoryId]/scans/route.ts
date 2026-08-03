@@ -24,6 +24,7 @@ import { webScansPerRepositoryPerHourLimit } from "@/lib/env/scan-rate-limit";
 import { INNGEST_NOT_CONFIGURED } from "@/lib/env/inngest-config";
 import { commitsMatch } from "@/lib/repository-sync/commits-match";
 import { randomUUID } from "crypto";
+import { resolveReviewIdempotency } from "@/brain/review-engine/idempotency";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -182,6 +183,36 @@ export async function POST(
       targetCommitSha: resolvedCommit.commitSha,
       targetBranch: resolvedCommit.branch,
     });
+
+    const idempotency = await resolveReviewIdempotency(admin, {
+      projectId: project.id,
+      commitSha: resolvedCommit.commitSha,
+      reviewType: "manual",
+    });
+
+    if (idempotency.action === "reuse_completed") {
+      return NextResponse.json(
+        {
+          scanId: idempotency.scan.id,
+          scan: idempotency.scan,
+          reused: true,
+          message: "Review already completed for this commit — reusing existing results.",
+        },
+        { status: 200 }
+      );
+    }
+
+    if (idempotency.action === "resume_active") {
+      return NextResponse.json(
+        {
+          scanId: idempotency.scan.id,
+          scan: idempotency.scan,
+          resumed: true,
+          message: "Review already in progress for this commit — resuming existing run.",
+        },
+        { status: 200 }
+      );
+    }
 
     let scan: { id: string; [key: string]: unknown } | null = null;
     let insertError: { code?: string; message: string } | null = null;

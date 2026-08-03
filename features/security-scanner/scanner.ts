@@ -6,6 +6,7 @@ import { createDefaultRegistry, RuleRegistry } from "./rules/registry";
 import type { RuleContext } from "./rules/types";
 import { scoreFindings } from "./scoring";
 import { detectStack } from "./stack";
+import { postProcessScanFindings } from "@/brain/evidence-finding/enrich-scan-finding";
 import type { Finding, FindingDraft, InputFile, ScanOmission, ScanResult } from "./types";
 
 export interface ScanOptions extends ScanConfigInput {
@@ -52,7 +53,12 @@ export async function scanRepository(files: readonly InputFile[], options: ScanO
   }
 
   const allFindings = drafts.map(finalizeFinding);
-  const findings = deduplicateFindings(allFindings);
+  const deduped = deduplicateFindings(allFindings);
+  const findings = postProcessScanFindings(
+    deduped,
+    normalized.files.map((file) => file.path),
+    normalized.files
+  );
   const durationMs = Math.max(0, config.now() - startedAt);
   return {
     findings,

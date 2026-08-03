@@ -1,0 +1,141 @@
+"use client";
+
+import { useState } from "react";
+import type { EvidenceItem, EvidenceReport, RuleInfo } from "@/brain/evidence-finding/schema";
+
+function EvidenceList({ title, items }: { title: string; items: EvidenceItem[] }) {
+  if (items.length === 0) return null;
+  return (
+    <section className="space-y-3">
+      <h3 className="text-sm font-semibold">{title}</h3>
+      <ul className="space-y-2">
+        {items.map((item) => (
+          <li key={item.id} className="rounded-xl border border-border/60">
+            <details className="group">
+              <summary className="cursor-pointer px-4 py-3 text-sm font-medium list-none flex items-center justify-between">
+                <span>✓ {item.label}</span>
+                {item.confidence != null ? (
+                  <span className="text-xs text-muted-foreground tabular-nums">
+                    {Math.round(item.confidence * 100)}%
+                  </span>
+                ) : null}
+              </summary>
+              {item.detail ? (
+                <div className="px-4 pb-3 text-sm text-muted-foreground whitespace-pre-wrap border-t border-border/40 pt-3">
+                  {item.detail}
+                </div>
+              ) : null}
+            </details>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function RuleBlock({ rule }: { rule: RuleInfo }) {
+  return (
+    <div className="rounded-lg border border-border/50 px-3 py-2 text-xs space-y-1">
+      <p className="font-medium">{rule.ruleName}</p>
+      {rule.ruleDescription ? <p className="text-muted-foreground">{rule.ruleDescription}</p> : null}
+      <p className="text-muted-foreground">Rule ID: {rule.ruleId}</p>
+      {rule.cwe?.length ? <p className="text-muted-foreground">CWE: {rule.cwe.join(", ")}</p> : null}
+      {rule.owasp?.length ? <p className="text-muted-foreground">OWASP: {rule.owasp.join(", ")}</p> : null}
+    </div>
+  );
+}
+
+export function EvidenceReportPanel({ report }: { report: EvidenceReport }) {
+  const [showTechnical, setShowTechnical] = useState(false);
+
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-sm">
+        <div className="rounded-xl border border-border/60 px-4 py-3">
+          <p className="text-xs text-muted-foreground uppercase tracking-wider">Confidence</p>
+          <p className="mt-1 font-semibold tabular-nums">{report.confidencePercent}%</p>
+        </div>
+        <div className="rounded-xl border border-border/60 px-4 py-3">
+          <p className="text-xs text-muted-foreground uppercase tracking-wider">False positive</p>
+          <p className="mt-1 font-semibold tabular-nums">{report.falsePositivePercent}%</p>
+        </div>
+        <div className="rounded-xl border border-border/60 px-4 py-3">
+          <p className="text-xs text-muted-foreground uppercase tracking-wider">Detection</p>
+          <p className="mt-1 font-medium">{report.detectionMethod.replaceAll("_", " ")}</p>
+        </div>
+        <div className="rounded-xl border border-border/60 px-4 py-3">
+          <p className="text-xs text-muted-foreground uppercase tracking-wider">Status</p>
+          <p className="mt-1 font-medium">{report.statusLabel}</p>
+        </div>
+      </div>
+
+      <p className="text-sm text-muted-foreground">{report.confidenceExplanation}</p>
+      <p className="text-sm text-muted-foreground">{report.falsePositiveExplanation}</p>
+
+      <EvidenceList title="Evidence" items={report.evidence} />
+      <EvidenceList title="Counter evidence" items={report.counterEvidence} />
+
+      <section className="space-y-2">
+        <h3 className="text-sm font-semibold">Reasoning</h3>
+        <p className="text-sm text-muted-foreground">{report.reasoning}</p>
+      </section>
+
+      {report.recommendedFix ? (
+        <section className="space-y-2">
+          <h3 className="text-sm font-semibold">Recommended fix</h3>
+          <p className="text-sm">{report.recommendedFix}</p>
+        </section>
+      ) : null}
+
+      <button
+        type="button"
+        className="text-sm text-muted-foreground underline-offset-4 hover:underline"
+        onClick={() => setShowTechnical((value) => !value)}
+      >
+        {showTechnical ? "Hide technical details" : "Show technical details"}
+      </button>
+
+      {showTechnical ? (
+        <div className="space-y-4 rounded-xl border border-border/60 p-4 text-sm">
+          {report.affectedFiles.length > 0 ? (
+            <div className="space-y-2">
+              <p className="font-medium">Affected files</p>
+              <ul className="space-y-1 text-muted-foreground">
+                {report.affectedFiles.map((file) => (
+                  <li key={`${file.path}:${file.line ?? 0}`}>
+                    {file.path}
+                    {file.line ? `:${file.line}` : ""}
+                    {file.column ? `:${file.column}` : ""}
+                    {file.matchedRule ? ` · ${file.matchedRule}` : ""}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {report.matchedRules.length > 0 ? (
+            <div className="space-y-2">
+              <p className="font-medium">Rules</p>
+              <div className="space-y-2">
+                {report.matchedRules.map((rule) => (
+                  <RuleBlock key={rule.ruleId} rule={rule} />
+                ))}
+              </div>
+            </div>
+          ) : null}
+          {report.runtimeEvidence?.length ? (
+            <EvidenceList title="Runtime evidence" items={report.runtimeEvidence} />
+          ) : null}
+          {report.replayEvidence?.length ? (
+            <EvidenceList title="Replay evidence" items={report.replayEvidence} />
+          ) : null}
+          {report.verificationStatus ? (
+            <p className="text-muted-foreground">Verification: {report.verificationStatus}</p>
+          ) : null}
+          {report.projectType ? (
+            <p className="text-muted-foreground">Project type: {report.projectType.replaceAll("_", " ")}</p>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}

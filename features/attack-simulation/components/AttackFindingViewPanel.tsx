@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { AttackCenterFindingView } from "../types";
 import { PrimaryActionButton } from "@/features/security-testing/components/SecurityTestHero";
+import { EvidenceReportPanel } from "@/features/evidence-finding/components/EvidenceReportPanel";
 
 export function AttackFindingViewPanel({
   view,
@@ -15,7 +16,7 @@ export function AttackFindingViewPanel({
   verifying: boolean;
   onBack?: () => void;
 }) {
-  const { finding, mitigation, safeFix, evidence, protection } = view;
+  const { finding, mitigation, safeFix, evidence, protection, evidenceReport } = view;
   const [copied, setCopied] = useState(false);
   const isVerified = Boolean(protection);
 
@@ -35,6 +36,8 @@ export function AttackFindingViewPanel({
         </div>
         <p className="text-sm sm:text-base text-muted-foreground">{finding.description}</p>
       </section>
+
+      {evidenceReport ? <EvidenceReportPanel report={evidenceReport} /> : null}
 
       {mitigation ? (
         <section className="space-y-3">

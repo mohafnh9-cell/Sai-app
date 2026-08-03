@@ -2,7 +2,10 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { scanRepository as scanRepositoryFiles, scoreFindings } from "@/features/security-scanner";
+import {
+  buildRepositoryModel,
+  toRepositoryModelSummary,
+} from "@/brain/repository-model";
 import type { Confidence, Finding as ScannerFinding, Severity } from "@/features/security-scanner";
 import { generateAndPersistProductionVerdict } from "@/server/production-verdict/service";
 import {
@@ -15,6 +18,10 @@ import {
   parseGitHubRepository,
 } from "@/lib/github/repository-service";
 import { commitsMatch } from "@/lib/repository-sync/commits-match";
+import {
+  mergeReviewPipelineMetadata,
+  reviewPhaseProgressForScan,
+} from "@/brain/review-engine/state-machine";
 
 const ACTIVE_SCAN_UPDATE_STATUSES = [
   "queued",
@@ -131,8 +138,11 @@ function findingRow(
 export class InlineScanJobRunner implements ScanJobRunner {
   constructor(private readonly supabase: SupabaseClient) {}
 
+  private scanStartedAtMs: number | null = null;
+
   async run(context: ScanContext): Promise<void> {
     const started = Date.now();
+    this.scanStartedAtMs = started;
     try {
       logScan("info", "scan_started", {
         scanId: context.scanId,
@@ -238,6 +248,15 @@ export class InlineScanJobRunner implements ScanJobRunner {
       }
 
       const result = await scanRepositoryFiles(snapshot.files);
+      const repositoryModel = buildRepositoryModel(
+        snapshot.files.map((file) => ({
+          path: file.path,
+          extension: file.path.includes(".") ? `.${file.path.split(".").pop()}` : "",
+          content: file.content,
+          size: file.content.length,
+        })),
+        result.stack
+      );
       let rows = result.findings.map((finding) => findingRow(context, finding));
       let scoreBreakdown = result.score;
       let stack = result.stack;
@@ -245,6 +264,7 @@ export class InlineScanJobRunner implements ScanJobRunner {
         ...result.metrics,
         changedPaths: snapshot.changedPaths ?? [],
         scanType: isIncremental ? "incremental" : "full",
+        repositoryModel: toRepositoryModelSummary(repositoryModel),
       } as Record<string, unknown>;
 
       if (isIncremental && snapshot.changedPaths?.length) {
@@ -606,11 +626,39 @@ export class InlineScanJobRunner implements ScanJobRunner {
   }
 
   private async updateScan(scanId: string, values: Record<string, unknown>) {
-    const updated = await this.updateActiveScan(scanId, values);
+    const enriched = this.withReviewPipeline(values);
+    const updated = await this.updateActiveScan(scanId, enriched);
     if (!updated) {
       logScan("info", "scan_update_superseded", { scanId });
     }
     return updated;
+  }
+
+  private withReviewPipeline(values: Record<string, unknown>): Record<string, unknown> {
+    const status = values.status;
+    if (typeof status !== "string") return values;
+
+    const progress = reviewPhaseProgressForScan({
+      scanStatus: status,
+      progress: typeof values.progress === "number" ? values.progress : null,
+      message: typeof values.progress_message === "string" ? values.progress_message : null,
+      startedAtMs: this.scanStartedAtMs,
+    });
+
+    const metrics =
+      values.metrics && typeof values.metrics === "object" && !Array.isArray(values.metrics)
+        ? (values.metrics as Record<string, unknown>)
+        : {};
+
+    return {
+      ...values,
+      metrics: mergeReviewPipelineMetadata(metrics, {
+        phase: progress.phase,
+        percentage: progress.percentage,
+        message: progress.message,
+        log: `${progress.phase}: ${progress.message}`,
+      }),
+    };
   }
 
   private async updateState(context: ScanContext, values: Record<string, unknown>) {

@@ -1,15 +1,20 @@
 import type { AttackEvidence } from "../contracts/attack-evidence";
-import type { AttackFindingOutcome } from "../contracts/enums";
+import type { AttackFindingOutcome, AttackRuntimeMode } from "../contracts/enums";
 import type { AttackScenario } from "../contracts/attack-scenario";
 import type { EvidenceCaptureBuffer } from "../evidence/capture-buffer";
 
+export type AttackConfirmationStatus = "confirmed" | "potential" | "not_exploitable" | "inconclusive";
+
 export type AttackOutcomeEvaluation = {
   outcome: AttackFindingOutcome;
+  confirmationStatus: AttackConfirmationStatus;
   severity: "info" | "low" | "medium" | "high" | "critical";
   impact: string;
   rootCause: string | null;
   rationale: string;
   exploitable: boolean;
+  exploitSignalHits: number;
+  protectionSignalHits: number;
 };
 
 export type MitigationTemplate = {
@@ -263,51 +268,72 @@ export function evaluateAttackOutcome(input: {
   scenario: Pick<AttackScenario, "adapterId" | "title" | "category">;
   buffer?: EvidenceCaptureBuffer;
   executionBlocked?: boolean;
+  runtimeMode?: AttackRuntimeMode;
 }): AttackOutcomeEvaluation {
   const template = getMitigationTemplate(input.scenario.adapterId);
   const haystack = haystackFromEvidence(input.evidence, input.buffer);
   const exploitHits = countSignals(haystack, template.exploitSignals);
   const protectionHits = countSignals(haystack, template.protectionSignals);
+  const runtimeMode = input.runtimeMode ?? "mock";
+  const confirmsInLiveRuntime = runtimeMode === "sandbox" || runtimeMode === "authorized_staging";
 
   if (input.executionBlocked || protectionHits > exploitHits) {
     return {
       outcome: "not_exploitable",
+      confirmationStatus: "not_exploitable",
       severity: "info",
-      impact: "Safe runtime or application protections prevented exploitation in this run.",
+      impact: "Application protections prevented exploitation in this run.",
       rootCause: null,
       rationale: "Protection signals outweighed exploit indicators or runtime blocked the attack.",
       exploitable: false,
+      exploitSignalHits: exploitHits,
+      protectionSignalHits: protectionHits,
     };
   }
 
   if (exploitHits > 0 && input.evidence.confidence >= 0.55) {
+    const confirmationStatus: AttackConfirmationStatus = confirmsInLiveRuntime ? "confirmed" : "potential";
+    const outcome: AttackFindingOutcome = confirmsInLiveRuntime ? "confirmed" : "inconclusive";
     return {
-      outcome: "confirmed",
+      outcome,
+      confirmationStatus,
       severity: template.defaultSeverity,
-      impact: `Attack scenario "${input.scenario.title}" appears exploitable under ${input.scenario.category} assumptions.`,
+      impact: confirmsInLiveRuntime
+        ? `Scenario "${input.scenario.title}" was reproduced under ${runtimeMode.replaceAll("_", " ")} conditions.`
+        : `Scenario "${input.scenario.title}" shows potential weakness in mock simulation — live verification recommended.`,
       rootCause: template.rootCause,
-      rationale: `Matched ${exploitHits} exploit signal(s) with evidence confidence ${input.evidence.confidence}.`,
+      rationale: confirmsInLiveRuntime
+        ? `Matched ${exploitHits} exploit signal(s) with runtime evidence confidence ${input.evidence.confidence}.`
+        : `Matched ${exploitHits} exploit signal(s) in ${runtimeMode} mode. Mock results indicate a potential vulnerability, not a live confirmation.`,
       exploitable: true,
+      exploitSignalHits: exploitHits,
+      protectionSignalHits: protectionHits,
     };
   }
 
   if (input.evidence.confidence >= 0.75 && input.evidence.statusCode != null && input.evidence.statusCode < 400) {
     return {
       outcome: "inconclusive",
+      confirmationStatus: "inconclusive",
       severity: "medium",
-      impact: "Attack completed without clear exploit or protection signals.",
+      impact: "The test completed without clear exploit or protection signals.",
       rootCause: null,
       rationale: "Successful response without strong exploit/protection indicators.",
       exploitable: false,
+      exploitSignalHits: exploitHits,
+      protectionSignalHits: protectionHits,
     };
   }
 
   return {
     outcome: "not_exploitable",
+    confirmationStatus: "not_exploitable",
     severity: "info",
     impact: "No exploitable behavior was confirmed from collected evidence.",
     rootCause: null,
     rationale: "Insufficient exploit signals in observed behavior.",
     exploitable: false,
+    exploitSignalHits: exploitHits,
+    protectionSignalHits: protectionHits,
   };
 }

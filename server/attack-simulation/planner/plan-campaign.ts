@@ -95,6 +95,7 @@ export function planAttackCampaign(input: {
     projectId: input.campaign.projectId,
     runtimeMode: input.campaign.runtimeMode,
     hypotheses: input.hypotheses,
+    repositoryModel: input.repositoryModel,
   });
 
   const scenarios = input.scenarios ?? [];
@@ -115,6 +116,7 @@ export function plannedScenarioInputsFromHypotheses(input: {
   hypotheses: AttackHypothesis[];
   authorization?: AttackAuthorizationRecord | null;
   targetUrl?: string | null;
+  repositoryModel?: RepositoryModel | null;
 }) {
   const precondition = validateAttackPreconditions({
     campaign: input.campaign,
@@ -131,6 +133,7 @@ export function plannedScenarioInputsFromHypotheses(input: {
     projectId: input.campaign.projectId,
     runtimeMode: input.campaign.runtimeMode,
     hypotheses: input.hypotheses,
+    repositoryModel: input.repositoryModel,
   });
 
   return { precondition, planned, skipped };

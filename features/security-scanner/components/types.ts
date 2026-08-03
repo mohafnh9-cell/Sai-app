@@ -1,3 +1,5 @@
+import { parseEvidenceReport } from "@/brain/evidence-finding/schema";
+
 export type ScanSeverity = "CRITICAL" | "HIGH" | "MEDIUM" | "LOW" | "INFO";
 
 export type ScanRecord = {
@@ -86,6 +88,9 @@ export const findingConfidence = (finding: ScanFinding) =>
 export const findingEvidence = (finding: ScanFinding) =>
   finding.evidence ??
   (typeof finding.metadata?.evidence === "string" ? finding.metadata.evidence : undefined);
+
+export const findingEvidenceReport = (finding: ScanFinding) =>
+  parseEvidenceReport(finding.metadata?.evidenceReport);
 
 export function severityCount(scan: ScanRecord, severity: ScanSeverity) {
   return (

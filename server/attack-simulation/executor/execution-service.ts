@@ -75,6 +75,7 @@ export type ExecuteAttackExecutionInput = {
   targetUrl?: string | null;
   authorization?: AttackAuthorizationRecord | null;
   signal?: AttackExecutionRunSignal;
+  projectFilePaths?: readonly string[];
 };
 
 export type ExecuteAttackExecutionResult =
@@ -337,6 +338,7 @@ export async function executeAttackExecution(
         executionBlocked: !runResult.ok || runResult.terminalStatus === "blocked",
         correlationId: execution.correlationId,
         skipIfExists: true,
+        projectFilePaths: input.projectFilePaths,
       });
       if (remediation.ok) {
         findingId = remediation.findingId;

@@ -31,7 +31,7 @@ export interface Finding {
   evidence?: string;
   remediation: string;
   fingerprint: string;
-  metadata?: Record<string, string | number | boolean>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface FindingDraft extends Omit<Finding, "id" | "fingerprint"> {

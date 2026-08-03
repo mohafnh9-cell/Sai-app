@@ -1,6 +1,11 @@
 import type { AttackHypothesis } from "../contracts/attack-hypothesis";
 import type { AttackRuntimeMode } from "../contracts/enums";
 import type { CreateAttackScenarioInput } from "../contracts/attack-scenario";
+import type { RepositoryModel } from "@/brain/repository-model";
+import {
+  isAdapterCompatibleWithFramework,
+  validateAdapterPreconditions,
+} from "@/brain/repository-model/attack-preconditions";
 import {
   isAdapterAllowedForRuntime,
   resolveAdapterForHypothesis,
@@ -24,6 +29,7 @@ export function planScenariosFromHypotheses(input: {
   projectId: string;
   runtimeMode: AttackRuntimeMode;
   hypotheses: AttackHypothesis[];
+  repositoryModel?: RepositoryModel | null;
 }): PlanScenariosResult {
   const planned: PlannedAttackScenario[] = [];
   const skipped: Array<{ hypothesisId: string; reason: string }> = [];
@@ -42,6 +48,19 @@ export function planScenariosFromHypotheses(input: {
         reason: `Adapter ${adapter.id} is not allowed for runtime ${input.runtimeMode}`,
       });
       return;
+    }
+
+    if (input.repositoryModel) {
+      const preconditions = validateAdapterPreconditions(adapter, input.repositoryModel);
+      if (!preconditions.satisfied) {
+        skipped.push({ hypothesisId: hypothesis.id, reason: preconditions.reason });
+        return;
+      }
+      const frameworkCheck = isAdapterCompatibleWithFramework(adapter, input.repositoryModel);
+      if (!frameworkCheck.satisfied) {
+        skipped.push({ hypothesisId: hypothesis.id, reason: frameworkCheck.reason });
+        return;
+      }
     }
 
     planned.push({

@@ -191,9 +191,9 @@ export async function getProductionReviewState(
 
         return buildState({
           scan,
-          status: "idle",
-          hasActiveReview: false,
-          isCancellable: false,
+          status: uiStatus,
+          hasActiveReview: true,
+          isCancellable: isProductionReviewCancellable({ scanStatus }),
           failureMessage: null,
         });
       }
@@ -229,6 +229,26 @@ export async function getProductionReviewState(
             : (latestTerminal.error_message as string | null),
       });
     }
+  }
+
+  const { data: latestCompleted } = await admin
+    .from("scans")
+    .select(
+      "id, status, commit_sha, created_at, started_at, completed_at, cancelled_at, error_message, progress_message"
+    )
+    .eq("repository_id", input.projectId)
+    .eq("status", "completed")
+    .order("completed_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (latestCompleted) {
+    return buildState({
+      scan: latestCompleted,
+      status: "completed",
+      hasActiveReview: false,
+      isCancellable: false,
+    });
   }
 
   return idleState();

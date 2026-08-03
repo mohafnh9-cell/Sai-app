@@ -28,7 +28,7 @@ import { evaluateAttackOutcome } from "./evaluate-outcome";
 import { bridgeAttackSafeFixToEngine } from "../integration/bridge-attack-safe-fix";
 
 export type ProcessAttackRemediationInput = {
-  campaign: Pick<AttackCampaign, "id" | "organizationId" | "projectId" | "scanId">;
+  campaign: Pick<AttackCampaign, "id" | "organizationId" | "projectId" | "scanId" | "runtimeMode">;
   execution: Pick<AttackExecution, "id" | "correlationId">;
   scenario: Pick<
     AttackScenario,
@@ -39,6 +39,7 @@ export type ProcessAttackRemediationInput = {
   executionBlocked?: boolean;
   correlationId: string;
   skipIfExists?: boolean;
+  projectFilePaths?: readonly string[];
 };
 
 export type ProcessAttackRemediationResult =
@@ -96,6 +97,7 @@ export async function processAttackRemediation(
     scenario: input.scenario,
     buffer: input.buffer,
     executionBlocked: input.executionBlocked,
+    runtimeMode: input.campaign.runtimeMode,
   });
 
   const finding = await createAttackFinding(
@@ -106,12 +108,15 @@ export async function processAttackRemediation(
       scenario: input.scenario,
       evidence: input.evidence,
       evaluation,
+      runtimeMode: input.campaign.runtimeMode,
+      projectFilePaths: input.projectFilePaths,
     })
   );
 
   const executionStatus = executionStatusForOutcome(evaluation.outcome);
+  const shouldRemediate = evaluation.exploitable;
 
-  if (evaluation.outcome === "confirmed") {
+  if (evaluation.confirmationStatus === "confirmed") {
     await appendAttackRuntimeEvent(admin, {
       campaignId: input.campaign.id,
       executionId: input.execution.id,
@@ -122,6 +127,22 @@ export async function processAttackRemediation(
       eventType: "attack_confirmed",
       payload: {
         metadata: { findingId: finding.id, severity: finding.severity },
+      },
+    });
+  } else if (evaluation.exploitable) {
+    await appendAttackRuntimeEvent(admin, {
+      campaignId: input.campaign.id,
+      executionId: input.execution.id,
+      stepId: null,
+      organizationId: input.campaign.organizationId,
+      projectId: input.campaign.projectId,
+      correlationId: input.correlationId,
+      eventType: "attack_evidence_collected",
+      payload: {
+        metadata: {
+          findingId: finding.id,
+          confirmationStatus: evaluation.confirmationStatus,
+        },
       },
     });
   } else if (evaluation.outcome === "not_exploitable") {
@@ -142,7 +163,7 @@ export async function processAttackRemediation(
   let mitigationId: string | null = null;
   let attackSafeFixId: string | null = null;
 
-  if (evaluation.outcome === "confirmed") {
+  if (shouldRemediate) {
     await appendAttackRuntimeEvent(admin, {
       campaignId: input.campaign.id,
       executionId: input.execution.id,
@@ -160,6 +181,7 @@ export async function processAttackRemediation(
         finding,
         scenario: input.scenario,
         evidence: input.evidence,
+        projectFilePaths: input.projectFilePaths,
       })
     );
     mitigationId = mitigation.id;

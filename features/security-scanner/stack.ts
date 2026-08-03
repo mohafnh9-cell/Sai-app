@@ -44,6 +44,12 @@ export function detectStack(files: NormalizedFile[]): StackProfile {
   if (hasPackage("next")) frameworks.add("Next.js");
   if (hasPackage("react") || hasPackage("react-dom")) frameworks.add("React");
   if (hasPackage("express")) frameworks.add("Express");
+  if (hasPackage("vite")) frameworks.add("Vite");
+  if (hasPackage("vue")) frameworks.add("Vue");
+  if (hasPackage("@angular/core")) frameworks.add("Angular");
+  if (hasPackage("@nestjs/core")) frameworks.add("NestJS");
+  if (hasPackage("fastify")) frameworks.add("Fastify");
+  if (hasPackage("@remix-run/react")) frameworks.add("Remix");
   if ([...packages].some((name) => name.startsWith("@supabase/"))) services.add("Supabase");
   if (hasPackage("firebase") || hasPackage("firebase-admin")) services.add("Firebase");
   if (hasPackage("@prisma/client") || hasPackage("prisma")) services.add("Prisma");
@@ -54,6 +60,8 @@ export function detectStack(files: NormalizedFile[]): StackProfile {
     const language = LANGUAGE_BY_EXTENSION[file.extension];
     if (language) languages.add(language);
     if (/^next\.config\.[cm]?[jt]s$/.test(file.path)) frameworks.add("Next.js");
+    if (/^vite\.config\.(?:[cm]?[jt]s|mts)$/.test(file.path)) frameworks.add("Vite");
+    if (/^angular\.json$/.test(file.path)) frameworks.add("Angular");
     if (file.extension === ".jsx" || file.extension === ".tsx") frameworks.add("React");
     if (file.path.endsWith(".prisma")) services.add("Prisma");
     if (/^(?:Dockerfile|docker-compose\.ya?ml)$/.test(file.path)) services.add("Docker");

@@ -5,6 +5,7 @@ import type { AttackAuthorizationRecord } from "@/server/ai-red-team/authorizati
 import type { AttackCampaign } from "../contracts/attack-campaign";
 import type { AttackHypothesis } from "../contracts/attack-hypothesis";
 import type { AttackScenario } from "../contracts/attack-scenario";
+import type { RepositoryModel } from "@/brain/repository-model";
 import { buildExecutionPlanForScenario, buildPlanHash, plannedScenarioInputsFromHypotheses } from "../planner/plan-campaign";
 import {
   createAttackScenario,
@@ -39,6 +40,7 @@ export async function planAndPersistCampaignFromHypotheses(
     hypotheses: AttackHypothesis[];
     authorization?: AttackAuthorizationRecord | null;
     targetUrl?: string | null;
+    repositoryModel?: RepositoryModel | null;
   }
 ): Promise<PlanAndPersistCampaignResult> {
   const { precondition, planned, skipped } = plannedScenarioInputsFromHypotheses(input);

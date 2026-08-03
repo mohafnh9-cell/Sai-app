@@ -14,6 +14,7 @@ import type {
   AttackCenterFeedItem,
   AttackCenterFindingView,
 } from "./types";
+import { evidenceReportFromMetadata } from "@/brain/evidence-finding/schema";
 
 function buildFeed(events: AttackRuntimeEvent[]): AttackCenterFeedItem[] {
   return events.map((event) => ({
@@ -195,5 +196,6 @@ export function buildAttackCenterFindingView(input: {
               : input.verification.outcome,
         }
       : null,
+    evidenceReport: evidenceReportFromMetadata(input.finding.metadata ?? null),
   };
 }

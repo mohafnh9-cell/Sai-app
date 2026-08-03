@@ -1,4 +1,5 @@
 import type { AttackCampaignStatus, AttackExecutionStatus, AttackFindingOutcome } from "../contracts/enums";
+import type { EvidenceReport } from "@/brain/evidence-finding/schema";
 
 export type AttackCenterFeedItem = {
   id: string;
@@ -105,6 +106,7 @@ export type AttackCenterFindingView = {
     outcome: string;
     summary: string;
   } | null;
+  evidenceReport: EvidenceReport | null;
 };
 
 export type AttackCenterSnapshot =

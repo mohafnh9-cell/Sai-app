@@ -1,3 +1,6 @@
+import type { EvidenceReport } from "@/brain/evidence-finding/schema";
+import { evidenceReportFromMetadata, parseEvidenceReport } from "@/brain/evidence-finding/schema";
+
 export type NormalizedFinding = {
   id: string;
   title: string;
@@ -5,15 +8,23 @@ export type NormalizedFinding = {
   category: string;
   ruleId?: string;
   filePath?: string;
+  line?: number;
+  column?: number;
   recommendation?: string;
   confidence: "high" | "medium" | "low";
+  confidencePercent?: number;
+  falsePositivePercent?: number;
+  detectionMethod?: string;
+  statusLabel?: string;
   evidence?: string;
+  evidenceReport?: EvidenceReport | null;
 };
 
 const HIGH_CONFIDENCE_RULES = new Set([
   "hardcoded-secret",
   "exposed-api-key",
   "exposed-credential",
+  "secrets.exposed",
   "sql-injection",
   "missing-auth",
   "missing-rls",
@@ -28,9 +39,11 @@ export function normalizeFinding(input: {
   rule_id?: string | null;
   rule?: string | null;
   file_path?: string | null;
+  start_line?: number | null;
   recommendation?: string | null;
   confidence?: string | number | null;
   evidence?: string | null;
+  metadata?: Record<string, unknown> | null;
 }): NormalizedFinding {
   const severityRaw = (input.severity ?? "medium").toLowerCase();
   const severity = (
@@ -41,9 +54,15 @@ export function normalizeFinding(input: {
 
   const ruleId = input.rule_id ?? input.rule ?? undefined;
   const category = (input.category ?? "general").toLowerCase();
+  const embeddedReport =
+    evidenceReportFromMetadata(input.metadata ?? null) ??
+    parseEvidenceReport(input.metadata?.evidenceReport);
 
   let confidence: NormalizedFinding["confidence"] = "medium";
-  if (ruleId && HIGH_CONFIDENCE_RULES.has(ruleId.toLowerCase())) {
+  if (embeddedReport) {
+    confidence =
+      embeddedReport.confidence >= 0.8 ? "high" : embeddedReport.confidence >= 0.55 ? "medium" : "low";
+  } else if (ruleId && HIGH_CONFIDENCE_RULES.has(ruleId.toLowerCase())) {
     confidence = "high";
   } else if (severity === "critical") {
     confidence = "high";
@@ -51,7 +70,7 @@ export function normalizeFinding(input: {
     confidence = "low";
   }
 
-  if (typeof input.confidence === "number" && input.confidence >= 0.8) {
+  if (!embeddedReport && typeof input.confidence === "number" && input.confidence >= 0.8) {
     confidence = "high";
   }
 
@@ -62,9 +81,15 @@ export function normalizeFinding(input: {
     category,
     ruleId,
     filePath: input.file_path ?? undefined,
-    recommendation: input.recommendation ?? undefined,
+    line: input.start_line ?? undefined,
+    recommendation: input.recommendation ?? embeddedReport?.recommendedFix ?? undefined,
     confidence,
+    confidencePercent: embeddedReport?.confidencePercent,
+    falsePositivePercent: embeddedReport?.falsePositivePercent,
+    detectionMethod: embeddedReport?.detectionMethod,
+    statusLabel: embeddedReport?.statusLabel,
     evidence: input.evidence ?? undefined,
+    evidenceReport: embeddedReport,
   };
 }
 

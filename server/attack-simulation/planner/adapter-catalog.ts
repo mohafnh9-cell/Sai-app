@@ -8,6 +8,7 @@ export type AttackAdapterDefinition = {
   allowedRuntimeModes: readonly AttackRuntimeMode[];
   hypothesisCategories: readonly string[];
   hypothesisKeywords: readonly string[];
+  requiredArchitecture?: readonly string[];
 };
 
 /** MVP safe adapters — metadata in catalog; execution modules in `adapters/`. */
@@ -29,6 +30,7 @@ export const ATTACK_ADAPTER_CATALOG: readonly AttackAdapterDefinition[] = [
     allowedRuntimeModes: ["static", "mock", "sandbox"],
     hypothesisCategories: ["authentication", "auth", "unauthenticated"],
     hypothesisKeywords: ["unauthenticated", "missing auth", "no auth"],
+    requiredArchitecture: ["api_surface"],
   },
   {
     id: "webhook-signature-bypass",

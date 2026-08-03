@@ -8,7 +8,12 @@ import { getActiveAttackAuthorization } from "@/server/ai-red-team/authorization
 import type { AttackHypothesis } from "../contracts/attack-hypothesis";
 import { createAttackCampaign, getAttackCampaignByScanId } from "../persistence/campaign-repository";
 import { listAttackExecutionsForCampaign } from "../persistence/execution-repository";
-import { planAndPersistCampaignFromHypotheses } from "../planner/plan-and-persist-campaign";
+import type { StackProfile } from "@/features/security-scanner/types";
+import {
+  repositoryModelFromSummary,
+  type RepositoryModel,
+  type RepositoryModelSummary,
+} from "@/brain/repository-model";
 import { enqueueAttackExecutionRun } from "../executor/enqueue-attack-execution";
 import { appendAttackRuntimeEvent } from "../persistence/runtime-event-repository";
 import { extractAttackHypothesesFromRedTeamReport } from "./extract-hypotheses-from-report";
@@ -100,6 +105,7 @@ export async function bootstrapAttackCampaignFromScan(
     hypotheses,
     authorization,
     targetUrl: input.targetUrl ?? null,
+    repositoryModel: await loadRepositoryModelForScan(admin, input.scanId),
   });
 
   if (!planned.ok) {
@@ -144,4 +150,22 @@ export async function getExistingScanCampaignExecutionIds(
     campaignId: campaign.id,
     executionIds: executions.map((execution) => execution.id),
   };
+}
+
+async function loadRepositoryModelForScan(
+  admin: SupabaseClient,
+  scanId: string
+): Promise<RepositoryModel | null> {
+  const { data } = await admin
+    .from("scans")
+    .select("metrics, detected_stack")
+    .eq("id", scanId)
+    .maybeSingle();
+  if (!data) return null;
+
+  const metrics = (data.metrics as Record<string, unknown> | null) ?? null;
+  const summary = metrics?.repositoryModel as RepositoryModelSummary | undefined;
+  const stack = (data.detected_stack as StackProfile | null) ?? { languages: [], frameworks: [], services: [], packageManagers: [], dependencies: {} };
+  if (!summary) return null;
+  return repositoryModelFromSummary(summary, stack);
 }
