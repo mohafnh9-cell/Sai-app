@@ -6,6 +6,8 @@ import {
   buildRepositoryModel,
   toRepositoryModelSummary,
 } from "@/brain/repository-model";
+import { scanRepository as scanRepositoryFiles, scoreFindings } from "@/features/security-scanner";
+import { stubNormalizedFile } from "@/features/security-scanner/normalization";
 import type { Confidence, Finding as ScannerFinding, Severity } from "@/features/security-scanner";
 import { generateAndPersistProductionVerdict } from "@/server/production-verdict/service";
 import {
@@ -249,12 +251,7 @@ export class InlineScanJobRunner implements ScanJobRunner {
 
       const result = await scanRepositoryFiles(snapshot.files);
       const repositoryModel = buildRepositoryModel(
-        snapshot.files.map((file) => ({
-          path: file.path,
-          extension: file.path.includes(".") ? `.${file.path.split(".").pop()}` : "",
-          content: file.content,
-          size: file.content.length,
-        })),
+        snapshot.files.map((file) => stubNormalizedFile(file.path, file.content)),
         result.stack
       );
       let rows = result.findings.map((finding) => findingRow(context, finding));

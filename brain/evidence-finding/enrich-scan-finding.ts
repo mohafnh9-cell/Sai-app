@@ -20,6 +20,7 @@ import {
   type RepositoryModel,
 } from "@/brain/repository-model";
 import { detectStack } from "@/features/security-scanner/stack";
+import { stubNormalizedFile } from "@/features/security-scanner/normalization";
 import type { NormalizedFile } from "@/features/security-scanner/types";
 
 export function shouldSuppressPublicWebsiteFinding(
@@ -277,12 +278,7 @@ export function postProcessScanFindings(
     normalizedFiles != null
       ? buildRepositoryModel(normalizedFiles, detectStack([...normalizedFiles]))
       : buildRepositoryModel(
-          filePaths.map((path) => ({
-            path,
-            extension: path.includes(".") ? `.${path.split(".").pop()}` : "",
-            content: "",
-            size: 0,
-          })),
+          filePaths.map((path) => stubNormalizedFile(path)),
           detectStack([])
         );
 

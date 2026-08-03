@@ -68,3 +68,14 @@ export function normalizeFiles(
   }
   return { files: normalized, omissions, bytes, truncated };
 }
+
+export function stubNormalizedFile(path: string, content = ""): NormalizedFile {
+  const normalized = content.replace(/\r\n?/g, "\n");
+  return {
+    path,
+    content: normalized,
+    extension: extensionOf(path),
+    lines: normalized.length > 0 ? normalized.split("\n") : [],
+    bytes: new TextEncoder().encode(normalized).byteLength,
+  };
+}

@@ -13,18 +13,19 @@ import {
   reviewPhaseProgressForScan,
 } from "@/brain/review-engine/state-machine";
 import type { NormalizedFile } from "@/features/security-scanner/types";
+import { stubNormalizedFile } from "@/features/security-scanner/normalization";
 import { detectStack } from "@/features/security-scanner/stack";
 import type { Finding } from "@/features/security-scanner/types";
 
 function filesFromPaths(paths: string[]): NormalizedFile[] {
-  return paths.map((path) => ({
-    path,
-    extension: path.includes(".") ? `.${path.split(".").pop()}` : "",
-    content: path.includes("route.ts")
-      ? "export async function GET() { return Response.json({ ok: true }); }"
-      : "",
-    size: 100,
-  }));
+  return paths.map((path) =>
+    stubNormalizedFile(
+      path,
+      path.includes("route.ts")
+        ? "export async function GET() { return Response.json({ ok: true }); }"
+        : ""
+    )
+  );
 }
 
 function sampleFinding(overrides: Partial<Finding> = {}): Finding {
