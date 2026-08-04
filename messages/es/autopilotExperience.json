@@ -1,11 +1,11 @@
 {
-  "title": "Continuous Reviews",
+  "title": "Production Review",
   "oneLiner": "Cada vez que tu código cambia, SequrAI lo revisa automáticamente.",
   "subtitleReviewed": "Tus últimos cambios han sido revisados.",
   "subtitleWaiting": "Esperando tu próximo push.",
   "subtitleReviewing": "Revisando tus últimos cambios.",
-  "subtitleDisabled": "Continuous Reviews están en pausa.",
-  "subtitleDisconnected": "Conecta un repositorio para activar Continuous Reviews.",
+  "subtitleDisabled": "Production Review está en pausa.",
+  "subtitleDisconnected": "Conecta un repositorio para activar Production Review.",
   "subtitleFailed": "No se pudo completar la última revisión.",
   "subtitleEnabled": "Monitorizando este repositorio.",
   "subtitleCloser": "Tu aplicación está más cerca de estar lista para producción.",
@@ -27,22 +27,22 @@
     "daysAgo": "hace {count} d"
   },
   "dashboard": {
-    "title": "Continuous Reviews",
+    "title": "Production Review",
     "subtitle": "Proyectos revisados automáticamente tras cada push.",
     "monitored": "Monitorizados",
     "waiting": "Esperando cambios",
     "approaching": "Cerca de producción",
     "latestReview": "Última revisión",
     "latestReviewProject": "en {project}",
-    "empty": "Conecta un repositorio para iniciar Continuous Reviews.",
+    "empty": "Conecta un repositorio para iniciar Production Review.",
     "connect": "Conectar repositorio"
   },
   "settings": {
-    "title": "Continuous Reviews",
+    "title": "Production Review",
     "subtitle": "Revisa tu aplicación automáticamente cuando el código cambia.",
     "on": "ON",
     "off": "OFF",
     "enabledHelp": "SequrAI revisa cada push y mantiene tu Production Verdict al día.",
-    "disabledHelp": "Continuous Reviews están en pausa. Puedes ejecutar revisiones manualmente."
+    "disabledHelp": "Production Review está en pausa. Puedes ejecutar revisiones manualmente."
   }
 }

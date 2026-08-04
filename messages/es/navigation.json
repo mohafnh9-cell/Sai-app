@@ -1,7 +1,9 @@
 {
-  "dashboard": "Dashboard",
+  "dashboard": "Mission Control",
+  "missionControl": "Mission Control",
   "projects": "Proyectos",
-  "integrations": "Integraciones",
+  "integrations": "GitHub",
+  "github": "GitHub",
   "settings": "Ajustes",
   "overview": "Resumen",
   "productionJourney": "Historial de Production Verdict",

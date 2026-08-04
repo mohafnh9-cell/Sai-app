@@ -51,7 +51,6 @@ export default async function DemoProjectsPage({
                 (dataset.orgBrain.projects.find((item) => item.projectId === project.id)?.status ??
                   "insufficient_data") as VerdictStatus
               }
-              intelligencePreview={dataset.intelligencePreviews[project.id] ?? null}
               detailHref={demoProjectPath(project.id, scenario)}
             />
           ))}

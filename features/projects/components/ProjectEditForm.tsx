@@ -5,6 +5,7 @@ import { useUpdateProject } from "@/hooks/use-projects";
 import { ProjectForm } from "./ProjectForm";
 import type { ProjectRow } from "@/types/database";
 import type { ProjectFormValues } from "@/features/projects/schemas/project.schema";
+import { projectVerdictHref } from "@/lib/navigation/project-hrefs";
 
 interface ProjectEditFormProps {
   project: ProjectRow;
@@ -25,7 +26,7 @@ export function ProjectEditForm({ project }: ProjectEditFormProps) {
         framework: (values.framework as ProjectRow["framework"]) ?? null,
       },
     });
-    router.push(`/projects/${project.id}`);
+    router.push(projectVerdictHref(project.id));
   };
 
   return (
@@ -34,7 +35,7 @@ export function ProjectEditForm({ project }: ProjectEditFormProps) {
       onSubmit={handleSubmit}
       isLoading={isPending}
       submitLabel="Save changes"
-      onCancel={() => router.push(`/projects/${project.id}`)}
+      onCancel={() => router.push(projectVerdictHref(project.id))}
     />
   );
 }

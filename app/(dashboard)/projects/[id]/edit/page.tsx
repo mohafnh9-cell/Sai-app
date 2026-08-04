@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { ArrowLeft } from "lucide-react";
@@ -6,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ProjectEditForm } from "@/features/projects/components/ProjectEditForm";
 import type { ProjectRow } from "@/types/database";
-import type { Metadata } from "next";
+import { projectVerdictHref } from "@/lib/navigation/project-hrefs";
 
 interface EditProjectPageProps {
   params: Promise<{ id: string }>;
@@ -42,7 +43,7 @@ export default async function EditProjectPage({ params }: EditProjectPageProps) 
   return (
     <div className="p-6 max-w-2xl space-y-6">
       <Button variant="ghost" size="sm" asChild className="gap-1.5 -ml-1">
-        <Link href={`/projects/${p.id}`}>
+        <Link href={projectVerdictHref(p.id)}>
           <ArrowLeft className="h-4 w-4" />
           Back to project
         </Link>

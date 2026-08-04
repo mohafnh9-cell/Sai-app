@@ -40,7 +40,7 @@ export async function DemoSettingsPreview() {
         <CardContent className="space-y-3 opacity-70">
           <div className="space-y-1.5">
             <Label htmlFor="demo-mcp-key">{t("mcpKeyNameLabel")}</Label>
-            <Input id="demo-mcp-key" defaultValue="Cursor MCP (demo)" disabled readOnly />
+            <Input id="demo-mcp-key" defaultValue="Cursor Connection (demo)" disabled readOnly />
           </div>
           <Button size="sm" disabled aria-disabled>
             {t("mcpGenerateKey")}

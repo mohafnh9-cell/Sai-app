@@ -1,66 +1,66 @@
 {
-  "title": "Security validation",
+  "title": "Security Test",
   "estimatedTime": "Estimated time:",
   "progressSteps": {
-    "choose": "Analyze application",
-    "run": "Production verdict",
-    "fix": "Validate blocker",
-    "verify": "Verify & deploy"
+    "choose": "Run Production Review",
+    "run": "Production Verdict",
+    "fix": "Security Test",
+    "verify": "Verification"
   },
   "estimatedDuration": "About 2 minutes",
   "safetyNote": "Nothing in production will be modified. SequrAI only runs safe simulations.",
   "stepLabel": "Step {n}",
   "emptyState": {
-    "headline": "Validate your deployment blockers",
+    "headline": "Run a Security Test on your deployment blockers",
     "description": "SequrAI reproduces each issue safely so you can confirm it before fixing.",
     "primaryAction": "Back to Mission Control"
   },
   "phases": {
     "needs_review": {
       "headline": "Is your application ready for production?",
-      "description": "Start with a production analysis of your latest code.",
-      "primaryAction": "Analyze application",
+      "description": "Start with a Production Review of your latest code.",
+      "primaryAction": "Run Production Review",
       "waitMessage": ""
     },
     "preparing": {
-      "headline": "Analyzing your application…",
+      "headline": "Production Review in progress…",
       "description": "SequrAI is reviewing your repository to build your Production Verdict.",
       "primaryAction": "Please wait…",
       "waitMessage": "Reading architecture, dependencies, and security patterns…"
     },
     "ready": {
       "headline": "Your Production Verdict is ready",
-      "description": "Review your deployment blockers and validate the ones that matter most.",
-      "primaryAction": "Validate blocker",
+      "description": "Review your deployment blockers and run a Security Test on the ones that matter most.",
+      "primaryAction": "Run Security Test",
       "waitMessage": ""
     },
     "running": {
-      "headline": "Running security validation…",
-      "description": "SequrAI is safely reproducing the issue to collect evidence.",
+      "headline": "Security Test running…",
+      "description": "SequrAI is safely reproducing the issue to collect Evidence.",
       "primaryAction": "View progress",
       "waitMessage": "Checking authentication… testing authorization… testing session isolation…"
     },
     "issues_found": {
       "headline": "Issue confirmed",
       "description": "SequrAI reproduced the problem. Review the evidence before applying a fix.",
-      "primaryAction": "View evidence",
+      "primaryAction": "View Evidence",
       "waitMessage": ""
     },
     "fix_ready": {
-      "headline": "Ready to protect your application",
-      "description": "Apply the recommended fix, then verify that the issue is closed.",
-      "primaryAction": "View fix",
+      "headline": "Ready for Safe Fix",
+      "description": "Apply the Safe Fix, then run Verification to confirm the issue is closed.",
+      "primaryAction": "View Safe Fix",
       "waitMessage": ""
     },
     "protected": {
       "headline": "Ready for production",
-      "description": "Protection verified. The issue no longer reproduces.",
+      "description": "Verification complete. The issue no longer reproduces.",
       "primaryAction": "Return to Mission Control",
       "waitMessage": ""
     },
     "completed_clean": {
       "headline": "Ready for production",
-      "description": "No issues reproduced during validation. Your application looks safe to deploy.",
+      "description": "No issues reproduced during the Security Test. Your application looks safe to deploy.",
       "primaryAction": "Return to Mission Control",
       "waitMessage": ""
     }
@@ -129,7 +129,7 @@
     "invalidAnalysisRun": "That analysis run does not belong to this project.",
     "notEnabled": "Security testing is not enabled for this project.",
     "selectAtLeastOne": "Select at least one test.",
-    "needsReviewFirst": "Run a security review first so SequrAI knows which version to test.",
+    "needsReviewFirst": "Run a Production Review first so SequrAI knows which version to test.",
     "mapFailed": "Could not map selected tests to attack scenarios."
   },
   "tests": {

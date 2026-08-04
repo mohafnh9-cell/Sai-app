@@ -3,7 +3,9 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AttackCenterExperience } from "@/features/attack-simulation/AttackCenterExperience";
-import { MissionControlSubNav } from "@/features/mission-control/components/MissionControlSubNav";
+import {
+  ProjectWorkflowNav,
+} from "@/features/mission-control/components/ProjectWorkflowNav";
 import { getCachedServerAuthContext } from "@/lib/server/request-cache";
 import { isFeatureEnabled } from "@/server/feature-flags";
 import { createAdminClient } from "@/server/security-scanner/admin-client";
@@ -169,11 +171,10 @@ export default async function AttackCenterPage({ params, searchParams }: PagePro
             {ta("page.backToMissionControl")}
           </Link>
         </Button>
-        <MissionControlSubNav
+        <ProjectWorkflowNav
           projectId={projectId}
-          latestReportHref={latestReportHref}
-          attackCenterEnabled
           analysisRunId={isolationEnabled ? analysisRunId : undefined}
+          showSecurityTest
         />
         <AttackCenterExperience
           projectId={projectId}

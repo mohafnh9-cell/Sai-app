@@ -189,7 +189,16 @@ export function OnboardingRepoPicker({
       </div>
 
       <ul className="space-y-2 max-h-[320px] overflow-y-auto pr-1" role="listbox" aria-label={t("searchRepos")}>
-        {filtered.map((repo) => {
+        {filtered.length === 0 ? (
+          <li className="rounded-xl border border-dashed border-border/70 p-6 text-center space-y-3">
+            <p className="text-sm font-medium">{t("searchNoResultsTitle")}</p>
+            <p className="text-sm text-muted-foreground">{t("searchNoResultsBody")}</p>
+            <Button type="button" variant="outline" size="sm" onClick={() => setSearch("")}>
+              {t("searchClear")}
+            </Button>
+          </li>
+        ) : (
+          filtered.map((repo) => {
           const selected = selectedId === repo.id;
           return (
             <li key={repo.id}>
@@ -230,7 +239,8 @@ export function OnboardingRepoPicker({
               </button>
             </li>
           );
-        })}
+        })
+        )}
       </ul>
 
       <Button

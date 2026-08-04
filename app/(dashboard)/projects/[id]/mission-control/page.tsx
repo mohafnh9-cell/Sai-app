@@ -3,7 +3,10 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MissionControlExperience } from "@/features/mission-control/components/MissionControlExperience";
-import { MissionControlSubNav } from "@/features/mission-control/components/MissionControlSubNav";
+import {
+  ProjectWorkflowNav,
+  shouldShowSecurityTestNav,
+} from "@/features/mission-control/components/ProjectWorkflowNav";
 import { ProjectOnboardedBanner } from "@/features/projects/components/ProjectOnboardedBanner";
 import { getMissionControlView } from "@/server/mission-control/get-mission-control";
 import { getCachedServerAuthContext } from "@/lib/server/request-cache";
@@ -12,6 +15,7 @@ import { fixPromptContextFromScan } from "@/features/production-verdict/fix-prom
 import { createAdminClient } from "@/server/security-scanner/admin-client";
 import { getProjectReviewUiContext } from "@/server/projects/review-ui-context";
 import { getSecurityTestContext } from "@/server/attack-simulation/get-security-test-context";
+import { getProtectionCenterModel } from "@/server/continuous-protection/protection-context";
 import { resolveAnalysisRunForMissionControl } from "@/server/analysis-runs/resolve-analysis-run";
 import { loadAnalysisRunFindingsForFixPrompt } from "@/server/analysis-runs/load-run-findings-for-fix";
 import { listAnalysisRunsForProject } from "@/server/analysis-runs/list-analysis-runs";
@@ -28,6 +32,7 @@ interface PageProps {
     reviewComplete?: string;
     onboarded?: string;
     run?: string;
+    technical?: string;
   }>;
 }
 
@@ -61,11 +66,11 @@ export default async function MissionControlPage({ params, searchParams }: PageP
   const auth = await getCachedServerAuthContext();
   if (!auth?.organizationId) redirect("/login");
 
-  if (!isFeatureEnabled("mission_control", { organizationId: auth.organizationId })) {
-    redirect(`/projects/${projectId}`);
-  }
-
   const isolationEnabled = isFeatureEnabled("analysis_run_isolation", {
+    organizationId: auth.organizationId,
+  });
+
+  const continuousProtectionEnabled = isFeatureEnabled("continuous_protection", {
     organizationId: auth.organizationId,
   });
 
@@ -199,24 +204,41 @@ export default async function MissionControlPage({ params, searchParams }: PageP
     reviewContext.productionReviewState.hasActiveReview &&
     reviewContext.productionReviewState.scanId !== analysisRunId;
 
+  const showSecurityTest = shouldShowSecurityTestNav({
+    attackCenterEnabled,
+    hasVerdict: Boolean(verdict),
+    verdictReadyToShip: verdict?.status === "ready_to_ship",
+    securityTestPhase: securityTestContext?.phase ?? null,
+  });
+
+  const showProtectionStatus =
+    continuousProtectionEnabled && Boolean(verdict) && !viewingHistoricalRun;
+
+  const protectionCenter =
+    showProtectionStatus && auth.organizationId
+      ? await getProtectionCenterModel(createAdminClient(), projectId).catch(() => null)
+      : null;
+
   return (
     <div className="app-cinematic-bg min-h-full">
       <div className="mx-auto max-w-4xl px-4 sm:px-8 pb-24 pt-6 sm:pt-10">
         <Button variant="ghost" size="sm" asChild className="gap-1.5 -ml-2 text-muted-foreground mb-8">
-          <Link href="/projects">
+          <Link href="/dashboard">
             <ArrowLeft className="h-4 w-4" />
-            {t("page.backToProjects")}
+            {t("page.backToMissionControl")}
           </Link>
         </Button>
-        <MissionControlSubNav
+        <ProjectWorkflowNav
           projectId={projectId}
-          latestReportHref={latestReportHref}
-          attackCenterEnabled={attackCenterEnabled}
           analysisRunId={isolationEnabled ? analysisRunId : undefined}
+          showSecurityTest={showSecurityTest}
         />
 
         {viewingHistoricalRun ? (
-          <div className="rounded-2xl border border-border/60 bg-muted/20 px-5 py-4 text-sm text-muted-foreground mb-8">
+          <div
+            className="rounded-2xl border border-border/60 bg-muted/20 px-5 py-4 text-sm text-muted-foreground mb-8"
+            role="status"
+          >
             {t("analysisRun.historicalBanner")}
           </div>
         ) : null}
@@ -230,21 +252,24 @@ export default async function MissionControlPage({ params, searchParams }: PageP
         ) : null}
 
         {query.connected === "1" ? (
-          <div className="surface-premium rounded-2xl p-5 mb-8">
+          <div className="surface-premium rounded-2xl p-5 mb-8" role="status">
             <p className="text-sm font-medium">{tp("connectedGuidanceTitle")}</p>
             <p className="mt-1 text-sm text-muted-foreground">{tp("connectedGuidanceBody")}</p>
           </div>
         ) : null}
 
         {query.reviewComplete === "1" && verdict ? (
-          <div className="surface-premium rounded-2xl p-5 mb-8">
+          <div className="surface-premium rounded-2xl p-5 mb-8" role="status">
             <p className="text-sm font-medium">{tp("reviewCompleteGuidanceTitle")}</p>
             <p className="mt-1 text-sm text-muted-foreground">{tp("reviewCompleteGuidanceBody")}</p>
           </div>
         ) : null}
 
         {reviewContext?.isStale && !viewingHistoricalRun ? (
-          <div className="rounded-2xl border border-brand-warning/30 bg-brand-warning/5 px-5 py-4 text-sm text-foreground/90 mb-8">
+          <div
+            className="rounded-2xl border border-brand-warning/30 bg-brand-warning/5 px-5 py-4 text-sm text-foreground/90 mb-8"
+            role="alert"
+          >
             {tp("latestCommitNotReviewedBanner")}
           </div>
         ) : null}
@@ -253,12 +278,18 @@ export default async function MissionControlPage({ params, searchParams }: PageP
           view={view}
           verdict={verdict}
           projectName={project.name}
+          framework={project.framework}
           fixPromptContext={fixPromptContext}
           securityTestContext={securityTestContext}
           reviewContext={reviewContext}
           analysisRunId={isolationEnabled ? analysisRunId : undefined}
           runScoped={Boolean(isolationEnabled && analysisRunId)}
           analysisRunIsolationEnabled={isolationEnabled}
+          reportHref={latestReportHref}
+          openTechnicalDetails={query.technical === "open"}
+          protectionCenter={protectionCenter}
+          showProtectionStatus={showProtectionStatus}
+          isVerdictStale={Boolean(reviewContext?.isStale && !viewingHistoricalRun)}
         />
       </div>
     </div>

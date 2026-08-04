@@ -7,8 +7,11 @@ import { getTranslator } from "@/lib/i18n/server";
 import { getCachedServerAuthContext } from "@/lib/server/request-cache";
 import { isFeatureEnabled } from "@/server/feature-flags";
 import { getProductionJourneyByProject } from "@/server/production-journey/service";
-import { ProjectSubNav } from "@/features/production-journey/components/ProjectSubNav";
-import { MissionControlSubNav } from "@/features/mission-control/components/MissionControlSubNav";
+import {
+  ProjectWorkflowNav,
+  shouldShowSecurityTestNav,
+} from "@/features/mission-control/components/ProjectWorkflowNav";
+import { projectVerdictHref } from "@/lib/navigation/project-hrefs";
 import { ProductionJourneyView } from "@/features/production-journey/components/ProductionJourneyView";
 import { withAnalysisRunQuery } from "@/features/analysis-runs/lib/build-run-query";
 import { resolveAnalysisRunForProject } from "@/server/analysis-runs/resolve-analysis-run";
@@ -96,13 +99,18 @@ export default async function ProjectJourneyPage({ params, searchParams }: Journ
     ? `/projects/${id}/scans/${latestScan.id}/report`
     : undefined;
 
-  const backHref = missionControlEnabled
-    ? withAnalysisRunQuery(
-        `/projects/${id}/mission-control`,
-        isolationEnabled ? analysisRunId : undefined
-      )
-    : `/projects/${id}`;
-  const backLabel = missionControlEnabled ? tm("page.title") : tp("backToProjects");
+  const backHref = withAnalysisRunQuery(
+    projectVerdictHref(id),
+    isolationEnabled ? analysisRunId : undefined
+  );
+  const backLabel = tm("page.backToMissionControl");
+
+  const showSecurityTest = shouldShowSecurityTestNav({
+    attackCenterEnabled,
+    hasVerdict: Boolean(journey?.currentStatus),
+    verdictReadyToShip: journey?.currentStatus === "ready_to_ship",
+    securityTestPhase: null,
+  });
 
   return (
     <div className={missionControlEnabled ? "app-cinematic-bg min-h-full" : "p-6 space-y-6 max-w-6xl"}>
@@ -119,16 +127,11 @@ export default async function ProjectJourneyPage({ params, searchParams }: Journ
           <p className="text-sm text-muted-foreground mt-1">{t("subtitle")}</p>
         </div>
 
-        {missionControlEnabled ? (
-          <MissionControlSubNav
-            projectId={id}
-            latestReportHref={latestReportHref}
-            attackCenterEnabled={attackCenterEnabled}
-            analysisRunId={isolationEnabled ? analysisRunId : undefined}
-          />
-        ) : (
-          <ProjectSubNav projectId={id} latestReportHref={latestReportHref} />
-        )}
+        <ProjectWorkflowNav
+          projectId={id}
+          analysisRunId={isolationEnabled ? analysisRunId : undefined}
+          showSecurityTest={missionControlEnabled ? showSecurityTest : false}
+        />
 
         {journey ? (
           <ProductionJourneyView

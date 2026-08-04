@@ -18,7 +18,7 @@ export function OnboardingProgressTracker({
   const activeIndex = resolveProgressIndex(wizardStep, context);
 
   return (
-    <nav aria-label="Onboarding progress" className="w-full">
+    <nav aria-label={t("progressNavAriaLabel")} className="w-full">
       <ol className="flex flex-col gap-0 sm:gap-1">
         {PROGRESS_STEPS.map((step, index) => {
           const done = index < activeIndex;
@@ -49,7 +49,7 @@ export function OnboardingProgressTracker({
               </div>
               <div className={`pb-4 sm:pb-3 ${upcoming ? "opacity-50" : ""}`}>
                 <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                  Step {index + 1}
+                  {t("progressStepLabel", { step: index + 1 })}
                 </p>
                 <p
                   className={`text-sm ${

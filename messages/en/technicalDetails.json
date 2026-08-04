@@ -1,7 +1,7 @@
 {
-  "title": "Technical Details",
-  "subtitle": "Findings, rules, and evidence for engineers.",
-  "findings": "Findings",
+  "title": "Evidence",
+  "subtitle": "Evidence, rules, and findings for engineers.",
+  "findings": "Evidence",
   "noFindings": "No technical findings for this review.",
   "noFindingsFiltered": "No findings match these filters",
   "severity": "Severity",

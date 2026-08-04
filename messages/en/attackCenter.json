@@ -1,7 +1,7 @@
 {
   "loading": "Loading…",
   "disabled": {
-    "headline": "Security testing is not available",
+    "headline": "Security Test is not available",
     "description": "Ask your admin to turn this on for your project.",
     "action": "Not available"
   },
@@ -9,23 +9,23 @@
     "headline": "Something went wrong.",
     "tryAgain": "Try again",
     "hideDetails": "Hide details",
-    "showDetails": "Technical details"
+    "showDetails": "Evidence"
   },
   "back": "← Back",
   "deployWithConfidence": "Return to Mission Control",
   "campaign": {
-    "title": "Security validation",
+    "title": "Security Test",
     "checksDone": "{done} of {total} checks done",
     "testDetails": "Test details",
     "show": "Show",
     "hide": "Hide",
-    "technicalDetails": "Technical details"
+    "technicalDetails": "Evidence"
   },
   "execution": {
-    "title": "Security test",
+    "title": "Security Test",
     "inProgress": "Testing in progress",
     "waitMessage": "Please wait while this check finishes.",
-    "technicalDetails": "Technical details"
+    "technicalDetails": "Evidence"
   },
   "finding": {
     "issueFound": "Issue found",
@@ -34,33 +34,33 @@
     "severity": "Severity",
     "critical": "Critical",
     "evidenceSummary": "SequrAI successfully reproduced the issue under safe conditions.",
-    "protectTitle": "Protect your application",
-    "howToProtect": "Protect your application",
-    "protectionVerified": "Protected",
-    "attackBlocked": "Attack blocked — your application is protected",
-    "applyThenVerify": "Apply the fix above, then verify protection.",
-    "verifyProtection": "Verify protection",
-    "technicalDetails": "Technical details",
-    "detailedEvidenceAvailable": "Detailed evidence is available in your production review.",
+    "protectTitle": "Apply Safe Fix",
+    "howToProtect": "Apply Safe Fix",
+    "protectionVerified": "Verification complete",
+    "attackBlocked": "Issue blocked — Verification passed",
+    "applyThenVerify": "Apply the Safe Fix above, then run Verification.",
+    "verifyProtection": "Verification",
+    "technicalDetails": "Evidence",
+    "detailedEvidenceAvailable": "Detailed Evidence is available in your Production Review.",
     "whatWeSaw": "What we observed",
     "expected": "Expected:",
     "observed": "Observed:",
-    "protectionForCursor": "Fix prompt for Cursor",
+    "protectionForCursor": "Safe Fix for Cursor",
     "copied": "Copied",
-    "copyProtection": "Copy fix for Cursor",
+    "copyProtection": "Copy Safe Fix",
     "reference": "Reference:",
     "back": "← Back"
   },
   "apiErrors": {
-    "storageUnavailable": "Attack Center storage is unavailable. Apply ASE migrations in Supabase.",
-    "refreshFailed": "Attack Center could not refresh.",
-    "simulationUnavailable": "Attack Simulation storage is not available in this environment.",
-    "loadFailed": "Attack Center could not load campaign data.",
-    "invalidData": "Attack Center received invalid persisted data.",
-    "requestFailed": "Attack Center request failed."
+    "storageUnavailable": "Security Test storage is unavailable. Apply ASE migrations in Supabase.",
+    "refreshFailed": "Security Test could not refresh.",
+    "simulationUnavailable": "Security Test storage is not available in this environment.",
+    "loadFailed": "Security Test could not load campaign data.",
+    "invalidData": "Security Test received invalid persisted data.",
+    "requestFailed": "Security Test request failed."
   },
   "page": {
-    "title": "Security test",
+    "title": "Security Test",
     "backToMissionControl": "Mission Control"
   }
 }

@@ -45,6 +45,7 @@ export function EmptyState({
               "h-6 w-6",
               variant === "success" ? "text-green-500" : "text-muted-foreground"
             )}
+            aria-hidden
           />
         </div>
       )}

@@ -18,7 +18,7 @@ type McpKeyRow = {
 export function McpApiKeysPanel() {
   const { t, locale } = useI18n("settings");
   const [keys, setKeys] = useState<McpKeyRow[]>([]);
-  const [name, setName] = useState("Cursor MCP");
+  const [name, setName] = useState("Cursor Connection");
   const [newKey, setNewKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

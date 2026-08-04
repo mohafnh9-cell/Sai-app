@@ -52,12 +52,12 @@
     "back": "← Volver"
   },
   "apiErrors": {
-    "storageUnavailable": "El almacenamiento del Attack Center no está disponible. Aplica las migraciones ASE en Supabase.",
-    "refreshFailed": "El Attack Center no pudo actualizarse.",
+    "storageUnavailable": "El almacenamiento de Security Test no está disponible. Aplica las migraciones ASE en Supabase.",
+    "refreshFailed": "Security Test no pudo actualizarse.",
     "simulationUnavailable": "El almacenamiento de simulación no está disponible en este entorno.",
-    "loadFailed": "El Attack Center no pudo cargar los datos de la campaña.",
-    "invalidData": "El Attack Center recibió datos persistidos inválidos.",
-    "requestFailed": "La solicitud al Attack Center falló."
+    "loadFailed": "Security Test no pudo cargar los datos de la campaña.",
+    "invalidData": "Security Test recibió datos persistidos inválidos.",
+    "requestFailed": "La solicitud de Security Test falló."
   },
   "page": {
     "title": "Prueba de seguridad",

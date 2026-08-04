@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { startGitHubOAuth } from "@/lib/github/oauth-client";
+import { projectVerdictHref } from "@/lib/navigation/project-hrefs";
 import type { GitHubRepo } from "@/lib/github";
 import { useI18n } from "@/lib/i18n/client";
 
@@ -248,7 +249,7 @@ export default function IntegrationsPage() {
       });
       const projectIds = data?.projectIds ?? [];
       if (projectIds.length === 1) {
-        router.push(`/projects/${projectIds[0]}?connected=1`);
+        router.push(projectVerdictHref(projectIds[0], { connected: "1" }));
         return;
       }
       setStep("done");

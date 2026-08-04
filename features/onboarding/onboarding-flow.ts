@@ -26,7 +26,6 @@ export const PROGRESS_STEPS = [
   { id: "repository", labelKey: "progress.repository" },
   { id: "review", labelKey: "progress.review" },
   { id: "verdict", labelKey: "progress.verdict" },
-  { id: "ready", labelKey: "progress.ready" },
 ] as const;
 
 export type ProgressStepId = (typeof PROGRESS_STEPS)[number]["id"];
@@ -85,7 +84,7 @@ export function resolveProgressIndex(
   if (wizardStep === "cursor") return PROGRESS_STEPS.length;
   if (wizardStep === "finale") {
     const ready = ctx.latestVerdict?.status === "ready_to_ship";
-    return ready ? 4 : 3;
+    return ready ? PROGRESS_STEPS.length : PROGRESS_STEPS.length - 1;
   }
   if (wizardStep === "review") {
     if (ctx.latestVerdict) return 3;

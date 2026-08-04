@@ -72,8 +72,8 @@ function parseRefreshError(status: number, body: AttackCenterListApiResponse): A
     message:
       body.error ??
       (fatal
-        ? "Attack Center storage is unavailable. Apply ASE migrations in Supabase."
-        : "Attack Center could not refresh."),
+        ? "Security Test storage is unavailable. Apply ASE migrations in Supabase."
+        : "Security Test could not refresh."),
     details: body.details ?? null,
   };
 }
@@ -142,7 +142,7 @@ export function useAttackCenterLive(options: LiveOptions) {
       return next;
     } catch (refreshError) {
       const message =
-        refreshError instanceof Error ? refreshError.message : "Attack Center could not refresh.";
+        refreshError instanceof Error ? refreshError.message : "Security Test could not refresh.";
       setError({
         status: 0,
         fatal: false,

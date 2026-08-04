@@ -6,39 +6,40 @@ import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n/client";
 import { withAnalysisRunQuery } from "@/features/analysis-runs/lib/build-run-query";
 
-export function MissionControlSubNav({
+/**
+ * Canonical project navigation — Production Verdict, Security Test (conditional), History.
+ */
+export function ProjectWorkflowNav({
   projectId,
-  latestReportHref,
-  attackCenterEnabled = true,
   analysisRunId,
+  showSecurityTest = false,
 }: {
   projectId: string;
-  latestReportHref?: string;
-  attackCenterEnabled?: boolean;
   analysisRunId?: string | null;
+  showSecurityTest?: boolean;
 }) {
   const pathname = usePathname();
   const { t } = useI18n("missionControl");
   const base = `/projects/${projectId}`;
   const verdictHref = `${base}/mission-control`;
-  const validateHref = `${base}/attack-center`;
+  const securityTestHref = `${base}/attack-center`;
   const historyHref = `${base}/journey`;
 
   const tabs = [
     {
       href: withAnalysisRunQuery(verdictHref, analysisRunId),
-      label: t("subNav.verdict"),
+      label: t("subNav.productionVerdict"),
       active:
         pathname.startsWith(verdictHref) &&
-        !pathname.startsWith(validateHref) &&
+        !pathname.startsWith(securityTestHref) &&
         !pathname.startsWith(historyHref),
     },
-    ...(attackCenterEnabled
+    ...(showSecurityTest
       ? [
           {
-            href: withAnalysisRunQuery(validateHref, analysisRunId),
-            label: t("subNav.validate"),
-            active: pathname.startsWith(validateHref),
+            href: withAnalysisRunQuery(securityTestHref, analysisRunId),
+            label: t("subNav.securityTest"),
+            active: pathname.startsWith(securityTestHref),
           },
         ]
       : []),
@@ -47,15 +48,6 @@ export function MissionControlSubNav({
       label: t("subNav.history"),
       active: pathname.startsWith(historyHref),
     },
-    ...(latestReportHref
-      ? [
-          {
-            href: latestReportHref,
-            label: t("subNav.technical"),
-            active: pathname.includes("/report"),
-          },
-        ]
-      : []),
   ];
 
   return (
@@ -77,4 +69,19 @@ export function MissionControlSubNav({
       ))}
     </nav>
   );
+}
+
+/** When Security Test should appear in project navigation. */
+export function shouldShowSecurityTestNav(input: {
+  attackCenterEnabled: boolean;
+  hasVerdict: boolean;
+  verdictReadyToShip: boolean;
+  securityTestPhase?: string | null;
+}): boolean {
+  if (!input.attackCenterEnabled || !input.hasVerdict) return false;
+  if (input.verdictReadyToShip) {
+    const activePhases = new Set(["running", "issues_found", "fix_ready", "protected", "completed_clean"]);
+    return input.securityTestPhase ? activePhases.has(input.securityTestPhase) : false;
+  }
+  return true;
 }

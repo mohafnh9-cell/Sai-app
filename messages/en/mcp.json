@@ -151,7 +151,7 @@
     "review_failed": "The Production Review did not complete successfully.",
     "repository_too_large": "This repository exceeds the size SequrAI can currently review.",
     "no_verdict_available": "I haven't reviewed this project yet. Say \"Review my project\" first.",
-    "review_in_progress": "A Continuous Review is currently running for this project. Try again shortly.",
+    "review_in_progress": "A Production Review is currently running for this project. Try again shortly.",
     "insufficient_data": "There is not enough repository coverage yet for a responsible production decision.",
     "analysis_failed": "The latest review did not complete successfully.",
     "blocker_not_found": "This blocker was not found in the latest Production Verdict. It may already be resolved.",

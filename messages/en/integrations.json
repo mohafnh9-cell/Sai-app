@@ -1,8 +1,8 @@
 {
-  "title": "Integrations",
-  "subtitle": "Connect SequrAI with your tools and repositories.",
+  "title": "GitHub",
+  "subtitle": "Connect SequrAI with your GitHub repositories.",
   "githubTitle": "GitHub",
-  "githubSubtitle": "Connect repos for automated production analysis on every push",
+  "githubSubtitle": "Connect repos for automatic Production Review on every push",
   "connectRepos": "Connect GitHub Repositories",
   "connectGitHubToWorkspace": "Connect GitHub to this Workspace",
   "loadRepositories": "Load repositories",
@@ -27,13 +27,13 @@
   "oauthStateInvalid": "GitHub authorization could not be verified. Try connecting again.",
   "oauthStateExpired": "GitHub authorization expired. Try connecting again.",
   "workspaceAccessDenied": "You no longer have access to that Workspace.",
-  "webhookHealthTitle": "Continuous Reviews health",
+  "webhookHealthTitle": "Production Review health",
   "webhookHealthSubtitle": "Webhook and repository connection status for each connected project.",
-  "webhookHealthLoading": "Checking Continuous Reviews health…",
-  "webhookHealthEmpty": "Connect a repository to enable Continuous Reviews.",
+  "webhookHealthLoading": "Checking Production Review health…",
+  "webhookHealthEmpty": "Connect a repository to enable Production Review.",
   "webhookHealthHealthy": "Healthy",
   "webhookHealthDegraded": "Needs attention",
-  "webhookHealthAllHealthy": "All connected repositories are ready for Continuous Reviews.",
-  "webhookHealthSomeDegraded": "{count} repositories need attention before Continuous Reviews can run reliably.",
-  "webhookHealthReconnect": "Reconnect GitHub or reconnect the repository to restore Continuous Reviews."
+  "webhookHealthAllHealthy": "All connected repositories are ready for Production Review.",
+  "webhookHealthSomeDegraded": "{count} repositories need attention before Production Review can run reliably.",
+  "webhookHealthReconnect": "Reconnect GitHub or reconnect the repository to restore Production Review."
 }
