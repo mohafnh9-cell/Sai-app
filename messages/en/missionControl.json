@@ -10,6 +10,9 @@
     "technical": "Technical",
     "ariaLabel": "Mission sections"
   },
+  "analysisRun": {
+    "historicalBanner": "You are viewing a previous analysis run. Start a new review to update the active run."
+  },
   "header": {
     "mission": "Mission",
     "project": "Project",

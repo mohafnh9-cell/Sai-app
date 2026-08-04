@@ -36,10 +36,16 @@ export async function GET(request: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  const { searchParams } = new URL(request.url);
+  const runId = searchParams.get("run");
+
   const { view, verdict } = await getMissionControlView(
     auth.supabase,
     projectId,
-    auth.organizationId
+    auth.organizationId,
+    isFeatureEnabled("analysis_run_isolation", { organizationId: auth.organizationId }) && runId
+      ? { analysisRunId: runId }
+      : undefined
   );
 
   return NextResponse.json({ view, verdict });

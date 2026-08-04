@@ -22,6 +22,16 @@ function reviewCompleteRedirectKey(projectId: string, scanId: string) {
   return `sequrai_review_complete_redirect_${projectId}_${scanId}`;
 }
 
+function navigateMissionControlToRun(projectId: string, scanId: string): boolean {
+  if (typeof window === "undefined") return false;
+  if (!window.location.pathname.includes("/mission-control")) return false;
+  const url = new URL(window.location.href);
+  url.searchParams.set("run", scanId);
+  url.searchParams.delete("reviewComplete");
+  window.location.replace(`${url.pathname}${url.search}`);
+  return true;
+}
+
 const IDLE_STATE: ProductionReviewState = {
   hasActiveReview: false,
   scanId: null,
@@ -231,11 +241,15 @@ export function AnalyzeProjectButton({
       const response = await fetch(`/api/repositories/${projectId}/scans`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scanType: "full" }),
+        body: JSON.stringify({
+          scanType: "full",
+          ...(context.hasVerdict ? { forceNew: true } : {}),
+        }),
       });
       const body = (await response.json().catch(() => null)) as
         | {
             scan_id?: string;
+            scanId?: string;
             scan?: { id: string; status: string };
             error?: string;
             code?: string;
@@ -248,19 +262,26 @@ export function AnalyzeProjectButton({
         return;
       }
 
+      const resolvedScanId = body?.scan_id ?? body?.scanId ?? body?.scan?.id;
+
       if (response.status === 409 && body?.scan?.id) {
+        if (navigateMissionControlToRun(projectId, body.scan.id)) return;
         await syncReviewState();
         return;
       }
 
-      if (!response.ok || !body?.scan_id) {
+      if (response.ok && resolvedScanId) {
+        if (navigateMissionControlToRun(projectId, resolvedScanId)) return;
+      }
+
+      if (!response.ok || !resolvedScanId) {
         if (body?.code === "SCAN_JOB_INFRASTRUCTURE_MISSING") {
           throw new Error(t("reviewInfrastructureMissing"));
         }
         throw new Error(body?.error || te("scanStart"));
       }
 
-      trackEvent("first_review_started", { projectId, scanId: body.scan_id });
+      trackEvent("first_review_started", { projectId, scanId: resolvedScanId });
       await syncReviewState();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : te("scanStart"));
@@ -305,10 +326,17 @@ export function AnalyzeProjectButton({
     trackEvent("first_review_completed", { projectId, scanId: reviewState.scanId });
 
     if (typeof window !== "undefined" && window.location.pathname.includes("/mission-control")) {
+      const url = new URL(window.location.href);
+      if (!url.searchParams.get("run")) {
+        url.searchParams.set("run", reviewState.scanId);
+        window.history.replaceState({}, "", url.pathname + url.search);
+      }
       return;
     }
 
-    window.location.assign(`/projects/${projectId}/mission-control?reviewComplete=1`);
+    window.location.assign(
+      `/projects/${projectId}/mission-control?reviewComplete=1&run=${reviewState.scanId}`
+    );
   }, [projectId, reviewState.scanId, reviewState.status]);
 
   useEffect(() => {

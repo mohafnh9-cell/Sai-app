@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
+import { appendAnalysisRunSearchParams } from "@/features/analysis-runs/lib/build-run-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { ProductionVerdictV1 } from "@/brain/production-verdict/schema";
 import { markOnboardingWizardComplete } from "@/lib/onboarding/mark-onboarding-complete";
@@ -30,6 +31,12 @@ type FlowState = {
 };
 
 const WIDE_STEPS = new Set<WizardStep>(["review", "finale", "cursor"]);
+
+function missionControlOnboardedHref(projectId: string, scanId: string | null): string {
+  const params = new URLSearchParams({ onboarded: "1" });
+  appendAnalysisRunSearchParams(params, scanId);
+  return `/projects/${projectId}/mission-control?${params.toString()}`;
+}
 
 function normalizeStep(
   step: WizardStep,
@@ -247,7 +254,7 @@ export function OnboardingFlow({ initialContext }: { initialContext: OnboardingC
           onFinish={() => void finishWizard("/dashboard?onboarded=1")}
           onSkip={() => {
             const href = activeProjectId
-              ? `/projects/${activeProjectId}/mission-control?onboarded=1`
+              ? missionControlOnboardedHref(activeProjectId, flow.scanId)
               : "/dashboard?onboarded=1";
             void finishWizard(href);
           }}

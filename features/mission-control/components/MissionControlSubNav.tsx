@@ -4,15 +4,18 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n/client";
+import { withAnalysisRunQuery } from "@/features/analysis-runs/lib/build-run-query";
 
 export function MissionControlSubNav({
   projectId,
   latestReportHref,
   attackCenterEnabled = true,
+  analysisRunId,
 }: {
   projectId: string;
   latestReportHref?: string;
   attackCenterEnabled?: boolean;
+  analysisRunId?: string | null;
 }) {
   const pathname = usePathname();
   const { t } = useI18n("missionControl");
@@ -23,7 +26,7 @@ export function MissionControlSubNav({
 
   const tabs = [
     {
-      href: verdictHref,
+      href: withAnalysisRunQuery(verdictHref, analysisRunId),
       label: t("subNav.verdict"),
       active:
         pathname.startsWith(verdictHref) &&
@@ -33,7 +36,7 @@ export function MissionControlSubNav({
     ...(attackCenterEnabled
       ? [
           {
-            href: validateHref,
+            href: withAnalysisRunQuery(validateHref, analysisRunId),
             label: t("subNav.validate"),
             active: pathname.startsWith(validateHref),
           },

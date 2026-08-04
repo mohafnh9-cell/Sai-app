@@ -436,6 +436,18 @@ export class InlineScanJobRunner implements ScanJobRunner {
         findings: rows.length,
         durationMs: Date.now() - started,
       });
+
+      try {
+        const { appendMissionFeedEvent } = await import("@/server/mission-control/get-mission-control");
+        await appendMissionFeedEvent(this.supabase, {
+          organizationId: context.organizationId,
+          projectId: context.repositoryId,
+          scanId: context.scanId,
+          message: "Production review completed.",
+        });
+      } catch {
+        // Feed writes are best-effort and must not fail the scan pipeline.
+      }
     } catch (error) {
       if (error instanceof ScanCancelledError) {
         logScan("info", "scan_aborted_cancelled", {

@@ -12,6 +12,9 @@ import { loadAttackCenterListState } from "@/server/attack-simulation/api/load-a
 import { buildAttackCenterCapability } from "@/server/attack-simulation/api/attack-center-contract";
 import { attackCenterErrorFromUnknown } from "@/server/attack-simulation/api/errors";
 import { getSecurityTestContext } from "@/server/attack-simulation/get-security-test-context";
+import { getAttackCampaignByScanId } from "@/server/attack-simulation/persistence/campaign-repository";
+import { isAnalysisRunOwnedByProject } from "@/server/analysis-runs/get-analysis-run-snapshot";
+import { withAnalysisRunQuery } from "@/features/analysis-runs/lib/build-run-query";
 import type { AttackCenterCapability } from "@/features/attack-simulation/api-types";
 import type { SecurityTestContext } from "@/features/security-testing/types";
 import type { AttackCenterSnapshot } from "@/server/attack-simulation/ui/types";
@@ -20,6 +23,7 @@ import { getTranslator } from "@/lib/i18n/server";
 
 interface PageProps {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ run?: string }>;
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -31,13 +35,32 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   return { title: data?.name ? `${data.name} — ${t("page.title")}` : t("page.title") };
 }
 
-export default async function AttackCenterPage({ params }: PageProps) {
+export default async function AttackCenterPage({ params, searchParams }: PageProps) {
   const { id: projectId } = await params;
+  const query = await searchParams;
   const auth = await getCachedServerAuthContext();
   if (!auth?.organizationId) redirect("/login");
 
   if (!isFeatureEnabled("attack_simulation", { organizationId: auth.organizationId })) {
     redirect(`/projects/${projectId}/mission-control`);
+  }
+
+  const isolationEnabled = isFeatureEnabled("analysis_run_isolation", {
+    organizationId: auth.organizationId,
+  });
+
+  let analysisRunId: string | null = query.run ?? null;
+
+  if (isolationEnabled && query.run) {
+    const admin = createAdminClient();
+    const owned = await isAnalysisRunOwnedByProject(admin, {
+      projectId,
+      organizationId: auth.organizationId,
+      runId: query.run,
+    });
+    if (!owned) {
+      redirect(`/projects/${projectId}/attack-center`);
+    }
   }
 
   const { data: project } = await auth.supabase
@@ -48,17 +71,21 @@ export default async function AttackCenterPage({ params }: PageProps) {
 
   if (!project) notFound();
 
-  const { data: latestScan } = await auth.supabase
-    .from("scans")
-    .select("id")
-    .eq("project_id", projectId)
-    .eq("status", "completed")
-    .order("completed_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  const reportScanId = analysisRunId
+    ? analysisRunId
+    : (
+        await auth.supabase
+          .from("scans")
+          .select("id")
+          .eq("project_id", projectId)
+          .eq("status", "completed")
+          .order("completed_at", { ascending: false })
+          .limit(1)
+          .maybeSingle()
+      ).data?.id;
 
-  const latestReportHref = latestScan?.id
-    ? `/projects/${projectId}/scans/${latestScan.id}/report`
+  const latestReportHref = reportScanId
+    ? `/projects/${projectId}/scans/${reportScanId}/report`
     : undefined;
 
   const reviewContext = await getProjectReviewUiContext(auth.supabase, projectId);
@@ -70,6 +97,12 @@ export default async function AttackCenterPage({ params }: PageProps) {
     organizationId: auth.organizationId,
   });
   let securityTestContext: SecurityTestContext | null = null;
+  let initialCampaignId: string | null = null;
+
+  if (isolationEnabled && analysisRunId) {
+    const runCampaign = await getAttackCampaignByScanId(admin, analysisRunId, auth.organizationId);
+    initialCampaignId = runCampaign?.id ?? null;
+  }
 
   try {
     const initialState = await loadAttackCenterListState(admin, {
@@ -93,20 +126,25 @@ export default async function AttackCenterPage({ params }: PageProps) {
     const fullContext = await getSecurityTestContext(admin, {
       projectId,
       organizationId: auth.organizationId,
+      analysisRunId: isolationEnabled ? analysisRunId : undefined,
     });
-    const { hypotheses: _hypotheses, ...publicContext } = fullContext;
+    const { hypotheses: _hypotheses, analysisRunId: _runId, ...publicContext } = fullContext;
     securityTestContext = publicContext;
   } catch {
     securityTestContext = null;
   }
 
   const { t: ta } = await getTranslator("attackCenter");
+  const missionControlHref = withAnalysisRunQuery(
+    `/projects/${projectId}/mission-control`,
+    isolationEnabled ? analysisRunId : undefined
+  );
 
   return (
     <div className="app-cinematic-bg min-h-full">
       <div className="mx-auto max-w-4xl px-4 sm:px-8 pb-24 pt-6 sm:pt-10">
         <Button variant="ghost" size="sm" asChild className="gap-1.5 -ml-2 text-muted-foreground mb-8">
-          <Link href={`/projects/${projectId}/mission-control`}>
+          <Link href={missionControlHref}>
             <ArrowLeft className="h-4 w-4" />
             {ta("page.backToMissionControl")}
           </Link>
@@ -115,6 +153,7 @@ export default async function AttackCenterPage({ params }: PageProps) {
           projectId={projectId}
           latestReportHref={latestReportHref}
           attackCenterEnabled
+          analysisRunId={isolationEnabled ? analysisRunId : undefined}
         />
         <AttackCenterExperience
           projectId={projectId}
@@ -123,7 +162,8 @@ export default async function AttackCenterPage({ params }: PageProps) {
           reviewContext={reviewContext}
           securityTestContext={securityTestContext}
           initialCampaignId={
-            initialSnapshot?.kind === "campaign" ? initialSnapshot.campaign.id : null
+            initialCampaignId ??
+            (initialSnapshot?.kind === "campaign" ? initialSnapshot.campaign.id : null)
           }
         />
       </div>

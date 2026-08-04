@@ -55,22 +55,42 @@ export async function getLatestVerdictsByOrganization(
   return map;
 }
 
-async function upsertVerdictWithRetry(
+async function insertVerdictIfAbsent(
   admin: SupabaseClient,
   row: Record<string, unknown>,
   maxAttempts = 3
-) {
-  let lastError: { message: string } | null = null;
+): Promise<{ data: { id: string } | null; error: { message: string } | null; reused: boolean }> {
+  const scanId = row.scan_id as string;
+  const existing = await getProductionVerdictByScan(admin, scanId);
+  if (existing) {
+    const { data } = await admin
+      .from("production_verdicts")
+      .select("id")
+      .eq("scan_id", scanId)
+      .maybeSingle();
+    return { data: data ? { id: data.id as string } : null, error: null, reused: true };
+  }
+
+  let lastError: { message: string; code?: string } | null = null;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     const { data, error } = await admin
       .from("production_verdicts")
-      .upsert(row, { onConflict: "scan_id" })
+      .insert(row)
       .select("id")
       .single();
 
     if (!error) {
-      return { data, error: null };
+      return { data: data ? { id: data.id as string } : null, error: null, reused: false };
+    }
+
+    if (error.code === "23505") {
+      const { data: raced } = await admin
+        .from("production_verdicts")
+        .select("id")
+        .eq("scan_id", scanId)
+        .maybeSingle();
+      return { data: raced ? { id: raced.id as string } : null, error: null, reused: true };
     }
 
     lastError = error;
@@ -79,7 +99,7 @@ async function upsertVerdictWithRetry(
     }
   }
 
-  return { data: null, error: lastError };
+  return { data: null, error: lastError, reused: false };
 }
 
 export async function generateAndPersistProductionVerdict(
@@ -214,7 +234,8 @@ export async function generateAndPersistProductionVerdict(
     blockersCount: verdict.blockersCount,
   });
 
-  const { data: persisted, error: persistError } = await upsertVerdictWithRetry(admin, {
+  const { data: persisted, error: persistError, reused: verdictReused } =
+    await insertVerdictIfAbsent(admin, {
     organization_id: input.organizationId,
     project_id: input.projectId,
     repository_id: scan.repository_id ?? input.projectId,
@@ -247,6 +268,12 @@ export async function generateAndPersistProductionVerdict(
       failureCode: "VERDICT_PERSISTENCE_FAILED",
     });
     throw new Error(persistError.message);
+  }
+
+  if (verdictReused) {
+    log("verdict_insert_skipped_immutable", { scanId: input.scanId });
+    const existing = await getProductionVerdictByScan(admin, input.scanId);
+    return existing;
   }
 
   await recordSideEffect(admin, {

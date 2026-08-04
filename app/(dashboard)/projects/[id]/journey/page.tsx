@@ -10,10 +10,14 @@ import { getProductionJourneyByProject } from "@/server/production-journey/servi
 import { ProjectSubNav } from "@/features/production-journey/components/ProjectSubNav";
 import { MissionControlSubNav } from "@/features/mission-control/components/MissionControlSubNav";
 import { ProductionJourneyView } from "@/features/production-journey/components/ProductionJourneyView";
+import { withAnalysisRunQuery } from "@/features/analysis-runs/lib/build-run-query";
+import { isAnalysisRunOwnedByProject } from "@/server/analysis-runs/get-analysis-run-snapshot";
+import { createAdminClient } from "@/server/security-scanner/admin-client";
 import type { Metadata } from "next";
 
 interface JourneyPageProps {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ run?: string }>;
 }
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -21,8 +25,9 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: t("title") };
 }
 
-export default async function ProjectJourneyPage({ params }: JourneyPageProps) {
+export default async function ProjectJourneyPage({ params, searchParams }: JourneyPageProps) {
   const { id } = await params;
+  const query = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -38,6 +43,21 @@ export default async function ProjectJourneyPage({ params }: JourneyPageProps) {
     auth?.organizationId &&
       isFeatureEnabled("attack_simulation", { organizationId: auth.organizationId })
   );
+  const isolationEnabled = Boolean(
+    auth?.organizationId &&
+      isFeatureEnabled("analysis_run_isolation", { organizationId: auth.organizationId })
+  );
+
+  let analysisRunId: string | null = query.run ?? null;
+  if (isolationEnabled && query.run && auth?.organizationId) {
+    const admin = createAdminClient();
+    const owned = await isAnalysisRunOwnedByProject(admin, {
+      projectId: id,
+      organizationId: auth.organizationId,
+      runId: query.run,
+    });
+    if (!owned) analysisRunId = null;
+  }
 
   const { t: tp } = await getTranslator("projects");
   const { t: tm } = await getTranslator("missionControl");
@@ -66,7 +86,12 @@ export default async function ProjectJourneyPage({ params }: JourneyPageProps) {
     ? `/projects/${id}/scans/${latestScan.id}/report`
     : undefined;
 
-  const backHref = missionControlEnabled ? `/projects/${id}/mission-control` : `/projects/${id}`;
+  const backHref = missionControlEnabled
+    ? withAnalysisRunQuery(
+        `/projects/${id}/mission-control`,
+        isolationEnabled ? analysisRunId : undefined
+      )
+    : `/projects/${id}`;
   const backLabel = missionControlEnabled ? tm("page.title") : tp("backToProjects");
 
   return (
@@ -89,6 +114,7 @@ export default async function ProjectJourneyPage({ params }: JourneyPageProps) {
             projectId={id}
             latestReportHref={latestReportHref}
             attackCenterEnabled={attackCenterEnabled}
+            analysisRunId={isolationEnabled ? analysisRunId : undefined}
           />
         ) : (
           <ProjectSubNav projectId={id} latestReportHref={latestReportHref} />

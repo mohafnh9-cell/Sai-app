@@ -34,6 +34,7 @@ const createScanSchema = z
   .object({
     scanType: z.literal("full").default("full"),
     branch: z.string().trim().min(1).max(255).optional(),
+    forceNew: z.boolean().optional(),
   })
   .strict();
 const historySchema = z.object({
@@ -188,6 +189,7 @@ export async function POST(
       projectId: project.id,
       commitSha: resolvedCommit.commitSha,
       reviewType: "manual",
+      forceNew: parsedBody.data.forceNew === true,
     });
 
     if (idempotency.action === "reuse_completed") {

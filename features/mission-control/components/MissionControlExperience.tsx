@@ -22,6 +22,7 @@ export function MissionControlExperience({
   fixPromptContext,
   securityTestContext = null,
   reviewContext = null,
+  analysisRunId: _analysisRunId = null,
 }: {
   view: MissionControlView;
   verdict: ProductionVerdictV1 | null;
@@ -29,6 +30,7 @@ export function MissionControlExperience({
   fixPromptContext?: FixPromptContext;
   securityTestContext?: SecurityTestContext | null;
   reviewContext?: ProjectReviewUiContext | null;
+  analysisRunId?: string | null;
 }) {
   const { t, locale } = useI18n("missionControl");
   const guidedFlowActive = Boolean(securityTestContext && reviewContext);

@@ -4,14 +4,23 @@ import { useRouter } from "next/navigation";
 import { ArrowRight, Rocket } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n/client";
+import { appendAnalysisRunSearchParams } from "@/features/analysis-runs/lib/build-run-query";
 
-export function OnboardingDashboardEntry({ projectId }: { projectId?: string | null }) {
+export function OnboardingDashboardEntry({
+  projectId,
+  scanId,
+}: {
+  projectId?: string | null;
+  scanId?: string | null;
+}) {
   const router = useRouter();
   const { t } = useI18n("onboarding");
 
   const finish = () => {
     if (projectId) {
-      router.push(`/projects/${projectId}/mission-control?onboarded=1`);
+      const params = new URLSearchParams({ onboarded: "1" });
+      appendAnalysisRunSearchParams(params, scanId);
+      router.push(`/projects/${projectId}/mission-control?${params.toString()}`);
       return;
     }
     router.push("/dashboard?firstVerdict=1");

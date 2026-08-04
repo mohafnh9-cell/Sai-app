@@ -10,6 +10,9 @@
     "technical": "Técnico",
     "ariaLabel": "Secciones de la misión"
   },
+  "analysisRun": {
+    "historicalBanner": "Estás viendo un análisis anterior. Inicia una nueva revisión para actualizar el análisis activo."
+  },
   "header": {
     "mission": "Misión",
     "project": "Proyecto",

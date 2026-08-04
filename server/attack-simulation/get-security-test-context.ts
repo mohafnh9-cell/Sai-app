@@ -14,10 +14,14 @@ import {
 import { deriveSecurityTestPhase } from "@/features/security-testing/lib/derive-phase";
 import { getTranslator } from "@/lib/i18n/server";
 import { extractAttackHypothesesFromRedTeamReport } from "./integration/extract-hypotheses-from-report";
-import { listAttackCampaignsForProject } from "./persistence/campaign-repository";
+import {
+  getAttackCampaignByScanId,
+  listAttackCampaignsForProject,
+} from "./persistence/campaign-repository";
 import { listAttackExecutionsForCampaign } from "./persistence/execution-repository";
 import type { AttackHypothesis } from "./contracts/attack-hypothesis";
 import { getProductionReviewState } from "@/server/review-cancel/get-production-review-state";
+import type { AnalysisRunId } from "@/server/analysis-runs/types";
 
 function parseRedTeamReportFromMetadata(metadata: unknown): RedTeamReport | null {
   if (!metadata || typeof metadata !== "object") return null;
@@ -29,60 +33,76 @@ function parseRedTeamReportFromMetadata(metadata: unknown): RedTeamReport | null
   return report as RedTeamReport;
 }
 
+function isTerminalReviewStatus(status: string): boolean {
+  return status === "completed" || status === "cancelled" || status === "failed" || status === "stale";
+}
+
 export type SecurityTestContextPayload = SecurityTestContext & {
   hypotheses: AttackHypothesis[];
+  analysisRunId?: AnalysisRunId | null;
 };
 
 export async function getSecurityTestContext(
   admin: SupabaseClient,
-  input: { projectId: string; organizationId: string }
+  input: { projectId: string; organizationId: string; analysisRunId?: AnalysisRunId | null }
 ): Promise<SecurityTestContextPayload> {
-  const attackCenterHref = `/projects/${input.projectId}/attack-center`;
+  const runQuery = input.analysisRunId ? `?run=${input.analysisRunId}` : "";
+  const attackCenterHref = `/projects/${input.projectId}/attack-center${runQuery}`;
 
-  const [reviewState, latestCompletedScan, campaigns] = await Promise.all([
-    getProductionReviewState(admin, {
-      organizationId: input.organizationId,
-      projectId: input.projectId,
-    }),
-    admin
-      .from("scans")
-      .select("id, commit_sha, status")
-      .eq("project_id", input.projectId)
-      .eq("status", "completed")
-      .order("completed_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-    listAttackCampaignsForProject(admin, {
-      projectId: input.projectId,
-      organizationId: input.organizationId,
-      limit: 1,
-    }),
-  ]);
+  const reviewState = await getProductionReviewState(admin, {
+    organizationId: input.organizationId,
+    projectId: input.projectId,
+  });
 
-  const latestScanJobForScan = latestCompletedScan.data
+  const scopedRunId = input.analysisRunId ?? null;
+  const reviewScopedToRun =
+    scopedRunId != null && reviewState.scanId != null && reviewState.scanId === scopedRunId;
+
+  const reviewInProgress = scopedRunId
+    ? reviewScopedToRun &&
+      reviewState.hasActiveReview &&
+      !isTerminalReviewStatus(reviewState.status)
+    : reviewState.hasActiveReview && !isTerminalReviewStatus(reviewState.status);
+
+  const targetScanResult = scopedRunId
+    ? await admin
+        .from("scans")
+        .select("id, commit_sha, status")
+        .eq("id", scopedRunId)
+        .eq("project_id", input.projectId)
+        .eq("organization_id", input.organizationId)
+        .maybeSingle()
+    : await admin
+        .from("scans")
+        .select("id, commit_sha, status")
+        .eq("project_id", input.projectId)
+        .eq("status", "completed")
+        .order("completed_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+  const targetScan = targetScanResult.data;
+  const targetScanCompleted = targetScan?.status === "completed";
+
+  const latestScanJobForScan = targetScan
     ? await admin
         .from("scan_jobs")
         .select("id, metadata, scan_id")
         .eq("project_id", input.projectId)
-        .eq("scan_id", latestCompletedScan.data.id)
+        .eq("scan_id", targetScan.id)
         .order("completed_at", { ascending: false })
         .limit(1)
         .maybeSingle()
     : { data: null };
 
-  const reviewInProgress =
-    reviewState.hasActiveReview &&
-    reviewState.status !== "completed" &&
-    reviewState.status !== "cancelled" &&
-    reviewState.status !== "failed" &&
-    reviewState.status !== "stale";
-  const latestScan = latestCompletedScan.data
-    ? {
-        id: latestCompletedScan.data.id as string,
-        scanJobId: (latestScanJobForScan.data?.id as string | null) ?? null,
-        commitSha: (latestCompletedScan.data.commit_sha as string) ?? "unknown",
-      }
-    : null;
+  const latestScan =
+    targetScan && targetScanCompleted
+      ? {
+          id: targetScan.id as string,
+          scanJobId: (latestScanJobForScan.data?.id as string | null) ?? null,
+          commitSha: (targetScan.commit_sha as string) ?? "unknown",
+        }
+      : null;
 
   const { t } = await getTranslator("securityTest");
 
@@ -93,20 +113,27 @@ export async function getSecurityTestContext(
       ? buildSecurityTestOptionsFromHypotheses(hypotheses, t)
       : buildDefaultSecurityTestOptions(t);
 
-  const latestCampaignRow = campaigns[0] ?? null;
-  const executions = latestCampaignRow
-    ? await listAttackExecutionsForCampaign(admin, latestCampaignRow.id, input.organizationId)
+  const campaignRow = scopedRunId
+    ? await getAttackCampaignByScanId(admin, scopedRunId, input.organizationId)
+    : (await listAttackCampaignsForProject(admin, {
+        projectId: input.projectId,
+        organizationId: input.organizationId,
+        limit: 1,
+      }))[0] ?? null;
+
+  const executions = campaignRow
+    ? await listAttackExecutionsForCampaign(admin, campaignRow.id, input.organizationId)
     : [];
 
-  const latestCampaign = latestCampaignRow
+  const latestCampaign = campaignRow
     ? {
-        id: latestCampaignRow.id,
-        status: latestCampaignRow.status,
-        progressPercent: latestCampaignRow.progressPercent,
-        confirmedFindings: latestCampaignRow.confirmedFindings,
-        totalExecutions: latestCampaignRow.totalExecutions,
-        completedExecutions: latestCampaignRow.completedExecutions,
-        commitSha: latestCampaignRow.commitSha,
+        id: campaignRow.id,
+        status: campaignRow.status,
+        progressPercent: campaignRow.progressPercent,
+        confirmedFindings: campaignRow.confirmedFindings,
+        totalExecutions: campaignRow.totalExecutions,
+        completedExecutions: campaignRow.completedExecutions,
+        commitSha: campaignRow.commitSha,
       }
     : null;
 
@@ -131,5 +158,6 @@ export async function getSecurityTestContext(
     progressSteps: buildProgressStepsForPhase(phase, t),
     attackCenterHref,
     hypotheses,
+    analysisRunId: scopedRunId,
   };
 }

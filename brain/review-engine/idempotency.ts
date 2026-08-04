@@ -29,6 +29,8 @@ export async function resolveReviewIdempotency(
     projectId: string;
     commitSha: string;
     reviewType?: string | null;
+    /** When true, never reuse a completed scan — always start a fresh analysis run. */
+    forceNew?: boolean;
   }
 ): Promise<ReviewIdempotencyLookup> {
   const reviewType = input.reviewType ?? "manual";
@@ -49,6 +51,10 @@ export async function resolveReviewIdempotency(
         return { action: "resume_active", scan: scan as Record<string, unknown> };
       }
     }
+  }
+
+  if (input.forceNew) {
+    return { action: "create_new" };
   }
 
   const { data: completed } = await admin

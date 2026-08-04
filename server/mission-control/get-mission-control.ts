@@ -13,17 +13,86 @@ import {
   parseLlmMetricsFromMetadata,
 } from "@/features/mission-control/lib/parse-llm-metrics";
 import type { MissionControlView, MissionFeedItem } from "@/features/mission-control/types";
-import { getCurrentProductionVerdict } from "@/server/production-verdict/service";
+import { getCurrentProductionVerdict, getProductionVerdictByScan } from "@/server/production-verdict/service";
 import { getProductionReviewState } from "@/server/review-cancel/get-production-review-state";
+
+export type MissionControlViewOptions = {
+  analysisRunId?: string | null;
+};
 
 export async function getMissionControlView(
   supabase: SupabaseClient,
   projectId: string,
-  organizationId: string
+  organizationId: string,
+  options?: MissionControlViewOptions
 ): Promise<{ view: MissionControlView; verdict: Awaited<ReturnType<typeof getCurrentProductionVerdict>> }> {
+  const analysisRunId = options?.analysisRunId ?? null;
+
+  const feedBase = supabase
+    .from("mission_control_feed_events")
+    .select("id, message, occurred_at")
+    .eq("project_id", projectId)
+    .order("occurred_at", { ascending: false })
+    .limit(20);
+
+  const activeJobBase = supabase
+    .from("scan_jobs")
+    .select("id, status, metadata")
+    .eq("project_id", projectId)
+    .in("status", ["queued", "running"])
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  const completedJobsBase = supabase
+    .from("scan_jobs")
+    .select("id, status, metadata, completed_at")
+    .eq("project_id", projectId)
+    .eq("status", "completed")
+    .order("completed_at", { ascending: false })
+    .limit(5);
+
+  const feedQuery = analysisRunId ? feedBase.eq("scan_id", analysisRunId) : feedBase;
+  const activeJobQuery = analysisRunId ? activeJobBase.eq("scan_id", analysisRunId) : activeJobBase;
+  const completedJobsQuery = analysisRunId
+    ? completedJobsBase.eq("scan_id", analysisRunId)
+    : completedJobsBase;
+
+  const latestScanQuery = analysisRunId
+    ? supabase
+        .from("scans")
+        .select("detected_stack, status")
+        .eq("id", analysisRunId)
+        .eq("project_id", projectId)
+        .maybeSingle()
+    : supabase
+        .from("scans")
+        .select("detected_stack")
+        .eq("project_id", projectId)
+        .order("completed_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+  const latestReviewScanQuery = analysisRunId
+    ? supabase
+        .from("scans")
+        .select(
+          "status, cancelled_at, cancelled_by, last_completed_phase, progress_at_cancellation, created_at"
+        )
+        .eq("id", analysisRunId)
+        .eq("project_id", projectId)
+        .maybeSingle()
+    : supabase
+        .from("scans")
+        .select(
+          "status, cancelled_at, cancelled_by, last_completed_phase, progress_at_cancellation, created_at"
+        )
+        .eq("project_id", projectId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
   const [
     { data: project },
-    verdict,
     reviewState,
     activeScanJob,
     completedJobsResult,
@@ -32,48 +101,21 @@ export async function getMissionControlView(
     latestReviewScan,
   ] = await Promise.all([
     supabase.from("projects").select("id, name").eq("id", projectId).single(),
-    getCurrentProductionVerdict(supabase, projectId),
     getProductionReviewState(supabase, { organizationId, projectId }),
-    supabase
-      .from("scan_jobs")
-      .select("id, status, metadata")
-      .eq("project_id", projectId)
-      .in("status", ["queued", "running"])
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-    supabase
-      .from("scan_jobs")
-      .select("id, status, metadata, completed_at")
-      .eq("project_id", projectId)
-      .eq("status", "completed")
-      .order("completed_at", { ascending: false })
-      .limit(5),
-    supabase
-      .from("scans")
-      .select("detected_stack")
-      .eq("project_id", projectId)
-      .order("completed_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-    supabase
-      .from("mission_control_feed_events")
-      .select("id, message, occurred_at")
-      .eq("project_id", projectId)
-      .order("occurred_at", { ascending: false })
-      .limit(20),
-    supabase
-      .from("scans")
-      .select(
-        "status, cancelled_at, cancelled_by, last_completed_phase, progress_at_cancellation, created_at"
-      )
-      .eq("project_id", projectId)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
+    activeJobQuery.maybeSingle(),
+    completedJobsQuery,
+    latestScanQuery,
+    feedQuery,
+    latestReviewScanQuery,
   ]);
 
-  const scanInProgress = reviewState.hasActiveReview;
+  const verdict = analysisRunId
+    ? await getProductionVerdictByScan(supabase, analysisRunId)
+    : await getCurrentProductionVerdict(supabase, projectId);
+
+  const scanInProgress = analysisRunId
+    ? reviewState.hasActiveReview && reviewState.scanId === analysisRunId
+    : reviewState.hasActiveReview;
   const cancelledReview =
     latestReviewScan.data?.status === "cancelled" &&
     latestReviewScan.data.cancelled_at &&
@@ -133,12 +175,19 @@ export async function getMissionControlView(
 
 export async function appendMissionFeedEvent(
   supabase: SupabaseClient,
-  input: { organizationId: string; projectId: string; message: string; sessionId?: string }
+  input: {
+    organizationId: string;
+    projectId: string;
+    message: string;
+    sessionId?: string;
+    scanId?: string;
+  }
 ): Promise<void> {
   await supabase.from("mission_control_feed_events").insert({
     organization_id: input.organizationId,
     project_id: input.projectId,
     session_id: input.sessionId ?? null,
+    scan_id: input.scanId ?? null,
     message: input.message,
     kind: "info",
   });
