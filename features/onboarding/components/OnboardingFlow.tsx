@@ -138,7 +138,7 @@ export function OnboardingFlow({ initialContext }: { initialContext: OnboardingC
       }
       router.replace(`/onboarding?${params.toString()}`, { scroll: false });
     },
-    [router, flow.projectId]
+    [router, flow.projectId, setRawStep]
   );
 
   const finishWizard = useCallback(
@@ -152,7 +152,7 @@ export function OnboardingFlow({ initialContext }: { initialContext: OnboardingC
   const handleGitHubConnected = useCallback(() => {
     setContext((prev) => ({ ...prev, githubConnected: true }));
     goTo("repository");
-  }, [goTo]);
+  }, [goTo, setContext]);
 
   const handleRepositoryConnected = useCallback(
     (projectId: string, projectName?: string) => {
@@ -181,7 +181,7 @@ export function OnboardingFlow({ initialContext }: { initialContext: OnboardingC
       }));
       goTo("review", { projectId });
     },
-    [goTo]
+    [goTo, setFlow, setContext]
   );
 
   const handleReviewComplete = useCallback(
@@ -190,7 +190,7 @@ export function OnboardingFlow({ initialContext }: { initialContext: OnboardingC
       setContext((prev) => ({ ...prev, latestVerdict: verdict }));
       goTo("finale");
     },
-    [goTo]
+    [goTo, setFlow, setContext]
   );
 
   const activeVerdict = flow.verdict ?? context.latestVerdict;

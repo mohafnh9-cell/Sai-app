@@ -14,7 +14,7 @@ describe("security test UX catalog", () => {
   });
 
   it("maps selected catalog tests to hypotheses", () => {
-    const hypotheses = mapSelectedTestsToHypotheses(["workflow-bypass"], []);
+    const hypotheses = mapSelectedTestsToHypotheses(["workflow-bypass"], [], t);
     expect(hypotheses).toHaveLength(1);
     expect(hypotheses[0].adapterHint).toBe("workflow-bypass");
   });

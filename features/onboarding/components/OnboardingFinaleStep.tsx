@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Loader2, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { fixPromptInputFromPriority } from "@/brain/fix-prompt";
@@ -37,11 +37,12 @@ export function OnboardingFinaleStep({
 }) {
   const { t } = useI18n("onboarding");
   const { t: te } = useI18n("errors");
-  const [verdict, setVerdict] = useState(initialVerdict);
+  const [recheckVerdict, setRecheckVerdict] = useState<ProductionVerdictV1 | null>(null);
   const [rechecking, setRechecking] = useState(false);
   const [recheckProgress, setRecheckProgress] = useState(12);
   const [recheckError, setRecheckError] = useState("");
 
+  const verdict = recheckVerdict ?? initialVerdict;
   const ready = verdict.status === "ready_to_ship";
   const topPriority = verdict.topPriorities[0] ?? null;
 
@@ -53,10 +54,6 @@ export function OnboardingFinaleStep({
       currentScore: verdict.score,
     });
   }, [topPriority, projectName, ready, verdict.score, verdict.status]);
-
-  useEffect(() => {
-    setVerdict(initialVerdict);
-  }, [initialVerdict]);
 
   const pollUntilVerdict = useCallback(
     async (scanId: string) => {
@@ -79,7 +76,7 @@ export function OnboardingFinaleStep({
 
       const nextVerdict = body.verdict?.v1 ?? null;
       if (scanIsCompleted(body.scan.status) && nextVerdict) {
-        setVerdict(nextVerdict);
+        setRecheckVerdict(nextVerdict);
         onVerdictUpdated(nextVerdict);
         return true;
       }

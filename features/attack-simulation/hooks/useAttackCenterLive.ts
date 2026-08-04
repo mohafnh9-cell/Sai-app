@@ -102,7 +102,10 @@ export function useAttackCenterLive(options: LiveOptions) {
   const failureCountRef = useRef(0);
   const pollDelayRef = useRef(ATTACK_CENTER_POLL_INTERVAL_MS);
   const snapshotRef = useRef(snapshot);
-  snapshotRef.current = snapshot;
+
+  useEffect(() => {
+    snapshotRef.current = snapshot;
+  }, [snapshot]);
 
   const refresh = useCallback(async () => {
     const url = resolvePollUrl({ projectId, campaignId, executionId, findingId });
@@ -161,7 +164,10 @@ export function useAttackCenterLive(options: LiveOptions) {
 
   useEffect(() => {
     if (!enabled || !projectId) return;
-    void refresh();
+    const timer = window.setTimeout(() => {
+      void refresh();
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [enabled, projectId, refresh]);
 
   useEffect(() => {
