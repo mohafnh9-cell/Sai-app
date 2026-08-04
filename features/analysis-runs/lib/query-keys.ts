@@ -15,4 +15,9 @@ export const analysisRunKeys = {
     runId
       ? ([...analysisRunKeys.run(projectId, runId), "attack-center"] as const)
       : ([...analysisRunKeys.project(projectId), "attack-center"] as const),
+  list: (projectId: string) => [...analysisRunKeys.project(projectId), "list"] as const,
+  securityTests: (projectId: string, runId?: string | null) =>
+    runId
+      ? ([...analysisRunKeys.run(projectId, runId), "security-tests"] as const)
+      : ([...analysisRunKeys.project(projectId), "security-tests"] as const),
 };

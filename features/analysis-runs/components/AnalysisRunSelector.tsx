@@ -4,6 +4,7 @@ import { useCallback } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useI18n } from "@/lib/i18n/client";
 import type { AnalysisRunListItem } from "@/server/analysis-runs/list-analysis-runs";
+import { useAnalysisRuns } from "../hooks/useAnalysisRuns";
 
 function shortSha(sha: string | null): string {
   if (!sha) return "—";
@@ -25,7 +26,7 @@ function formatRunLabel(
 }
 
 export function AnalysisRunSelector({
-  runs,
+  runs: initialRuns,
   activeRunId,
 }: {
   runs: AnalysisRunListItem[];
@@ -35,6 +36,11 @@ export function AnalysisRunSelector({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { t } = useI18n("missionControl");
+  const projectId = pathname.match(/\/projects\/([^/]+)/)?.[1] ?? "";
+  const { data: runs = initialRuns } = useAnalysisRuns(projectId, {
+    initialRuns,
+    enabled: Boolean(projectId),
+  });
 
   const onChange = useCallback(
     (runId: string) => {

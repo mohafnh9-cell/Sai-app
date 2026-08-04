@@ -33,4 +33,14 @@ describe("analysisRunKeys", () => {
       "mission-control",
     ]);
   });
+
+  it("builds list and security-tests keys", () => {
+    expect(analysisRunKeys.list("proj-1")).toEqual(["analysis-run", "proj-1", "list"]);
+    expect(analysisRunKeys.securityTests("proj-1", "run-1")).toEqual([
+      "analysis-run",
+      "proj-1",
+      "run-1",
+      "security-tests",
+    ]);
+  });
 });

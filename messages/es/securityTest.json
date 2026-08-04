@@ -126,6 +126,7 @@
     "startFailed": "No se pudo iniciar la prueba de seguridad.",
     "verifyFailed": "No se pudo completar la verificación.",
     "invalidProjectId": "ID de proyecto inválido",
+    "invalidAnalysisRun": "Ese análisis no pertenece a este proyecto.",
     "notEnabled": "Las pruebas de seguridad no están activadas para este proyecto.",
     "selectAtLeastOne": "Selecciona al menos una prueba.",
     "needsReviewFirst": "Ejecuta primero una revisión de seguridad para que SequrAI sepa qué versión probar.",

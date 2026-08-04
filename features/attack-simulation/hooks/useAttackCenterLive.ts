@@ -12,6 +12,7 @@ import {
   ATTACK_CENTER_POLL_INTERVAL_MS,
   ATTACK_CENTER_REALTIME_CHANNEL,
 } from "../constants";
+import { appendAnalysisRunSearchParams } from "@/features/analysis-runs/lib/build-run-query";
 
 type LiveOptions = {
   projectId: string;
@@ -25,7 +26,7 @@ type LiveOptions = {
 };
 
 function resolvePollUrl(options: LiveOptions): string | null {
-  const { projectId, campaignId, executionId, findingId } = options;
+  const { projectId, analysisRunId, campaignId, executionId, findingId } = options;
   if (!projectId) return null;
   if (findingId) {
     return `/api/projects/${projectId}/attack-findings/${findingId}`;
@@ -36,7 +37,10 @@ function resolvePollUrl(options: LiveOptions): string | null {
   if (campaignId) {
     return `/api/projects/${projectId}/attack-campaigns/${campaignId}`;
   }
-  return `/api/projects/${projectId}/attack-campaigns`;
+  const params = new URLSearchParams();
+  appendAnalysisRunSearchParams(params, analysisRunId);
+  const qs = params.toString();
+  return `/api/projects/${projectId}/attack-campaigns${qs ? `?${qs}` : ""}`;
 }
 
 function isActiveCampaign(snapshot: AttackCenterSnapshot | null): boolean {
@@ -153,7 +157,7 @@ export function useAttackCenterLive(options: LiveOptions) {
     } finally {
       setLoading(false);
     }
-  }, [projectId, campaignId, executionId, findingId]);
+  }, [projectId, analysisRunId, campaignId, executionId, findingId]);
 
   useEffect(() => {
     if (!enabled || !projectId) return;

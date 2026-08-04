@@ -5,6 +5,11 @@ import { createAdminClient } from "@/server/security-scanner/admin-client";
 import { generateSafeFix } from "@/server/safe-fix-engine/generate";
 import { listSafeFixHistory } from "@/server/safe-fix-engine/history";
 import { requireProjectApiAccess } from "@/server/projects/project-access";
+import { isFeatureEnabled } from "@/server/feature-flags";
+import {
+  requestedAnalysisRunIdFromRequest,
+  resolveAnalysisRunIdForIsolation,
+} from "@/server/analysis-runs/resolve-analysis-run-id-for-isolation";
 
 const paramsSchema = z.object({
   id: z.string().uuid(),
@@ -13,6 +18,7 @@ const paramsSchema = z.object({
 const bodySchema = z.object({
   blockerId: z.string().uuid().optional(),
   priorityId: z.string().min(1).optional(),
+  analysisRunId: z.string().uuid().optional(),
 });
 
 export async function GET(
@@ -64,12 +70,26 @@ export async function POST(
   if (!access.ok) return access.response;
 
   const admin = createAdminClient();
+  const isolationEnabled = isFeatureEnabled("analysis_run_isolation", {
+    organizationId: access.project.organization_id,
+  });
+  const { runId: analysisRunId, invalidRequest } = await resolveAnalysisRunIdForIsolation(admin, {
+    projectId,
+    organizationId: access.project.organization_id,
+    requestedRunId: requestedAnalysisRunIdFromRequest(request, parsedBody.data.analysisRunId),
+    isolationEnabled,
+  });
+  if (invalidRequest) {
+    return NextResponse.json({ error: "Invalid analysis run" }, { status: 400 });
+  }
+
   const result = await generateSafeFix(admin, {
     organizationId: access.project.organization_id,
     projectId,
     projectName: access.project.name ?? "Project",
     blockerId,
     priorityId,
+    analysisRunId: analysisRunId ?? undefined,
     actor: access.userId,
   });
 

@@ -126,6 +126,7 @@
     "startFailed": "Could not start the security test.",
     "verifyFailed": "Verification could not finish.",
     "invalidProjectId": "Invalid project id",
+    "invalidAnalysisRun": "That analysis run does not belong to this project.",
     "notEnabled": "Security testing is not enabled for this project.",
     "selectAtLeastOne": "Select at least one test.",
     "needsReviewFirst": "Run a security review first so SequrAI knows which version to test.",

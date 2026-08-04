@@ -9,7 +9,10 @@ import {
   stackFromDetectedStack,
 } from "@/brain/fix-prompt";
 import type { ProductionPriority } from "@/brain/production-verdict/schema";
-import { getCurrentProductionVerdict } from "@/server/production-verdict/service";
+import {
+  getCurrentProductionVerdict,
+  getProductionVerdictByScan,
+} from "@/server/production-verdict/service";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { calculateSafeFixConfidence, historicalSuccessRate } from "./confidence";
 import { buildFromPromptInput } from "./v2-document";
@@ -28,6 +31,7 @@ export type GenerateSafeFixInput = {
   blockerId?: string;
   priorityId?: string;
   findingId?: string;
+  analysisRunId?: string;
   actor?: string;
 };
 
@@ -55,7 +59,9 @@ async function generateSafeFixInner(
   | { status: "ready"; record: SafeFixRecord }
 > {
   const requestedId = input.blockerId?.trim() || input.priorityId?.trim() || input.findingId?.trim();
-  const verdict = await getCurrentProductionVerdict(admin, input.projectId);
+  const verdict = input.analysisRunId
+    ? await getProductionVerdictByScan(admin, input.analysisRunId)
+    : await getCurrentProductionVerdict(admin, input.projectId);
   if (!verdict) throw new Error("no_verdict");
 
   if (verdict.blockersCount === 0 && verdict.topPriorities.length === 0) {
@@ -102,6 +108,9 @@ async function generateSafeFixInner(
       .eq("id", requestedId)
       .maybeSingle();
     if (!finding) throw new Error("blocker_not_found");
+    if (input.analysisRunId && finding.scan_id !== input.analysisRunId) {
+      throw new Error("finding_run_mismatch");
+    }
     const { data: scan } = await admin
       .from("scans")
       .select("detected_stack")

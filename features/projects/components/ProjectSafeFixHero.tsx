@@ -17,12 +17,14 @@ export function ProjectSafeFixHero({
   projectName,
   fixPromptContext,
   reviewContext,
+  analysisRunIsolationEnabled = false,
 }: {
   verdict: ProductionVerdictV1;
   projectId: string;
   projectName: string;
   fixPromptContext?: FixPromptContext;
   reviewContext: ProjectReviewUiContext;
+  analysisRunIsolationEnabled?: boolean;
 }) {
   const { t } = useI18n("projects");
   const topPriority = verdict.topPriorities[0] ?? null;
@@ -43,7 +45,11 @@ export function ProjectSafeFixHero({
   if (verdict.status === "ready_to_ship" || !topPriority || !fixPromptInput) {
     return (
       <section className="product-section">
-        <AnalyzeProjectButton projectId={projectId} initialContext={reviewContext} />
+        <AnalyzeProjectButton
+          projectId={projectId}
+          initialContext={reviewContext}
+          analysisRunIsolationEnabled={analysisRunIsolationEnabled}
+        />
       </section>
     );
   }
@@ -111,7 +117,11 @@ export function ProjectSafeFixHero({
             </p>
             <p className="text-sm text-muted-foreground mt-1">{t("safeFixStep3Body")}</p>
           </div>
-          <AnalyzeProjectButton projectId={projectId} initialContext={reviewContext} />
+          <AnalyzeProjectButton
+          projectId={projectId}
+          initialContext={reviewContext}
+          analysisRunIsolationEnabled={analysisRunIsolationEnabled}
+        />
         </li>
       </ol>
     </section>

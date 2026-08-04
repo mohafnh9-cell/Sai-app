@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { ProductionVerdictV1 } from "@/brain/production-verdict/schema";
 import type { SecurityTestContext } from "@/features/security-testing/types";
 import type { ProjectReviewUiContext } from "@/server/projects/review-ui-context";
+import { useSecurityTestContext } from "@/features/analysis-runs/hooks/useSecurityTestContext";
 import { SecurityTestProgressSteps } from "@/features/security-testing/components/SecurityTestProgressSteps";
 import { PrimaryActionButton } from "@/features/security-testing/components/SecurityTestHero";
 import { copyForPhase } from "@/features/security-testing/lib/product-copy";
@@ -21,6 +22,7 @@ export function ProductionReadinessExperience({
   reviewContext,
   analysisRunId = null,
   runScoped = false,
+  analysisRunIsolationEnabled = false,
 }: {
   projectId: string;
   verdict: ProductionVerdictV1 | null;
@@ -28,6 +30,7 @@ export function ProductionReadinessExperience({
   reviewContext: ProjectReviewUiContext;
   analysisRunId?: string | null;
   runScoped?: boolean;
+  analysisRunIsolationEnabled?: boolean;
 }) {
   const router = useRouter();
   const { t } = useI18n("securityTest");
@@ -36,7 +39,16 @@ export function ProductionReadinessExperience({
   const [startingBlockerId, setStartingBlockerId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const phase = securityTestContext.phase;
+  const { data: liveSecurityTestContext } = useSecurityTestContext(projectId, {
+    analysisRunId: runScoped ? analysisRunId : null,
+    initialData: securityTestContext,
+    enabled: runScoped,
+  });
+  const activeSecurityTestContext = runScoped
+    ? (liveSecurityTestContext ?? securityTestContext)
+    : securityTestContext;
+
+  const phase = activeSecurityTestContext.phase;
   const displayPhase = runScoped
     ? phase
     : phase === "preparing" && verdict
@@ -45,11 +57,12 @@ export function ProductionReadinessExperience({
   const screenCopy = copyForPhase(displayPhase, t);
 
   useEffect(() => {
+    if (runScoped) return;
     if (displayPhase === "ready") return;
     if (verdict && !reviewContext.productionReviewState.hasActiveReview) return;
     if (phase === "preparing" && verdict) return;
     const shouldPoll =
-      securityTestContext.reviewInProgress ||
+      activeSecurityTestContext.reviewInProgress ||
       displayPhase === "preparing" ||
       displayPhase === "running" ||
       displayPhase === "issues_found" ||
@@ -58,11 +71,12 @@ export function ProductionReadinessExperience({
     const timer = window.setInterval(() => router.refresh(), 5000);
     return () => window.clearInterval(timer);
   }, [
+    activeSecurityTestContext.reviewInProgress,
     displayPhase,
     phase,
     reviewContext.productionReviewState.hasActiveReview,
-    securityTestContext.reviewInProgress,
     router,
+    runScoped,
     verdict,
   ]);
 
@@ -71,13 +85,13 @@ export function ProductionReadinessExperience({
       setStartingBlockerId(_priorityId ?? "all");
       setError(null);
       try {
-        const testIds = securityTestContext.availableTests
+        const testIds = activeSecurityTestContext.availableTests
           .filter((test) => test.recommended)
           .map((test) => test.id);
         const ids =
           testIds.length > 0
             ? testIds
-            : securityTestContext.availableTests.slice(0, 1).map((test) => test.id);
+            : activeSecurityTestContext.availableTests.slice(0, 1).map((test) => test.id);
 
         const response = await fetch(`/api/projects/${projectId}/security-tests`, {
           method: "POST",
@@ -98,7 +112,7 @@ export function ProductionReadinessExperience({
           return;
         }
 
-        router.push(body.attackCenterHref ?? securityTestContext.attackCenterHref);
+        router.push(body.attackCenterHref ?? activeSecurityTestContext.attackCenterHref);
         router.refresh();
       } catch {
         setError(t("errors.startFailed"));
@@ -106,18 +120,19 @@ export function ProductionReadinessExperience({
         setStartingBlockerId(null);
       }
     },
-    [analysisRunId, projectId, router, securityTestContext, t]
+    [activeSecurityTestContext, analysisRunId, projectId, router, t]
   );
 
   if (displayPhase === "needs_review" || displayPhase === "preparing") {
     return (
       <div className="space-y-10">
-        <SecurityTestProgressSteps steps={securityTestContext.progressSteps} />
+        <SecurityTestProgressSteps steps={activeSecurityTestContext.progressSteps} />
         <AnalyzeApplicationPrompt
           projectId={projectId}
           reviewContext={reviewContext}
           preparing={displayPhase === "preparing"}
           waitMessage={screenCopy.waitMessage}
+          analysisRunIsolationEnabled={analysisRunIsolationEnabled}
         />
       </div>
     );
@@ -126,12 +141,13 @@ export function ProductionReadinessExperience({
   if (!verdict) {
     return (
       <div className="space-y-10">
-        <SecurityTestProgressSteps steps={securityTestContext.progressSteps} />
+        <SecurityTestProgressSteps steps={activeSecurityTestContext.progressSteps} />
         <AnalyzeApplicationPrompt
           projectId={projectId}
           reviewContext={reviewContext}
           preparing={false}
           waitMessage={null}
+          analysisRunIsolationEnabled={analysisRunIsolationEnabled}
         />
       </div>
     );
@@ -144,7 +160,7 @@ export function ProductionReadinessExperience({
   return (
     <div className="space-y-10">
       {showProgress ? (
-        <SecurityTestProgressSteps steps={securityTestContext.progressSteps} />
+        <SecurityTestProgressSteps steps={activeSecurityTestContext.progressSteps} />
       ) : null}
 
       <ProductionReadinessHero verdict={verdict} />
@@ -152,7 +168,7 @@ export function ProductionReadinessExperience({
       {displayPhase === "ready" && blockers.length > 0 ? (
         <DeploymentBlockersList
           blockers={blockers}
-          attackCenterHref={securityTestContext.attackCenterHref}
+          attackCenterHref={activeSecurityTestContext.attackCenterHref}
           primaryActionLabel={screenCopy.primaryActionLabel}
           onPrimaryValidation={() => void startValidation()}
           startingPrimary={startingBlockerId === "all"}
@@ -175,7 +191,7 @@ export function ProductionReadinessExperience({
         <section className="rounded-2xl border border-primary/20 bg-primary/5 p-6 space-y-4">
           <p className="font-medium">{screenCopy.headline}</p>
           <p className="text-sm text-muted-foreground">{screenCopy.description}</p>
-          <PrimaryActionButton onClick={() => router.push(securityTestContext.attackCenterHref)}>
+          <PrimaryActionButton onClick={() => router.push(activeSecurityTestContext.attackCenterHref)}>
             {screenCopy.primaryActionLabel}
           </PrimaryActionButton>
         </section>

@@ -12,6 +12,10 @@ import { startAttackCampaign, StartAttackCampaignError } from "@/server/attack-s
 import { getAttackCenterCampaignSnapshot } from "@/server/attack-simulation/get-attack-center";
 import { attackCenterErrorResponse } from "@/server/attack-simulation/api/errors";
 import { buildAttackCenterDisabledResponse } from "@/server/attack-simulation/api/attack-center-contract";
+import {
+  requestedAnalysisRunIdFromRequest,
+  resolveAnalysisRunIdForIsolation,
+} from "@/server/analysis-runs/resolve-analysis-run-id-for-isolation";
 
 const paramsSchema = z.object({ id: z.string().uuid() });
 
@@ -20,9 +24,25 @@ const postBodySchema = z.object({
   analysisRunId: z.string().uuid().optional(),
 });
 
-function resolveAnalysisRunId(request: Request, bodyRunId?: string | null): string | null {
-  const url = new URL(request.url);
-  return bodyRunId ?? url.searchParams.get("run");
+async function resolveScopedRunId(
+  admin: ReturnType<typeof createAdminClient>,
+  input: {
+    request: Request;
+    projectId: string;
+    organizationId: string;
+    bodyRunId?: string | null;
+  }
+): Promise<{ runId: string | null; invalidRequest: boolean }> {
+  const isolationEnabled = isFeatureEnabled("analysis_run_isolation", {
+    organizationId: input.organizationId,
+  });
+  const requestedRunId = requestedAnalysisRunIdFromRequest(input.request, input.bodyRunId);
+  return resolveAnalysisRunIdForIsolation(admin, {
+    projectId: input.projectId,
+    organizationId: input.organizationId,
+    requestedRunId,
+    isolationEnabled,
+  });
 }
 
 export async function GET(
@@ -52,7 +72,14 @@ export async function GET(
 
   try {
     const admin = createAdminClient();
-    const analysisRunId = resolveAnalysisRunId(request);
+    const { runId: analysisRunId, invalidRequest } = await resolveScopedRunId(admin, {
+      request,
+      projectId,
+      organizationId: access.project.organization_id,
+    });
+    if (invalidRequest) {
+      return NextResponse.json({ error: t("errors.invalidAnalysisRun") }, { status: 400 });
+    }
     const context = await getSecurityTestContext(admin, {
       projectId,
       organizationId: access.project.organization_id,
@@ -100,7 +127,15 @@ export async function POST(
       return NextResponse.json({ ok: false, error: t("errors.selectAtLeastOne") }, { status: 400 });
     }
 
-    const analysisRunId = resolveAnalysisRunId(request, body.data.analysisRunId);
+    const { runId: analysisRunId, invalidRequest } = await resolveScopedRunId(admin, {
+      request,
+      projectId,
+      organizationId: access.project.organization_id,
+      bodyRunId: body.data.analysisRunId,
+    });
+    if (invalidRequest) {
+      return NextResponse.json({ ok: false, error: t("errors.invalidAnalysisRun") }, { status: 400 });
+    }
     const context = await getSecurityTestContext(admin, {
       projectId,
       organizationId: access.project.organization_id,

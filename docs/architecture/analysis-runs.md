@@ -40,9 +40,7 @@ Resolution order:
 
 ## Out of scope (later sprints)
 
-- `POST /analysis-runs` dedicated endpoint (uses existing scans POST)
 - MCP / deploy tools (keep `getCurrentProductionVerdict`)
-- React Query hooks fully wired to `analysisRunKeys` factory
 
 ## Write path (Sprint 2)
 
@@ -100,6 +98,38 @@ After a new run starts from Mission Control, the client navigates to `?run={newS
 | Analysis runs API | `GET /api/projects/{id}/analysis-runs` — list recent runs (flag on) |
 
 MCP and deploy tools remain on `getCurrentProductionVerdict` (current production pointer).
+
+## Client cache & URL parity (Sprint 7)
+
+| Surface | Scoped behavior |
+|---------|-----------------|
+| Attack Center redirect | Auto-redirect to `?run=` when isolation ON (same resolver as MC) |
+| Attack campaigns API | GET accepts `?run=` for scoped list/active campaign |
+| Live polling | `useAttackCenterLive` passes `?run=` on list endpoint |
+| React Query | `useAnalysisRuns`, `useSecurityTestContext` wired to `analysisRunKeys` |
+| Guided flow polling | Run-scoped phases poll via React Query instead of full page refresh |
+
+## Strict API scoping (Sprint 8)
+
+| Surface | Scoped behavior |
+|---------|-----------------|
+| `resolveAnalysisRunIdForIsolation` | Shared helper — auto-resolves run when isolation ON and `?run=` omitted |
+| Security tests / attack campaigns / MC API | Use resolver; 400 on invalid `?run=` |
+| Safe Fix generate | `getProductionVerdictByScan(runId)` when `analysisRunId` provided |
+| `POST /analysis-runs` | Starts scan via repository pipeline with `forceNew` default true |
+| Journey page | Auto-redirect to `?run=` when isolation ON |
+
+MCP and deploy tools remain on `getCurrentProductionVerdict`.
+
+## Start-run server module (Sprint 9)
+
+| Surface | Scoped behavior |
+|---------|-----------------|
+| `startRepositoryManualScan` | Shared server entry for manual scan creation + scheduling |
+| Repository scans API | Thin wrapper over shared start module |
+| `POST /analysis-runs` | Calls shared module directly (no internal HTTP fetch) |
+| `useStartAnalysisRun` | Client mutation with run list invalidation |
+| Analyze again (MC) | Uses `/analysis-runs` when isolation flag ON |
 
 ## Feature flag
 

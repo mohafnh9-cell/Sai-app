@@ -5,6 +5,11 @@ import { getProjectAccessForUser } from "@/server/projects/project-access";
 import { getMissionControlView } from "@/server/mission-control/get-mission-control";
 import { isFeatureEnabled } from "@/server/feature-flags";
 import { enforceRateLimit } from "@/server/http/rate-limit";
+import { createAdminClient } from "@/server/security-scanner/admin-client";
+import {
+  requestedAnalysisRunIdFromRequest,
+  resolveAnalysisRunIdForIsolation,
+} from "@/server/analysis-runs/resolve-analysis-run-id-for-isolation";
 
 const paramsSchema = z.object({
   id: z.string().uuid(),
@@ -37,15 +42,25 @@ export async function GET(request: Request, { params }: RouteParams) {
   }
 
   const { searchParams } = new URL(request.url);
-  const runId = searchParams.get("run");
+  const isolationEnabled = isFeatureEnabled("analysis_run_isolation", {
+    organizationId: auth.organizationId,
+  });
+  const admin = createAdminClient();
+  const { runId: analysisRunId, invalidRequest } = await resolveAnalysisRunIdForIsolation(admin, {
+    projectId,
+    organizationId: auth.organizationId,
+    requestedRunId: requestedAnalysisRunIdFromRequest(request),
+    isolationEnabled,
+  });
+  if (invalidRequest) {
+    return NextResponse.json({ error: "Invalid analysis run" }, { status: 400 });
+  }
 
   const { view, verdict } = await getMissionControlView(
     auth.supabase,
     projectId,
     auth.organizationId,
-    isFeatureEnabled("analysis_run_isolation", { organizationId: auth.organizationId }) && runId
-      ? { analysisRunId: runId }
-      : undefined
+    isolationEnabled && analysisRunId ? { analysisRunId } : undefined
   );
 
   return NextResponse.json({ view, verdict });

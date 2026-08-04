@@ -11,7 +11,7 @@ import { ProjectSubNav } from "@/features/production-journey/components/ProjectS
 import { MissionControlSubNav } from "@/features/mission-control/components/MissionControlSubNav";
 import { ProductionJourneyView } from "@/features/production-journey/components/ProductionJourneyView";
 import { withAnalysisRunQuery } from "@/features/analysis-runs/lib/build-run-query";
-import { isAnalysisRunOwnedByProject } from "@/server/analysis-runs/get-analysis-run-snapshot";
+import { resolveAnalysisRunForProject } from "@/server/analysis-runs/resolve-analysis-run";
 import { createAdminClient } from "@/server/security-scanner/admin-client";
 import type { Metadata } from "next";
 
@@ -49,14 +49,24 @@ export default async function ProjectJourneyPage({ params, searchParams }: Journ
   );
 
   let analysisRunId: string | null = query.run ?? null;
-  if (isolationEnabled && query.run && auth?.organizationId) {
+
+  if (isolationEnabled && auth?.organizationId) {
     const admin = createAdminClient();
-    const owned = await isAnalysisRunOwnedByProject(admin, {
+    const resolved = await resolveAnalysisRunForProject(admin, {
       projectId: id,
       organizationId: auth.organizationId,
-      runId: query.run,
+      requestedRunId: query.run,
     });
-    if (!owned) analysisRunId = null;
+
+    if (query.run && !resolved.valid) {
+      redirect(`/projects/${id}/journey`);
+    }
+
+    if (!query.run && resolved.runId) {
+      redirect(withAnalysisRunQuery(`/projects/${id}/journey`, resolved.runId));
+    }
+
+    analysisRunId = resolved.runId;
   }
 
   const { t: tp } = await getTranslator("projects");

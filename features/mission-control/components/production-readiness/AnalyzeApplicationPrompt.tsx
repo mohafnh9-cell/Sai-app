@@ -10,11 +10,13 @@ export function AnalyzeApplicationPrompt({
   reviewContext,
   preparing = false,
   waitMessage,
+  analysisRunIsolationEnabled = false,
 }: {
   projectId: string;
   reviewContext: ProjectReviewUiContext;
   preparing?: boolean;
   waitMessage?: string | null;
+  analysisRunIsolationEnabled?: boolean;
 }) {
   const { t } = useI18n("readiness");
 
@@ -57,6 +59,7 @@ export function AnalyzeApplicationPrompt({
             size="default"
             className="h-12 min-w-[240px] rounded-full text-base px-8"
             labelOverride={t("analyze.cta")}
+            analysisRunIsolationEnabled={analysisRunIsolationEnabled}
           />
         )}
       </div>

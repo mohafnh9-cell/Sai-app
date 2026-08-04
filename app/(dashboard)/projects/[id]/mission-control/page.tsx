@@ -257,6 +257,7 @@ export default async function MissionControlPage({ params, searchParams }: PageP
           reviewContext={reviewContext}
           analysisRunId={isolationEnabled ? analysisRunId : undefined}
           runScoped={Boolean(isolationEnabled && analysisRunId)}
+          analysisRunIsolationEnabled={isolationEnabled}
         />
       </div>
     </div>

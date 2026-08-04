@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, Loader2 } from "lucide-react";
+import { analysisRunKeys } from "@/features/analysis-runs/lib/query-keys";
 import { Button } from "@/components/ui/button";
 import { startGitHubOAuth } from "@/lib/github/oauth-client";
 import { trackEvent } from "@/lib/analytics/track";
@@ -82,6 +84,7 @@ export function AnalyzeProjectButton({
   className,
   size = "default",
   labelOverride,
+  analysisRunIsolationEnabled = false,
 }: {
   projectId: string;
   initialContext: ProjectReviewUiContext;
@@ -89,9 +92,11 @@ export function AnalyzeProjectButton({
   className?: string;
   size?: "default" | "sm" | "lg";
   labelOverride?: string;
+  analysisRunIsolationEnabled?: boolean;
 }) {
   const { t } = useI18n("projects");
   const { t: te } = useI18n("errors");
+  const queryClient = useQueryClient();
   const [context, setContext] = useState(initialContext);
   const [reviewState, setReviewState] = useState<ProductionReviewState>(
     initialContext.productionReviewState ?? IDLE_STATE
@@ -238,16 +243,21 @@ export function AnalyzeProjectButton({
     });
 
     try {
-      const response = await fetch(`/api/repositories/${projectId}/scans`, {
+      const endpoint = analysisRunIsolationEnabled
+        ? `/api/projects/${projectId}/analysis-runs`
+        : `/api/repositories/${projectId}/scans`;
+      const payload = analysisRunIsolationEnabled
+        ? { forceNew: context.hasVerdict ? true : false }
+        : { scanType: "full", ...(context.hasVerdict ? { forceNew: true } : {}) };
+
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          scanType: "full",
-          ...(context.hasVerdict ? { forceNew: true } : {}),
-        }),
+        body: JSON.stringify(payload),
       });
       const body = (await response.json().catch(() => null)) as
         | {
+            runId?: string;
             scan_id?: string;
             scanId?: string;
             scan?: { id: string; status: string };
@@ -262,7 +272,7 @@ export function AnalyzeProjectButton({
         return;
       }
 
-      const resolvedScanId = body?.scan_id ?? body?.scanId ?? body?.scan?.id;
+      const resolvedScanId = body?.runId ?? body?.scan_id ?? body?.scanId ?? body?.scan?.id;
 
       if (response.status === 409 && body?.scan?.id) {
         if (navigateMissionControlToRun(projectId, body.scan.id)) return;
@@ -271,6 +281,9 @@ export function AnalyzeProjectButton({
       }
 
       if (response.ok && resolvedScanId) {
+        if (analysisRunIsolationEnabled) {
+          void queryClient.invalidateQueries({ queryKey: analysisRunKeys.list(projectId) });
+        }
         if (navigateMissionControlToRun(projectId, resolvedScanId)) return;
       }
 

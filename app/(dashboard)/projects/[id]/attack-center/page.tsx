@@ -14,6 +14,7 @@ import { attackCenterErrorFromUnknown } from "@/server/attack-simulation/api/err
 import { getSecurityTestContext } from "@/server/attack-simulation/get-security-test-context";
 import { getAttackCampaignByScanId } from "@/server/attack-simulation/persistence/campaign-repository";
 import { isAnalysisRunOwnedByProject } from "@/server/analysis-runs/get-analysis-run-snapshot";
+import { resolveAnalysisRunForMissionControl } from "@/server/analysis-runs/resolve-analysis-run";
 import { withAnalysisRunQuery } from "@/features/analysis-runs/lib/build-run-query";
 import type { AttackCenterCapability } from "@/features/attack-simulation/api-types";
 import type { SecurityTestContext } from "@/features/security-testing/types";
@@ -51,7 +52,24 @@ export default async function AttackCenterPage({ params, searchParams }: PagePro
 
   let analysisRunId: string | null = query.run ?? null;
 
-  if (isolationEnabled && query.run) {
+  if (isolationEnabled) {
+    const admin = createAdminClient();
+    const resolved = await resolveAnalysisRunForMissionControl(admin, {
+      projectId,
+      organizationId: auth.organizationId,
+      requestedRunId: query.run,
+    });
+
+    if (query.run && !resolved.valid) {
+      redirect(`/projects/${projectId}/attack-center`);
+    }
+
+    if (!query.run && resolved.runId) {
+      redirect(withAnalysisRunQuery(`/projects/${projectId}/attack-center`, resolved.runId));
+    }
+
+    analysisRunId = resolved.runId;
+  } else if (query.run) {
     const admin = createAdminClient();
     const owned = await isAnalysisRunOwnedByProject(admin, {
       projectId,

@@ -113,3 +113,6 @@ export async function resolveAnalysisRunForMissionControl(
 
   return { runId: null, source: "none", valid: true };
 }
+
+/** Project-wide alias — same resolution order as Mission Control. */
+export const resolveAnalysisRunForProject = resolveAnalysisRunForMissionControl;

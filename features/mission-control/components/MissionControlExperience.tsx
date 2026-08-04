@@ -24,6 +24,7 @@ export function MissionControlExperience({
   reviewContext = null,
   analysisRunId = null,
   runScoped = false,
+  analysisRunIsolationEnabled = false,
 }: {
   view: MissionControlView;
   verdict: ProductionVerdictV1 | null;
@@ -33,6 +34,7 @@ export function MissionControlExperience({
   reviewContext?: ProjectReviewUiContext | null;
   analysisRunId?: string | null;
   runScoped?: boolean;
+  analysisRunIsolationEnabled?: boolean;
 }) {
   const { t, locale } = useI18n("missionControl");
   const guidedFlowActive = Boolean(securityTestContext && reviewContext);
@@ -47,6 +49,7 @@ export function MissionControlExperience({
           reviewContext={reviewContext!}
           analysisRunId={analysisRunId}
           runScoped={runScoped}
+          analysisRunIsolationEnabled={analysisRunIsolationEnabled}
         />
       ) : (
         <>
@@ -64,6 +67,7 @@ export function MissionControlExperience({
           projectName={projectName}
           fixPromptContext={fixPromptContext}
           reviewContext={reviewContext}
+          analysisRunIsolationEnabled={analysisRunIsolationEnabled}
         />
       ) : null}
 

@@ -16,6 +16,10 @@ import {
 } from "@/server/attack-simulation/api/attack-center-contract";
 import { attackCenterErrorResponse } from "@/server/attack-simulation/api/errors";
 import { loadAttackCenterListState } from "@/server/attack-simulation/api/load-attack-center-list";
+import {
+  requestedAnalysisRunIdFromRequest,
+  resolveAnalysisRunIdForIsolation,
+} from "@/server/analysis-runs/resolve-analysis-run-id-for-isolation";
 
 const paramsSchema = z.object({
   id: z.string().uuid(),
@@ -51,9 +55,23 @@ export async function GET(request: Request, { params }: RouteParams) {
 
   try {
     const admin = createAdminClient();
+    const isolationEnabled = isFeatureEnabled("analysis_run_isolation", { organizationId });
+    const { runId: analysisRunId, invalidRequest } = await resolveAnalysisRunIdForIsolation(
+      admin,
+      {
+        projectId,
+        organizationId,
+        requestedRunId: requestedAnalysisRunIdFromRequest(request),
+        isolationEnabled,
+      }
+    );
+    if (invalidRequest) {
+      return NextResponse.json({ error: "Invalid analysis run" }, { status: 400 });
+    }
     const body = await loadAttackCenterListState(admin, {
       projectId,
       organizationId,
+      analysisRunId: isolationEnabled ? analysisRunId : undefined,
     });
     return NextResponse.json(body);
   } catch (error) {
