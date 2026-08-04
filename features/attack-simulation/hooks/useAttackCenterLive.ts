@@ -195,9 +195,13 @@ export function useAttackCenterLive(options: LiveOptions) {
     if (!enabled || !projectId) return;
 
     const supabase = createClient();
+    const postgresFilter = campaignId
+      ? `campaign_id=eq.${campaignId}`
+      : `project_id=eq.${projectId}`;
+
     const channel = supabase
       .channel(
-        `${ATTACK_CENTER_REALTIME_CHANNEL}:${projectId}:${analysisRunId ?? "project"}`
+        `${ATTACK_CENTER_REALTIME_CHANNEL}:${projectId}:${analysisRunId ?? "project"}:${campaignId ?? "all"}`
       )
       .on(
         "postgres_changes",
@@ -205,7 +209,7 @@ export function useAttackCenterLive(options: LiveOptions) {
           event: "*",
           schema: "public",
           table: "attack_simulation_runtime_events",
-          filter: `project_id=eq.${projectId}`,
+          filter: postgresFilter,
         },
         () => {
           setTransport("realtime");
@@ -221,7 +225,7 @@ export function useAttackCenterLive(options: LiveOptions) {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [enabled, projectId, analysisRunId, refresh]);
+  }, [enabled, projectId, analysisRunId, campaignId, refresh]);
 
   return {
     snapshot,

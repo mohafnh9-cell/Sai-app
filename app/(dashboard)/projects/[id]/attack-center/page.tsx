@@ -146,6 +146,7 @@ export default async function AttackCenterPage({ params, searchParams }: PagePro
       projectId,
       organizationId: auth.organizationId,
       analysisRunId: isolationEnabled ? analysisRunId : undefined,
+      isolationEnabled,
     });
     const { hypotheses: _hypotheses, analysisRunId: _runId, ...publicContext } = fullContext;
     securityTestContext = publicContext;

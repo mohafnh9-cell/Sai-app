@@ -131,6 +131,25 @@ MCP and deploy tools remain on `getCurrentProductionVerdict`.
 | `useStartAnalysisRun` | Client mutation with run list invalidation |
 | Analyze again (MC) | Uses `/analysis-runs` when isolation flag ON |
 
+## Rollout (Sprint 10)
+
+| Change | Behavior |
+|--------|----------|
+| Feature flag | `analysis_run_isolation` promoted to **GA** — enabled for all organizations |
+| Security test context | No project-level scan/campaign fallback when `isolationEnabled` |
+| Rollback | Set `SEQURAI_FEATURE_FLAGS_JSON` → `{"analysis_run_isolation":"internal"}` or disable via env |
+
+MCP and deploy tools remain on `getCurrentProductionVerdict`.
+
 ## Feature flag
 
-`analysis_run_isolation` — default rollout `"internal"`. When off, all pages behave as before (project-level latest verdict and campaign).
+`analysis_run_isolation` — **GA** (was `internal`). Override via `SEQURAI_FEATURE_FLAGS_JSON` for staged rollback.
+
+## Hardening (Sprint 11)
+
+| Surface | Scoped behavior |
+|---------|-----------------|
+| Verdict generation | Skips engine re-run when scan is immutable and verdict exists |
+| Safe Fix verify | Uses run-scoped verdict via `analysisRunId` / `record.reviewId` |
+| Attack Center realtime | Filters by `campaign_id` when campaign is known |
+| Production review state API | Returns run-scoped verdict + `analysisRunId` when isolation ON |

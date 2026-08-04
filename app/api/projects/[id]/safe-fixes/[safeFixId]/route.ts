@@ -9,6 +9,11 @@ import {
   verifySafeFix,
 } from "@/server/safe-fix-engine/verify";
 import { requireProjectApiAccess } from "@/server/projects/project-access";
+import { isFeatureEnabled } from "@/server/feature-flags";
+import {
+  requestedAnalysisRunIdFromRequest,
+  resolveAnalysisRunIdForIsolation,
+} from "@/server/analysis-runs/resolve-analysis-run-id-for-isolation";
 
 const paramsSchema = z.object({
   id: z.string().uuid(),
@@ -90,10 +95,19 @@ export async function POST(
     return NextResponse.json({ ok: true, state: "APPLIED" });
   }
 
+  const isolationEnabled = isFeatureEnabled("analysis_run_isolation", { organizationId: orgId });
+  const { runId: analysisRunId } = await resolveAnalysisRunIdForIsolation(admin, {
+    projectId,
+    organizationId: orgId,
+    requestedRunId: requestedAnalysisRunIdFromRequest(request),
+    isolationEnabled,
+  });
+
   const verification = await verifySafeFix(admin, {
     safeFixId,
     organizationId: orgId,
     projectId,
+    analysisRunId,
     actor: access.userId,
   });
   return NextResponse.json({ ok: true, verification });

@@ -45,6 +45,7 @@ const { validVerdict } = vi.hoisted(() => {
 });
 
 import { generateAndPersistProductionVerdict } from "../core";
+import { generateProductionVerdict } from "@/brain/production-verdict/engine";
 
 vi.mock("@/brain/production-verdict/engine", () => ({
   generateProductionVerdict: vi.fn(() => ({
@@ -74,7 +75,10 @@ vi.mock("@/server/production-memory/record-writes", () => ({
   recordReviewCompletedMemory: vi.fn(async () => undefined),
 }));
 
-function buildAdmin(input: { existingVerdict?: ProductionVerdictV1 | null }) {
+function buildAdmin(input: {
+  existingVerdict?: ProductionVerdictV1 | null;
+  immutabilityLockedAt?: string | null;
+}) {
   let insertCalled = false;
   const scanRow = {
     id: SCAN_ID,
@@ -86,6 +90,7 @@ function buildAdmin(input: { existingVerdict?: ProductionVerdictV1 | null }) {
     security_score: 90,
     files_analyzed: 10,
     files_discovered: 10,
+    immutability_locked_at: input.immutabilityLockedAt ?? null,
   };
 
   return {
@@ -219,5 +224,22 @@ describe("generateAndPersistProductionVerdict insert-only", () => {
 
     expect(result?.status).toBe("not_ready");
     expect(insertCalled()).toBe(true);
+  });
+
+  it("returns existing verdict without re-running engine when scan is immutable", async () => {
+    const { admin, insertCalled } = buildAdmin({
+      existingVerdict: validVerdict(),
+      immutabilityLockedAt: "2026-01-01T00:00:00.000Z",
+    });
+
+    const result = await generateAndPersistProductionVerdict(admin, {
+      organizationId: ORG_ID,
+      projectId: PROJECT_ID,
+      scanId: SCAN_ID,
+    });
+
+    expect(result?.status).toBe("ready_to_ship");
+    expect(insertCalled()).toBe(false);
+    expect(generateProductionVerdict).not.toHaveBeenCalled();
   });
 });

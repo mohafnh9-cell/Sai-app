@@ -22,5 +22,6 @@ describe("feature flags", () => {
 
   it("always allows GA flags", () => {
     expect(isFeatureEnabled("mcp_enrichment", { organizationId: "any" })).toBe(true);
+    expect(isFeatureEnabled("analysis_run_isolation", { organizationId: "any" })).toBe(true);
   });
 });

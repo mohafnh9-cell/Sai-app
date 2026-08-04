@@ -180,6 +180,7 @@ export default async function MissionControlPage({ params, searchParams }: PageP
         projectId,
         organizationId: auth.organizationId,
         analysisRunId: isolationEnabled ? analysisRunId : undefined,
+        isolationEnabled,
       });
       const { hypotheses: _hypotheses, analysisRunId: _runId, ...publicContext } = fullContext;
       securityTestContext = publicContext;

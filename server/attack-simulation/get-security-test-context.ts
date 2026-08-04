@@ -44,10 +44,16 @@ export type SecurityTestContextPayload = SecurityTestContext & {
 
 export async function getSecurityTestContext(
   admin: SupabaseClient,
-  input: { projectId: string; organizationId: string; analysisRunId?: AnalysisRunId | null }
+  input: {
+    projectId: string;
+    organizationId: string;
+    analysisRunId?: AnalysisRunId | null;
+    isolationEnabled?: boolean;
+  }
 ): Promise<SecurityTestContextPayload> {
   const runQuery = input.analysisRunId ? `?run=${input.analysisRunId}` : "";
   const attackCenterHref = `/projects/${input.projectId}/attack-center${runQuery}`;
+  const useProjectFallbacks = !input.isolationEnabled;
 
   const reviewState = await getProductionReviewState(admin, {
     organizationId: input.organizationId,
@@ -72,14 +78,16 @@ export async function getSecurityTestContext(
         .eq("project_id", input.projectId)
         .eq("organization_id", input.organizationId)
         .maybeSingle()
-    : await admin
-        .from("scans")
-        .select("id, commit_sha, status")
-        .eq("project_id", input.projectId)
-        .eq("status", "completed")
-        .order("completed_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+    : useProjectFallbacks
+      ? await admin
+          .from("scans")
+          .select("id, commit_sha, status")
+          .eq("project_id", input.projectId)
+          .eq("status", "completed")
+          .order("completed_at", { ascending: false })
+          .limit(1)
+          .maybeSingle()
+      : { data: null };
 
   const targetScan = targetScanResult.data;
   const targetScanCompleted = targetScan?.status === "completed";
@@ -115,11 +123,13 @@ export async function getSecurityTestContext(
 
   const campaignRow = scopedRunId
     ? await getAttackCampaignByScanId(admin, scopedRunId, input.organizationId)
-    : (await listAttackCampaignsForProject(admin, {
-        projectId: input.projectId,
-        organizationId: input.organizationId,
-        limit: 1,
-      }))[0] ?? null;
+    : useProjectFallbacks
+      ? (await listAttackCampaignsForProject(admin, {
+          projectId: input.projectId,
+          organizationId: input.organizationId,
+          limit: 1,
+        }))[0] ?? null
+      : null;
 
   const executions = campaignRow
     ? await listAttackExecutionsForCampaign(admin, campaignRow.id, input.organizationId)

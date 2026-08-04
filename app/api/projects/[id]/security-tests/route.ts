@@ -72,6 +72,8 @@ export async function GET(
 
   try {
     const admin = createAdminClient();
+    const organizationId = access.project.organization_id;
+    const isolationEnabled = isFeatureEnabled("analysis_run_isolation", { organizationId });
     const { runId: analysisRunId, invalidRequest } = await resolveScopedRunId(admin, {
       request,
       projectId,
@@ -84,6 +86,7 @@ export async function GET(
       projectId,
       organizationId: access.project.organization_id,
       analysisRunId,
+      isolationEnabled,
     });
     const { hypotheses: _hypotheses, ...publicContext } = context;
     return NextResponse.json({ ok: true, ...publicContext });
@@ -122,6 +125,8 @@ export async function POST(
 
   try {
     const admin = createAdminClient();
+    const organizationId = access.project.organization_id;
+    const isolationEnabled = isFeatureEnabled("analysis_run_isolation", { organizationId });
     const body = postBodySchema.safeParse(await request.json().catch(() => null));
     if (!body.success) {
       return NextResponse.json({ ok: false, error: t("errors.selectAtLeastOne") }, { status: 400 });
@@ -130,7 +135,7 @@ export async function POST(
     const { runId: analysisRunId, invalidRequest } = await resolveScopedRunId(admin, {
       request,
       projectId,
-      organizationId: access.project.organization_id,
+      organizationId,
       bodyRunId: body.data.analysisRunId,
     });
     if (invalidRequest) {
@@ -140,6 +145,7 @@ export async function POST(
       projectId,
       organizationId: access.project.organization_id,
       analysisRunId,
+      isolationEnabled,
     });
 
     if (!context.latestScan) {

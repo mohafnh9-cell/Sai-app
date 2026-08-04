@@ -3,6 +3,7 @@ import {
   parseProductionVerdict,
   type ProductionVerdictV1,
 } from "@/brain/production-verdict/schema";
+import { isAnalysisRunImmutable } from "@/server/analysis-runs/is-analysis-run-immutable";
 import { generateProductionVerdict as runEngine } from "@/brain/production-verdict/engine";
 import { finalizeProductionVerdict } from "@/brain/production-verdict/finalize-verdict";
 import {
@@ -139,6 +140,18 @@ export async function generateAndPersistProductionVerdict(
   if (scanStatus === "cancelled" || scanStatus === "cancelling") {
     log("verdict_generation_skipped_cancelled", { scanId: input.scanId, status: scanStatus });
     return null;
+  }
+
+  const existingRunVerdict = await getProductionVerdictByScan(admin, input.scanId);
+  if (
+    existingRunVerdict &&
+    isAnalysisRunImmutable({
+      status: scanStatus,
+      immutabilityLockedAt: (scan.immutability_locked_at as string | null) ?? null,
+    })
+  ) {
+    log("verdict_generation_skipped_immutable", { scanId: input.scanId });
+    return existingRunVerdict;
   }
 
   const verdictKey = buildIdempotencyKey({

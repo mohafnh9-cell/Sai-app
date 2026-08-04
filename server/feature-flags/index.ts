@@ -48,7 +48,7 @@ const DEFAULTS: Record<FeatureFlagKey, FeatureRollout> = {
   adaptive_team_selection: "internal",
   mission_control: "ga",
   attack_simulation: "ga",
-  analysis_run_isolation: "internal",
+  analysis_run_isolation: "ga",
 };
 
 function parseOverrides(): Partial<Record<FeatureFlagKey, FeatureRollout>> {

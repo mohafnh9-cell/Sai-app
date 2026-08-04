@@ -4,9 +4,17 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/server/security-scanner/admin-client";
 import { requireProjectApiAccess } from "@/server/projects/project-access";
 import { getProductionReviewState } from "@/server/review-cancel/get-production-review-state";
-import { getCurrentProductionVerdict } from "@/server/production-verdict/service";
+import {
+  getCurrentProductionVerdict,
+  getProductionVerdictByScan,
+} from "@/server/production-verdict/service";
 import { refreshGitHubHeadForProject } from "@/server/repository-sync/refresh-github-head";
 import { buildProductionReviewUiContract } from "@/server/projects/build-production-review-ui-contract";
+import { isFeatureEnabled } from "@/server/feature-flags";
+import {
+  requestedAnalysisRunIdFromRequest,
+  resolveAnalysisRunIdForIsolation,
+} from "@/server/analysis-runs/resolve-analysis-run-id-for-isolation";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -16,7 +24,7 @@ const paramsSchema = z.object({
 });
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const parsed = paramsSchema.safeParse(await params);
@@ -33,6 +41,18 @@ export async function GET(
   if (!access.ok) return access.response;
 
   const admin = createAdminClient();
+  const organizationId = access.project.organization_id;
+  const isolationEnabled = isFeatureEnabled("analysis_run_isolation", { organizationId });
+  const { runId: analysisRunId, invalidRequest } = await resolveAnalysisRunIdForIsolation(admin, {
+    projectId,
+    organizationId,
+    requestedRunId: requestedAnalysisRunIdFromRequest(request),
+    isolationEnabled,
+  });
+  if (invalidRequest) {
+    return NextResponse.json({ error: "Invalid analysis run" }, { status: 400 });
+  }
+
   const { data: projectRow } = await admin
     .from("projects")
     .select("github_repo, github_repository_id")
@@ -46,11 +66,14 @@ export async function GET(
   });
 
   const state = await getProductionReviewState(admin, {
-    organizationId: access.project.organization_id,
+    organizationId,
     projectId,
   });
 
-  const verdict = await getCurrentProductionVerdict(admin, projectId);
+  const verdict =
+    isolationEnabled && analysisRunId
+      ? await getProductionVerdictByScan(admin, analysisRunId)
+      : await getCurrentProductionVerdict(admin, projectId);
   const lastVerdictCommitSha = verdict?.commitSha ?? null;
 
   let githubHeadSha: string | null = contract?.github.headCommitSha ?? null;
@@ -81,6 +104,7 @@ export async function GET(
       contract,
       state,
       githubSync,
+      analysisRunId: isolationEnabled ? analysisRunId : null,
     },
     {
       headers: {

@@ -1,7 +1,10 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getCurrentProductionVerdict } from "@/server/production-verdict/service";
+import {
+  getCurrentProductionVerdict,
+  getProductionVerdictByScan,
+} from "@/server/production-verdict/service";
 import { loadProtectionContext } from "@/server/continuous-protection/protection-context";
 import { getSafeFixById, storeSafeFixHistoryUpdate } from "./history";
 import { transitionSafeFixState } from "./lifecycle";
@@ -28,6 +31,7 @@ export async function verifySafeFix(
     safeFixId: string;
     organizationId: string;
     projectId: string;
+    analysisRunId?: string | null;
     actor?: string;
   }
 ): Promise<SafeFixVerificationResult> {
@@ -44,6 +48,7 @@ async function verifySafeFixInner(
     safeFixId: string;
     organizationId: string;
     projectId: string;
+    analysisRunId?: string | null;
     actor?: string;
   }
 ): Promise<SafeFixVerificationResult> {
@@ -70,7 +75,10 @@ async function verifySafeFixInner(
     .eq("id", record.id)
     .maybeSingle())?.data?.baseline_snapshot as Record<string, unknown> | undefined;
 
-  const verdict = await getCurrentProductionVerdict(admin, input.projectId);
+  const verdictScanId = input.analysisRunId ?? record.reviewId ?? null;
+  const verdict = verdictScanId
+    ? await getProductionVerdictByScan(admin, verdictScanId)
+    : await getCurrentProductionVerdict(admin, input.projectId);
   const ctx = await loadProtectionContext(admin, input.projectId);
 
   const baselineScore = (baselineSnap?.score as number) ?? null;
