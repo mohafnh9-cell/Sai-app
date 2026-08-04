@@ -36,7 +36,7 @@ export function ProductionVerdictCardSection({ verdict }: { verdict: MissionVerd
         <Metric label={t("verdict.criticalCampaigns")} value={String(verdict.criticalCampaigns)} />
         <Metric label={t("verdict.replay")} value={verdict.replayStatusLabel} />
         <Metric label={t("verdict.engineeringPlan")} value={verdict.engineeringPlanStatusLabel} />
-        <Metric label={t("verdict.score")} value={String(verdict.score)} />
+        <Metric label={t("verdict.score")} value={verdict.score == null ? "—" : String(verdict.score)} />
       </div>
       <p className="text-sm text-muted-foreground leading-relaxed max-w-2xl">
         {verdict.deploymentRecommendation}

@@ -14,7 +14,8 @@
     "title_other": "Tu aplicación está casi lista. {count} bloqueadores impiden el despliegue.",
     "subtitle": "Valida cada bloqueador para confirmar el problema antes de aplicar una corrección.",
     "validate": "Probar esto",
-    "starting": "Iniciando…"
+    "starting": "Iniciando…",
+    "viewDetails": "Ver detalles"
   },
   "severity": {
     "critical": "Crítico",

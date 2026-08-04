@@ -1,5 +1,9 @@
 import type { VerdictStatus } from "@/brain/production-verdict/schema";
 import type { ProductionVerdictV1 } from "@/brain/production-verdict/schema";
+import {
+  finalizeProductionVerdict,
+  mapSecurityDeploymentToVerdictStatus,
+} from "@/brain/production-verdict/finalize-verdict";
 import type {
   SecurityDecisionReport,
   SecurityDeploymentVerdictStatus,
@@ -9,16 +13,7 @@ import type { IntelligenceProductionVerdict } from "../intelligence/models";
 export function mapDeploymentVerdictToScanStatus(
   status: SecurityDeploymentVerdictStatus
 ): VerdictStatus {
-  switch (status) {
-    case "SAFE_TO_DEPLOY":
-      return "ready_to_ship";
-    case "DEPLOY_WITH_WARNINGS":
-      return "almost_ready";
-    case "DO_NOT_DEPLOY":
-      return "not_ready";
-    case "INSUFFICIENT_EVIDENCE":
-      return "insufficient_data";
-  }
+  return mapSecurityDeploymentToVerdictStatus(status);
 }
 
 export function mapSecurityDeploymentToMcpRecommendation(
@@ -28,7 +23,7 @@ export function mapSecurityDeploymentToMcpRecommendation(
     case "SAFE_TO_DEPLOY":
       return "SHIP_IT";
     case "DEPLOY_WITH_WARNINGS":
-      return "DO_NOT_DEPLOY";
+      return "SHIP_IT";
     case "DO_NOT_DEPLOY":
       return "DO_NOT_DEPLOY";
     case "INSUFFICIENT_EVIDENCE":
@@ -43,20 +38,12 @@ export function applySecurityDecisionToProductionVerdict(
   securityDeploymentVerdict: SecurityDeploymentVerdictStatus;
   securityDecisionId: string;
 } {
-  const status = mapDeploymentVerdictToScanStatus(decisionReport.decision.deploymentVerdict);
-  return {
-    ...verdict,
-    status,
-    executiveSummary: decisionReport.explanation.founder.headline,
-    recommendedAction: decisionReport.decision.primaryRecommendation,
-    confidence:
-      decisionReport.decision.confidence === "very_high" || decisionReport.decision.confidence === "high"
-        ? "high"
-        : decisionReport.decision.confidence === "medium"
-          ? "medium"
-          : "low",
-    securityDeploymentVerdict: decisionReport.decision.deploymentVerdict,
-    securityDecisionId: decisionReport.decision.decisionId,
+  return finalizeProductionVerdict({
+    verdict,
+    securityDecisionReport: decisionReport,
+  }) as ProductionVerdictV1 & {
+    securityDeploymentVerdict: SecurityDeploymentVerdictStatus;
+    securityDecisionId: string;
   };
 }
 

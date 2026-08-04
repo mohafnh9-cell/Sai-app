@@ -4,9 +4,8 @@ import {
   type ProductionVerdictV1,
 } from "@/brain/production-verdict/schema";
 import { generateProductionVerdict as runEngine } from "@/brain/production-verdict/engine";
-import { applySecurityDecisionToProductionVerdict } from "@/server/ai-red-team/decision/production-verdict-bridge";
+import { finalizeProductionVerdict } from "@/brain/production-verdict/finalize-verdict";
 import {
-  applyAttackSimulationVerdictOverlay,
   buildAttackSimulationVerdictOverlay,
 } from "@/server/attack-simulation/integration/build-verdict-overlay";
 import { emitOperationalEvent } from "@/server/observability/operational-events";
@@ -166,11 +165,21 @@ export async function generateAndPersistProductionVerdict(
     .limit(1)
     .maybeSingle();
 
+  const previousVerdictParsed = previousVerdict?.verdict
+    ? parseProductionVerdict(previousVerdict.verdict)
+    : null;
+
   const previousBlockers =
     previousVerdict?.blockers_count ??
     (previousScan ? (previousScan.critical_count ?? 0) + (previousScan.high_count ?? 0) : undefined);
 
-  let verdict = runEngine({
+  const attackOverlay = await buildAttackSimulationVerdictOverlay(admin, {
+    scanId: input.scanId,
+    organizationId: input.organizationId,
+    projectId: input.projectId,
+  });
+
+  const baseVerdict = runEngine({
     projectId: input.projectId,
     repositoryId: scan.repository_id ?? input.projectId,
     scanId: input.scanId,
@@ -181,31 +190,22 @@ export async function generateAndPersistProductionVerdict(
     filesAnalyzed: scan.files_analyzed ?? scan.files_scanned ?? 0,
     filesDiscovered: scan.files_discovered ?? scan.total_files ?? 0,
     findings: findings ?? [],
-    previousScore: previousScan?.security_score ?? null,
+    previousScore: previousVerdictParsed?.score ?? null,
     previousBlockersCount: previousBlockers,
     partialScanFailure: scan.status !== "completed",
     aiExecutiveSummary: aiReport?.executive_summary ?? null,
   }).verdict;
 
-  if (input.securityDecisionReport) {
-    verdict = applySecurityDecisionToProductionVerdict(verdict, input.securityDecisionReport);
-  }
-
-  const attackOverlay = await buildAttackSimulationVerdictOverlay(admin, {
-    scanId: input.scanId,
-    organizationId: input.organizationId,
-    projectId: input.projectId,
-  });
-
   const correlationId = input.scanId;
-  verdict = applyAttackSimulationVerdictOverlay(
-    {
-      ...verdict,
+  let verdict = finalizeProductionVerdict({
+    verdict: {
+      ...baseVerdict,
       correlationId,
       scanExecutionId: input.scanJobId ?? input.scanId,
     },
-    attackOverlay
-  ) as ProductionVerdictV1;
+    securityDecisionReport: input.securityDecisionReport ?? null,
+    attackSimulation: attackOverlay,
+  });
 
   log("verdict_generated", {
     scanId: input.scanId,

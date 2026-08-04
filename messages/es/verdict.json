@@ -1,5 +1,11 @@
 {
   "productionVerdict": "Production Verdict",
+  "canIDeploy": {
+    "question": "¿Puedo desplegar?",
+    "yes": "SÍ.",
+    "almost": "CASI.",
+    "no": "NO."
+  },
   "productionReadyScore": "Production Ready Score",
   "productionBlocker_one": "{count} bloqueador de producción",
   "productionBlocker_other": "{count} bloqueadores de producción",

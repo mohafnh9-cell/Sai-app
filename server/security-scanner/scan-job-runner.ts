@@ -577,12 +577,14 @@ export class InlineScanJobRunner implements ScanJobRunner {
     });
 
     if (context.persistMode !== "review_only" && context.scanJobId) {
+      let securityDecisionReport: import("@/server/ai-red-team/decision/decision-model").SecurityDecisionReport | null =
+        null;
       try {
         await assertScanContinues(this.supabase, context.scanId);
         const { executeUnifiedScanRedTeamPhase } = await import(
           "@/server/platform-convergence/execute-unified-scan-pipeline"
         );
-        await executeUnifiedScanRedTeamPhase(this.supabase, {
+        const unified = await executeUnifiedScanRedTeamPhase(this.supabase, {
           scanId: context.scanId,
           scanJobId: context.scanJobId,
           organizationId: context.organizationId,
@@ -590,6 +592,7 @@ export class InlineScanJobRunner implements ScanJobRunner {
           commitSha: snapshot.commitSha,
           files: "files" in snapshot && Array.isArray(snapshot.files) ? snapshot.files : [],
         });
+        securityDecisionReport = unified.redTeam.securityDecision;
       } catch (error) {
         if (error instanceof ScanCancelledError) return;
         // verdict path may still run without red team
@@ -599,6 +602,8 @@ export class InlineScanJobRunner implements ScanJobRunner {
         organizationId: context.organizationId,
         projectId: context.repositoryId,
         scanId: context.scanId,
+        scanJobId: context.scanJobId,
+        securityDecisionReport,
       });
     } else if (context.persistMode !== "review_only") {
       await assertScanContinues(this.supabase, context.scanId);
@@ -606,6 +611,7 @@ export class InlineScanJobRunner implements ScanJobRunner {
         organizationId: context.organizationId,
         projectId: context.repositoryId,
         scanId: context.scanId,
+        scanJobId: context.scanJobId ?? null,
       });
     }
   }

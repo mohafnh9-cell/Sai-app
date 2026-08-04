@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { ProductionPriority } from "@/brain/production-verdict/schema";
+import { PrimaryActionButton } from "@/features/security-testing/components/SecurityTestHero";
 import { useI18n } from "@/lib/i18n/client";
 
 function severityLabel(severity: ProductionPriority["severity"], t: (key: string) => string) {
@@ -13,13 +14,15 @@ function severityLabel(severity: ProductionPriority["severity"], t: (key: string
 export function DeploymentBlockersList({
   blockers,
   attackCenterHref,
-  onStartValidation,
-  startingId,
+  primaryActionLabel,
+  onPrimaryValidation,
+  startingPrimary = false,
 }: {
   blockers: ProductionPriority[];
   attackCenterHref: string;
-  onStartValidation?: (priority: ProductionPriority) => void;
-  startingId?: string | null;
+  primaryActionLabel?: string;
+  onPrimaryValidation?: () => void;
+  startingPrimary?: boolean;
 }) {
   const { t } = useI18n("readiness");
   const router = useRouter();
@@ -34,6 +37,12 @@ export function DeploymentBlockersList({
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">{t("blockers.subtitle")}</p>
       </div>
+
+      {primaryActionLabel && onPrimaryValidation ? (
+        <PrimaryActionButton disabled={startingPrimary} onClick={onPrimaryValidation}>
+          {startingPrimary ? t("blockers.starting") : primaryActionLabel}
+        </PrimaryActionButton>
+      ) : null}
 
       <ul className="space-y-3 list-none">
         {blockers.map((blocker) => (
@@ -61,16 +70,9 @@ export function DeploymentBlockersList({
               type="button"
               variant="outline"
               className="shrink-0 rounded-full"
-              disabled={startingId === blocker.id}
-              onClick={() => {
-                if (onStartValidation) {
-                  onStartValidation(blocker);
-                  return;
-                }
-                router.push(attackCenterHref);
-              }}
+              onClick={() => router.push(attackCenterHref)}
             >
-              {startingId === blocker.id ? t("blockers.starting") : t("blockers.validate")}
+              {t("blockers.viewDetails")}
             </Button>
           </li>
         ))}

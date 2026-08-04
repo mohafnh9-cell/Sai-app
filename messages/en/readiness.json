@@ -14,7 +14,8 @@
     "title_other": "Your application is almost ready. {count} blockers prevent deployment.",
     "subtitle": "Validate each blocker to confirm the issue before applying a fix.",
     "validate": "Test this",
-    "starting": "Starting…"
+    "starting": "Starting…",
+    "viewDetails": "View details"
   },
   "severity": {
     "critical": "Critical",

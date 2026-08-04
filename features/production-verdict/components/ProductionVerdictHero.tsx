@@ -57,22 +57,22 @@ export function ProductionVerdictHero({
   const tone = verdictToneClass(view.status);
 
   if (variant === "product") {
-    const canDeploy =
+    const canDeployKey =
       view.status === "ready_to_ship"
-        ? "YES."
+        ? "verdict.canIDeploy.yes"
         : view.status === "almost_ready"
-          ? "ALMOST."
-          : "NO.";
+          ? "verdict.canIDeploy.almost"
+          : "verdict.canIDeploy.no";
 
     return (
       <section className={`rounded-3xl border p-8 sm:p-10 surface-premium ${tone}`}>
         <div className="space-y-8 max-w-3xl">
           <div className="space-y-3">
             <p className="text-sm uppercase tracking-[0.24em] text-muted-foreground">
-              Can I deploy?
+              {t("verdict.canIDeploy.question")}
             </p>
             <p className="text-5xl sm:text-6xl font-semibold tracking-tighter leading-none">
-              {canDeploy}
+              {t(canDeployKey)}
             </p>
           </div>
           <div className="flex items-end justify-between gap-6 flex-wrap">
@@ -125,7 +125,7 @@ export function ProductionVerdictHero({
                 <Button variant="outline" size="sm" asChild>
                   <Link href={retryHref}>
                     <RefreshCw className="mr-2 h-4 w-4" />
-                    Retry production check
+                    {t("verdict.retryProductionCheck")}
                   </Link>
                 </Button>
               )}

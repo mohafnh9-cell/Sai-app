@@ -3,6 +3,15 @@ import type { SecurityTestPhase } from "../types";
 
 const TERMINAL_CAMPAIGN_STATUSES = new Set(["completed", "failed", "cancelled"]);
 
+const SAFE_TERMINAL_EXECUTION_STATUSES = new Set<AttackExecutionStatus>([
+  "protected",
+  "not_exploitable",
+  "blocked",
+  "completed",
+  "failed",
+  "cancelled",
+]);
+
 export function deriveSecurityTestPhase(input: {
   reviewInProgress: boolean;
   hasLatestScan: boolean;
@@ -15,18 +24,23 @@ export function deriveSecurityTestPhase(input: {
 
   const statuses = input.executionStatuses;
 
-  if (statuses.some((status) => status === "protected")) return "protected";
-  if (statuses.some((status) => status === "fix_ready")) return "fix_ready";
-  if (statuses.some((status) => status === "confirmed")) return "issues_found";
-
-  if (!TERMINAL_CAMPAIGN_STATUSES.has(input.campaignStatus)) return "running";
+  // Worst-case first — never show "protected" while any execution still has open issues.
+  if (statuses.some((status) => status === "still_vulnerable" || status === "confirmed")) {
+    return "issues_found";
+  }
+  if (statuses.some((status) => status === "fix_ready")) {
+    return "fix_ready";
+  }
+  if (!TERMINAL_CAMPAIGN_STATUSES.has(input.campaignStatus)) {
+    return "running";
+  }
 
   if (
-    statuses.some(
-      (status) => status === "confirmed" || status === "still_vulnerable" || status === "fix_ready"
-    )
+    statuses.length > 0 &&
+    statuses.every((status) => SAFE_TERMINAL_EXECUTION_STATUSES.has(status)) &&
+    statuses.some((status) => status === "protected")
   ) {
-    return "issues_found";
+    return "protected";
   }
 
   return "completed_clean";

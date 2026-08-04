@@ -260,7 +260,7 @@ export function buildMissionControlView(
             ? t("verdict.deploymentRecommendation.warnings")
             : t("verdict.deploymentRecommendation.blocked"),
       verdictStatus: input.verdict?.status ?? "insufficient_data",
-      score: input.verdict?.score ?? 0,
+      score: input.verdict?.score ?? null,
     },
     detailsHref: input.verdict ? `/projects/${input.projectId}` : undefined,
     fixPromptContext: input.verdict

@@ -72,7 +72,8 @@ export function buildDeltaNarrative(verdict: ProductionVerdictV1): {
 }
 
 export function verdictExperienceFromVerdict(
-  verdict: ProductionVerdictV1
+  verdict: ProductionVerdictV1,
+  options?: { statusMessage?: string }
 ): VerdictExperienceView {
   const { narrative, direction } = buildDeltaNarrative(verdict);
   const showScore = shouldShowScore(verdict.score, verdict.status);
@@ -93,7 +94,7 @@ export function verdictExperienceFromVerdict(
   return {
     status: verdict.status,
     headline: verdictHeadlineDisplay(verdict.status),
-    statusMessage: STATUS_MESSAGES[verdict.status],
+    statusMessage: options?.statusMessage ?? STATUS_MESSAGES[verdict.status],
     score: verdict.score,
     scoreDelta: verdict.scoreDelta,
     blockersCount: verdict.blockersCount,

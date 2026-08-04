@@ -28,6 +28,7 @@ export function ProductionReadinessExperience({
   const router = useRouter();
   const { t } = useI18n("securityTest");
   const { t: tr } = useI18n("readiness");
+  const { t: tm } = useI18n("missionControl");
   const [startingBlockerId, setStartingBlockerId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -77,6 +78,8 @@ export function ProductionReadinessExperience({
 
         router.push(body.attackCenterHref ?? securityTestContext.attackCenterHref);
         router.refresh();
+      } catch {
+        setError(t("errors.startFailed"));
       } finally {
         setStartingBlockerId(null);
       }
@@ -98,9 +101,23 @@ export function ProductionReadinessExperience({
     );
   }
 
-  const blockers = verdict?.topPriorities ?? [];
-  const showVerdict = Boolean(verdict);
+  if (!verdict) {
+    return (
+      <div className="space-y-10">
+        <SecurityTestProgressSteps steps={securityTestContext.progressSteps} />
+        <AnalyzeApplicationPrompt
+          projectId={projectId}
+          reviewContext={reviewContext}
+          preparing={false}
+          waitMessage={null}
+        />
+      </div>
+    );
+  }
+
+  const blockers = verdict.topPriorities ?? [];
   const showProgress = phase !== "completed_clean" && phase !== "protected";
+  const reportHref = `/projects/${projectId}/scans/${verdict.scanId}/report`;
 
   return (
     <div className="space-y-10">
@@ -108,14 +125,15 @@ export function ProductionReadinessExperience({
         <SecurityTestProgressSteps steps={securityTestContext.progressSteps} />
       ) : null}
 
-      {showVerdict ? <ProductionReadinessHero verdict={verdict!} /> : null}
+      <ProductionReadinessHero verdict={verdict} />
 
       {phase === "ready" && blockers.length > 0 ? (
         <DeploymentBlockersList
           blockers={blockers}
           attackCenterHref={securityTestContext.attackCenterHref}
-          onStartValidation={(priority) => void startValidation(priority.id)}
-          startingId={startingBlockerId}
+          primaryActionLabel={screenCopy.primaryActionLabel}
+          onPrimaryValidation={() => void startValidation()}
+          startingPrimary={startingBlockerId === "all"}
         />
       ) : null}
 
@@ -143,9 +161,15 @@ export function ProductionReadinessExperience({
         <section className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-8 text-center space-y-4">
           <p className="text-2xl font-semibold tracking-tight">{screenCopy.headline}</p>
           <p className="text-sm text-muted-foreground max-w-md mx-auto">{screenCopy.description}</p>
-          <PrimaryActionButton onClick={() => router.push(`/projects/${projectId}/mission-control`)}>
-            {screenCopy.primaryActionLabel}
-          </PrimaryActionButton>
+          {verdict.status === "ready_to_ship" ? (
+            <PrimaryActionButton onClick={() => router.push(reportHref)}>
+              {tm("actions.deploy")}
+            </PrimaryActionButton>
+          ) : (
+            <PrimaryActionButton onClick={() => router.push(`/projects/${projectId}/mission-control`)}>
+              {screenCopy.primaryActionLabel}
+            </PrimaryActionButton>
+          )}
         </section>
       )}
 

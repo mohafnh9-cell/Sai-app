@@ -61,7 +61,7 @@ export type MissionVerdictCard = {
   engineeringPlanStatusLabel: string;
   deploymentRecommendation: string;
   verdictStatus: VerdictStatus;
-  score: number;
+  score: number | null;
 };
 
 export type MissionControlView = {

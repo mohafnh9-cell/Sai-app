@@ -45,8 +45,8 @@ const DEFAULTS: Record<FeatureFlagKey, FeatureRollout> = {
   autonomous_orchestrator: "internal",
   parallel_execution: "internal",
   adaptive_team_selection: "internal",
-  mission_control: "internal",
-  attack_simulation: "internal",
+  mission_control: "ga",
+  attack_simulation: "ga",
 };
 
 function parseOverrides(): Partial<Record<FeatureFlagKey, FeatureRollout>> {

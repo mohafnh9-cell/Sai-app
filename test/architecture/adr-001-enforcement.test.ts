@@ -76,4 +76,25 @@ describe("ADR-001: single source of truth enforcement", () => {
   it("keeps the legacy production-readiness module deleted", () => {
     expect(fs.existsSync(path.join(ROOT, "brain", "production-readiness"))).toBe(false);
   });
+
+  it("does not mutate Production Verdict status outside brain/production-verdict", () => {
+    const offenders: string[] = [];
+    const allowedAssignPatterns = [/brain\/production-verdict\//];
+
+    for (const file of allSourceFiles()) {
+      const relative = path.relative(ROOT, file);
+      if (allowedAssignPatterns.some((pattern) => pattern.test(relative))) continue;
+      const content = fs.readFileSync(file, "utf8");
+      if (/\.status\s*=\s*mapDeploymentVerdictToScanStatus/.test(content)) {
+        offenders.push(relative);
+      }
+      if (/applySecurityDecisionToProductionVerdict\([\s\S]*?\)\s*;/.test(content)) {
+        if (!relative.includes("production-verdict-bridge.ts")) {
+          offenders.push(relative);
+        }
+      }
+    }
+
+    expect(offenders).toEqual([]);
+  });
 });

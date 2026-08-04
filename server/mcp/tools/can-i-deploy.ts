@@ -71,9 +71,7 @@ export async function canIDeploy(
     throw new McpError(404, "no_verdict_available", t("errors.no_verdict_available"));
   }
 
-  const securityOverlay = applyLatestSecurityDecisionToVerdict(project.id, verdict, {
-    organizationId: ctx.organizationId,
-  });
+  const securityOverlay = applyLatestSecurityDecisionToVerdict(project.id, verdict);
   verdict = securityOverlay.verdict;
 
   const [staleness, latestReview] = await Promise.all([
