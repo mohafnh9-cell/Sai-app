@@ -100,7 +100,7 @@ export async function getMissionControlView(
     feedRows,
     latestReviewScan,
   ] = await Promise.all([
-    supabase.from("projects").select("id, name").eq("id", projectId).single(),
+    supabase.from("projects").select("id, name").eq("id", projectId).maybeSingle(),
     getProductionReviewState(supabase, { organizationId, projectId }),
     activeJobQuery.maybeSingle(),
     completedJobsQuery,

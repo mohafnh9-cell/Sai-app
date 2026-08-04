@@ -43,7 +43,7 @@ export function MissionControlTechnicalDetails({
   const { t: tp } = useI18n("projects");
 
   const areas = verdict
-    ? [...verdict.evaluatedAreas, ...verdict.partiallyEvaluatedAreas]
+    ? [...(verdict.evaluatedAreas ?? []), ...(verdict.partiallyEvaluatedAreas ?? [])]
     : [];
 
   return (
