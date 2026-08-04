@@ -13,7 +13,10 @@ import { createAdminClient } from "@/server/security-scanner/admin-client";
 import { getProjectReviewUiContext } from "@/server/projects/review-ui-context";
 import { getSecurityTestContext } from "@/server/attack-simulation/get-security-test-context";
 import { resolveAnalysisRunForMissionControl } from "@/server/analysis-runs/resolve-analysis-run";
+import { loadAnalysisRunFindingsForFixPrompt } from "@/server/analysis-runs/load-run-findings-for-fix";
+import { listAnalysisRunsForProject } from "@/server/analysis-runs/list-analysis-runs";
 import { appendAnalysisRunSearchParams } from "@/features/analysis-runs/lib/build-run-query";
+import { AnalysisRunSelector } from "@/features/analysis-runs/components/AnalysisRunSelector";
 import type { SecurityTestContext } from "@/features/security-testing/types";
 import type { Metadata } from "next";
 import { getTranslator } from "@/lib/i18n/server";
@@ -114,6 +117,14 @@ export default async function MissionControlPage({ params, searchParams }: PageP
 
   const reviewContext = await getProjectReviewUiContext(auth.supabase, projectId);
 
+  const analysisRuns =
+    isolationEnabled && auth.organizationId
+      ? await listAnalysisRunsForProject(createAdminClient(), {
+          projectId,
+          organizationId: auth.organizationId,
+        }).catch(() => [])
+      : [];
+
   const { view, verdict } = await getMissionControlView(
     auth.supabase,
     projectId,
@@ -138,6 +149,12 @@ export default async function MissionControlPage({ params, searchParams }: PageP
         .maybeSingle();
 
   const contextScan = scanForContext.data;
+
+  const runFindings =
+    isolationEnabled && analysisRunId
+      ? await loadAnalysisRunFindingsForFixPrompt(auth.supabase, analysisRunId)
+      : undefined;
+
   const latestReportHref =
     contextScan?.id && (contextScan.status === "completed" || !isolationEnabled)
       ? `/projects/${projectId}/scans/${contextScan.id}/report`
@@ -148,6 +165,7 @@ export default async function MissionControlPage({ params, searchParams }: PageP
         projectName: project.name,
         detectedStack: contextScan?.detected_stack,
         framework: project.framework,
+        findings: runFindings,
         currentVerdictStatus: verdict.status,
         currentScore: verdict.score,
       })
@@ -202,6 +220,10 @@ export default async function MissionControlPage({ params, searchParams }: PageP
           </div>
         ) : null}
 
+        {isolationEnabled && analysisRuns.length > 1 ? (
+          <AnalysisRunSelector runs={analysisRuns} activeRunId={analysisRunId} />
+        ) : null}
+
         {query.onboarded === "1" && verdict ? (
           <ProjectOnboardedBanner readyToShip={verdict.status === "ready_to_ship"} />
         ) : null}
@@ -234,6 +256,7 @@ export default async function MissionControlPage({ params, searchParams }: PageP
           securityTestContext={securityTestContext}
           reviewContext={reviewContext}
           analysisRunId={isolationEnabled ? analysisRunId : undefined}
+          runScoped={Boolean(isolationEnabled && analysisRunId)}
         />
       </div>
     </div>

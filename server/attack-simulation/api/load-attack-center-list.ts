@@ -2,9 +2,13 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
+  getAttackCenterCampaignSnapshot,
   getLatestAttackCenterCampaignForProject,
 } from "../get-attack-center";
-import { listAttackCampaignsForProject } from "../persistence/campaign-repository";
+import {
+  getAttackCampaignByScanId,
+  listAttackCampaignsForProject,
+} from "../persistence/campaign-repository";
 import {
   buildAttackCenterListResponse,
   type AttackCenterListResponse,
@@ -13,8 +17,30 @@ import { attackCenterErrorFromSupabase } from "./errors";
 
 export async function loadAttackCenterListState(
   admin: SupabaseClient,
-  input: { projectId: string; organizationId: string }
+  input: { projectId: string; organizationId: string; analysisRunId?: string | null }
 ): Promise<AttackCenterListResponse> {
+  if (input.analysisRunId) {
+    const runCampaign = await getAttackCampaignByScanId(
+      admin,
+      input.analysisRunId,
+      input.organizationId
+    );
+    const campaigns = runCampaign ? [runCampaign] : [];
+    const activeCampaign = runCampaign
+      ? await getAttackCenterCampaignSnapshot(admin, {
+          projectId: input.projectId,
+          organizationId: input.organizationId,
+          campaignId: runCampaign.id,
+        })
+      : null;
+
+    return buildAttackCenterListResponse({
+      organizationId: input.organizationId,
+      campaigns,
+      activeCampaign,
+    });
+  }
+
   const campaigns = await listAttackCampaignsForProject(admin, {
     projectId: input.projectId,
     organizationId: input.organizationId,

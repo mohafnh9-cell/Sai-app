@@ -11,7 +11,13 @@
     "ariaLabel": "Mission sections"
   },
   "analysisRun": {
-    "historicalBanner": "You are viewing a previous analysis run. Start a new review to update the active run."
+    "historicalBanner": "You are viewing a previous analysis run. Start a new review to update the active run.",
+    "selector": {
+      "label": "Analysis run",
+      "hint": "Verdict, validation, and Safe Fix reflect this run.",
+      "noScore": "—",
+      "runOption": "{sha} · {score} · {status}"
+    }
   },
   "header": {
     "mission": "Mission",

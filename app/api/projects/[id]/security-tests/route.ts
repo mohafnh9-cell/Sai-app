@@ -17,7 +17,13 @@ const paramsSchema = z.object({ id: z.string().uuid() });
 
 const postBodySchema = z.object({
   testIds: z.array(z.string().min(1)).min(1).max(20),
+  analysisRunId: z.string().uuid().optional(),
 });
+
+function resolveAnalysisRunId(request: Request, bodyRunId?: string | null): string | null {
+  const url = new URL(request.url);
+  return bodyRunId ?? url.searchParams.get("run");
+}
 
 export async function GET(
   request: Request,
@@ -46,9 +52,11 @@ export async function GET(
 
   try {
     const admin = createAdminClient();
+    const analysisRunId = resolveAnalysisRunId(request);
     const context = await getSecurityTestContext(admin, {
       projectId,
       organizationId: access.project.organization_id,
+      analysisRunId,
     });
     const { hypotheses: _hypotheses, ...publicContext } = context;
     return NextResponse.json({ ok: true, ...publicContext });
@@ -85,16 +93,18 @@ export async function POST(
     );
   }
 
-  const body = postBodySchema.safeParse(await request.json().catch(() => null));
-  if (!body.success) {
-    return NextResponse.json({ ok: false, error: t("errors.selectAtLeastOne") }, { status: 400 });
-  }
-
   try {
     const admin = createAdminClient();
+    const body = postBodySchema.safeParse(await request.json().catch(() => null));
+    if (!body.success) {
+      return NextResponse.json({ ok: false, error: t("errors.selectAtLeastOne") }, { status: 400 });
+    }
+
+    const analysisRunId = resolveAnalysisRunId(request, body.data.analysisRunId);
     const context = await getSecurityTestContext(admin, {
       projectId,
       organizationId: access.project.organization_id,
+      analysisRunId,
     });
 
     if (!context.latestScan) {

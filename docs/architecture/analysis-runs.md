@@ -41,10 +41,8 @@ Resolution order:
 ## Out of scope (later sprints)
 
 - `POST /analysis-runs` dedicated endpoint (uses existing scans POST)
-- DB immutability constraints
-- Safe Fix scoping to run
-- React Query cache keys per run
 - MCP / deploy tools (keep `getCurrentProductionVerdict`)
+- React Query hooks fully wired to `analysisRunKeys` factory
 
 ## Write path (Sprint 2)
 
@@ -72,6 +70,36 @@ After a new run starts from Mission Control, the client navigates to `?run={newS
 
 - Feature flag off → project-level MC view and legacy idempotency unchanged
 - Migration 045 is additive (nullable columns + trigger); safe to deploy before code
+
+## Safe Fix & History (Sprint 4)
+
+| Surface | Scoped behavior |
+|---------|-----------------|
+| Safe Fix prompt context | Findings loaded from `scan_findings` for the active `analysisRunId` |
+| Journey history | "View run" links to `/mission-control?run={scanId}` when flag on |
+| Sub-nav History tab | Preserves `?run=` |
+| Attack Center live channel | Realtime channel namespaced by `analysisRunId` |
+| React Query | `analysisRunKeys` factory for run-scoped cache keys |
+
+## Guided flow (Sprint 5)
+
+| Surface | Scoped behavior |
+|---------|-----------------|
+| Run selector | Dropdown on Mission Control when 2+ runs exist (flag on) |
+| Security test phase | Server phase used directly when `runScoped` — no client `preparing→ready` hack |
+| Security tests API | GET/POST accept `?run=` or `analysisRunId` body — campaign starts for that scan |
+| Validation redirect | `attackCenterHref` includes `?run=` for scoped runs |
+
+## Hard immutability (Sprint 6)
+
+| Layer | Behavior |
+|-------|----------|
+| DB trigger (`046`) | After `immutability_locked_at` is set, only `metrics` and `updated_at` may change on `scans` |
+| Application guard | `assertAnalysisRunMutable()` for explicit pre-write checks |
+| Attack Center list | `loadAttackCenterListState({ analysisRunId })` — no project-level campaign fallback when scoped |
+| Analysis runs API | `GET /api/projects/{id}/analysis-runs` — list recent runs (flag on) |
+
+MCP and deploy tools remain on `getCurrentProductionVerdict` (current production pointer).
 
 ## Feature flag
 

@@ -108,6 +108,7 @@ export default async function AttackCenterPage({ params, searchParams }: PagePro
     const initialState = await loadAttackCenterListState(admin, {
       projectId,
       organizationId: auth.organizationId,
+      analysisRunId: isolationEnabled ? analysisRunId : undefined,
     });
     initialSnapshot = initialState.activeCampaign;
     initialCapability = initialState.capability;
@@ -165,6 +166,7 @@ export default async function AttackCenterPage({ params, searchParams }: PagePro
             initialCampaignId ??
             (initialSnapshot?.kind === "campaign" ? initialSnapshot.campaign.id : null)
           }
+          analysisRunId={isolationEnabled ? analysisRunId : undefined}
         />
       </div>
     </div>

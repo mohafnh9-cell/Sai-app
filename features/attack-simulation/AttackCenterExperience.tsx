@@ -29,6 +29,7 @@ export function AttackCenterExperience({
   initialCapability = null,
   reviewContext,
   securityTestContext = null,
+  analysisRunId = null,
 }: {
   projectId: string;
   initialSnapshot: AttackCenterSnapshot | null;
@@ -36,6 +37,7 @@ export function AttackCenterExperience({
   initialCapability?: AttackCenterCapability | null;
   reviewContext?: ProjectReviewUiContext | null;
   securityTestContext?: SecurityTestContext | null;
+  analysisRunId?: string | null;
 }) {
   const router = useRouter();
   const { t: ts } = useI18n("securityTest");
@@ -54,6 +56,7 @@ export function AttackCenterExperience({
 
   const { snapshot, capability, loading, error, refresh, setSnapshot } = useAttackCenterLive({
     projectId,
+    analysisRunId,
     campaignId: findingId ? null : campaignId,
     executionId: null,
     findingId,

@@ -121,7 +121,11 @@ export default async function ProjectJourneyPage({ params, searchParams }: Journ
         )}
 
         {journey ? (
-          <ProductionJourneyView journey={journey} projectId={id} />
+          <ProductionJourneyView
+            journey={journey}
+            projectId={id}
+            analysisRunLinksEnabled={isolationEnabled}
+          />
         ) : (
           <p className="text-sm text-destructive">{t("loadFailed")}</p>
         )}

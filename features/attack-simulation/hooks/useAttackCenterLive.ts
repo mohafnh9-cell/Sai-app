@@ -15,6 +15,7 @@ import {
 
 type LiveOptions = {
   projectId: string;
+  analysisRunId?: string | null;
   campaignId?: string | null;
   executionId?: string | null;
   findingId?: string | null;
@@ -80,6 +81,7 @@ function snapshotFromResponse(body: AttackCenterListApiResponse): AttackCenterSn
 export function useAttackCenterLive(options: LiveOptions) {
   const {
     projectId,
+    analysisRunId,
     campaignId,
     executionId,
     findingId,
@@ -190,7 +192,9 @@ export function useAttackCenterLive(options: LiveOptions) {
 
     const supabase = createClient();
     const channel = supabase
-      .channel(`${ATTACK_CENTER_REALTIME_CHANNEL}:${projectId}`)
+      .channel(
+        `${ATTACK_CENTER_REALTIME_CHANNEL}:${projectId}:${analysisRunId ?? "project"}`
+      )
       .on(
         "postgres_changes",
         {
@@ -213,7 +217,7 @@ export function useAttackCenterLive(options: LiveOptions) {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [enabled, projectId, refresh]);
+  }, [enabled, projectId, analysisRunId, refresh]);
 
   return {
     snapshot,

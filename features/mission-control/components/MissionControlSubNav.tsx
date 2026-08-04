@@ -43,7 +43,7 @@ export function MissionControlSubNav({
         ]
       : []),
     {
-      href: historyHref,
+      href: withAnalysisRunQuery(historyHref, analysisRunId),
       label: t("subNav.history"),
       active: pathname.startsWith(historyHref),
     },

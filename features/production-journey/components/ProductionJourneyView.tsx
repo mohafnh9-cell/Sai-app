@@ -19,12 +19,16 @@ function TrendIcon({ trend }: { trend: ProductionJourney["trend"] }) {
   return <Minus className="h-4 w-4 text-muted-foreground" aria-hidden />;
 }
 
+import { withAnalysisRunQuery } from "@/features/analysis-runs/lib/build-run-query";
+
 export function ProductionJourneyView({
   journey,
   projectId,
+  analysisRunLinksEnabled = false,
 }: {
   journey: ProductionJourney;
   projectId: string;
+  analysisRunLinksEnabled?: boolean;
 }) {
   const { t } = useI18n("productionJourney");
   const { href } = useDemoNavigation();
@@ -260,6 +264,24 @@ export function ProductionJourneyView({
               </div>
               <div className="flex items-center gap-2">
                 <VerdictStatusBadge status={point.status} />
+                {analysisRunLinksEnabled ? (
+                  <Button variant="ghost" size="sm" asChild>
+                    <Link
+                      href={withAnalysisRunQuery(
+                        href(`/projects/${projectId}/mission-control`),
+                        point.scanId
+                      )}
+                      onClick={() =>
+                        trackEvent("review_history_opened", {
+                          scanId: point.scanId,
+                          destination: "mission_control",
+                        })
+                      }
+                    >
+                      {t("viewRun")}
+                    </Link>
+                  </Button>
+                ) : null}
                 <Button variant="ghost" size="sm" asChild>
                   <Link
                     href={href(`/projects/${projectId}/scans/${point.scanId}/report`)}

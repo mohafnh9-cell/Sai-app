@@ -19,11 +19,15 @@ export function ProductionReadinessExperience({
   verdict,
   securityTestContext,
   reviewContext,
+  analysisRunId = null,
+  runScoped = false,
 }: {
   projectId: string;
   verdict: ProductionVerdictV1 | null;
   securityTestContext: SecurityTestContext;
   reviewContext: ProjectReviewUiContext;
+  analysisRunId?: string | null;
+  runScoped?: boolean;
 }) {
   const router = useRouter();
   const { t } = useI18n("securityTest");
@@ -33,7 +37,11 @@ export function ProductionReadinessExperience({
   const [error, setError] = useState<string | null>(null);
 
   const phase = securityTestContext.phase;
-  const displayPhase = phase === "preparing" && verdict ? "ready" : phase;
+  const displayPhase = runScoped
+    ? phase
+    : phase === "preparing" && verdict
+      ? "ready"
+      : phase;
   const screenCopy = copyForPhase(displayPhase, t);
 
   useEffect(() => {
@@ -74,7 +82,10 @@ export function ProductionReadinessExperience({
         const response = await fetch(`/api/projects/${projectId}/security-tests`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ testIds: ids }),
+          body: JSON.stringify({
+            testIds: ids,
+            ...(analysisRunId ? { analysisRunId } : {}),
+          }),
         });
         const body = (await response.json().catch(() => null)) as {
           ok?: boolean;
@@ -95,7 +106,7 @@ export function ProductionReadinessExperience({
         setStartingBlockerId(null);
       }
     },
-    [projectId, router, securityTestContext, t]
+    [analysisRunId, projectId, router, securityTestContext, t]
   );
 
   if (displayPhase === "needs_review" || displayPhase === "preparing") {

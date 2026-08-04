@@ -11,7 +11,13 @@
     "ariaLabel": "Secciones de la misión"
   },
   "analysisRun": {
-    "historicalBanner": "Estás viendo un análisis anterior. Inicia una nueva revisión para actualizar el análisis activo."
+    "historicalBanner": "Estás viendo un análisis anterior. Inicia una nueva revisión para actualizar el análisis activo.",
+    "selector": {
+      "label": "Análisis",
+      "hint": "El veredicto, la validación y Safe Fix corresponden a este análisis.",
+      "noScore": "—",
+      "runOption": "{sha} · {score} · {status}"
+    }
   },
   "header": {
     "mission": "Misión",
