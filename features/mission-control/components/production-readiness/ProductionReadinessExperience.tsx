@@ -37,6 +37,8 @@ export function ProductionReadinessExperience({
   const screenCopy = copyForPhase(displayPhase, t);
 
   useEffect(() => {
+    if (displayPhase === "ready") return;
+    if (verdict && !reviewContext.productionReviewState.hasActiveReview) return;
     if (phase === "preparing" && verdict) return;
     const shouldPoll =
       securityTestContext.reviewInProgress ||
@@ -47,7 +49,14 @@ export function ProductionReadinessExperience({
     if (!shouldPoll || TERMINAL_DISPLAY_PHASES.has(displayPhase)) return;
     const timer = window.setInterval(() => router.refresh(), 5000);
     return () => window.clearInterval(timer);
-  }, [displayPhase, phase, securityTestContext.reviewInProgress, router, verdict]);
+  }, [
+    displayPhase,
+    phase,
+    reviewContext.productionReviewState.hasActiveReview,
+    securityTestContext.reviewInProgress,
+    router,
+    verdict,
+  ]);
 
   const startValidation = useCallback(
     async (_priorityId?: string) => {

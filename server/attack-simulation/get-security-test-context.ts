@@ -70,7 +70,12 @@ export async function getSecurityTestContext(
         .maybeSingle()
     : { data: null };
 
-  const reviewInProgress = reviewState.hasActiveReview;
+  const reviewInProgress =
+    reviewState.hasActiveReview &&
+    reviewState.status !== "completed" &&
+    reviewState.status !== "cancelled" &&
+    reviewState.status !== "failed" &&
+    reviewState.status !== "stale";
   const latestScan = latestCompletedScan.data
     ? {
         id: latestCompletedScan.data.id as string,

@@ -18,6 +18,10 @@ import type { ProductionReviewUiContract } from "@/server/projects/build-product
 
 const scanRetryKey = (projectId: string) => `sequrai_github_scan_${projectId}`;
 
+function reviewCompleteRedirectKey(projectId: string, scanId: string) {
+  return `sequrai_review_complete_redirect_${projectId}_${scanId}`;
+}
+
 const IDLE_STATE: ProductionReviewState = {
   hasActiveReview: false,
   scanId: null,
@@ -293,7 +297,17 @@ export function AnalyzeProjectButton({
 
   useEffect(() => {
     if (reviewState.status !== "completed" || !reviewState.scanId) return;
+
+    const redirectKey = reviewCompleteRedirectKey(projectId, reviewState.scanId);
+    if (sessionStorage.getItem(redirectKey)) return;
+    sessionStorage.setItem(redirectKey, "1");
+
     trackEvent("first_review_completed", { projectId, scanId: reviewState.scanId });
+
+    if (typeof window !== "undefined" && window.location.pathname.includes("/mission-control")) {
+      return;
+    }
+
     window.location.assign(`/projects/${projectId}/mission-control?reviewComplete=1`);
   }, [projectId, reviewState.scanId, reviewState.status]);
 
