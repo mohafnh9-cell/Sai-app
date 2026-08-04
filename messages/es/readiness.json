@@ -1,0 +1,31 @@
+{
+  "analyze": {
+    "headline": "¿Está tu aplicación lista para producción?",
+    "description": "SequrAI analiza tu repositorio y te dice si es seguro desplegar.",
+    "cta": "Analizar aplicación",
+    "preparingHeadline": "Analizando tu aplicación…",
+    "preparingCta": "Espera un momento…"
+  },
+  "verdict": {
+    "eyebrow": "Preparación para producción"
+  },
+  "blockers": {
+    "title_one": "Tu aplicación está casi lista. {count} bloqueador impide el despliegue.",
+    "title_other": "Tu aplicación está casi lista. {count} bloqueadores impiden el despliegue.",
+    "subtitle": "Valida cada bloqueador para confirmar el problema antes de aplicar una corrección.",
+    "validate": "Probar esto",
+    "starting": "Iniciando…"
+  },
+  "severity": {
+    "critical": "Crítico",
+    "high": "Alto",
+    "medium": "Medio",
+    "low": "Bajo",
+    "info": "Info"
+  },
+  "ready": {
+    "noBlockersTitle": "No hay bloqueadores de despliegue",
+    "noBlockersDescription": "Ejecuta una validación de seguridad para confirmar que tu aplicación se comporta de forma segura en condiciones reales.",
+    "runValidation": "Ejecutar validación de seguridad"
+  }
+}

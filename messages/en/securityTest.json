@@ -1,67 +1,67 @@
 {
-  "title": "Security test",
+  "title": "Security validation",
   "estimatedTime": "Estimated time:",
   "progressSteps": {
-    "choose": "Review code",
-    "run": "Test application",
-    "fix": "Protect app",
-    "verify": "Verify protection"
+    "choose": "Analyze application",
+    "run": "Production verdict",
+    "fix": "Validate blocker",
+    "verify": "Verify & deploy"
   },
   "estimatedDuration": "About 2 minutes",
   "safetyNote": "Nothing in production will be modified. SequrAI only runs safe simulations.",
   "stepLabel": "Step {n}",
   "emptyState": {
-    "headline": "Your application hasn't been tested yet",
-    "description": "SequrAI will safely simulate the most important problems real attackers try.",
-    "primaryAction": "Start security test"
+    "headline": "Validate your deployment blockers",
+    "description": "SequrAI reproduces each issue safely so you can confirm it before fixing.",
+    "primaryAction": "Back to Mission Control"
   },
   "phases": {
     "needs_review": {
-      "headline": "Let's review your code first",
-      "description": "SequrAI reads your latest version so it knows what to test safely afterward.",
-      "primaryAction": "Review my code",
+      "headline": "Is your application ready for production?",
+      "description": "Start with a production analysis of your latest code.",
+      "primaryAction": "Analyze application",
       "waitMessage": ""
     },
     "preparing": {
-      "headline": "Preparing your test",
-      "description": "Please wait while SequrAI gets everything ready.",
+      "headline": "Analyzing your application…",
+      "description": "SequrAI is reviewing your repository to build your Production Verdict.",
       "primaryAction": "Please wait…",
-      "waitMessage": "Checking login, permissions, APIs, and AI features…"
+      "waitMessage": "Reading architecture, dependencies, and security patterns…"
     },
     "ready": {
-      "headline": "Your code review is complete",
-      "description": "Now let's safely test how your application behaves in real situations.",
-      "primaryAction": "Test my application",
+      "headline": "Your Production Verdict is ready",
+      "description": "Review your deployment blockers and validate the ones that matter most.",
+      "primaryAction": "Validate blocker",
       "waitMessage": ""
     },
     "running": {
-      "headline": "Testing your application",
-      "description": "SequrAI is running safe tests. This usually takes a couple of minutes.",
+      "headline": "Running security validation…",
+      "description": "SequrAI is safely reproducing the issue to collect evidence.",
       "primaryAction": "View progress",
-      "waitMessage": "Please wait — your app is being tested now."
+      "waitMessage": "Checking authentication… testing authorization… testing session isolation…"
     },
     "issues_found": {
-      "headline": "We found a problem",
-      "description": "A user could reach data or actions they should not have access to.",
-      "primaryAction": "Protect my application",
+      "headline": "Issue confirmed",
+      "description": "SequrAI reproduced the problem. Review the evidence before applying a fix.",
+      "primaryAction": "View evidence",
       "waitMessage": ""
     },
     "fix_ready": {
-      "headline": "Protection is ready",
-      "description": "SequrAI prepared steps to close the gap we found.",
-      "primaryAction": "Protect my application",
+      "headline": "Ready to protect your application",
+      "description": "Apply the recommended fix, then verify that the issue is closed.",
+      "primaryAction": "View fix",
       "waitMessage": ""
     },
     "protected": {
-      "headline": "Protection verified",
-      "description": "We tried again and your application blocked the problem.",
-      "primaryAction": "Deploy with confidence",
+      "headline": "Ready for production",
+      "description": "Protection verified. The issue no longer reproduces.",
+      "primaryAction": "Return to Mission Control",
       "waitMessage": ""
     },
     "completed_clean": {
-      "headline": "Your application looks good",
-      "description": "None of the safe tests found a way through in this version.",
-      "primaryAction": "Deploy with confidence",
+      "headline": "Ready for production",
+      "description": "No issues reproduced during validation. Your application looks safe to deploy.",
+      "primaryAction": "Return to Mission Control",
       "waitMessage": ""
     }
   },

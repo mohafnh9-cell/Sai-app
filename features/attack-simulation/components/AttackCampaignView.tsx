@@ -9,6 +9,7 @@ import { Progress } from "@/components/ui/progress";
 import type { AttackCenterCampaignView } from "../types";
 import {
   deriveLiveTestDisplay,
+  deriveLiveTestPhase,
   executionStatusLabel,
   friendlyScenarioTitle,
   humanFeedLabel,
@@ -25,7 +26,7 @@ export function AttackCampaignView({
   const router = useRouter();
   const { t: ts } = useI18n("securityTest");
   const { t: ta } = useI18n("attackCenter");
-  const [showDetails, setShowDetails] = useState(false);
+  const [showDetails, setShowDetails] = useState(() => deriveLiveTestPhase(view) === "running");
   const { executions, feed } = view;
   const display = deriveLiveTestDisplay(view, ts);
   const hasPrimaryAction = Boolean(display.primaryAction);

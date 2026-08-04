@@ -3,6 +3,7 @@ import type { AttackExecutionStatus } from "@/server/attack-simulation/contracts
 import type { Translator } from "@/lib/i18n/types";
 import type { SecurityTestPhase, SecurityTestProgressStep } from "../types";
 import { buildProgressStepsForPhase, copyForPhase } from "./product-copy";
+import { deriveSecurityTestPhase } from "./derive-phase";
 
 const TERMINAL_EXECUTION_STATUSES = new Set<AttackExecutionStatus>([
   "completed",
@@ -15,8 +16,6 @@ const TERMINAL_EXECUTION_STATUSES = new Set<AttackExecutionStatus>([
   "fix_ready",
   "confirmed",
 ]);
-
-const TERMINAL_CAMPAIGN_STATUSES = new Set(["completed", "failed", "cancelled"]);
 
 export function executionStatusLabel(status: AttackExecutionStatus, t: Translator): string {
   const key = `executionStatus.${status}`;
@@ -32,24 +31,12 @@ export function friendlyScenarioTitle(adapterId: string, fallback: string, t: Tr
 }
 
 export function deriveLiveTestPhase(view: AttackCenterCampaignView): SecurityTestPhase {
-  const { campaign, executions } = view;
-
-  if (executions.some((execution) => execution.status === "protected")) {
-    return "protected";
-  }
-  if (executions.some((execution) => execution.status === "fix_ready")) {
-    return "fix_ready";
-  }
-  if (executions.some((execution) => execution.status === "confirmed")) {
-    return "issues_found";
-  }
-  if (!TERMINAL_CAMPAIGN_STATUSES.has(campaign.status)) {
-    return "running";
-  }
-  if (campaign.confirmedFindings > 0) {
-    return "issues_found";
-  }
-  return "completed_clean";
+  return deriveSecurityTestPhase({
+    reviewInProgress: false,
+    hasLatestScan: true,
+    campaignStatus: view.campaign.status,
+    executionStatuses: view.executions.map((execution) => execution.status),
+  });
 }
 
 export function buildLiveProgressSteps(

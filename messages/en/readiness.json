@@ -1,0 +1,31 @@
+{
+  "analyze": {
+    "headline": "Is your application ready for production?",
+    "description": "SequrAI analyzes your repository and tells you whether it is safe to deploy.",
+    "cta": "Analyze application",
+    "preparingHeadline": "Analyzing your application…",
+    "preparingCta": "Please wait…"
+  },
+  "verdict": {
+    "eyebrow": "Production Readiness"
+  },
+  "blockers": {
+    "title_one": "Your application is almost ready. {count} blocker prevents deployment.",
+    "title_other": "Your application is almost ready. {count} blockers prevent deployment.",
+    "subtitle": "Validate each blocker to confirm the issue before applying a fix.",
+    "validate": "Test this",
+    "starting": "Starting…"
+  },
+  "severity": {
+    "critical": "Critical",
+    "high": "High",
+    "medium": "Medium",
+    "low": "Low",
+    "info": "Info"
+  },
+  "ready": {
+    "noBlockersTitle": "No deployment blockers found",
+    "noBlockersDescription": "Run a security validation to confirm your application behaves safely under real conditions.",
+    "runValidation": "Run security validation"
+  }
+}

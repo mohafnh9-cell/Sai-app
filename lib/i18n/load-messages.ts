@@ -26,6 +26,7 @@ import enMissionControl from "@/messages/en/missionControl.json";
 import enReviewProgress from "@/messages/en/reviewProgress.json";
 import enEvidenceFinding from "@/messages/en/evidenceFinding.json";
 import enLanding from "@/messages/en/landing.json";
+import enReadiness from "@/messages/en/readiness.json";
 
 import esCommon from "@/messages/es/common.json";
 import esNavigation from "@/messages/es/navigation.json";
@@ -52,6 +53,7 @@ import esMissionControl from "@/messages/es/missionControl.json";
 import esReviewProgress from "@/messages/es/reviewProgress.json";
 import esEvidenceFinding from "@/messages/es/evidenceFinding.json";
 import esLanding from "@/messages/es/landing.json";
+import esReadiness from "@/messages/es/readiness.json";
 
 const PACKAGES: Record<AppLocale, Record<MessageNamespace, Messages>> = {
   en: {
@@ -81,6 +83,7 @@ const PACKAGES: Record<AppLocale, Record<MessageNamespace, Messages>> = {
     reviewProgress: enReviewProgress,
     evidenceFinding: enEvidenceFinding,
     landing: enLanding,
+    readiness: enReadiness,
   },
   es: {
     common: esCommon,
@@ -109,6 +112,7 @@ const PACKAGES: Record<AppLocale, Record<MessageNamespace, Messages>> = {
     reviewProgress: esReviewProgress,
     evidenceFinding: esEvidenceFinding,
     landing: esLanding,
+    readiness: esReadiness,
   },
 };
 
@@ -142,6 +146,7 @@ export function loadAllMessages(locale: AppLocale): Messages {
     { missionControl: PACKAGES[locale].missionControl },
     { reviewProgress: PACKAGES[locale].reviewProgress },
     { evidenceFinding: PACKAGES[locale].evidenceFinding },
-    { landing: PACKAGES[locale].landing }
+    { landing: PACKAGES[locale].landing },
+    { readiness: PACKAGES[locale].readiness }
   );
 }

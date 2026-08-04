@@ -6,17 +6,17 @@ import {
   buildDefaultSecurityTestOptions,
   buildSecurityTestOptionsFromHypotheses,
 } from "./security-test-options";
-import type { SecurityTestContext, SecurityTestPhase } from "@/features/security-testing/types";
+import type { SecurityTestContext } from "@/features/security-testing/types";
 import {
   buildProgressStepsForPhase,
   copyForPhase,
 } from "@/features/security-testing/lib/product-copy";
+import { deriveSecurityTestPhase } from "@/features/security-testing/lib/derive-phase";
 import { getTranslator } from "@/lib/i18n/server";
 import { extractAttackHypothesesFromRedTeamReport } from "./integration/extract-hypotheses-from-report";
 import { listAttackCampaignsForProject } from "./persistence/campaign-repository";
+import { listAttackExecutionsForCampaign } from "./persistence/execution-repository";
 import type { AttackHypothesis } from "./contracts/attack-hypothesis";
-
-const TERMINAL_CAMPAIGN = new Set(["completed", "failed", "cancelled"]);
 
 function parseRedTeamReportFromMetadata(metadata: unknown): RedTeamReport | null {
   if (!metadata || typeof metadata !== "object") return null;
@@ -26,26 +26,6 @@ function parseRedTeamReportFromMetadata(metadata: unknown): RedTeamReport | null
   const report = platform.report;
   if (!report || typeof report !== "object") return null;
   return report as RedTeamReport;
-}
-
-function derivePhase(input: {
-  reviewInProgress: boolean;
-  latestScan: SecurityTestContext["latestScan"];
-  campaign: SecurityTestContext["campaign"];
-}): SecurityTestPhase {
-  if (input.reviewInProgress) return "preparing";
-  if (!input.latestScan) return "needs_review";
-
-  const campaign = input.campaign;
-  if (!campaign) return "ready";
-
-  if (!TERMINAL_CAMPAIGN.has(campaign.status)) return "running";
-
-  if (campaign.confirmedFindings > 0) {
-    return "issues_found";
-  }
-
-  return "completed_clean";
 }
 
 export type SecurityTestContextPayload = SecurityTestContext & {
@@ -110,19 +90,29 @@ export async function getSecurityTestContext(
       ? buildSecurityTestOptionsFromHypotheses(hypotheses, t)
       : buildDefaultSecurityTestOptions(t);
 
-  const latestCampaign = campaigns[0]
+  const latestCampaignRow = campaigns[0] ?? null;
+  const executions = latestCampaignRow
+    ? await listAttackExecutionsForCampaign(admin, latestCampaignRow.id, input.organizationId)
+    : [];
+
+  const latestCampaign = latestCampaignRow
     ? {
-        id: campaigns[0].id,
-        status: campaigns[0].status,
-        progressPercent: campaigns[0].progressPercent,
-        confirmedFindings: campaigns[0].confirmedFindings,
-        totalExecutions: campaigns[0].totalExecutions,
-        completedExecutions: campaigns[0].completedExecutions,
-        commitSha: campaigns[0].commitSha,
+        id: latestCampaignRow.id,
+        status: latestCampaignRow.status,
+        progressPercent: latestCampaignRow.progressPercent,
+        confirmedFindings: latestCampaignRow.confirmedFindings,
+        totalExecutions: latestCampaignRow.totalExecutions,
+        completedExecutions: latestCampaignRow.completedExecutions,
+        commitSha: latestCampaignRow.commitSha,
       }
     : null;
 
-  const phase = derivePhase({ reviewInProgress, latestScan, campaign: latestCampaign });
+  const phase = deriveSecurityTestPhase({
+    reviewInProgress,
+    hasLatestScan: Boolean(latestScan),
+    campaignStatus: latestCampaign?.status ?? null,
+    executionStatuses: executions.map((execution) => execution.status),
+  });
   const copy = copyForPhase(phase, t);
 
   return {

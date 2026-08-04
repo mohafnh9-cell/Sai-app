@@ -1,67 +1,67 @@
 {
-  "title": "Prueba de seguridad",
+  "title": "Validación de seguridad",
   "estimatedTime": "Tiempo estimado:",
   "progressSteps": {
-    "choose": "Revisar código",
-    "run": "Probar aplicación",
-    "fix": "Proteger app",
-    "verify": "Comprobar protección"
+    "choose": "Analizar aplicación",
+    "run": "Veredicto de producción",
+    "fix": "Validar bloqueador",
+    "verify": "Verificar y desplegar"
   },
   "estimatedDuration": "Unos 2 minutos",
   "safetyNote": "Nada en producción se modificará. SequrAI solo ejecuta simulaciones seguras.",
   "stepLabel": "Paso {n}",
   "emptyState": {
-    "headline": "Tu aplicación aún no ha sido probada",
-    "description": "SequrAI simulará de forma segura los problemas más importantes que intentan los atacantes reales.",
-    "primaryAction": "Iniciar prueba de seguridad"
+    "headline": "Valida tus bloqueadores de despliegue",
+    "description": "SequrAI reproduce cada problema de forma segura para que puedas confirmarlo antes de corregirlo.",
+    "primaryAction": "Volver a Mission Control"
   },
   "phases": {
     "needs_review": {
-      "headline": "Primero revisemos tu código",
-      "description": "SequrAI lee tu última versión para saber qué probar de forma segura después.",
-      "primaryAction": "Revisar mi código",
+      "headline": "¿Está tu aplicación lista para producción?",
+      "description": "Empieza con un análisis de producción de tu último código.",
+      "primaryAction": "Analizar aplicación",
       "waitMessage": ""
     },
     "preparing": {
-      "headline": "Preparando tu prueba",
-      "description": "Espera mientras SequrAI prepara todo.",
+      "headline": "Analizando tu aplicación…",
+      "description": "SequrAI está revisando tu repositorio para generar tu veredicto de producción.",
       "primaryAction": "Espera un momento…",
-      "waitMessage": "Comprobando login, permisos, APIs y funciones de IA…"
+      "waitMessage": "Leyendo arquitectura, dependencias y patrones de seguridad…"
     },
     "ready": {
-      "headline": "La revisión de código está lista",
-      "description": "Ahora probemos de forma segura cómo se comporta tu aplicación en situaciones reales.",
-      "primaryAction": "Probar mi aplicación",
+      "headline": "Tu veredicto de producción está listo",
+      "description": "Revisa tus bloqueadores de despliegue y valida los más importantes.",
+      "primaryAction": "Validar bloqueador",
       "waitMessage": ""
     },
     "running": {
-      "headline": "Probando tu aplicación",
-      "description": "SequrAI está ejecutando pruebas seguras. Suele tardar un par de minutos.",
+      "headline": "Ejecutando validación de seguridad…",
+      "description": "SequrAI está reproduciendo el problema de forma segura para recopilar evidencia.",
       "primaryAction": "Ver progreso",
-      "waitMessage": "Espera — tu app se está probando ahora."
+      "waitMessage": "Comprobando autenticación… probando autorización… probando aislamiento de sesión…"
     },
     "issues_found": {
-      "headline": "Encontramos un problema",
-      "description": "Un usuario podría acceder a datos o acciones que no debería.",
-      "primaryAction": "Proteger mi aplicación",
+      "headline": "Problema confirmado",
+      "description": "SequrAI reprodujo el problema. Revisa la evidencia antes de aplicar una corrección.",
+      "primaryAction": "Ver evidencia",
       "waitMessage": ""
     },
     "fix_ready": {
-      "headline": "La protección está lista",
-      "description": "SequrAI preparó los pasos para cerrar la brecha que encontramos.",
-      "primaryAction": "Proteger mi aplicación",
+      "headline": "Listo para proteger tu aplicación",
+      "description": "Aplica la corrección recomendada y verifica que el problema quedó resuelto.",
+      "primaryAction": "Ver corrección",
       "waitMessage": ""
     },
     "protected": {
-      "headline": "Protección verificada",
-      "description": "Lo intentamos de nuevo y tu aplicación bloqueó el problema.",
-      "primaryAction": "Desplegar con confianza",
+      "headline": "Listo para producción",
+      "description": "Protección verificada. El problema ya no se reproduce.",
+      "primaryAction": "Volver a Mission Control",
       "waitMessage": ""
     },
     "completed_clean": {
-      "headline": "Tu aplicación se ve bien",
-      "description": "Ninguna de las pruebas seguras encontró una vía de acceso en esta versión.",
-      "primaryAction": "Desplegar con confianza",
+      "headline": "Listo para producción",
+      "description": "No se reprodujeron problemas durante la validación. Tu aplicación parece segura para desplegar.",
+      "primaryAction": "Volver a Mission Control",
       "waitMessage": ""
     }
   },

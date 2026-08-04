@@ -9,16 +9,15 @@ import { MissionHeader } from "./MissionHeader";
 import { ActiveTeams } from "./ActiveTeams";
 import { WhyTheseTeams } from "./WhyTheseTeams";
 import { MissionFeed } from "./MissionFeed";
-import { CurrentObjective } from "./CurrentObjective";
 import { ProductionVerdictCardSection } from "./ProductionVerdictCard";
-import { SecurityTestPanel } from "@/features/security-testing/components/SecurityTestPanel";
+import { ProductionReadinessExperience } from "./production-readiness/ProductionReadinessExperience";
 import type { SecurityTestContext } from "@/features/security-testing/types";
 import type { ProjectReviewUiContext } from "@/server/projects/review-ui-context";
 
 export function MissionControlExperience({
   view,
   verdict,
-  fixPromptContext,
+  fixPromptContext: _fixPromptContext,
   securityTestContext = null,
   reviewContext = null,
 }: {
@@ -34,27 +33,22 @@ export function MissionControlExperience({
   return (
     <div className="space-y-12 sm:space-y-16 max-w-2xl mx-auto">
       {guidedFlowActive ? (
-        <SecurityTestPanel
+        <ProductionReadinessExperience
           projectId={view.projectId}
-          context={securityTestContext!}
+          verdict={verdict}
+          securityTestContext={securityTestContext!}
           reviewContext={reviewContext!}
         />
-      ) : null}
-
-      {!guidedFlowActive ? (
+      ) : (
         <>
           <MissionHeader header={view.header} />
           <ActiveTeams teams={view.teams} />
           <WhyTheseTeams reasons={view.teamReasons} />
           <MissionFeed items={view.feed} />
-          <CurrentObjective
-            objective={view.objective}
-            projectId={view.projectId}
-            verdict={view.hideProductionVerdict ? null : verdict}
-            fixPromptContext={view.hideProductionVerdict ? undefined : fixPromptContext}
-          />
         </>
-      ) : (
+      )}
+
+      {guidedFlowActive ? (
         <details className="rounded-2xl border border-border/60 group">
           <summary className="cursor-pointer px-5 py-4 text-sm font-medium text-muted-foreground list-none">
             {t("technicalDetails")}
@@ -69,7 +63,7 @@ export function MissionControlExperience({
             ) : null}
           </div>
         </details>
-      )}
+      ) : null}
 
       {view.cancelledReview ? (
         <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">

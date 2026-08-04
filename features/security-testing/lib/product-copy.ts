@@ -17,28 +17,22 @@ export function buildProgressStepsForPhase(
       "completed_clean",
     ];
     const idx = order.indexOf(phase);
-    const chooseIdx = order.indexOf("ready");
-    const runIdx = order.indexOf("running");
-    const fixIdx = order.indexOf("issues_found");
-    const verifyIdx = order.indexOf("protected");
+    const readyIdx = order.indexOf("ready");
+    const validateDoneIdx = order.indexOf("protected");
 
     if (id === "choose") {
-      if (idx >= runIdx) return "done";
-      if (idx >= chooseIdx) return "current";
-      return "upcoming";
+      return idx >= readyIdx ? "done" : "current";
     }
     if (id === "run") {
-      if (idx >= fixIdx || idx === order.indexOf("completed_clean")) return "done";
-      if (idx >= runIdx) return "current";
-      return "upcoming";
+      return idx >= readyIdx ? "done" : "upcoming";
     }
     if (id === "fix") {
-      if (idx >= verifyIdx || idx === order.indexOf("completed_clean")) return "done";
-      if (idx >= fixIdx) return "current";
+      if (idx >= validateDoneIdx || idx === order.indexOf("completed_clean")) return "done";
+      if (idx >= readyIdx) return "current";
       return "upcoming";
     }
     if (idx === order.indexOf("protected") || idx === order.indexOf("completed_clean")) return "done";
-    if (idx >= fixIdx) return "current";
+    if (idx >= order.indexOf("fix_ready")) return "current";
     return "upcoming";
   };
 

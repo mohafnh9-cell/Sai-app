@@ -12,7 +12,6 @@ import { useAttackCenterLive } from "./hooks/useAttackCenterLive";
 import { AttackCampaignView } from "./components/AttackCampaignView";
 import { AttackExecutionViewPanel } from "./components/AttackExecutionViewPanel";
 import { AttackFindingViewPanel } from "./components/AttackFindingViewPanel";
-import { SecurityTestPanel } from "@/features/security-testing/components/SecurityTestPanel";
 import type { SecurityTestContext } from "@/features/security-testing/types";
 import { SecurityTestProgressSteps } from "@/features/security-testing/components/SecurityTestProgressSteps";
 import type { ProjectReviewUiContext } from "@/server/projects/review-ui-context";
@@ -169,27 +168,18 @@ export function AttackCenterExperience({
       ) : null}
 
       {viewState.kind === "empty" ? (
-        securityTestContext && reviewContext ? (
-          <SecurityTestPanel
-            projectId={projectId}
-            context={securityTestContext}
-            reviewContext={reviewContext}
-            compact
-          />
-        ) : (
-          <SecurityTestHero
-            headline={emptyCopy.headline}
-            description={emptyCopy.description}
-            progressSteps={liveProgressSteps ?? []}
-            showEstimatedDuration
-            showSafetyNote
-            primaryAction={
-              <PrimaryActionButton onClick={() => router.push(`/projects/${projectId}/mission-control`)}>
-                {emptyCopy.primaryActionLabel}
-              </PrimaryActionButton>
-            }
-          />
-        )
+        <SecurityTestHero
+          headline={emptyCopy.headline}
+          description={emptyCopy.description}
+          progressSteps={liveProgressSteps ?? securityTestContext?.progressSteps ?? []}
+          showEstimatedDuration
+          showSafetyNote
+          primaryAction={
+            <PrimaryActionButton onClick={() => router.push(`/projects/${projectId}/mission-control`)}>
+              {emptyCopy.primaryActionLabel}
+            </PrimaryActionButton>
+          }
+        />
       ) : null}
 
       {actionError ? <p className="text-sm text-destructive">{actionError}</p> : null}
