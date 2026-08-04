@@ -210,7 +210,10 @@ export function buildMissionControlView(
 
   const top = input.verdict?.topPriorities[0];
   const objective = {
-    title: top?.title ?? (input.verdict ? t("objective.reviewVerdict") : t("objective.runAnalysis")),
+    title:
+      top?.title ??
+      input.verdict?.recommendedAction ??
+      (input.verdict ? t("objective.reviewVerdict") : t("objective.runAnalysis")),
     estimatedEffortLabel: top?.estimatedTimeLabel ?? "—",
     engineeringPlanStatus: top ? ("ready" as const) : ("none" as const),
     replayStatus: input.verdict?.status === "ready_to_ship" ? ("passed" as const) : ("pending" as const),

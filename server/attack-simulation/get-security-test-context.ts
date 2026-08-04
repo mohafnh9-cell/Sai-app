@@ -17,6 +17,7 @@ import { extractAttackHypothesesFromRedTeamReport } from "./integration/extract-
 import { listAttackCampaignsForProject } from "./persistence/campaign-repository";
 import { listAttackExecutionsForCampaign } from "./persistence/execution-repository";
 import type { AttackHypothesis } from "./contracts/attack-hypothesis";
+import { getProductionReviewState } from "@/server/review-cancel/get-production-review-state";
 
 function parseRedTeamReportFromMetadata(metadata: unknown): RedTeamReport | null {
   if (!metadata || typeof metadata !== "object") return null;
@@ -38,14 +39,11 @@ export async function getSecurityTestContext(
 ): Promise<SecurityTestContextPayload> {
   const attackCenterHref = `/projects/${input.projectId}/attack-center`;
 
-  const [activeScanJob, latestCompletedScan, campaigns] = await Promise.all([
-    admin
-      .from("scan_jobs")
-      .select("id, status")
-      .eq("project_id", input.projectId)
-      .in("status", ["queued", "running"])
-      .limit(1)
-      .maybeSingle(),
+  const [reviewState, latestCompletedScan, campaigns] = await Promise.all([
+    getProductionReviewState(admin, {
+      organizationId: input.organizationId,
+      projectId: input.projectId,
+    }),
     admin
       .from("scans")
       .select("id, commit_sha, status")
@@ -72,7 +70,7 @@ export async function getSecurityTestContext(
         .maybeSingle()
     : { data: null };
 
-  const reviewInProgress = Boolean(activeScanJob.data);
+  const reviewInProgress = reviewState.hasActiveReview;
   const latestScan = latestCompletedScan.data
     ? {
         id: latestCompletedScan.data.id as string,

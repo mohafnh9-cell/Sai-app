@@ -12,6 +12,11 @@ export const PRODUCT_VOCABULARY = {
   project: "Project",
   deploymentRisk: "deployment risk",
   issue: "issue",
+  securityTest: "Security Test",
+  safeFix: "Safe Fix",
+  deploymentBlockers: "Deployment Blockers",
+  missionControl: "Mission Control",
+  validate: "Validate",
 } as const;
 
 export type ProductVocabularyKey = keyof typeof PRODUCT_VOCABULARY;

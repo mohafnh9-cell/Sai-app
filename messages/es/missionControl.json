@@ -4,8 +4,10 @@
     "backToProjects": "Proyectos"
   },
   "subNav": {
-    "overview": "Resumen",
-    "securityTest": "Validar",
+    "verdict": "Veredicto",
+    "validate": "Validar",
+    "history": "Historial",
+    "technical": "Técnico",
     "ariaLabel": "Secciones de la misión"
   },
   "header": {

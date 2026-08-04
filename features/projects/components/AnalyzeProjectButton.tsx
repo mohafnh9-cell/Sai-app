@@ -294,7 +294,7 @@ export function AnalyzeProjectButton({
   useEffect(() => {
     if (reviewState.status !== "completed" || !reviewState.scanId) return;
     trackEvent("first_review_completed", { projectId, scanId: reviewState.scanId });
-    window.location.assign(`/projects/${projectId}?reviewComplete=1`);
+    window.location.assign(`/projects/${projectId}/mission-control?reviewComplete=1`);
   }, [projectId, reviewState.scanId, reviewState.status]);
 
   useEffect(() => {

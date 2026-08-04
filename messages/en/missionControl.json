@@ -4,8 +4,10 @@
     "backToProjects": "Projects"
   },
   "subNav": {
-    "overview": "Overview",
-    "securityTest": "Validate",
+    "verdict": "Verdict",
+    "validate": "Validate",
+    "history": "History",
+    "technical": "Technical",
     "ariaLabel": "Mission sections"
   },
   "header": {

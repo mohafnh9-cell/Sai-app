@@ -33,19 +33,21 @@ export function ProductionReadinessExperience({
   const [error, setError] = useState<string | null>(null);
 
   const phase = securityTestContext.phase;
-  const screenCopy = copyForPhase(phase, t);
+  const displayPhase = phase === "preparing" && verdict ? "ready" : phase;
+  const screenCopy = copyForPhase(displayPhase, t);
 
   useEffect(() => {
+    if (phase === "preparing" && verdict) return;
     const shouldPoll =
       securityTestContext.reviewInProgress ||
-      phase === "preparing" ||
-      phase === "running" ||
-      phase === "issues_found" ||
-      phase === "fix_ready";
-    if (!shouldPoll || TERMINAL_DISPLAY_PHASES.has(phase)) return;
+      displayPhase === "preparing" ||
+      displayPhase === "running" ||
+      displayPhase === "issues_found" ||
+      displayPhase === "fix_ready";
+    if (!shouldPoll || TERMINAL_DISPLAY_PHASES.has(displayPhase)) return;
     const timer = window.setInterval(() => router.refresh(), 5000);
     return () => window.clearInterval(timer);
-  }, [phase, securityTestContext.reviewInProgress, router]);
+  }, [displayPhase, phase, securityTestContext.reviewInProgress, router, verdict]);
 
   const startValidation = useCallback(
     async (_priorityId?: string) => {
@@ -87,14 +89,14 @@ export function ProductionReadinessExperience({
     [projectId, router, securityTestContext, t]
   );
 
-  if (phase === "needs_review" || phase === "preparing") {
+  if (displayPhase === "needs_review" || displayPhase === "preparing") {
     return (
       <div className="space-y-10">
         <SecurityTestProgressSteps steps={securityTestContext.progressSteps} />
         <AnalyzeApplicationPrompt
           projectId={projectId}
           reviewContext={reviewContext}
-          preparing={phase === "preparing"}
+          preparing={displayPhase === "preparing"}
           waitMessage={screenCopy.waitMessage}
         />
       </div>
@@ -116,7 +118,7 @@ export function ProductionReadinessExperience({
   }
 
   const blockers = verdict.topPriorities ?? [];
-  const showProgress = phase !== "completed_clean" && phase !== "protected";
+  const showProgress = displayPhase !== "completed_clean" && displayPhase !== "protected";
   const reportHref = `/projects/${projectId}/scans/${verdict.scanId}/report`;
 
   return (
@@ -127,7 +129,7 @@ export function ProductionReadinessExperience({
 
       <ProductionReadinessHero verdict={verdict} />
 
-      {phase === "ready" && blockers.length > 0 ? (
+      {displayPhase === "ready" && blockers.length > 0 ? (
         <DeploymentBlockersList
           blockers={blockers}
           attackCenterHref={securityTestContext.attackCenterHref}
@@ -137,7 +139,7 @@ export function ProductionReadinessExperience({
         />
       ) : null}
 
-      {phase === "ready" && blockers.length === 0 ? (
+      {displayPhase === "ready" && blockers.length === 0 ? (
         <section className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-6 text-center space-y-4">
           <p className="font-medium">{tr("ready.noBlockersTitle")}</p>
           <p className="text-sm text-muted-foreground">{tr("ready.noBlockersDescription")}</p>
@@ -147,7 +149,9 @@ export function ProductionReadinessExperience({
         </section>
       ) : null}
 
-      {(phase === "running" || phase === "issues_found" || phase === "fix_ready") && (
+      {(displayPhase === "running" ||
+        displayPhase === "issues_found" ||
+        displayPhase === "fix_ready") && (
         <section className="rounded-2xl border border-primary/20 bg-primary/5 p-6 space-y-4">
           <p className="font-medium">{screenCopy.headline}</p>
           <p className="text-sm text-muted-foreground">{screenCopy.description}</p>
@@ -157,7 +161,7 @@ export function ProductionReadinessExperience({
         </section>
       )}
 
-      {(phase === "protected" || phase === "completed_clean") && (
+      {(displayPhase === "protected" || displayPhase === "completed_clean") && (
         <section className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-8 text-center space-y-4">
           <p className="text-2xl font-semibold tracking-tight">{screenCopy.headline}</p>
           <p className="text-sm text-muted-foreground max-w-md mx-auto">{screenCopy.description}</p>

@@ -14,6 +14,7 @@ import {
 } from "@/features/mission-control/lib/parse-llm-metrics";
 import type { MissionControlView, MissionFeedItem } from "@/features/mission-control/types";
 import { getCurrentProductionVerdict } from "@/server/production-verdict/service";
+import { getProductionReviewState } from "@/server/review-cancel/get-production-review-state";
 
 export async function getMissionControlView(
   supabase: SupabaseClient,
@@ -23,7 +24,7 @@ export async function getMissionControlView(
   const [
     { data: project },
     verdict,
-    ,
+    reviewState,
     activeScanJob,
     completedJobsResult,
     latestScan,
@@ -32,7 +33,7 @@ export async function getMissionControlView(
   ] = await Promise.all([
     supabase.from("projects").select("id, name").eq("id", projectId).single(),
     getCurrentProductionVerdict(supabase, projectId),
-    Promise.resolve(null),
+    getProductionReviewState(supabase, { organizationId, projectId }),
     supabase
       .from("scan_jobs")
       .select("id, status, metadata")
@@ -72,7 +73,7 @@ export async function getMissionControlView(
       .maybeSingle(),
   ]);
 
-  const scanInProgress = Boolean(activeScanJob.data);
+  const scanInProgress = reviewState.hasActiveReview;
   const cancelledReview =
     latestReviewScan.data?.status === "cancelled" &&
     latestReviewScan.data.cancelled_at &&

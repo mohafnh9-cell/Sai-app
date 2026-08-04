@@ -247,7 +247,7 @@ export function OnboardingFlow({ initialContext }: { initialContext: OnboardingC
           onFinish={() => void finishWizard("/dashboard?onboarded=1")}
           onSkip={() => {
             const href = activeProjectId
-              ? `/projects/${activeProjectId}?onboarded=1`
+              ? `/projects/${activeProjectId}/mission-control?onboarded=1`
               : "/dashboard?onboarded=1";
             void finishWizard(href);
           }}

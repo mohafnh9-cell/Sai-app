@@ -5,23 +5,54 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n/client";
 
-export function MissionControlSubNav({ projectId }: { projectId: string }) {
+export function MissionControlSubNav({
+  projectId,
+  latestReportHref,
+  attackCenterEnabled = true,
+}: {
+  projectId: string;
+  latestReportHref?: string;
+  attackCenterEnabled?: boolean;
+}) {
   const pathname = usePathname();
   const { t } = useI18n("missionControl");
-  const missionHref = `/projects/${projectId}/mission-control`;
-  const attackHref = `/projects/${projectId}/attack-center`;
+  const base = `/projects/${projectId}`;
+  const verdictHref = `${base}/mission-control`;
+  const validateHref = `${base}/attack-center`;
+  const historyHref = `${base}/journey`;
 
   const tabs = [
     {
-      href: missionHref,
-      label: t("subNav.overview"),
-      active: pathname.startsWith(missionHref) && !pathname.startsWith(attackHref),
+      href: verdictHref,
+      label: t("subNav.verdict"),
+      active:
+        pathname.startsWith(verdictHref) &&
+        !pathname.startsWith(validateHref) &&
+        !pathname.startsWith(historyHref),
     },
+    ...(attackCenterEnabled
+      ? [
+          {
+            href: validateHref,
+            label: t("subNav.validate"),
+            active: pathname.startsWith(validateHref),
+          },
+        ]
+      : []),
     {
-      href: attackHref,
-      label: t("subNav.securityTest"),
-      active: pathname.startsWith(attackHref),
+      href: historyHref,
+      label: t("subNav.history"),
+      active: pathname.startsWith(historyHref),
     },
+    ...(latestReportHref
+      ? [
+          {
+            href: latestReportHref,
+            label: t("subNav.technical"),
+            active: pathname.includes("/report"),
+          },
+        ]
+      : []),
   ];
 
   return (

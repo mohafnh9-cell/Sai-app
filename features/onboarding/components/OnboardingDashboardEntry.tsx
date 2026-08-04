@@ -11,7 +11,7 @@ export function OnboardingDashboardEntry({ projectId }: { projectId?: string | n
 
   const finish = () => {
     if (projectId) {
-      router.push(`/projects/${projectId}?onboarded=1`);
+      router.push(`/projects/${projectId}/mission-control?onboarded=1`);
       return;
     }
     router.push("/dashboard?firstVerdict=1");

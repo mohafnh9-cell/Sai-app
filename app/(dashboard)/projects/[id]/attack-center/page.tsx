@@ -48,6 +48,19 @@ export default async function AttackCenterPage({ params }: PageProps) {
 
   if (!project) notFound();
 
+  const { data: latestScan } = await auth.supabase
+    .from("scans")
+    .select("id")
+    .eq("project_id", projectId)
+    .eq("status", "completed")
+    .order("completed_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const latestReportHref = latestScan?.id
+    ? `/projects/${projectId}/scans/${latestScan.id}/report`
+    : undefined;
+
   const reviewContext = await getProjectReviewUiContext(auth.supabase, projectId);
   if (!reviewContext) notFound();
 
@@ -98,7 +111,11 @@ export default async function AttackCenterPage({ params }: PageProps) {
             {ta("page.backToMissionControl")}
           </Link>
         </Button>
-        <MissionControlSubNav projectId={projectId} />
+        <MissionControlSubNav
+          projectId={projectId}
+          latestReportHref={latestReportHref}
+          attackCenterEnabled
+        />
         <AttackCenterExperience
           projectId={projectId}
           initialSnapshot={initialSnapshot}

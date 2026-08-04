@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MissionControlExperience } from "@/features/mission-control/components/MissionControlExperience";
 import { MissionControlSubNav } from "@/features/mission-control/components/MissionControlSubNav";
+import { ProjectOnboardedBanner } from "@/features/projects/components/ProjectOnboardedBanner";
 import { getMissionControlView } from "@/server/mission-control/get-mission-control";
 import { getCachedServerAuthContext } from "@/lib/server/request-cache";
 import { isFeatureEnabled } from "@/server/feature-flags";
@@ -17,6 +18,7 @@ import { getTranslator } from "@/lib/i18n/server";
 
 interface PageProps {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ connected?: string; reviewComplete?: string; onboarded?: string }>;
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -28,8 +30,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   return { title: data?.name ? `${data.name} — ${t("page.title")}` : t("page.title") };
 }
 
-export default async function MissionControlPage({ params }: PageProps) {
+export default async function MissionControlPage({ params, searchParams }: PageProps) {
   const { id: projectId } = await params;
+  const query = await searchParams;
   const auth = await getCachedServerAuthContext();
   if (!auth?.organizationId) redirect("/login");
 
@@ -49,24 +52,31 @@ export default async function MissionControlPage({ params }: PageProps) {
 
   if (!project) notFound();
 
+  const reviewContext = await getProjectReviewUiContext(auth.supabase, projectId);
+
   const { view, verdict } = await getMissionControlView(
     auth.supabase,
     projectId,
     auth.organizationId
   );
 
-  const latestScan = await auth.supabase
+  const { data: latestScan } = await auth.supabase
     .from("scans")
-    .select("detected_stack")
+    .select("id, detected_stack")
     .eq("project_id", projectId)
+    .eq("status", "completed")
     .order("completed_at", { ascending: false })
     .limit(1)
     .maybeSingle();
 
+  const latestReportHref = latestScan?.id
+    ? `/projects/${projectId}/scans/${latestScan.id}/report`
+    : undefined;
+
   const fixPromptContext = verdict
     ? fixPromptContextFromScan({
         projectName: project.name,
-        detectedStack: latestScan.data?.detected_stack,
+        detectedStack: latestScan?.detected_stack,
         framework: project.framework,
         currentVerdictStatus: verdict.status,
         currentScore: verdict.score,
@@ -74,26 +84,23 @@ export default async function MissionControlPage({ params }: PageProps) {
     : undefined;
 
   let securityTestContext: SecurityTestContext | null = null;
-  let reviewContext = null;
 
-  if (attackCenterEnabled) {
-    reviewContext = await getProjectReviewUiContext(auth.supabase, projectId);
-    if (reviewContext) {
-      try {
-        const admin = createAdminClient();
-        const fullContext = await getSecurityTestContext(admin, {
-          projectId,
-          organizationId: auth.organizationId,
-        });
-        const { hypotheses: _hypotheses, ...publicContext } = fullContext;
-        securityTestContext = publicContext;
-      } catch {
-        securityTestContext = null;
-      }
+  if (attackCenterEnabled && reviewContext) {
+    try {
+      const admin = createAdminClient();
+      const fullContext = await getSecurityTestContext(admin, {
+        projectId,
+        organizationId: auth.organizationId,
+      });
+      const { hypotheses: _hypotheses, ...publicContext } = fullContext;
+      securityTestContext = publicContext;
+    } catch {
+      securityTestContext = null;
     }
   }
 
   const { t } = await getTranslator("missionControl");
+  const { t: tp } = await getTranslator("projects");
 
   return (
     <div className="app-cinematic-bg min-h-full">
@@ -104,10 +111,40 @@ export default async function MissionControlPage({ params }: PageProps) {
             {t("page.backToProjects")}
           </Link>
         </Button>
-        {attackCenterEnabled ? <MissionControlSubNav projectId={projectId} /> : null}
+        <MissionControlSubNav
+          projectId={projectId}
+          latestReportHref={latestReportHref}
+          attackCenterEnabled={attackCenterEnabled}
+        />
+
+        {query.onboarded === "1" && verdict ? (
+          <ProjectOnboardedBanner readyToShip={verdict.status === "ready_to_ship"} />
+        ) : null}
+
+        {query.connected === "1" ? (
+          <div className="surface-premium rounded-2xl p-5 mb-8">
+            <p className="text-sm font-medium">{tp("connectedGuidanceTitle")}</p>
+            <p className="mt-1 text-sm text-muted-foreground">{tp("connectedGuidanceBody")}</p>
+          </div>
+        ) : null}
+
+        {query.reviewComplete === "1" && verdict ? (
+          <div className="surface-premium rounded-2xl p-5 mb-8">
+            <p className="text-sm font-medium">{tp("reviewCompleteGuidanceTitle")}</p>
+            <p className="mt-1 text-sm text-muted-foreground">{tp("reviewCompleteGuidanceBody")}</p>
+          </div>
+        ) : null}
+
+        {reviewContext?.isStale ? (
+          <div className="rounded-2xl border border-brand-warning/30 bg-brand-warning/5 px-5 py-4 text-sm text-foreground/90 mb-8">
+            {tp("latestCommitNotReviewedBanner")}
+          </div>
+        ) : null}
+
         <MissionControlExperience
           view={view}
           verdict={verdict}
+          projectName={project.name}
           fixPromptContext={fixPromptContext}
           securityTestContext={securityTestContext}
           reviewContext={reviewContext}

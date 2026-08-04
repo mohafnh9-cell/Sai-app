@@ -11,18 +11,21 @@ import { WhyTheseTeams } from "./WhyTheseTeams";
 import { MissionFeed } from "./MissionFeed";
 import { ProductionVerdictCardSection } from "./ProductionVerdictCard";
 import { ProductionReadinessExperience } from "./production-readiness/ProductionReadinessExperience";
+import { ProjectSafeFixHero } from "@/features/projects/components/ProjectSafeFixHero";
 import type { SecurityTestContext } from "@/features/security-testing/types";
 import type { ProjectReviewUiContext } from "@/server/projects/review-ui-context";
 
 export function MissionControlExperience({
   view,
   verdict,
-  fixPromptContext: _fixPromptContext,
+  projectName,
+  fixPromptContext,
   securityTestContext = null,
   reviewContext = null,
 }: {
   view: MissionControlView;
   verdict: ProductionVerdictV1 | null;
+  projectName: string;
   fixPromptContext?: FixPromptContext;
   securityTestContext?: SecurityTestContext | null;
   reviewContext?: ProjectReviewUiContext | null;
@@ -47,6 +50,16 @@ export function MissionControlExperience({
           <MissionFeed items={view.feed} />
         </>
       )}
+
+      {verdict && reviewContext ? (
+        <ProjectSafeFixHero
+          verdict={verdict}
+          projectId={view.projectId}
+          projectName={projectName}
+          fixPromptContext={fixPromptContext}
+          reviewContext={reviewContext}
+        />
+      ) : null}
 
       {guidedFlowActive ? (
         <details className="rounded-2xl border border-border/60 group">

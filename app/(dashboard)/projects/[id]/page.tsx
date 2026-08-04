@@ -68,7 +68,12 @@ export default async function ProjectDetailPage({
   if (error || !project) notFound();
 
   if (isFeatureEnabled("mission_control", { organizationId: auth.organizationId })) {
-    redirect(`/projects/${id}/mission-control`);
+    const qs = new URLSearchParams();
+    if (query.onboarded === "1") qs.set("onboarded", "1");
+    if (query.connected === "1") qs.set("connected", "1");
+    if (query.reviewComplete === "1") qs.set("reviewComplete", "1");
+    const suffix = qs.toString() ? `?${qs.toString()}` : "";
+    redirect(`/projects/${id}/mission-control${suffix}`);
   }
 
   const p = project as ProjectRow;
