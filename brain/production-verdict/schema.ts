@@ -139,3 +139,8 @@ export type ProductionVerdictV1 = z.infer<typeof ProductionVerdictSchema>;
 export function parseProductionVerdict(data: unknown): ProductionVerdictV1 {
   return ProductionVerdictSchema.parse(data);
 }
+
+export function safeParseProductionVerdict(data: unknown): ProductionVerdictV1 | null {
+  const result = ProductionVerdictSchema.safeParse(data);
+  return result.success ? result.data : null;
+}

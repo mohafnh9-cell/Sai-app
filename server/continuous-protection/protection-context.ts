@@ -115,7 +115,7 @@ export async function loadProtectionContext(
 
   const openCritical = verdict?.criticalBlockersCount ?? 0;
   const openHigh = verdict?.highBlockersCount ?? 0;
-  const worries = verdict?.topPriorities.slice(0, 3).map((p) => p.title) ?? [];
+  const worries = verdict?.topPriorities?.slice(0, 3).map((p) => p.title) ?? [];
 
   return {
     organizationId,

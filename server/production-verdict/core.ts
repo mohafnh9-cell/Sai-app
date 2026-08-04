@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   parseProductionVerdict,
+  safeParseProductionVerdict,
   type ProductionVerdictV1,
 } from "@/brain/production-verdict/schema";
 import { isAnalysisRunImmutable } from "@/server/analysis-runs/is-analysis-run-immutable";
@@ -50,7 +51,8 @@ export async function getLatestVerdictsByOrganization(
   const map = new Map<string, ProductionVerdictV1>();
   for (const row of data ?? []) {
     if (!map.has(row.project_id) && row.verdict) {
-      map.set(row.project_id, parseProductionVerdict(row.verdict));
+      const parsed = safeParseProductionVerdict(row.verdict);
+      if (parsed) map.set(row.project_id, parsed);
     }
   }
   return map;
@@ -357,7 +359,12 @@ export async function getProductionVerdictByScan(
     .maybeSingle();
 
   if (!data?.verdict) return null;
-  return parseProductionVerdict(data.verdict);
+  const parsed = safeParseProductionVerdict(data.verdict);
+  if (!parsed) {
+    log("verdict_parse_failed", { scanId });
+    return null;
+  }
+  return parsed;
 }
 
 export async function getCurrentProductionVerdict(
@@ -386,7 +393,12 @@ export async function getCurrentProductionVerdict(
 
     if (data?.verdict) {
       log("verdict_read_completed", { repositoryId, source: "current_verdict_id" });
-      return parseProductionVerdict(data.verdict);
+      const parsed = safeParseProductionVerdict(data.verdict);
+      if (!parsed) {
+        log("verdict_parse_failed", { repositoryId, source: "current_verdict_id" });
+        return null;
+      }
+      return parsed;
     }
   }
 
@@ -413,7 +425,12 @@ export async function getCurrentProductionVerdict(
   }
 
   log("verdict_read_completed", { repositoryId, source: "latest_by_repo" });
-  return parseProductionVerdict(data.verdict);
+  const parsed = safeParseProductionVerdict(data.verdict);
+  if (!parsed) {
+    log("verdict_parse_failed", { repositoryId, source: "latest_by_repo" });
+    return null;
+  }
+  return parsed;
 }
 
 export async function compareProductionVerdicts(
