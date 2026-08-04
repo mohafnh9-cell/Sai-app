@@ -60,7 +60,7 @@ export function OnboardingCursorStep({
       const response = await fetch("/api/mcp/keys", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: "Cursor connection" }),
+        body: JSON.stringify({ name: "Cursor Connection" }),
       });
       const data = await response.json();
       if (!response.ok) {

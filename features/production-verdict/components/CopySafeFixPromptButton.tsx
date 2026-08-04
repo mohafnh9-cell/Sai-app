@@ -55,6 +55,7 @@ export function CopySafeFixPromptButton({
       size={size}
       variant={variant}
       className={className}
+      aria-pressed={copied}
       onClick={() => void copyPrompt()}
     >
       {copied ? (

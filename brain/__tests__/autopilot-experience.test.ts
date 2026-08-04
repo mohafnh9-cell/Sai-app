@@ -236,10 +236,10 @@ describe("Block 7.0.4 autopilot i18n", () => {
     const en = loadNamespace("en", "autopilotExperience");
     const es = loadNamespace("es", "autopilotExperience");
 
-    expect(en.title).toBe("Continuous Reviews");
+    expect(en.title).toBe("Production Review");
     expect(es.subtitleReviewed).toContain("revisados");
     expect((en.states as Record<string, string>).up_to_date).toBe("Up to date");
     expect((es.states as Record<string, string>).waiting_for_changes).toContain("Esperando");
-    expect((en.settings as Record<string, string>).title).toBe("Continuous Reviews");
+    expect((en.settings as Record<string, string>).title).toBe("Production Review");
   });
 });

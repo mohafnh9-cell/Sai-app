@@ -20,6 +20,7 @@ function TrendIcon({ trend }: { trend: ProductionJourney["trend"] }) {
 }
 
 import { withAnalysisRunQuery } from "@/features/analysis-runs/lib/build-run-query";
+import { projectVerdictHref } from "@/lib/navigation/project-hrefs";
 
 export function ProductionJourneyView({
   journey,
@@ -44,7 +45,7 @@ export function ProductionJourneyView({
         <CardContent className="py-12 text-center space-y-4">
           <p className="text-sm text-muted-foreground">{t("emptyTitle")}</p>
           <Button asChild>
-            <Link href={href(`/projects/${projectId}`)}>{t("emptyCta")}</Link>
+            <Link href={href(projectVerdictHref(projectId))}>{t("emptyCta")}</Link>
           </Button>
         </CardContent>
       </Card>

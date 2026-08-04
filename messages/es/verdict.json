@@ -1,5 +1,6 @@
 {
   "productionVerdict": "Production Verdict",
+  "badgeAriaLabel": "Production Verdict: {status}",
   "canIDeploy": {
     "question": "¿Puedo desplegar?",
     "yes": "SÍ.",

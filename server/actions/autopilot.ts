@@ -32,7 +32,7 @@ export async function setVerdictAutopilotEnabledAction(enabled: boolean) {
 
   if (error) {
     if (error.message.includes("verdict_autopilot_enabled")) {
-      return { error: "Continuous Reviews setting is not available yet. Apply migration 014." };
+      return { error: "Production Review setting is not available yet. Apply migration 014." };
     }
     return { error: error.message };
   }

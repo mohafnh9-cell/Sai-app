@@ -44,9 +44,9 @@ function simulatedStep(input: SafeRuntimeStepInput, classification: SafeRuntimeS
 
 function executeWithAttackAdapter(input: SafeRuntimeStepInput): SafeRuntimeStepResult | null {
   if (!input.adapterId) return null;
-  const module = resolveAttackAdapterModule(input.adapterId);
-  if (!module) return null;
-  return module.executeStep({
+  const adapterModule = resolveAttackAdapterModule(input.adapterId);
+  if (!adapterModule) return null;
+  return adapterModule.executeStep({
     adapterId: input.adapterId,
     stepKind: input.stepKind,
     stepLabel: input.stepLabel,

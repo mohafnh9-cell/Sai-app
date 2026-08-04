@@ -1,14 +1,17 @@
 {
   "page": {
     "title": "Mission Control",
+    "backToMissionControl": "Mission Control",
     "backToProjects": "Proyectos"
   },
   "subNav": {
-    "verdict": "Veredicto",
-    "validate": "Validar",
+    "productionVerdict": "Production Verdict",
+    "securityTest": "Security Test",
+    "verdict": "Production Verdict",
+    "validate": "Security Test",
     "history": "Historial",
     "technical": "Técnico",
-    "ariaLabel": "Secciones de la misión"
+    "ariaLabel": "Secciones del proyecto"
   },
   "analysisRun": {
     "historicalBanner": "Estás viendo un análisis anterior. Inicia una nueva revisión para actualizar el análisis activo.",
@@ -121,9 +124,51 @@
     }
   },
   "technicalDetails": "Detalles técnicos",
+  "sections": {
+    "reason": "Por qué",
+    "primaryAction": "Siguiente paso",
+    "history": "Historial",
+    "historyDescription": "Ver historial y tendencias del Production Verdict",
+    "reviewInProgress": "Production Review en curso…",
+    "securityTestRunning": "Security Test en curso. Los resultados actualizarán tu Production Verdict al terminar."
+  },
+  "technical": {
+    "repository": "Repositorio",
+    "framework": "Framework",
+    "evidence": "Evidencia",
+    "architecture": "Arquitectura",
+    "attackDetails": "Detalles de ataques",
+    "logs": "Registros"
+  },
   "actions": {
-    "reviewAgain": "Analizar nuevamente",
-    "generateProtection": "Generar protección",
+    "reviewAgain": "Ejecutar Production Review de nuevo",
+    "generateProtection": "Copy Safe Fix",
     "deploy": "Desplegar"
+  },
+  "protection": {
+    "eyebrow": "Protection Status",
+    "productionConfidence": "Production confidence",
+    "securityConfidence": "Security confidence",
+    "lastChecked": "Última revisión",
+    "lastCheckedNever": "Aún no",
+    "worriesTitle": "Lo que me preocupa",
+    "nothingUrgent": "Nada urgente.",
+    "recommendation": "Recomendación",
+    "unavailable": "El estado de protección no está disponible temporalmente. Tu Production Verdict de arriba sigue siendo válido.",
+    "status": {
+      "PROTECTED": "Protected",
+      "SAFE_WITH_CAUTION": "Safe with caution",
+      "REQUIRES_ATTENTION": "Requires attention",
+      "NOT_PROTECTED": "Not protected"
+    }
+  },
+  "history": {
+    "lastReview": "Último Production Review: {time}",
+    "staleVerdict": "Tus últimos cambios de código aún no se han revisado.",
+    "openLinkAriaLabel": "Ver historial de Production Review"
+  },
+  "empty": {
+    "noVerdictTitle": "Aún no hay Production Verdict",
+    "noVerdictBody": "Ejecuta un Production Review para saber si esta aplicación está lista para desplegar."
   }
 }

@@ -72,8 +72,8 @@ function parseRefreshError(status: number, body: AttackCenterListApiResponse): A
     message:
       body.error ??
       (fatal
-        ? "Attack Center storage is unavailable. Apply ASE migrations in Supabase."
-        : "Attack Center could not refresh."),
+        ? "Security Test storage is unavailable. Apply ASE migrations in Supabase."
+        : "Security Test could not refresh."),
     details: body.details ?? null,
   };
 }
@@ -102,7 +102,10 @@ export function useAttackCenterLive(options: LiveOptions) {
   const failureCountRef = useRef(0);
   const pollDelayRef = useRef(ATTACK_CENTER_POLL_INTERVAL_MS);
   const snapshotRef = useRef(snapshot);
-  snapshotRef.current = snapshot;
+
+  useEffect(() => {
+    snapshotRef.current = snapshot;
+  }, [snapshot]);
 
   const refresh = useCallback(async () => {
     const url = resolvePollUrl({ projectId, campaignId, executionId, findingId });
@@ -142,7 +145,7 @@ export function useAttackCenterLive(options: LiveOptions) {
       return next;
     } catch (refreshError) {
       const message =
-        refreshError instanceof Error ? refreshError.message : "Attack Center could not refresh.";
+        refreshError instanceof Error ? refreshError.message : "Security Test could not refresh.";
       setError({
         status: 0,
         fatal: false,
@@ -161,7 +164,10 @@ export function useAttackCenterLive(options: LiveOptions) {
 
   useEffect(() => {
     if (!enabled || !projectId) return;
-    void refresh();
+    const timer = window.setTimeout(() => {
+      void refresh();
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [enabled, projectId, refresh]);
 
   useEffect(() => {

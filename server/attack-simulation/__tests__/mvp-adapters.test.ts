@@ -17,8 +17,8 @@ describe("MVP attack adapter modules", () => {
   });
 
   it("idor adapter emits exploit signals in vulnerable mock mode", async () => {
-    const module = resolveAttackAdapterModule("idor-cross-tenant");
-    expect(module).toBeDefined();
+    const adapterModule = resolveAttackAdapterModule("idor-cross-tenant");
+    expect(adapterModule).toBeDefined();
 
     const session = createSafeRuntimeSession({
       mode: "mock",
@@ -32,7 +32,7 @@ describe("MVP attack adapter modules", () => {
       commitSha: "67e0cc53e3dbc4dcd04bb4a8ab3220eb453d5f1b",
     });
 
-    const result = module!.executeStep({
+    const result = adapterModule!.executeStep({
       adapterId: "idor-cross-tenant",
       stepKind: "execute_request",
       stepLabel: "Execute request",
@@ -58,7 +58,7 @@ describe("MVP attack adapter modules", () => {
   });
 
   it("idor adapter reports protection signals when simulationOutcome is protected", async () => {
-    const module = resolveAttackAdapterModule("idor-cross-tenant")!;
+    const adapterModule = resolveAttackAdapterModule("idor-cross-tenant")!;
     const session = createSafeRuntimeSession({
       mode: "mock",
       tenant: {
@@ -71,7 +71,7 @@ describe("MVP attack adapter modules", () => {
       commitSha: "67e0cc53e3dbc4dcd04bb4a8ab3220eb453d5f1b",
     });
 
-    const result = module.executeStep({
+    const result = adapterModule.executeStep({
       adapterId: "idor-cross-tenant",
       stepKind: "execute_request",
       stepLabel: "Execute request",

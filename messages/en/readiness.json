@@ -1,21 +1,22 @@
 {
   "analyze": {
     "headline": "Is your application ready for production?",
-    "description": "SequrAI analyzes your repository and tells you whether it is safe to deploy.",
-    "cta": "Analyze application",
-    "preparingHeadline": "Analyzing your application…",
+    "description": "SequrAI reviews your repository and tells you whether it is safe to deploy.",
+    "cta": "Run Production Review",
+    "preparingHeadline": "Production Review in progress…",
     "preparingCta": "Please wait…"
   },
   "verdict": {
-    "eyebrow": "Production Readiness"
+    "eyebrow": "Production Review"
   },
   "blockers": {
-    "title_one": "Your application is almost ready. {count} blocker prevents deployment.",
-    "title_other": "Your application is almost ready. {count} blockers prevent deployment.",
-    "subtitle": "Validate each blocker to confirm the issue before applying a fix.",
-    "validate": "Test this",
+    "title_one": "Your application is almost ready. {count} deployment blocker prevents shipping.",
+    "title_other": "Your application is almost ready. {count} deployment blockers prevent shipping.",
+    "subtitle": "Run a Security Test to confirm each blocker before applying a Safe Fix.",
+    "subtitleReadOnly": "These deployment blockers prevent shipping until resolved.",
+    "validate": "Run Security Test",
     "starting": "Starting…",
-    "viewDetails": "View details"
+    "viewDetails": "View Evidence"
   },
   "severity": {
     "critical": "Critical",
@@ -26,7 +27,7 @@
   },
   "ready": {
     "noBlockersTitle": "No deployment blockers found",
-    "noBlockersDescription": "Run a security validation to confirm your application behaves safely under real conditions.",
-    "runValidation": "Run security validation"
+    "noBlockersDescription": "Run a Security Test to confirm your application behaves safely under real conditions.",
+    "runValidation": "Run Security Test"
   }
 }

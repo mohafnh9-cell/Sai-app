@@ -1,5 +1,5 @@
 {
-  "title": "Integraciones",
+  "title": "GitHub",
   "subtitle": "Conecta SequrAI con tus herramientas y repositorios.",
   "githubTitle": "GitHub",
   "githubSubtitle": "Conecta repos para análisis de producción automático en cada push",
@@ -27,13 +27,13 @@
   "oauthStateInvalid": "No se pudo verificar la autorización de GitHub. Intenta conectar de nuevo.",
   "oauthStateExpired": "La autorización de GitHub expiró. Intenta conectar de nuevo.",
   "workspaceAccessDenied": "Ya no tienes acceso a ese Workspace.",
-  "webhookHealthTitle": "Estado de Continuous Reviews",
+  "webhookHealthTitle": "Estado de Production Review",
   "webhookHealthSubtitle": "Estado del webhook y la conexión del repositorio para cada proyecto conectado.",
-  "webhookHealthLoading": "Comprobando el estado de Continuous Reviews…",
-  "webhookHealthEmpty": "Conecta un repositorio para activar Continuous Reviews.",
+  "webhookHealthLoading": "Comprobando el estado de Production Review…",
+  "webhookHealthEmpty": "Conecta un repositorio para activar Production Review.",
   "webhookHealthHealthy": "Correcto",
   "webhookHealthDegraded": "Requiere atención",
-  "webhookHealthAllHealthy": "Todos los repositorios conectados están listos para Continuous Reviews.",
-  "webhookHealthSomeDegraded": "{count} repositorios requieren atención antes de que Continuous Reviews funcione con fiabilidad.",
-  "webhookHealthReconnect": "Reconecta GitHub o el repositorio para restaurar Continuous Reviews."
+  "webhookHealthAllHealthy": "Todos los repositorios conectados están listos para Production Review.",
+  "webhookHealthSomeDegraded": "{count} repositorios requieren atención antes de que Production Review funcione con fiabilidad.",
+  "webhookHealthReconnect": "Reconecta GitHub o el repositorio para restaurar Production Review."
 }

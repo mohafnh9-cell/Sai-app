@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getTranslator } from "@/lib/i18n/server";
-import { ProjectSubNav } from "@/features/production-journey/components/ProjectSubNav";
+import { ProjectWorkflowNav } from "@/features/mission-control/components/ProjectWorkflowNav";
 import { ProductionJourneyView } from "@/features/production-journey/components/ProductionJourneyView";
 import {
   buildDemoDataset,
@@ -11,7 +11,6 @@ import {
 } from "@/features/demo/fixtures/build-demo-dataset";
 import { demoHref } from "@/features/demo/paths";
 import { parseDemoScenario } from "@/features/demo/scenarios";
-import { DEMO_SCAN_ACME } from "@/features/demo/constants";
 
 export default async function DemoProjectJourneyPage({
   params,
@@ -30,7 +29,6 @@ export default async function DemoProjectJourneyPage({
   const { t: tp } = await getTranslator("projects");
   const { t } = await getTranslator("productionJourney");
   const journey = dataset.journeys[id] ?? null;
-  const latestReportHref = `/projects/${id}/scans/${DEMO_SCAN_ACME}/report`;
 
   return (
     <div className="p-6 space-y-6 max-w-6xl">
@@ -46,7 +44,7 @@ export default async function DemoProjectJourneyPage({
         <p className="text-sm text-muted-foreground mt-1">{t("subtitle")}</p>
       </div>
 
-      <ProjectSubNav projectId={id} latestReportHref={latestReportHref} />
+      <ProjectWorkflowNav projectId={id} showSecurityTest={false} />
 
       {journey ? (
         <ProductionJourneyView journey={journey} projectId={id} />

@@ -9,9 +9,9 @@
   },
   "features": {
     "productionVerdict": "Production Verdict",
-    "continuousReviews": "Continuous Reviews",
+    "continuousReviews": "Production Review",
     "recommendations": "Recommendations",
-    "history": "Production Verdict History",
+    "history": "History",
     "githubConnection": "GitHub repository connection"
   },
   "productProof": {
@@ -29,7 +29,7 @@
       },
       "push": {
         "word": "Push",
-        "line": "SequrAI runs a Continuous Review on every code change."
+        "line": "SequrAI runs a Production Review on every code change."
       },
       "verdict": {
         "word": "Verdict",
@@ -46,7 +46,7 @@
     "verdictStatus": "Almost Ready",
     "verdictSummary": "Fix 3 issues before you deploy to production.",
     "score": "Score",
-    "continuousReviews": "Continuous Reviews",
+    "continuousReviews": "Production Review",
     "reviewsState": "Up to date",
     "lastReview": "Last review: {time}",
     "lastReviewTime": "2m ago",

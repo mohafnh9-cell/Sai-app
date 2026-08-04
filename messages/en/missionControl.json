@@ -1,20 +1,23 @@
 {
   "page": {
     "title": "Mission Control",
+    "backToMissionControl": "Mission Control",
     "backToProjects": "Projects"
   },
   "subNav": {
-    "verdict": "Verdict",
-    "validate": "Validate",
+    "productionVerdict": "Production Verdict",
+    "securityTest": "Security Test",
+    "verdict": "Production Verdict",
+    "validate": "Security Test",
     "history": "History",
     "technical": "Technical",
-    "ariaLabel": "Mission sections"
+    "ariaLabel": "Project sections"
   },
   "analysisRun": {
     "historicalBanner": "You are viewing a previous analysis run. Start a new review to update the active run.",
     "selector": {
       "label": "Analysis run",
-      "hint": "Verdict, validation, and Safe Fix reflect this run.",
+      "hint": "Production Verdict, Security Test, and Safe Fix reflect this run.",
       "noScore": "—",
       "runOption": "{sha} · {score} · {status}"
     }
@@ -87,7 +90,7 @@
     "engineeringPlanPending": "Engineering Plan Pending",
     "replayPassed": "Replay Passed",
     "replayPending": "Replay Pending",
-    "generateFix": "Generate Protection",
+    "generateFix": "Copy Safe Fix",
     "startAnalysis": "Start Analysis",
     "viewDetails": "View Details",
     "reviewVerdict": "Review Production Verdict",
@@ -120,10 +123,52 @@
       "blocked": "Do not deploy until blockers are resolved."
     }
   },
-  "technicalDetails": "Technical details",
+  "technicalDetails": "Evidence",
+  "sections": {
+    "reason": "Why",
+    "primaryAction": "Next step",
+    "history": "History",
+    "historyDescription": "View History and readiness trends",
+    "reviewInProgress": "Production Review is running…",
+    "securityTestRunning": "Security Test is running. Results will update your Production Verdict when complete."
+  },
+  "technical": {
+    "repository": "Repository",
+    "framework": "Framework",
+    "evidence": "Evidence",
+    "architecture": "Architecture",
+    "attackDetails": "Attack details",
+    "logs": "Logs"
+  },
   "actions": {
-    "reviewAgain": "Review again",
-    "generateProtection": "Generate protection",
+    "reviewAgain": "Run Production Review again",
+    "generateProtection": "Copy Safe Fix",
     "deploy": "Deploy"
+  },
+  "protection": {
+    "eyebrow": "Protection Status",
+    "productionConfidence": "Production confidence",
+    "securityConfidence": "Security confidence",
+    "lastChecked": "Last checked",
+    "lastCheckedNever": "Not yet",
+    "worriesTitle": "Things that worry me",
+    "nothingUrgent": "Nothing urgent.",
+    "recommendation": "Recommendation",
+    "unavailable": "Protection status is temporarily unavailable. Your Production Verdict above is still valid.",
+    "status": {
+      "PROTECTED": "Protected",
+      "SAFE_WITH_CAUTION": "Safe with caution",
+      "REQUIRES_ATTENTION": "Requires attention",
+      "NOT_PROTECTED": "Not protected"
+    }
+  },
+  "history": {
+    "lastReview": "Last Production Review: {time}",
+    "staleVerdict": "Your latest code changes haven't been reviewed yet.",
+    "openLinkAriaLabel": "View Production Review history"
+  },
+  "empty": {
+    "noVerdictTitle": "No Production Verdict yet",
+    "noVerdictBody": "Run a Production Review to see whether this application is ready to deploy."
   }
 }

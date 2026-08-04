@@ -15,7 +15,7 @@
   "mcpTitle": "Conexión con agentes de IA",
   "mcpSubtitle": "Conecta Cursor o Claude Code a tu Production Verdict y herramientas de blockers vía MCP.",
   "mcpKeyNameLabel": "Nombre de la clave",
-  "mcpKeyNamePlaceholder": "Cursor MCP",
+  "mcpKeyNamePlaceholder": "Cursor Connection",
   "mcpGenerateKey": "Generar clave API MCP",
   "mcpLoadKeysFailed": "No se pudieron cargar las claves MCP",
   "mcpCreateKeyFailed": "No se pudo crear la clave",

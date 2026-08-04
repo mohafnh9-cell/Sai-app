@@ -24,6 +24,7 @@ export function AnalyzeApplicationPrompt({
     <section
       className="rounded-3xl border border-border/60 bg-gradient-to-b from-primary/5 to-transparent px-8 py-16 sm:py-20 text-center space-y-8"
       aria-labelledby="analyze-application-heading"
+      aria-busy={preparing}
     >
       <div className="mx-auto max-w-lg space-y-4">
         <h1
@@ -40,8 +41,8 @@ export function AnalyzeApplicationPrompt({
       </div>
 
       {preparing && waitMessage ? (
-        <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin text-primary shrink-0" />
+        <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground" role="status">
+          <Loader2 className="h-4 w-4 animate-spin text-primary shrink-0" aria-hidden />
           <span>{waitMessage}</span>
         </div>
       ) : null}

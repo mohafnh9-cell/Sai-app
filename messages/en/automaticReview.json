@@ -1,13 +1,13 @@
 {
-  "title": "Continuous Reviews",
+  "title": "Production Review",
   "enabled": "Enabled.",
   "disabled": "Not available until the repository is connected.",
-  "latestAutomaticReview": "Latest automatic review:",
+  "latestAutomaticReview": "Latest Production Review:",
   "statusLabel": "Status:",
   "reviewTypeLabel": "Review type:",
   "reviewTypeAutomatic": "Automatic",
   "reviewTypeManual": "Manual",
-  "noReviewsYet": "No automatic reviews yet.",
+  "noReviewsYet": "No Production Reviews yet.",
   "relative": {
     "never": "Never",
     "justNow": "Just now",
@@ -25,9 +25,9 @@
     "invalid_repository": "Invalid repository.",
     "missing_commit": "Missing commit information.",
     "duplicate_review": "This commit was already reviewed.",
-    "review_failed": "Automatic review failed.",
+    "review_failed": "Production Review failed.",
     "repository_disconnected": "Repository disconnected.",
-    "review_in_progress": "A review is already in progress."
+    "review_in_progress": "A Production Review is already in progress."
   },
   "verdictUpdated": "Production Verdict updated."
 }

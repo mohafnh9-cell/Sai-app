@@ -1,17 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Loader2, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { fixPromptInputFromPriority } from "@/brain/fix-prompt";
-import { verdictExperienceFromVerdict } from "@/brain/production-verdict/experience-view";
 import type { ProductionVerdictV1 } from "@/brain/production-verdict/schema";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { ProductionVerdictHero } from "@/features/production-verdict/components/ProductionVerdictHero";
-import { CopySafeFixPromptButton } from "@/features/production-verdict/components/CopySafeFixPromptButton";
-import { SafeFixMetrics } from "@/features/production-verdict/components/SafeFixMetrics";
+import { MissionControlHero } from "@/features/mission-control/components/MissionControlHero";
+import { SafeFixHeroCard } from "@/features/production-verdict/components/SafeFixHeroCard";
 import { scanIsCompleted } from "../onboarding-flow";
+import { projectVerdictHref } from "@/lib/navigation/project-hrefs";
 import { useI18n } from "@/lib/i18n/client";
 
 type ScanPayload = {
@@ -38,13 +37,13 @@ export function OnboardingFinaleStep({
 }) {
   const { t } = useI18n("onboarding");
   const { t: te } = useI18n("errors");
-  const [verdict, setVerdict] = useState(initialVerdict);
+  const [recheckVerdict, setRecheckVerdict] = useState<ProductionVerdictV1 | null>(null);
   const [rechecking, setRechecking] = useState(false);
   const [recheckProgress, setRecheckProgress] = useState(12);
   const [recheckError, setRecheckError] = useState("");
 
-  const view = useMemo(() => verdictExperienceFromVerdict(verdict), [verdict]);
-  const ready = view.status === "ready_to_ship";
+  const verdict = recheckVerdict ?? initialVerdict;
+  const ready = verdict.status === "ready_to_ship";
   const topPriority = verdict.topPriorities[0] ?? null;
 
   const fixPromptInput = useMemo(() => {
@@ -55,10 +54,6 @@ export function OnboardingFinaleStep({
       currentScore: verdict.score,
     });
   }, [topPriority, projectName, ready, verdict.score, verdict.status]);
-
-  useEffect(() => {
-    setVerdict(initialVerdict);
-  }, [initialVerdict]);
 
   const pollUntilVerdict = useCallback(
     async (scanId: string) => {
@@ -81,7 +76,7 @@ export function OnboardingFinaleStep({
 
       const nextVerdict = body.verdict?.v1 ?? null;
       if (scanIsCompleted(body.scan.status) && nextVerdict) {
-        setVerdict(nextVerdict);
+        setRecheckVerdict(nextVerdict);
         onVerdictUpdated(nextVerdict);
         return true;
       }
@@ -127,54 +122,27 @@ export function OnboardingFinaleStep({
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
-      <div className="space-y-2 text-center sm:text-left">
-        <p className="text-xs font-medium uppercase tracking-[0.22em] text-primary">
-          {t("deployAnswerEyebrow")}
+      {ready && (
+        <p className="text-sm text-emerald-400/90 flex items-center justify-center sm:justify-start gap-2">
+          <Sparkles className="h-4 w-4" aria-hidden />
+          {t("finaleReadyCelebration")}
         </p>
-        {ready && (
-          <p className="text-sm text-emerald-400/90 flex items-center justify-center sm:justify-start gap-2">
-            <Sparkles className="h-4 w-4" aria-hidden />
-            {t("finaleReadyCelebration")}
-          </p>
-        )}
-      </div>
+      )}
 
-      <ProductionVerdictHero verdict={verdict} view={view} variant="product" />
+      <MissionControlHero verdict={verdict} />
 
       {!ready && topPriority && fixPromptInput && (
-        <section className="rounded-3xl border border-primary/25 bg-gradient-to-b from-primary/10 via-[#101014]/80 to-[#101014]/60 p-6 sm:p-8 shadow-[0_0_60px_-24px_rgba(var(--primary-rgb,99,102,241),0.35)]">
-          <p className="text-xs font-medium uppercase tracking-[0.22em] text-primary mb-2">
-            {t("fixThisFirstTitle")}
-          </p>
-          <p className="text-lg font-semibold tracking-tight">{topPriority.title}</p>
-          <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
-            {topPriority.reason}
-          </p>
-          {view.estimatedFixMinutes > 0 && (
-            <p className="mt-2 text-sm text-muted-foreground">
-              {t("safeFixIntroMinutes", { minutes: view.estimatedFixMinutes })}
-            </p>
-          )}
-          <div className="mt-4 border-t border-border/50 pt-4">
-            <SafeFixMetrics input={fixPromptInput} />
-          </div>
-          <ol className="mt-6 space-y-3 text-sm text-muted-foreground">
-            <li>{t("safeFixStepPaste")}</li>
-            <li>{t("safeFixStepReturn")}</li>
-          </ol>
-          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
-            <CopySafeFixPromptButton
-              input={fixPromptInput}
-              source="priority"
-              priorityId={topPriority.id}
-              size="default"
-              variant="default"
-              className="w-full sm:flex-1 h-12 text-base"
-              label={t("copyFixForCursor")}
-              copiedLabel={t("copiedFixForCursor")}
-            />
-          </div>
-        </section>
+        <SafeFixHeroCard
+          topPriority={topPriority}
+          fixPromptInput={fixPromptInput}
+          labels={{
+            eyebrow: t("fixThisFirstTitle"),
+            stepOne: t("safeFixStepPaste"),
+            stepTwo: t("safeFixStepReturn"),
+            copyLabel: t("copyFixForCursor"),
+            copiedLabel: t("copiedFixForCursor"),
+          }}
+        />
       )}
 
       {rechecking && (
@@ -195,28 +163,28 @@ export function OnboardingFinaleStep({
 
       <div className="flex flex-col gap-3">
         {ready ? (
-          <Button className="w-full h-12 text-base" size="lg" onClick={onConnectCursor}>
-            {t("connectCursor")}
-          </Button>
+          <>
+            <Button className="w-full h-12 text-base" size="lg" onClick={onGoToDashboard}>
+              {t("goToDashboard")}
+            </Button>
+            <Button variant="outline" className="w-full" onClick={onConnectCursor}>
+              {t("connectCursor")}
+            </Button>
+          </>
         ) : (
-          <Button
-            className="w-full h-12 text-base"
-            size="lg"
-            onClick={() => void handleCheckAgain()}
-            disabled={rechecking}
-          >
-            {rechecking ? t("finaleRechecking") : t("checkAgain")}
-          </Button>
-        )}
-
-        {ready ? (
-          <Button variant="ghost" className="w-full" onClick={onGoToDashboard}>
-            {t("skipCursorGoDashboard")}
-          </Button>
-        ) : (
-          <Button variant="outline" className="w-full" asChild>
-            <Link href={`/projects/${projectId}`}>{t("openProjectSecondary")}</Link>
-          </Button>
+          <>
+            <Button
+              className="w-full h-12 text-base"
+              size="lg"
+              onClick={() => void handleCheckAgain()}
+              disabled={rechecking}
+            >
+              {rechecking ? t("finaleRechecking") : t("checkAgain")}
+            </Button>
+            <Button variant="ghost" className="w-full" asChild>
+              <Link href={projectVerdictHref(projectId)}>{t("openProjectSecondary")}</Link>
+            </Button>
+          </>
         )}
       </div>
     </div>

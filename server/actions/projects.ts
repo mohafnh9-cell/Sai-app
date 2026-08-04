@@ -7,6 +7,7 @@ import { getOrganizationByUser } from "@/services/organizations.service";
 import type { ProjectInsert, ProjectUpdate } from "@/types/database";
 import { projectSchema, projectUpdateSchema } from "@/features/projects/schemas/project.schema";
 import { normalizeStoredGitHubRepository } from "@/lib/github/repository-reference";
+import { projectVerdictHref } from "@/lib/navigation/project-hrefs";
 
 // ─── Project Server Actions ───────────────────────────────────────────────────
 // These run on the server and can safely access Supabase with the service role.
@@ -50,7 +51,7 @@ export async function createProjectAction(formData: FormData) {
   if (error) return { error: { _root: [error.message] } };
 
   revalidatePath("/projects");
-  redirect(`/projects/${project.id}`);
+  redirect(projectVerdictHref(project.id));
 }
 
 export async function updateProjectAction(projectId: string, formData: FormData) {
@@ -86,7 +87,7 @@ export async function updateProjectAction(projectId: string, formData: FormData)
 
   revalidatePath(`/projects/${projectId}`);
   revalidatePath("/projects");
-  redirect(`/projects/${projectId}`);
+  redirect(projectVerdictHref(projectId));
 }
 
 export async function deleteProjectAction(projectId: string) {

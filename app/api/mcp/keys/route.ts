@@ -7,7 +7,7 @@ import { resolveActiveWorkspaceIdForUser } from "@/server/workspaces/service";
 import { enforceRateLimit } from "@/server/http/rate-limit";
 
 const createKeySchema = z.object({
-  name: z.string().trim().min(1).max(80).default("Cursor MCP"),
+  name: z.string().trim().min(1).max(80).default("Cursor Connection"),
 });
 
 export async function GET(request: Request) {

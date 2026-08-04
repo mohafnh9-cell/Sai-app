@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ProjectVerdictSummary } from "@/features/production-verdict/components/ProductionVerdictExperience";
 import { getTranslator } from "@/lib/i18n/server";
-import { ProjectSubNav } from "@/features/production-journey/components/ProjectSubNav";
+import { ProjectWorkflowNav } from "@/features/mission-control/components/ProjectWorkflowNav";
 import { ProductionIntelligencePanel } from "@/features/production-intelligence/components/ProductionIntelligencePanel";
 import { AutopilotSection } from "@/features/autopilot/components/AutopilotSection";
 import {
@@ -93,7 +93,7 @@ export default async function DemoProjectDetailPage({
         </Button>
       </div>
 
-      <ProjectSubNav projectId={p.id} latestReportHref={latestReportHref} />
+      <ProjectWorkflowNav projectId={p.id} showSecurityTest={false} />
 
       {brain?.currentVerdict ? (
         <ProjectVerdictSummary

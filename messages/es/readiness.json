@@ -13,6 +13,7 @@
     "title_one": "Tu aplicación está casi lista. {count} bloqueador impide el despliegue.",
     "title_other": "Tu aplicación está casi lista. {count} bloqueadores impiden el despliegue.",
     "subtitle": "Valida cada bloqueador para confirmar el problema antes de aplicar una corrección.",
+    "subtitleReadOnly": "Estos problemas impiden el despliegue hasta que se resuelvan.",
     "validate": "Probar esto",
     "starting": "Iniciando…",
     "viewDetails": "Ver detalles"

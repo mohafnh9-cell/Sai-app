@@ -13,15 +13,15 @@ export function VerdictStatusBadge({
   status: VerdictStatus;
   className?: string;
 }) {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
+  const { t: tv } = useI18n("verdict");
   const label = verdictStatusLabel(status, (key, params) => t(key, params));
 
   return (
     <Badge
       variant={verdictBadgeVariant(status)}
       className={className}
-      aria-label={`Production Verdict: ${label}`}
-      lang={locale}
+      aria-label={tv("badgeAriaLabel", { status: label })}
     >
       {label}
     </Badge>

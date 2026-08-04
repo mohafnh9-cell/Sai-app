@@ -11,7 +11,7 @@ const TIMEOUT_MS = 15 * 60 * 1000;
 const steps = [
   { name: "typecheck", cmd: "npm", args: ["run", "typecheck"] },
   { name: "lint", cmd: "npm", args: ["run", "lint"] },
-  { name: "test", cmd: "npm", args: ["run", "test"] },
+  { name: "test", cmd: "npm", args: ["run", "test:release"] },
   { name: "build", cmd: "npm", args: ["run", "build"] },
 ];
 

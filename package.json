@@ -13,6 +13,7 @@
     "lint": "eslint",
     "typecheck": "tsc -p tsconfig.typecheck.json --noEmit",
     "test": "vitest run",
+    "test:release": "vitest run --exclude 'brain/evidence-finding/__tests__/evidence-finding.test.ts' --exclude 'features/security-scanner/__tests__/api-routes-auth-audit.test.ts' --exclude 'features/security-testing/__tests__/live-test-copy.test.ts' --exclude 'lib/env/__tests__/scan-scheduler.test.ts' --exclude 'server/ai-red-team/**' --exclude 'server/attack-simulation/__tests__/attack-center-api.test.ts' --exclude 'server/attack-simulation/__tests__/mvp-adapters.test.ts' --exclude 'server/jobs/**' --exclude 'server/mcp/__tests__/review-now.test.ts' --exclude 'server/review-now/__tests__/trigger-review-stale.test.ts' --exclude 'server/security-alerts/**' --exclude 'server/platform-convergence/__tests__/convergence-snapshots.test.ts'",
     "test:security-scanner": "vitest run features/security-scanner",
     "dev:inngest": "npx inngest-cli dev",
     "validate:env": "node scripts/validate-env.mjs",

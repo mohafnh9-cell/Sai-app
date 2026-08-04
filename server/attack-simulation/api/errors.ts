@@ -41,7 +41,7 @@ export function attackCenterErrorFromSupabase(error: {
   return new AttackCenterApiError(
     500,
     "database_error",
-    "Attack Center could not load campaign data.",
+    "Security Test could not load campaign data.",
     error.message
   );
 }
@@ -71,7 +71,7 @@ export function attackCenterErrorFromUnknown(error: unknown): AttackCenterApiErr
     return new AttackCenterApiError(
       500,
       "validation_failed",
-      "Attack Center received invalid persisted data.",
+      "Security Test received invalid persisted data.",
       error.message
     );
   }
@@ -80,7 +80,7 @@ export function attackCenterErrorFromUnknown(error: unknown): AttackCenterApiErr
     return new AttackCenterApiError(500, "internal_error", error.message);
   }
 
-  return new AttackCenterApiError(500, "internal_error", "Attack Center request failed.");
+  return new AttackCenterApiError(500, "internal_error", "Security Test request failed.");
 }
 
 export function attackCenterErrorResponse(error: unknown): NextResponse {

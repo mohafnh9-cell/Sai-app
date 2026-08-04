@@ -147,7 +147,7 @@ describe("Block 6.4 First Production Verdict onboarding flow", () => {
     expect(resolveProgressIndex("repository", ctx)).toBe(1);
     expect(resolveProgressIndex("review", ctx)).toBe(2);
     expect(resolveProgressIndex("finale", ctx)).toBe(3);
-    expect(resolveProgressIndex("cursor", ctx)).toBe(5);
+    expect(resolveProgressIndex("cursor", ctx)).toBe(4);
   });
 
   it("uses canonical verdict statuses for finale progress (ready_to_ship only)", () => {
@@ -199,9 +199,6 @@ describe("Block 6.4 First Production Verdict onboarding flow", () => {
     expect(
       resolveProgressIndex("finale", baseContext({ githubConnected: true, latestVerdict: readyToShip }))
     ).toBe(4);
-  });
-
-  it("prefers scan project over newest project list entry for onboarding resume", () => {
     const scanProject = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
     const newestProject = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
     expect(
@@ -229,9 +226,9 @@ describe("Block 6.4 First Production Verdict onboarding flow", () => {
     ).toBe(scanProject);
   });
 
-  it("mobile and desktop layouts expose progress tracker steps", () => {
-    expect(PROGRESS_STEPS).toHaveLength(5);
+  it("mobile and desktop layouts expose four progress steps", () => {
+    expect(PROGRESS_STEPS).toHaveLength(4);
     expect(PROGRESS_STEPS[0].labelKey).toBe("progress.github");
-    expect(PROGRESS_STEPS[4].labelKey).toBe("progress.ready");
+    expect(PROGRESS_STEPS[3].labelKey).toBe("progress.verdict");
   });
 });
