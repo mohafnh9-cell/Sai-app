@@ -1,5 +1,6 @@
 import type { Finding } from "@/features/security-scanner/types";
 import type { EvidenceReport } from "@/brain/evidence-finding/schema";
+import { notEnoughEvidenceReason } from "@/brain/prompts/analysis-engine-v2";
 import { CONFIDENCE_FINDING_THRESHOLD, type FindingClassification, type RepositoryModel } from "./schema";
 
 export type FindingGateResult =
@@ -40,13 +41,17 @@ export function validateFindingAgainstRepository(
     if (!model.capabilities.hasApiSurface) {
       return {
         allowed: false,
-        reason: "No API or route handlers exist in this repository — authentication finding not applicable.",
+        reason: notEnoughEvidenceReason(
+          "No API or route handlers exist in this repository — authentication finding not applicable."
+        ),
       };
     }
     if (model.capabilities.hasPublicPagesOnly && !model.capabilities.hasProtectedRoutes) {
       return {
         allowed: false,
-        reason: "Project appears to be a public/static site without protected routes.",
+        reason: notEnoughEvidenceReason(
+          "Project appears to be a public/static site without protected routes."
+        ),
       };
     }
   }
@@ -59,13 +64,17 @@ export function validateFindingAgainstRepository(
     if (!requiresAuthInfrastructure && !model.capabilities.hasApiSurface) {
       return {
         allowed: false,
-        reason: "No authentication architecture or protected endpoints detected — cannot assert missing auth.",
+        reason: notEnoughEvidenceReason(
+          "No authentication architecture or protected endpoints detected — cannot assert missing auth."
+        ),
       };
     }
     if (model.capabilities.hasPublicPagesOnly && finding.confidence === "low") {
       return {
         allowed: false,
-        reason: "Low-confidence auth heuristic suppressed for public website.",
+        reason: notEnoughEvidenceReason(
+          "Low-confidence auth heuristic suppressed for public website."
+        ),
       };
     }
   }
@@ -73,7 +82,7 @@ export function validateFindingAgainstRepository(
   if (ruleId.includes("middleware") && !model.capabilities.hasMiddleware && !model.capabilities.hasNextJs) {
     return {
       allowed: false,
-      reason: "Project has no middleware layer.",
+      reason: notEnoughEvidenceReason("Project has no middleware layer."),
     };
   }
 
@@ -90,7 +99,7 @@ export function validateFindingAgainstRepository(
   if (!hasRequiredEvidence) {
     return {
       allowed: false,
-      reason: "No evidence found — file, line, and proof are required.",
+      reason: notEnoughEvidenceReason("File, line, and proof are required."),
     };
   }
 

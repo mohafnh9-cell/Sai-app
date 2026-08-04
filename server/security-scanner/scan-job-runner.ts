@@ -6,6 +6,7 @@ import {
   buildRepositoryModel,
   toRepositoryModelSummary,
 } from "@/brain/repository-model";
+import { ANALYSIS_ENGINE_V2_VERSION } from "@/brain/prompts/analysis-engine-v2";
 import { scanRepository as scanRepositoryFiles, scoreFindings } from "@/features/security-scanner";
 import { stubNormalizedFile } from "@/features/security-scanner/normalization";
 import type { Confidence, Finding as ScannerFinding, Severity } from "@/features/security-scanner";
@@ -262,6 +263,7 @@ export class InlineScanJobRunner implements ScanJobRunner {
         changedPaths: snapshot.changedPaths ?? [],
         scanType: isIncremental ? "incremental" : "full",
         repositoryModel: toRepositoryModelSummary(repositoryModel),
+        analysisEngineVersion: ANALYSIS_ENGINE_V2_VERSION,
       } as Record<string, unknown>;
 
       if (isIncremental && snapshot.changedPaths?.length) {

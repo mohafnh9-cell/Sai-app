@@ -6,7 +6,7 @@ Single execution path for production scans and red-team analysis.
 
 ```
 Product Scan (scan_jobs)
-  → Repository fetch + static scanner
+  → Repository fetch + static scanner (Analysis Engine V2 methodology — docs/prompts/analysis-engine-v2.md)
   → executeUnifiedScanRedTeamPhase
        Discovery → Security Director → RT-Core → RT9/RT10
        → Security Intelligence → Decision Engine

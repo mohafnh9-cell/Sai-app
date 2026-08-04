@@ -3,8 +3,12 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import type { ProjectSecurityContext, ScanAnalysisResult } from "@/features/ai-security-engine/types";
 import { calculateRiskScore } from "@/features/ai-security-engine/risk-engine";
+import {
+  ANALYSIS_ENGINE_V2_VERSION,
+  getAnalysisEngineV2NarrativeSupplement,
+} from "@/brain/prompts/analysis-engine-v2";
 
-const PROMPT_VERSION = "1.0.0";
+const PROMPT_VERSION = `2.0.0-ae-narrative+${ANALYSIS_ENGINE_V2_VERSION}`;
 const MODEL = "claude-sonnet-4-20250514";
 
 let client: Anthropic | null = null;
@@ -33,7 +37,9 @@ Rules:
 - Avoid endless vulnerability lists and heavy jargon.
 - Focus on what to fix today, estimated time, and highest risk reduction.
 - ${languageRule}
-- Respond ONLY with valid JSON matching the requested schema.`;
+- Respond ONLY with valid JSON matching the requested schema.
+
+${getAnalysisEngineV2NarrativeSupplement(locale)}`;
 }
 
 function buildUserPrompt(context: ProjectSecurityContext, topFindingIds: string[]) {
