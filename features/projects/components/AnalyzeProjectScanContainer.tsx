@@ -383,13 +383,14 @@ export function AnalyzeProjectScanContainer({
     t,
     te,
     uiStatus,
-    analysisRunId,
     analysisRunIsolationEnabled,
     queryClient,
     router,
   ]);
 
+  // Legacy container: keep local polling state aligned when SSR props refresh.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional sync from SSR props
     setContext(initialContext);
     setReviewState(initialContext.productionReviewState ?? IDLE_STATE);
   }, [initialContext]);
