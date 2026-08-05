@@ -1,23 +1,26 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getCachedServerAuthContext } from "@/lib/server/request-cache";
-import { getProjectAccessForUser } from "@/server/projects/project-access";
-import { getMissionControlView } from "@/server/mission-control/get-mission-control";
+import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/server/security-scanner/admin-client";
+import { requireProjectApiAccess } from "@/server/projects/project-access";
 import { isFeatureEnabled } from "@/server/feature-flags";
 import { enforceRateLimit } from "@/server/http/rate-limit";
-import { createAdminClient } from "@/server/security-scanner/admin-client";
 import {
   requestedAnalysisRunIdFromRequest,
   resolveAnalysisRunIdForIsolation,
 } from "@/server/analysis-runs/resolve-analysis-run-id-for-isolation";
+import { loadFullMissionControlState } from "@/server/mission-control/load-full-mission-control-state";
+import { toRscSafe } from "@/lib/rsc/to-rsc-safe";
 
-const paramsSchema = z.object({
-  id: z.string().uuid(),
-});
+const paramsSchema = z.object({ id: z.string().uuid() });
 
-type RouteParams = { params: Promise<{ id: string }> };
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
-export async function GET(request: Request, { params }: RouteParams) {
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   const rateLimited = enforceRateLimit(request);
   if (rateLimited) return rateLimited;
 
@@ -26,42 +29,54 @@ export async function GET(request: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Invalid project id" }, { status: 400 });
   }
 
-  const { id: projectId } = parsed.data;
-  const auth = await getCachedServerAuthContext();
-  if (!auth?.organizationId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const projectId = parsed.data.id;
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const access = await requireProjectApiAccess(supabase, user?.id, projectId);
+  if (!access.ok) return access.response;
+
+  const organizationId = access.project.organization_id;
+  const isolationEnabled = isFeatureEnabled("analysis_run_isolation", { organizationId });
+
+  let admin = null;
+  try {
+    admin = createAdminClient();
+  } catch {
+    admin = null;
   }
 
-  if (!isFeatureEnabled("mission_control", { organizationId: auth.organizationId })) {
-    return NextResponse.json({ error: "Mission Control is not enabled" }, { status: 404 });
-  }
+  const { runId: analysisRunId, invalidRequest } = admin
+    ? await resolveAnalysisRunIdForIsolation(admin, {
+        projectId,
+        organizationId,
+        requestedRunId: requestedAnalysisRunIdFromRequest(request),
+        isolationEnabled,
+      })
+    : { runId: null, invalidRequest: false };
 
-  const project = await getProjectAccessForUser(auth.supabase, projectId, auth.user.id);
-  if (!project) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
-
-  const { searchParams } = new URL(request.url);
-  const isolationEnabled = isFeatureEnabled("analysis_run_isolation", {
-    organizationId: auth.organizationId,
-  });
-  const admin = createAdminClient();
-  const { runId: analysisRunId, invalidRequest } = await resolveAnalysisRunIdForIsolation(admin, {
-    projectId,
-    organizationId: auth.organizationId,
-    requestedRunId: requestedAnalysisRunIdFromRequest(request),
-    isolationEnabled,
-  });
   if (invalidRequest) {
     return NextResponse.json({ error: "Invalid analysis run" }, { status: 400 });
   }
 
-  const { view, verdict } = await getMissionControlView(
-    auth.supabase,
-    projectId,
-    auth.organizationId,
-    isolationEnabled && analysisRunId ? { analysisRunId } : undefined
-  );
+  const { searchParams } = new URL(request.url);
+  const manualRecovery = searchParams.get("recovery") === "1";
 
-  return NextResponse.json({ view, verdict });
+  const state = await loadFullMissionControlState(supabase, {
+    projectId,
+    organizationId,
+    admin,
+    analysisRunId,
+    manualRecovery,
+    openTechnicalDetails: searchParams.get("technical") === "open",
+  });
+
+  if (!state) {
+    return NextResponse.json({ error: "Project not found" }, { status: 404 });
+  }
+
+  return NextResponse.json(toRscSafe({ ok: true, ...state }), {
+    headers: { "Cache-Control": "no-store, max-age=0" },
+  });
 }

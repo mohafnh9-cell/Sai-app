@@ -13,7 +13,7 @@ export function deriveScanCodeButtonState(input: {
   uiStatus: ProductionReviewUiStatus;
   requesting: boolean;
   reviewInProgress: boolean;
-  hasVerdict: boolean;
+  hasCompletedAnalysis: boolean;
 }): ScanCodeButtonState {
   if (
     input.requesting ||
@@ -30,7 +30,7 @@ export function deriveScanCodeButtonState(input: {
   if (
     input.uiStatus === "completed" ||
     input.uiStatus === "cancelled" ||
-    input.hasVerdict
+    input.hasCompletedAnalysis
   ) {
     return "completed";
   }

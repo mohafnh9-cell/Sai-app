@@ -12,7 +12,7 @@ describe("deriveScanCodeButtonState", () => {
         uiStatus: "idle",
         requesting: false,
         reviewInProgress: false,
-        hasVerdict: false,
+        hasCompletedAnalysis: false,
       })
     ).toBe("idle");
   });
@@ -23,7 +23,7 @@ describe("deriveScanCodeButtonState", () => {
         uiStatus: "analyzing",
         requesting: false,
         reviewInProgress: true,
-        hasVerdict: false,
+        hasCompletedAnalysis: false,
       })
     ).toBe("running");
   });
@@ -34,18 +34,18 @@ describe("deriveScanCodeButtonState", () => {
         uiStatus: "completed",
         requesting: false,
         reviewInProgress: false,
-        hasVerdict: true,
+        hasCompletedAnalysis: true,
       })
     ).toBe("completed");
   });
 
-  it("returns completed when a verdict exists even if status is idle", () => {
+  it("returns completed when a completed analysis exists even if status is idle", () => {
     expect(
       deriveScanCodeButtonState({
         uiStatus: "idle",
         requesting: false,
         reviewInProgress: false,
-        hasVerdict: true,
+        hasCompletedAnalysis: true,
       })
     ).toBe("completed");
   });
@@ -56,7 +56,7 @@ describe("deriveScanCodeButtonState", () => {
         uiStatus: "failed",
         requesting: false,
         reviewInProgress: false,
-        hasVerdict: false,
+        hasCompletedAnalysis: false,
       })
     ).toBe("failed");
   });

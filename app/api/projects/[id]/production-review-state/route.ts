@@ -99,11 +99,26 @@ export async function GET(
     syncInProgress: contract?.reviewInProgress ?? false,
   };
 
+  let activeScanProgress: { progress: number | null; progressMessage: string | null } | null =
+    null;
+  if (contract?.reviewInProgress && contract.activeReview?.scanId) {
+    const { data: scanRow } = await admin
+      .from("scans")
+      .select("progress, progress_message")
+      .eq("id", contract.activeReview.scanId)
+      .maybeSingle();
+    activeScanProgress = {
+      progress: (scanRow?.progress as number | null) ?? null,
+      progressMessage: (scanRow?.progress_message as string | null) ?? null,
+    };
+  }
+
   return NextResponse.json(
     {
       contract,
       state,
       githubSync,
+      activeScanProgress,
       analysisRunId: isolationEnabled ? analysisRunId : null,
     },
     {

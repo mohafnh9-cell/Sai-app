@@ -14,6 +14,10 @@ export type ProjectReviewUiContext = {
   githubConnected: boolean;
   githubNeedsReconnect: boolean;
   hasVerdict: boolean;
+  /** True when a completed analysis exists (verdict or completed scan), not verdict-only. */
+  hasCompletedAnalysis: boolean;
+  /** ISO timestamp for "Último análisis" — verdict time or latest completed scan. */
+  lastAnalysisAt: string | null;
   reviewedCommitSha: string | null;
   latestCommitSha: string | null;
   githubHeadSha: string | null;
@@ -33,9 +37,20 @@ export type ProjectReviewUiContext = {
   productionReviewState: ProductionReviewState;
 };
 
+type ReviewUiContextOptions = {
+  analysisRunId?: string | null;
+  analysisRuns?: Array<{
+    runId: string;
+    status: string;
+    completedAt: string | null;
+  }>;
+  scopedVerdictGeneratedAt?: string | null;
+};
+
 export async function getProjectReviewUiContext(
   supabase: SupabaseClient,
-  projectId: string
+  projectId: string,
+  options?: ReviewUiContextOptions
 ): Promise<ProjectReviewUiContext | null> {
   const { data: project } = await supabase
     .from("projects")
@@ -131,10 +146,33 @@ export async function getProjectReviewUiContext(
     hasActiveReview: productionReviewState.hasActiveReview,
   });
 
+  const runs = options?.analysisRuns ?? [];
+  const scopedRun = options?.analysisRunId
+    ? runs.find((run) => run.runId === options.analysisRunId)
+    : runs[0] ?? null;
+  const latestCompletedRun =
+    runs.find((run) => run.status === "completed") ??
+    (scopedRun?.status === "completed" ? scopedRun : null);
+
+  const hasCompletedAnalysis =
+    Boolean(currentVerdict) ||
+    productionReviewState.status === "completed" ||
+    runs.some((run) => run.status === "completed");
+
+  const lastAnalysisAt =
+    options?.scopedVerdictGeneratedAt ??
+    (scopedRun?.status === "completed" ? scopedRun.completedAt : null) ??
+    latestCompletedRun?.completedAt ??
+    productionReviewState.completedAt ??
+    currentVerdict?.generatedAt ??
+    null;
+
   return {
     githubConnected,
     githubNeedsReconnect,
     hasVerdict: Boolean(currentVerdict),
+    hasCompletedAnalysis,
+    lastAnalysisAt,
     reviewedCommitSha,
     latestCommitSha,
     githubHeadSha,

@@ -230,6 +230,14 @@ export async function processAttackRemediation(
       completedAt: new Date().toISOString(),
     });
 
+    const { reconcileAttackCampaignCompletion } = await import(
+      "../persistence/reconcile-campaign-completion"
+    );
+    await reconcileAttackCampaignCompletion(admin, {
+      campaignId: input.campaign.id,
+      organizationId: input.campaign.organizationId,
+    }).catch(() => undefined);
+
     return {
       ok: true,
       findingId: finding.id,
@@ -247,6 +255,14 @@ export async function processAttackRemediation(
     currentStage: executionStatus,
     completedAt: new Date().toISOString(),
   });
+
+  const { reconcileAttackCampaignCompletion } = await import(
+    "../persistence/reconcile-campaign-completion"
+  );
+  await reconcileAttackCampaignCompletion(admin, {
+    campaignId: input.campaign.id,
+    organizationId: input.campaign.organizationId,
+  }).catch(() => undefined);
 
   return {
     ok: true,

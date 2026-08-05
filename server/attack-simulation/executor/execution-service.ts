@@ -30,6 +30,7 @@ import {
 } from "../evidence/capture-buffer";
 import { persistAttackEvidenceFromRun } from "../evidence/persist-evidence";
 import { processAttackRemediation } from "../mitigation/process-remediation";
+import { reconcileAttackCampaignCompletion } from "../persistence/reconcile-campaign-completion";
 import { runAttackExecutionSteps } from "./run-execution-steps";
 import { resolveExecutionStageForStepKind } from "./step-stage-map";
 import type { AttackExecutionRunContext, AttackExecutionRunSignal } from "./types";
@@ -114,6 +115,10 @@ export async function executeAttackExecution(
   }
 
   if (TERMINAL_ATTACK_EXECUTION_STATUSES.has(execution.status)) {
+    await reconcileAttackCampaignCompletion(admin, {
+      campaignId: execution.campaignId,
+      organizationId: input.organizationId,
+    }).catch(() => undefined);
     return { ok: true, skipped: true, reason: "already_terminal", execution };
   }
 
@@ -414,12 +419,21 @@ export async function executeAttackExecution(
   }
 
   if (!runResult.ok) {
+    await reconcileAttackCampaignCompletion(admin, {
+      campaignId: campaign.id,
+      organizationId: campaign.organizationId,
+    }).catch(() => undefined);
     return {
       ok: false,
       failureCode: runResult.failureCode,
       safeFailureMessage: runResult.safeFailureMessage,
     };
   }
+
+  await reconcileAttackCampaignCompletion(admin, {
+    campaignId: campaign.id,
+    organizationId: campaign.organizationId,
+  }).catch(() => undefined);
 
   return {
     ok: true,

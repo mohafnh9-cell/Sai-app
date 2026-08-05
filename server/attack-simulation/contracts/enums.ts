@@ -133,6 +133,7 @@ export const TERMINAL_ATTACK_EXECUTION_STATUSES: ReadonlySet<AttackExecutionStat
   "blocked",
   "protected",
   "still_vulnerable",
+  "fix_ready",
   "completed",
   "failed",
   "cancelled",

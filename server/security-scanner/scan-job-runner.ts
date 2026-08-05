@@ -409,13 +409,16 @@ export class InlineScanJobRunner implements ScanJobRunner {
 
         try {
           await assertScanContinues(this.supabase, context.scanId);
-          await generateAndPersistProductionVerdict(this.supabase, {
+          const verdict = await generateAndPersistProductionVerdict(this.supabase, {
             organizationId: context.organizationId,
             projectId: context.repositoryId,
             scanId: context.scanId,
             scanJobId: context.scanJobId,
             securityDecisionReport,
           });
+          if (!verdict) {
+            throw new Error(`VERDICT_NOT_PERSISTED: scan=${context.scanId}`);
+          }
         } catch (error) {
           await this.updateScan(context.scanId, {
             status: "failed",

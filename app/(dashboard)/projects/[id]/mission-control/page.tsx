@@ -8,6 +8,7 @@ import { ProjectWorkflowNav } from "@/features/mission-control/components/Projec
 import { shouldShowSecurityTestNav } from "@/features/mission-control/lib/navigation";
 import { ProjectOnboardedBanner } from "@/features/projects/components/ProjectOnboardedBanner";
 import { loadMissionControlWithRecovery } from "@/server/mission-control/load-mission-control-with-recovery";
+import { buildMissionControlState } from "@/server/mission-control/build-mission-control-state";
 import { getCachedServerAuthContext } from "@/lib/server/request-cache";
 import { isFeatureEnabled } from "@/server/feature-flags";
 import { fixPromptContextFromScan } from "@/features/production-verdict/fix-prompt-context";
@@ -20,6 +21,7 @@ import { loadAnalysisRunFindingsForFixPrompt } from "@/server/analysis-runs/load
 import { listAnalysisRunsForProject } from "@/server/analysis-runs/list-analysis-runs";
 import { appendAnalysisRunSearchParams } from "@/features/analysis-runs/lib/build-run-query";
 import { AnalysisRunSelector } from "@/features/analysis-runs/components/AnalysisRunSelector";
+import type { MissionControlState } from "@/features/mission-control/types/mission-control-state";
 import type { SecurityTestContext } from "@/features/security-testing/types";
 import type { ProjectReviewUiContext } from "@/server/projects/review-ui-context";
 import type { Metadata } from "next";
@@ -179,20 +181,6 @@ export default async function MissionControlPage({ params, searchParams }: PageP
     }
   }
 
-  let reviewContext: ProjectReviewUiContext | null = null;
-  try {
-    reviewContext = await traceAwait("getProjectReviewUiContext", traceCtx, () =>
-      getProjectReviewUiContext(auth.supabase, projectId)
-    );
-  } catch (error) {
-    console.error({
-      component: "mission-control-page",
-      event: "review_context_failed",
-      projectId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
-
   const adminClient = tryCreateMissionControlAdminClient();
   const analysisRuns =
     isolationEnabled && adminClient
@@ -217,6 +205,24 @@ export default async function MissionControlPage({ params, searchParams }: PageP
   );
 
   const { view, verdict, runScoped, activeRunId, recoveryReason } = missionLoad;
+
+  let reviewContext: ProjectReviewUiContext | null = null;
+  try {
+    reviewContext = await traceAwait("getProjectReviewUiContext", traceCtx, () =>
+      getProjectReviewUiContext(auth.supabase, projectId, {
+        analysisRunId: isolationEnabled ? activeRunId : null,
+        analysisRuns,
+        scopedVerdictGeneratedAt: verdict?.generatedAt ?? null,
+      })
+    );
+  } catch (error) {
+    console.error({
+      component: "mission-control-page",
+      event: "review_context_failed",
+      projectId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 
   const findingsRunId = runScoped && activeRunId ? activeRunId : null;
 
@@ -302,21 +308,8 @@ export default async function MissionControlPage({ params, searchParams }: PageP
     }
   }
 
-  const { t } = await getTranslator("missionControl");
-  const { t: tp } = await getTranslator("projects");
-
-  const viewingHistoricalRun =
-    isolationEnabled &&
-    runScoped &&
-    activeRunId &&
-    reviewContext?.productionReviewState?.scanId &&
-    reviewContext.productionReviewState?.hasActiveReview &&
-    reviewContext.productionReviewState.scanId !== activeRunId;
-
-  const showSecurityTest = shouldShowSecurityTestNav({ attackCenterEnabled });
-
   const showProtectionStatus =
-    continuousProtectionEnabled && Boolean(verdict) && !viewingHistoricalRun;
+    continuousProtectionEnabled && Boolean(verdict) && !manualRecovery;
 
   const protectionCenter =
     showProtectionStatus && adminClient
@@ -324,6 +317,9 @@ export default async function MissionControlPage({ params, searchParams }: PageP
           getProtectionCenterModel(adminClient, projectId).catch(() => null)
         )
       : null;
+
+  const { t } = await getTranslator("missionControl");
+  const { t: tp } = await getTranslator("projects");
 
   const showRecoveryBanner =
     manualRecovery || recoveryReason === "scoped_verdict_missing" || recoveryReason === "manual_recovery";
@@ -333,27 +329,30 @@ export default async function MissionControlPage({ params, searchParams }: PageP
       ? "analysisRun.autoRecoveryBanner"
       : "analysisRun.recoveryBanner";
 
-  const rawExperienceProps = {
-    view,
-    verdict,
+  const missionControlState: MissionControlState = buildMissionControlState({
+    projectId,
     projectName: project.name,
     framework: project.framework ?? null,
-    fixPromptContext,
-    securityTestContext,
+    missionLoad,
+    analysisRuns,
     reviewContext,
-    analysisRunId: isolationEnabled && runScoped ? activeRunId : null,
-    runScoped,
-    analysisRunIsolationEnabled: isolationEnabled,
-    reportHref: latestReportHref,
-    openTechnicalDetails: query.technical === "open",
+    securityTestContext,
     protectionCenter,
-    showProtectionStatus,
-    isVerdictStale: Boolean(reviewContext?.isStale && !viewingHistoricalRun),
-    attackCenterEnabled,
-  };
+    fixPromptContext,
+    reportHref: latestReportHref,
+    flags: {
+      analysisRunIsolationEnabled: isolationEnabled,
+      attackCenterEnabled,
+      continuousProtectionEnabled,
+      manualRecovery,
+    },
+    ui: {
+      openTechnicalDetails: query.technical === "open",
+    },
+  });
 
-  const rscIssues = findNonSerializablePaths(rawExperienceProps, {
-    rootLabel: "experienceProps",
+  const rscIssues = findNonSerializablePaths(missionControlState, {
+    rootLabel: "missionControlState",
   });
   if (rscIssues.length > 0) {
     console.error({
@@ -366,7 +365,7 @@ export default async function MissionControlPage({ params, searchParams }: PageP
     });
   }
 
-  const experienceProps = toRscSafe(rawExperienceProps);
+  const safeMissionControlState = toRscSafe(missionControlState) as MissionControlState;
 
   missionControlTrace("MissionControlPage", "END", {
     ...traceCtx,
@@ -376,6 +375,8 @@ export default async function MissionControlPage({ params, searchParams }: PageP
     hasVerdict: Boolean(verdict),
     rscIssueCount: rscIssues.length,
   });
+
+  const showSecurityTest = shouldShowSecurityTestNav({ attackCenterEnabled });
 
   return (
     <div className="app-cinematic-bg min-h-full">
@@ -392,7 +393,7 @@ export default async function MissionControlPage({ params, searchParams }: PageP
           showSecurityTest={showSecurityTest}
         />
 
-        {viewingHistoricalRun ? (
+        {missionControlState.ui.viewingHistoricalRun ? (
           <div
             className="rounded-2xl border border-border/60 bg-muted/20 px-5 py-4 text-sm text-muted-foreground mb-8"
             role="status"
@@ -434,7 +435,7 @@ export default async function MissionControlPage({ params, searchParams }: PageP
           </div>
         ) : null}
 
-        {reviewContext?.isStale && !viewingHistoricalRun ? (
+        {missionControlState.ui.isVerdictStale && !missionControlState.ui.viewingHistoricalRun ? (
           <div
             className="rounded-2xl border border-brand-warning/30 bg-brand-warning/5 px-5 py-4 text-sm text-foreground/90 mb-8"
             role="alert"
@@ -443,7 +444,7 @@ export default async function MissionControlPage({ params, searchParams }: PageP
           </div>
         ) : null}
 
-        <MissionControlExperience {...experienceProps} />
+        <MissionControlExperience initialState={safeMissionControlState} />
       </div>
     </div>
   );

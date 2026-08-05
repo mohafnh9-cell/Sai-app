@@ -288,7 +288,18 @@ export async function generateAndPersistProductionVerdict(
   if (verdictReused) {
     log("verdict_insert_skipped_immutable", { scanId: input.scanId });
     const existing = await getProductionVerdictByScan(admin, input.scanId);
+    if (!existing) {
+      throw new Error(
+        `VERDICT_INSERT_REUSED_WITHOUT_ROW: scan=${input.scanId} project=${input.projectId}`
+      );
+    }
     return existing;
+  }
+
+  if (!persisted?.id) {
+    throw new Error(
+      `VERDICT_PERSISTENCE_EMPTY: scan=${input.scanId} project=${input.projectId}`
+    );
   }
 
   await recordSideEffect(admin, {

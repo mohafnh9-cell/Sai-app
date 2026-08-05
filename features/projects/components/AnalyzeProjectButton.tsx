@@ -1,9 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { analysisRunKeys } from "@/features/analysis-runs/lib/query-keys";
+import { appendAnalysisRunSearchParams } from "@/features/analysis-runs/lib/build-run-query";
 import { Button } from "@/components/ui/button";
 import { startGitHubOAuth } from "@/lib/github/oauth-client";
 import { trackEvent } from "@/lib/analytics/track";
@@ -90,6 +92,7 @@ export function AnalyzeProjectButton({
   size = "default",
   labelOverride,
   analysisRunIsolationEnabled = false,
+  analysisRunId = null,
   buttonVariant = "default",
 }: {
   projectId: string;
@@ -99,8 +102,10 @@ export function AnalyzeProjectButton({
   size?: "default" | "sm" | "lg";
   labelOverride?: string;
   analysisRunIsolationEnabled?: boolean;
+  analysisRunId?: string | null;
   buttonVariant?: "default" | "scanCard";
 }) {
+  const router = useRouter();
   const { t } = useI18n("projects");
   const { t: tm } = useI18n("missionControl");
   const { t: te } = useI18n("errors");
@@ -120,12 +125,19 @@ export function AnalyzeProjectButton({
   const disconnected = context.githubNeedsReconnect || !context.githubConnected;
 
   const syncReviewState = useCallback(async () => {
-    const response = await fetch(`/api/projects/${projectId}/production-review-state`, {
-      cache: "no-store",
-    });
+    const params = new URLSearchParams();
+    if (analysisRunIsolationEnabled) {
+      appendAnalysisRunSearchParams(params, analysisRunId);
+    }
+    const qs = params.toString();
+    const response = await fetch(
+      `/api/projects/${projectId}/production-review-state${qs ? `?${qs}` : ""}`,
+      { cache: "no-store" }
+    );
     const body = (await response.json().catch(() => null)) as {
       state?: ProductionReviewState;
       contract?: ProductionReviewUiContract | null;
+      activeScanProgress?: { progress: number | null; progressMessage: string | null } | null;
       githubSync?: {
         githubHeadSha: string | null;
         analyzedCommitSha: string | null;
@@ -139,6 +151,7 @@ export function AnalyzeProjectButton({
     const state = body.state;
     const contract = body.contract ?? null;
     const githubSync = body.githubSync;
+    const activeScanProgress = body.activeScanProgress ?? null;
     const inProgress = contract?.reviewInProgress ?? false;
     setReviewInProgress(inProgress);
     setReviewState({
@@ -147,7 +160,11 @@ export function AnalyzeProjectButton({
       isCancellable: contract?.canCancelReview ?? state.isCancellable,
       scanJobId: contract?.activeReview?.scanJobId ?? state.scanJobId,
       commitSha: contract?.activeReview?.commitSha ?? state.commitSha,
-      status: inProgress ? state.status : state.hasActiveReview ? "idle" : state.status,
+      status: inProgress
+        ? state.status
+        : ["completed", "failed", "cancelled", "stale"].includes(state.status)
+          ? state.status
+          : state.status,
     });
     if (githubSync) {
       setContext((prev) => ({
@@ -160,6 +177,12 @@ export function AnalyzeProjectButton({
           contract?.latestCompletedReview?.commitSha ??
           githubSync.analyzedCommitSha ??
           prev.reviewedCommitSha,
+        hasCompletedAnalysis:
+          Boolean(contract?.latestCompletedReview) ||
+          prev.hasCompletedAnalysis ||
+          (!inProgress && state.status === "completed"),
+        lastAnalysisAt:
+          contract?.latestCompletedReview?.completedAt ?? prev.lastAnalysisAt,
         isStale:
           Boolean(githubSync.githubHeadSha) &&
           Boolean(
@@ -174,8 +197,8 @@ export function AnalyzeProjectButton({
                 scanJobId: contract.activeReview.scanJobId,
                 scanJobStatus: null,
                 status: contract.activeReview.status,
-                progress: null,
-                progressMessage: null,
+                progress: activeScanProgress?.progress ?? null,
+                progressMessage: activeScanProgress?.progressMessage ?? null,
                 commitSha: contract.activeReview.commitSha,
               }
             : null,
@@ -184,7 +207,7 @@ export function AnalyzeProjectButton({
       setContext((prev) => ({ ...prev, activeScan: null }));
     }
     return state;
-  }, [projectId]);
+  }, [analysisRunId, analysisRunIsolationEnabled, projectId]);
 
   const reconnectGitHub = useCallback(async () => {
     localStorage.setItem(scanRetryKey(projectId), "1");
@@ -204,7 +227,7 @@ export function AnalyzeProjectButton({
           uiStatus,
           requesting,
           reviewInProgress,
-          hasVerdict: context.hasVerdict,
+          hasCompletedAnalysis: context.hasCompletedAnalysis,
         })
       : null;
 
@@ -321,7 +344,10 @@ export function AnalyzeProjectButton({
         if (analysisRunIsolationEnabled) {
           void queryClient.invalidateQueries({ queryKey: analysisRunKeys.list(projectId) });
         }
+        void syncReviewState();
         if (navigateMissionControlToRun(projectId, resolvedScanId)) return;
+        router.refresh();
+        return;
       }
 
       if (!response.ok || !resolvedScanId) {
@@ -357,9 +383,16 @@ export function AnalyzeProjectButton({
     t,
     te,
     uiStatus,
+    analysisRunId,
     analysisRunIsolationEnabled,
     queryClient,
+    router,
   ]);
+
+  useEffect(() => {
+    setContext(initialContext);
+    setReviewState(initialContext.productionReviewState ?? IDLE_STATE);
+  }, [initialContext]);
 
   useEffect(() => {
     queueMicrotask(() => void syncReviewState());
@@ -386,13 +419,24 @@ export function AnalyzeProjectButton({
         url.searchParams.set("run", reviewState.scanId);
         window.history.replaceState({}, "", url.pathname + url.search);
       }
+      void queryClient.invalidateQueries({ queryKey: analysisRunKeys.list(projectId) });
+      router.refresh();
       return;
     }
 
     window.location.assign(
       `/projects/${projectId}/mission-control?reviewComplete=1&run=${reviewState.scanId}`
     );
-  }, [projectId, reviewState.scanId, reviewState.status]);
+  }, [projectId, queryClient, reviewState.scanId, reviewState.status, router]);
+
+  const scanProgressLabel = useMemo(() => {
+    if (buttonVariant !== "scanCard" || !reviewInProgress) return null;
+    const message = context.activeScan?.progressMessage;
+    const progress = context.activeScan?.progress;
+    if (message) return message;
+    if (progress != null) return `${progress}%`;
+    return null;
+  }, [buttonVariant, context.activeScan, reviewInProgress]);
 
   useEffect(() => {
     const pending = localStorage.getItem(scanRetryKey(projectId));
@@ -501,6 +545,11 @@ export function AnalyzeProjectButton({
         {showSpinner ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
         {label}
       </Button>
+      {scanProgressLabel ? (
+        <p className="mt-2 text-xs text-muted-foreground" role="status">
+          {scanProgressLabel}
+        </p>
+      ) : null}
       {showCancel && reviewState.scanId && reviewState.scanJobId ? (
         <CancelReviewButton
           projectId={projectId}

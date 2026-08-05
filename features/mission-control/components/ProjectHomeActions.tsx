@@ -1,12 +1,8 @@
 "use client";
 
-import Link from "next/link";
-import { ScanSearch, Shield, Sparkles } from "lucide-react";
-import type { ProductionVerdictV1 } from "@/brain/production-verdict/schema";
+import { Loader2, ScanSearch, Shield, Sparkles } from "lucide-react";
 import { VerdictStatusBadge } from "@/features/production-verdict/components/VerdictStatusBadge";
-import { AnalyzeProjectButton } from "@/features/projects/components/AnalyzeProjectButton";
-import type { ProjectReviewUiContext } from "@/server/projects/review-ui-context";
-import { withAnalysisRunQuery } from "@/features/analysis-runs/lib/build-run-query";
+import type { MissionControlState } from "@/features/mission-control/types/mission-control-state";
 import { useI18n } from "@/lib/i18n/client";
 import { formatRelativeLocalized } from "@/lib/i18n/format";
 import { Button } from "@/components/ui/button";
@@ -39,29 +35,36 @@ function ActionCard({
   );
 }
 
+const SCAN_LABEL_KEYS = {
+  cta: "projectHome.scanCode.cta",
+  running: "projectHome.scanCode.running",
+  rescan: "projectHome.scanCode.rescan",
+  retry: "projectHome.scanCode.retry",
+} as const;
+
+const SECURITY_LABEL_KEYS = {
+  cta: "projectHome.testSecurity.cta",
+  running: "projectHome.testSecurity.running",
+} as const;
+
 export function ProjectHomeActions({
-  projectId,
-  reviewContext,
-  verdict,
-  analysisRunId,
-  attackCenterEnabled,
-  attackCenterHref,
-  analysisRunIsolationEnabled = false,
+  state,
+  scanAction,
+  securityAction,
+  actionError,
+  onStartScan,
+  onStartSecurityTest,
 }: {
-  projectId: string;
-  reviewContext: ProjectReviewUiContext | null;
-  verdict: ProductionVerdictV1 | null;
-  analysisRunId?: string | null;
-  attackCenterEnabled: boolean;
-  attackCenterHref?: string | null;
-  analysisRunIsolationEnabled?: boolean;
+  state: MissionControlState;
+  scanAction: MissionControlState["actions"]["scan"] & { label: MissionControlState["actions"]["scan"]["label"] };
+  securityAction: MissionControlState["actions"]["security"] & { label: MissionControlState["actions"]["security"]["label"] };
+  actionError: string | null;
+  onStartScan: () => void;
+  onStartSecurityTest: () => void;
 }) {
   const { t, locale } = useI18n("missionControl");
   const { t: tc } = useI18n("common");
-
-  const securityHref =
-    attackCenterHref ??
-    withAnalysisRunQuery(`/projects/${projectId}/attack-center`, analysisRunId ?? null);
+  const verdict = state.productionVerdict;
 
   const relativeLabels = {
     never: tc("never"),
@@ -71,8 +74,8 @@ export function ProjectHomeActions({
     daysAgo: tc("daysAgo"),
   };
 
-  const lastAnalysisLabel = verdict?.generatedAt
-    ? formatRelativeLocalized(locale, verdict.generatedAt, relativeLabels)
+  const lastAnalysisLabel = state.status.lastAnalysisAt
+    ? formatRelativeLocalized(locale, state.status.lastAnalysisAt, relativeLabels)
     : t("projectHome.lastAnalysisNever");
 
   const topBlocker = verdict?.topPriorities?.[0] ?? null;
@@ -82,7 +85,7 @@ export function ProjectHomeActions({
     <section className="space-y-6 mb-10" aria-labelledby="project-home-heading">
       <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
         <p id="project-home-heading" className="text-muted-foreground">
-          {reviewContext?.githubConnected
+          {state.status.repositoryConnected
             ? t("projectHome.repositoryConnected")
             : t("projectHome.repositoryNotConnected")}
         </p>
@@ -98,35 +101,60 @@ export function ProjectHomeActions({
           title={t("projectHome.scanCode.title")}
           description={t("projectHome.scanCode.description")}
         >
-          {reviewContext ? (
-            <AnalyzeProjectButton
-              projectId={projectId}
-              initialContext={reviewContext}
-              analysisRunIsolationEnabled={analysisRunIsolationEnabled}
-              buttonVariant="scanCard"
-              showCommitHint={false}
-              size="default"
-              className="w-full [&_button]:w-full [&_button]:h-11 [&_button]:rounded-full"
-            />
-          ) : (
-            <Button className="w-full h-11 rounded-full" disabled>
-              {t("projectHome.scanCode.cta")}
+          <div className="w-full [&_button]:w-full [&_button]:h-11 [&_button]:rounded-full">
+            <Button
+              type="button"
+              className="w-full h-11 rounded-full"
+              disabled={scanAction.disabled}
+              aria-busy={scanAction.showSpinner}
+              variant={scanAction.label === "retry" ? "destructive" : "default"}
+              onClick={onStartScan}
+            >
+              {scanAction.showSpinner ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+              ) : null}
+              {t(SCAN_LABEL_KEYS[scanAction.label])}
             </Button>
-          )}
+            {state.status.reviewInProgress && state.status.progressMessage ? (
+              <p className="mt-2 text-xs text-muted-foreground" role="status">
+                {state.status.progressMessage}
+              </p>
+            ) : state.status.reviewInProgress && state.status.progress != null ? (
+              <p className="mt-2 text-xs text-muted-foreground" role="status">
+                {state.status.progress}%
+              </p>
+            ) : null}
+          </div>
         </ActionCard>
 
-        {attackCenterEnabled ? (
+        {state.flags.attackCenterEnabled ? (
           <ActionCard
             icon={<Shield className="h-5 w-5" aria-hidden />}
             title={t("projectHome.testSecurity.title")}
             description={t("projectHome.testSecurity.description")}
           >
-            <Button asChild className="w-full h-11 rounded-full" variant="secondary">
-              <Link href={securityHref}>{t("projectHome.testSecurity.cta")}</Link>
+            <Button
+              type="button"
+              className="w-full h-11 rounded-full"
+              variant="secondary"
+              disabled={securityAction.disabled}
+              aria-busy={securityAction.showSpinner}
+              onClick={onStartSecurityTest}
+            >
+              {securityAction.showSpinner ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+              ) : null}
+              {t(SECURITY_LABEL_KEYS[securityAction.label])}
             </Button>
           </ActionCard>
         ) : null}
       </div>
+
+      {actionError ? (
+        <p className="text-xs text-destructive" role="alert">
+          {actionError}
+        </p>
+      ) : null}
 
       {verdict ? (
         <article

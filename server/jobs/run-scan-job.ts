@@ -26,6 +26,7 @@ import {
   appendScanJobExecutionTrace,
   logScanExecutionTrace,
 } from "./scan-execution/scan-execution-trace";
+import { ensureProductionVerdictForCompletedScan } from "@/server/production-verdict/ensure-verdict-for-scan";
 
 function log(level: "info" | "error", event: string, fields: Record<string, unknown>) {
   const payload = { component: "run-scan-job", event, ...fields };
@@ -332,6 +333,15 @@ export async function executeScanRunJob(
     organizationId: payload.organizationId,
     projectId: payload.projectId,
   });
+
+  if (payload.persistMode !== "review_only") {
+    await ensureProductionVerdictForCompletedScan(admin, {
+      organizationId: payload.organizationId,
+      projectId: payload.projectId,
+      scanId: payload.scanId,
+      scanJobId: payload.scanJobId,
+    });
+  }
 
   await appendScanJobExecutionTrace(admin, payload.scanJobId, {
     stage: "verdict_persisted",

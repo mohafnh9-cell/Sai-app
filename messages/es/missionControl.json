@@ -22,14 +22,15 @@
       "title": "Escanear código",
       "description": "Analiza el repositorio y genera un nuevo Production Verdict.",
       "cta": "Escanear código",
-      "running": "Ya hay un análisis en curso",
+      "running": "Analizando...",
       "rescan": "Volver a escanear",
       "retry": "Reintentar análisis"
     },
     "testSecurity": {
       "title": "Probar seguridad",
       "description": "Simula ataques reales contra tu aplicación.",
-      "cta": "Probar seguridad"
+      "cta": "Probar seguridad",
+      "running": "Probando seguridad..."
     },
     "aiFix": {
       "title": "Corregir con IA",

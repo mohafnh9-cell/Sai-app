@@ -22,14 +22,15 @@
       "title": "Scan code",
       "description": "Analyze the repository and generate a new Production Verdict.",
       "cta": "Scan code",
-      "running": "An analysis is already in progress",
+      "running": "Analyzing...",
       "rescan": "Scan again",
       "retry": "Retry scan"
     },
     "testSecurity": {
       "title": "Test security",
       "description": "Simulate real attacks against your application.",
-      "cta": "Test security"
+      "cta": "Test security",
+      "running": "Testing security..."
     },
     "aiFix": {
       "title": "Fix with AI",

@@ -1,15 +1,9 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useMemo } from "react";
 import { formatLocalizedDate } from "@/lib/i18n/format";
-import type { MissionControlView } from "../types";
-import type { ProductionVerdictV1 } from "@/brain/production-verdict/schema";
-import type { FixPromptContext } from "@/features/production-verdict/fix-prompt-context";
-import type { SecurityTestContext } from "@/features/security-testing/types";
-import type { ProjectReviewUiContext } from "@/server/projects/review-ui-context";
-import { useSecurityTestContext } from "@/features/analysis-runs/hooks/useSecurityTestContext";
-import { TERMINAL_DISPLAY_PHASES } from "@/features/security-testing/lib/derive-phase";
+import type { MissionControlState } from "@/features/mission-control/types/mission-control-state";
+import { useMissionControlState } from "@/features/mission-control/hooks/useMissionControlState";
 import { useI18n } from "@/lib/i18n/client";
 import { DeploymentBlockersList } from "./production-readiness/DeploymentBlockersList";
 import { ProjectHomeActions } from "./ProjectHomeActions";
@@ -22,114 +16,47 @@ import { SafeFixHeroCard } from "@/features/production-verdict/components/SafeFi
 import { fixPromptInputFromPriority, findingsByIdMap } from "@/brain/fix-prompt";
 import { MissionControlTechnicalDetails } from "./MissionControlTechnicalDetails";
 import { MissionControlProtectionStatus } from "./MissionControlProtectionStatus";
-import type { ProtectionCenterSnapshot } from "@/features/continuous-protection/types";
 
 export function MissionControlExperience({
-  view,
-  verdict,
-  projectName,
-  framework,
-  fixPromptContext,
-  securityTestContext = null,
-  reviewContext = null,
-  analysisRunId = null,
-  runScoped = false,
-  analysisRunIsolationEnabled = false,
-  reportHref,
-  openTechnicalDetails = false,
-  protectionCenter = null,
-  showProtectionStatus = false,
-  isVerdictStale = false,
-  attackCenterEnabled = false,
+  initialState,
 }: {
-  view: MissionControlView;
-  verdict: ProductionVerdictV1 | null;
-  projectName: string;
-  framework?: string | null;
-  fixPromptContext?: FixPromptContext;
-  securityTestContext?: SecurityTestContext | null;
-  reviewContext?: ProjectReviewUiContext | null;
-  analysisRunId?: string | null;
-  runScoped?: boolean;
-  analysisRunIsolationEnabled?: boolean;
-  reportHref?: string;
-  openTechnicalDetails?: boolean;
-  protectionCenter?: ProtectionCenterSnapshot | null;
-  showProtectionStatus?: boolean;
-  isVerdictStale?: boolean;
-  attackCenterEnabled?: boolean;
+  initialState: MissionControlState;
 }) {
-  const router = useRouter();
   const { t, locale } = useI18n("missionControl");
-  const guidedFlowActive = Boolean(securityTestContext && reviewContext);
-
-  const { data: liveSecurityTestContext } = useSecurityTestContext(view.projectId, {
-    analysisRunId: runScoped ? analysisRunId : null,
-    initialData: securityTestContext ?? undefined,
-    enabled: runScoped && Boolean(securityTestContext),
+  const {
+    state,
+    scanAction,
+    securityAction,
+    actionError,
+    startScan,
+    startSecurityTest,
+  } = useMissionControlState(initialState.projectId, {
+    initialState,
+    analysisRunId: initialState.analysisRunId,
   });
 
-  const activeSecurityTestContext = runScoped
-    ? (liveSecurityTestContext ?? securityTestContext)
-    : securityTestContext;
-
-  const phase = activeSecurityTestContext?.phase ?? "needs_review";
-  const displayPhase =
-    runScoped || !activeSecurityTestContext
-      ? phase
-      : phase === "preparing" && verdict
-        ? "ready"
-        : phase;
-
-  const reviewInProgress = Boolean(
-    reviewContext?.productionReviewState?.hasActiveReview ||
-      activeSecurityTestContext?.reviewInProgress
-  );
-
-  useEffect(() => {
-    if (runScoped || !guidedFlowActive) return;
-    if (displayPhase === "ready") return;
-    if (verdict && !reviewContext?.productionReviewState?.hasActiveReview) return;
-    if (phase === "preparing" && verdict) return;
-    const shouldPoll =
-      activeSecurityTestContext?.reviewInProgress ||
-      displayPhase === "preparing" ||
-      displayPhase === "running" ||
-      displayPhase === "issues_found" ||
-      displayPhase === "fix_ready";
-    if (!shouldPoll || TERMINAL_DISPLAY_PHASES.has(displayPhase)) return;
-    const timer = window.setInterval(() => router.refresh(), 5000);
-    return () => window.clearInterval(timer);
-  }, [
-    activeSecurityTestContext?.reviewInProgress,
-    displayPhase,
-    guidedFlowActive,
-    phase,
-    reviewContext?.productionReviewState?.hasActiveReview,
-    router,
-    runScoped,
-    verdict,
-  ]);
+  const verdict = state.productionVerdict;
+  const securityPhase = state.securityTestContext?.phase ?? "needs_review";
 
   const primaryActionKind = derivePrimaryActionKind({
     verdict,
-    displayPhase,
-    reviewInProgress,
+    displayPhase: securityPhase,
+    reviewInProgress: state.status.reviewInProgress,
   });
 
   const topPriority = verdict?.topPriorities?.[0] ?? null;
   const safeFixPromptInput = useMemo(() => {
     if (!topPriority || !verdict || verdict.status === "ready_to_ship") return null;
     return fixPromptInputFromPriority(topPriority, {
-      projectName,
-      stack: fixPromptContext?.stack,
-      findingsById: fixPromptContext?.findings
-        ? findingsByIdMap(fixPromptContext.findings)
+      projectName: state.projectName,
+      stack: state.ui.fixPromptContext?.stack,
+      findingsById: state.ui.fixPromptContext?.findings
+        ? findingsByIdMap(state.ui.fixPromptContext.findings)
         : undefined,
       currentVerdictStatus: verdict.status,
       currentScore: verdict.score,
     });
-  }, [fixPromptContext, projectName, topPriority, verdict]);
+  }, [state.projectName, state.ui.fixPromptContext, topPriority, verdict]);
 
   const showSafeFixCard =
     primaryActionKind === "copy_safe_fix" && topPriority && safeFixPromptInput;
@@ -140,16 +67,15 @@ export function MissionControlExperience({
   return (
     <div className="space-y-10 max-w-2xl mx-auto">
       <ProjectHomeActions
-        projectId={view.projectId}
-        reviewContext={reviewContext}
-        verdict={verdict}
-        analysisRunId={analysisRunId}
-        attackCenterEnabled={attackCenterEnabled}
-        attackCenterHref={activeSecurityTestContext?.attackCenterHref}
-        analysisRunIsolationEnabled={analysisRunIsolationEnabled}
+        state={state}
+        scanAction={scanAction}
+        securityAction={securityAction}
+        actionError={actionError}
+        onStartScan={() => void startScan()}
+        onStartSecurityTest={() => void startSecurityTest()}
       />
 
-      {reviewInProgress && !verdict && reviewContext ? (
+      {state.status.reviewInProgress && !verdict ? (
         <div
           className="rounded-2xl border border-border/60 bg-muted/20 px-5 py-4 text-sm text-muted-foreground text-center"
           role="status"
@@ -162,9 +88,7 @@ export function MissionControlExperience({
         <>
           <MissionControlHero verdict={verdict} />
 
-          {showBlockers ? (
-            <DeploymentBlockersList blockers={blockers} />
-          ) : null}
+          {showBlockers ? <DeploymentBlockersList blockers={blockers} /> : null}
 
           {showSafeFixCard ? (
             <SafeFixHeroCard
@@ -180,37 +104,37 @@ export function MissionControlExperience({
           <MissionControlPrimaryAction
             kind={showSafeFixCard ? "none" : primaryActionKind}
             verdict={verdict}
-            projectId={view.projectId}
-            projectName={projectName}
-            fixPromptContext={fixPromptContext}
-            reviewContext={reviewContext}
-            reportHref={reportHref}
-            attackCenterHref={activeSecurityTestContext?.attackCenterHref}
-            analysisRunIsolationEnabled={analysisRunIsolationEnabled}
+            projectId={state.projectId}
+            projectName={state.projectName}
+            fixPromptContext={state.ui.fixPromptContext}
+            reviewContext={state.reviewContext}
+            reportHref={state.ui.reportHref}
+            attackCenterHref={state.ui.attackCenterHref}
+            analysisRunIsolationEnabled={state.flags.analysisRunIsolationEnabled}
           />
 
-          {showProtectionStatus && (
+          {state.ui.showProtectionStatus && (
             <MissionControlProtectionStatus
-              projectId={view.projectId}
-              initialData={protectionCenter}
-              enabled={showProtectionStatus}
+              projectId={state.projectId}
+              initialData={state.protectionCenter}
+              enabled={state.ui.showProtectionStatus}
             />
           )}
 
           <MissionControlTechnicalDetails
-            view={view}
+            view={state.view}
             verdict={verdict}
-            framework={framework}
-            reportHref={reportHref}
-            openByDefault={openTechnicalDetails}
+            framework={state.framework}
+            reportHref={state.ui.reportHref}
+            openByDefault={state.ui.openTechnicalDetails}
           />
         </>
       ) : null}
 
-      {view.cancelledReview ? (
+      {state.view.cancelledReview ? (
         <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
           <p className="font-medium text-foreground">{t("feed.reviewStopped")}</p>
-          <p className="mt-1">{formatLocalizedDate(locale, view.cancelledReview.cancelledAt)}</p>
+          <p className="mt-1">{formatLocalizedDate(locale, state.view.cancelledReview.cancelledAt)}</p>
         </div>
       ) : null}
     </div>
