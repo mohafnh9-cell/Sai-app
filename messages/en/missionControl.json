@@ -21,7 +21,10 @@
     "scanCode": {
       "title": "Scan code",
       "description": "Analyze the repository and generate a new Production Verdict.",
-      "cta": "Scan code"
+      "cta": "Scan code",
+      "running": "Analyzing…",
+      "rescan": "Scan again",
+      "retry": "Retry scan"
     },
     "testSecurity": {
       "title": "Test security",

@@ -21,7 +21,10 @@
     "scanCode": {
       "title": "Escanear código",
       "description": "Analiza el repositorio y genera un nuevo Production Verdict.",
-      "cta": "Escanear código"
+      "cta": "Escanear código",
+      "running": "Analizando…",
+      "rescan": "Volver a escanear",
+      "retry": "Reintentar análisis"
     },
     "testSecurity": {
       "title": "Probar seguridad",

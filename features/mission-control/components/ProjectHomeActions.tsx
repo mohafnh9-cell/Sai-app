@@ -47,7 +47,6 @@ export function ProjectHomeActions({
   attackCenterEnabled,
   attackCenterHref,
   analysisRunIsolationEnabled = false,
-  reviewInProgress = false,
 }: {
   projectId: string;
   reviewContext: ProjectReviewUiContext | null;
@@ -56,7 +55,6 @@ export function ProjectHomeActions({
   attackCenterEnabled: boolean;
   attackCenterHref?: string | null;
   analysisRunIsolationEnabled?: boolean;
-  reviewInProgress?: boolean;
 }) {
   const { t, locale } = useI18n("missionControl");
   const { t: tc } = useI18n("common");
@@ -105,9 +103,10 @@ export function ProjectHomeActions({
               projectId={projectId}
               initialContext={reviewContext}
               analysisRunIsolationEnabled={analysisRunIsolationEnabled}
+              buttonVariant="scanCard"
+              showCommitHint={false}
               size="default"
-              className="w-full h-11 rounded-full"
-              labelOverride={t("projectHome.scanCode.cta")}
+              className="w-full [&_button]:w-full [&_button]:h-11 [&_button]:rounded-full"
             />
           ) : (
             <Button className="w-full h-11 rounded-full" disabled>
@@ -166,16 +165,6 @@ export function ProjectHomeActions({
             <Button asChild variant="outline" className="rounded-full">
               <a href="#production-verdict-detail">{t("projectHome.verdictSummary.viewVerdict")}</a>
             </Button>
-            {verdict.status === "ready_to_ship" && reviewContext ? (
-              <AnalyzeProjectButton
-                projectId={projectId}
-                initialContext={reviewContext}
-                analysisRunIsolationEnabled={analysisRunIsolationEnabled}
-                size="default"
-                className="rounded-full"
-                labelOverride={t("projectHome.verdictSummary.scanAgain")}
-              />
-            ) : null}
           </div>
         </article>
       ) : null}

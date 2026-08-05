@@ -14,6 +14,11 @@ import {
   type ProductionReviewState,
   type ProductionReviewUiStatus,
 } from "@/lib/review/production-review-state";
+import {
+  deriveScanCodeButtonState,
+  scanCodeButtonDisabled,
+  scanCodeButtonLabelKey,
+} from "@/lib/review/scan-code-button-state";
 import { CancelReviewButton } from "@/features/projects/components/CancelReviewButton";
 import type { ProjectReviewUiContext } from "@/server/projects/review-ui-context";
 import type { ProductionReviewUiContract } from "@/server/projects/build-production-review-ui-contract";
@@ -85,6 +90,7 @@ export function AnalyzeProjectButton({
   size = "default",
   labelOverride,
   analysisRunIsolationEnabled = false,
+  buttonVariant = "default",
 }: {
   projectId: string;
   initialContext: ProjectReviewUiContext;
@@ -93,8 +99,10 @@ export function AnalyzeProjectButton({
   size?: "default" | "sm" | "lg";
   labelOverride?: string;
   analysisRunIsolationEnabled?: boolean;
+  buttonVariant?: "default" | "scanCard";
 }) {
   const { t } = useI18n("projects");
+  const { t: tm } = useI18n("missionControl");
   const { t: te } = useI18n("errors");
   const queryClient = useQueryClient();
   const [context, setContext] = useState(initialContext);
@@ -190,7 +198,21 @@ export function AnalyzeProjectButton({
     return reviewState.status;
   }, [cancelInFlight, disconnected, requesting, reviewState.status]);
 
+  const scanCardState =
+    buttonVariant === "scanCard"
+      ? deriveScanCodeButtonState({
+          uiStatus,
+          requesting,
+          reviewInProgress,
+          hasVerdict: context.hasVerdict,
+        })
+      : null;
+
   const label = useMemo(() => {
+    if (scanCardState) {
+      if (disconnected) return t("reconnectGitHub");
+      return tm(scanCodeButtonLabelKey(scanCardState));
+    }
     if (labelOverride && (uiStatus === "idle" || uiStatus === "queued" || uiStatus === "running" || uiStatus === "analyzing")) {
       if (disconnected) return t("reconnectGitHub");
       if (requesting && !reviewInProgress) return t("startingReview");
@@ -203,9 +225,10 @@ export function AnalyzeProjectButton({
     if (context.hasVerdict && uiStatus === "idle") return t("analyzeAgain");
     if (uiStatus === "idle" && !context.hasVerdict) return t("analyzeProject");
     return t(statusLabelKey(uiStatus));
-  }, [context.hasVerdict, context.isStale, disconnected, labelOverride, requesting, reviewInProgress, t, uiStatus]);
+  }, [context.hasVerdict, context.isStale, disconnected, labelOverride, requesting, reviewInProgress, scanCardState, t, tm, uiStatus]);
 
   const showSpinner =
+    scanCardState === "running" ||
     (reviewInProgress &&
       productionReviewHasActiveWork(reviewState.status, true)) ||
     (cancelInFlight && productionReviewShowsSpinner("cancelling"));
@@ -220,9 +243,14 @@ export function AnalyzeProjectButton({
   const primaryDisabled =
     disconnected
       ? false
-      : requesting ||
-        reviewInProgress ||
-        (reviewState.hasActiveReview && uiStatus !== "cancelled" && uiStatus !== "failed");
+      : scanCardState
+        ? scanCodeButtonDisabled(scanCardState)
+        : requesting ||
+          reviewInProgress ||
+          (reviewState.hasActiveReview &&
+            uiStatus !== "cancelled" &&
+            uiStatus !== "failed" &&
+            uiStatus !== "completed");
 
   const requestReview = useCallback(async () => {
     if (requestedRef.current || requesting) return;
@@ -231,6 +259,15 @@ export function AnalyzeProjectButton({
       return;
     }
     if (reviewInProgress) return;
+    if (
+      buttonVariant !== "scanCard" &&
+      reviewState.hasActiveReview &&
+      uiStatus !== "cancelled" &&
+      uiStatus !== "failed" &&
+      uiStatus !== "completed"
+    ) {
+      return;
+    }
 
     requestedRef.current = true;
     setRequesting(true);
@@ -308,15 +345,20 @@ export function AnalyzeProjectButton({
       requestedRef.current = false;
     }
   }, [
+    buttonVariant,
     context.hasVerdict,
     disconnected,
     projectId,
     reconnectGitHub,
     requesting,
     reviewInProgress,
+    reviewState.hasActiveReview,
     syncReviewState,
     t,
     te,
+    uiStatus,
+    analysisRunIsolationEnabled,
+    queryClient,
   ]);
 
   useEffect(() => {
@@ -443,12 +485,17 @@ export function AnalyzeProjectButton({
   }, [reviewState.failureMessage, t, uiStatus]);
 
   return (
-    <div className={className}>
+    <div className={buttonVariant === "scanCard" ? undefined : className}>
       <Button
         onClick={() => void requestReview()}
         disabled={primaryDisabled}
         size={size}
-        variant={uiStatus === "failed" || uiStatus === "stale" ? "destructive" : "default"}
+        variant={
+          scanCardState === "failed" || uiStatus === "failed" || uiStatus === "stale"
+            ? "destructive"
+            : "default"
+        }
+        className={buttonVariant === "scanCard" ? className : undefined}
         aria-busy={showSpinner}
       >
         {showSpinner ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
