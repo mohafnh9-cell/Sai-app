@@ -16,6 +16,7 @@
   "analysisRun": {
     "historicalBanner": "Estás viendo un análisis anterior. Inicia una nueva revisión para actualizar el análisis activo.",
     "recoveryBanner": "Mostrando la vista de producción actual sin filtrar por análisis. Elige un run en el selector cuando quieras.",
+    "autoRecoveryBanner": "Este run de análisis aún no tiene Production Verdict. Mostramos tu vista de producción actual.",
     "selector": {
       "label": "Análisis",
       "hint": "El veredicto, la validación y Safe Fix corresponden a este análisis.",

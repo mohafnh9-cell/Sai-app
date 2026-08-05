@@ -9,7 +9,7 @@ import {
   shouldShowSecurityTestNav,
 } from "@/features/mission-control/components/ProjectWorkflowNav";
 import { ProjectOnboardedBanner } from "@/features/projects/components/ProjectOnboardedBanner";
-import { getMissionControlView } from "@/server/mission-control/get-mission-control";
+import { loadMissionControlWithRecovery } from "@/server/mission-control/load-mission-control-with-recovery";
 import { getCachedServerAuthContext } from "@/lib/server/request-cache";
 import { isFeatureEnabled } from "@/server/feature-flags";
 import { fixPromptContextFromScan } from "@/features/production-verdict/fix-prompt-context";
@@ -26,6 +26,7 @@ import type { SecurityTestContext } from "@/features/security-testing/types";
 import type { ProjectReviewUiContext } from "@/server/projects/review-ui-context";
 import type { Metadata } from "next";
 import { getTranslator } from "@/lib/i18n/server";
+import { toRscSafe } from "@/lib/rsc/to-rsc-safe";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -89,10 +90,10 @@ export default async function MissionControlPage({ params, searchParams }: PageP
 
   if (!project) notFound();
 
-  const recoveryMode = query.recovery === "1";
-  let analysisRunId: string | null = recoveryMode ? null : (query.run ?? null);
+  const manualRecovery = query.recovery === "1";
+  let analysisRunId: string | null = manualRecovery ? null : (query.run ?? null);
 
-  if (isolationEnabled && !recoveryMode) {
+  if (isolationEnabled && !manualRecovery) {
     const admin = tryCreateMissionControlAdminClient();
     if (!admin) {
       console.error({
@@ -100,6 +101,16 @@ export default async function MissionControlPage({ params, searchParams }: PageP
         event: "isolation_admin_unavailable",
         projectId,
       });
+      if (query.run) {
+        redirect(
+          `/projects/${projectId}/mission-control${buildMissionControlSearchParams({
+            connected: query.connected,
+            reviewComplete: query.reviewComplete,
+            onboarded: query.onboarded,
+          })}`
+        );
+      }
+      analysisRunId = null;
     } else {
       let resolved: Awaited<ReturnType<typeof resolveAnalysisRunForMissionControl>>;
       try {
@@ -116,8 +127,14 @@ export default async function MissionControlPage({ params, searchParams }: PageP
           run: query.run,
           error: error instanceof Error ? error.message : String(error),
         });
-        if (query.run && !recoveryMode) {
-          redirect(`/projects/${projectId}/mission-control?recovery=1`);
+        if (query.run) {
+          redirect(
+            `/projects/${projectId}/mission-control${buildMissionControlSearchParams({
+              connected: query.connected,
+              reviewComplete: query.reviewComplete,
+              onboarded: query.onboarded,
+            })}`
+          );
         }
         resolved = { runId: null, source: "none", valid: true };
       }
@@ -168,41 +185,27 @@ export default async function MissionControlPage({ params, searchParams }: PageP
         }).catch(() => [])
       : [];
 
-  let view;
-  let verdict;
-  try {
-    ({ view, verdict } = await getMissionControlView(
-      auth.supabase,
-      projectId,
-      auth.organizationId,
-      {
-        analysisRunId:
-          isolationEnabled && analysisRunId && !recoveryMode ? analysisRunId : undefined,
-        admin: adminClient,
-      }
-    ));
-  } catch (error) {
-    console.error({
-      component: "mission-control-page",
-      event: "view_load_failed",
-      projectId,
+  const missionLoad = await loadMissionControlWithRecovery(
+    auth.supabase,
+    projectId,
+    auth.organizationId,
+    {
       analysisRunId,
-      recoveryMode,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    if (isolationEnabled && analysisRunId && !recoveryMode) {
-      redirect(`/projects/${projectId}/mission-control?recovery=1`);
-    }
-    ({ view, verdict } = await getMissionControlView(auth.supabase, projectId, auth.organizationId, {
+      isolationEnabled,
+      manualRecovery,
       admin: adminClient,
-    }));
-  }
+    }
+  );
 
-  const scanForContext = analysisRunId
+  const { view, verdict, runScoped, activeRunId, recoveryReason } = missionLoad;
+
+  const findingsRunId = runScoped && activeRunId ? activeRunId : null;
+
+  const scanForContext = findingsRunId
     ? await auth.supabase
         .from("scans")
         .select("id, detected_stack, status")
-        .eq("id", analysisRunId)
+        .eq("id", findingsRunId)
         .eq("project_id", projectId)
         .maybeSingle()
     : await auth.supabase
@@ -217,8 +220,8 @@ export default async function MissionControlPage({ params, searchParams }: PageP
   const contextScan = scanForContext.data;
 
   const runFindings =
-    isolationEnabled && analysisRunId
-      ? await loadAnalysisRunFindingsForFixPrompt(auth.supabase, analysisRunId)
+    isolationEnabled && findingsRunId
+      ? await loadAnalysisRunFindingsForFixPrompt(auth.supabase, findingsRunId)
       : undefined;
 
   const latestReportHref =
@@ -246,7 +249,7 @@ export default async function MissionControlPage({ params, searchParams }: PageP
         const fullContext = await getSecurityTestContext(admin, {
           projectId,
           organizationId: auth.organizationId,
-          analysisRunId: isolationEnabled && analysisRunId && !recoveryMode ? analysisRunId : undefined,
+          analysisRunId: runScoped && activeRunId ? activeRunId : undefined,
           isolationEnabled,
         });
         const { hypotheses: _hypotheses, analysisRunId: _runId, ...publicContext } = fullContext;
@@ -257,7 +260,7 @@ export default async function MissionControlPage({ params, searchParams }: PageP
         component: "mission-control-page",
         event: "security_test_context_failed",
         projectId,
-        analysisRunId,
+        analysisRunId: activeRunId,
         error: error instanceof Error ? error.message : String(error),
       });
       securityTestContext = null;
@@ -269,11 +272,11 @@ export default async function MissionControlPage({ params, searchParams }: PageP
 
   const viewingHistoricalRun =
     isolationEnabled &&
-    !recoveryMode &&
-    analysisRunId &&
+    runScoped &&
+    activeRunId &&
     reviewContext?.productionReviewState?.scanId &&
     reviewContext.productionReviewState?.hasActiveReview &&
-    reviewContext.productionReviewState.scanId !== analysisRunId;
+    reviewContext.productionReviewState.scanId !== activeRunId;
 
   const showSecurityTest = shouldShowSecurityTestNav({
     attackCenterEnabled,
@@ -290,6 +293,32 @@ export default async function MissionControlPage({ params, searchParams }: PageP
       ? await getProtectionCenterModel(adminClient, projectId).catch(() => null)
       : null;
 
+  const showRecoveryBanner =
+    manualRecovery || recoveryReason === "scoped_verdict_missing" || recoveryReason === "manual_recovery";
+
+  const recoveryBannerKey =
+    recoveryReason === "scoped_verdict_missing"
+      ? "analysisRun.autoRecoveryBanner"
+      : "analysisRun.recoveryBanner";
+
+  const experienceProps = toRscSafe({
+    view,
+    verdict,
+    projectName: project.name,
+    framework: project.framework ?? null,
+    fixPromptContext,
+    securityTestContext,
+    reviewContext,
+    analysisRunId: isolationEnabled && runScoped ? activeRunId : null,
+    runScoped,
+    analysisRunIsolationEnabled: isolationEnabled,
+    reportHref: latestReportHref,
+    openTechnicalDetails: query.technical === "open",
+    protectionCenter,
+    showProtectionStatus,
+    isVerdictStale: Boolean(reviewContext?.isStale && !viewingHistoricalRun),
+  });
+
   return (
     <div className="app-cinematic-bg min-h-full">
       <div className="mx-auto max-w-4xl px-4 sm:px-8 pb-24 pt-6 sm:pt-10">
@@ -301,7 +330,7 @@ export default async function MissionControlPage({ params, searchParams }: PageP
         </Button>
         <ProjectWorkflowNav
           projectId={projectId}
-          analysisRunId={isolationEnabled && !recoveryMode ? analysisRunId : undefined}
+          analysisRunId={isolationEnabled && runScoped ? activeRunId : undefined}
           showSecurityTest={showSecurityTest}
         />
 
@@ -314,18 +343,18 @@ export default async function MissionControlPage({ params, searchParams }: PageP
           </div>
         ) : null}
 
-        {recoveryMode ? (
+        {showRecoveryBanner ? (
           <div
             className="rounded-2xl border border-brand-warning/30 bg-brand-warning/5 px-5 py-4 text-sm text-foreground/90 mb-8"
             role="status"
           >
-            {t("analysisRun.recoveryBanner")}
+            {t(recoveryBannerKey)}
           </div>
         ) : null}
 
         {isolationEnabled && analysisRuns.length > 1 ? (
           <Suspense fallback={null}>
-            <AnalysisRunSelector runs={analysisRuns} activeRunId={analysisRunId} />
+            <AnalysisRunSelector runs={analysisRuns} activeRunId={activeRunId} />
           </Suspense>
         ) : null}
 
@@ -356,23 +385,7 @@ export default async function MissionControlPage({ params, searchParams }: PageP
           </div>
         ) : null}
 
-        <MissionControlExperience
-          view={view}
-          verdict={verdict}
-          projectName={project.name}
-          framework={project.framework}
-          fixPromptContext={fixPromptContext}
-          securityTestContext={securityTestContext}
-          reviewContext={reviewContext}
-          analysisRunId={isolationEnabled && !recoveryMode ? analysisRunId : undefined}
-          runScoped={Boolean(isolationEnabled && analysisRunId && !recoveryMode)}
-          analysisRunIsolationEnabled={isolationEnabled}
-          reportHref={latestReportHref}
-          openTechnicalDetails={query.technical === "open"}
-          protectionCenter={protectionCenter}
-          showProtectionStatus={showProtectionStatus}
-          isVerdictStale={Boolean(reviewContext?.isStale && !viewingHistoricalRun)}
-        />
+        <MissionControlExperience {...experienceProps} />
       </div>
     </div>
   );

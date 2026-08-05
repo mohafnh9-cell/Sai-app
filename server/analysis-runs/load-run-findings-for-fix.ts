@@ -34,7 +34,6 @@ export async function loadAnalysisRunFindingsForFixPrompt(
       file_path: row.file_path as string,
       rule_id: row.rule_id as string,
       confidence: row.confidence as string,
-      fingerprint: row.fingerprint as string,
     };
 
     if (row.description != null) {
