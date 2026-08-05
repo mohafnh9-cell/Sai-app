@@ -22,7 +22,7 @@
       "title": "Scan code",
       "description": "Analyze the repository and generate a new Production Verdict.",
       "cta": "Scan code",
-      "running": "Analyzing…",
+      "running": "An analysis is already in progress",
       "rescan": "Scan again",
       "retry": "Retry scan"
     },

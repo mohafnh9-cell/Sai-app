@@ -22,7 +22,7 @@
       "title": "Escanear código",
       "description": "Analiza el repositorio y genera un nuevo Production Verdict.",
       "cta": "Escanear código",
-      "running": "Analizando…",
+      "running": "Ya hay un análisis en curso",
       "rescan": "Volver a escanear",
       "retry": "Reintentar análisis"
     },

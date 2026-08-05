@@ -91,7 +91,7 @@ describe("resolveReviewIdempotency", () => {
     expect(result).toEqual({ action: "create_new" });
   });
 
-  it("still resumes active scan when forceNew is true", async () => {
+  it("skips resume when forceNew is true", async () => {
     const admin = buildAdmin({
       active: [
         {
@@ -109,10 +109,7 @@ describe("resolveReviewIdempotency", () => {
       forceNew: true,
     });
 
-    expect(result).toEqual({
-      action: "resume_active",
-      scan: expect.objectContaining({ id: "scan-active" }),
-    });
+    expect(result).toEqual({ action: "create_new" });
   });
 
   it("returns create_new when no matching scans exist", async () => {

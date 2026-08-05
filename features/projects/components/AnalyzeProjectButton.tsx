@@ -284,8 +284,8 @@ export function AnalyzeProjectButton({
         ? `/api/projects/${projectId}/analysis-runs`
         : `/api/repositories/${projectId}/scans`;
       const payload = analysisRunIsolationEnabled
-        ? { forceNew: context.hasVerdict ? true : false }
-        : { scanType: "full", ...(context.hasVerdict ? { forceNew: true } : {}) };
+        ? { forceNew: true }
+        : { scanType: "full", forceNew: true };
 
       const response = await fetch(endpoint, {
         method: "POST",
