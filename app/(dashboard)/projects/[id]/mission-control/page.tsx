@@ -23,6 +23,7 @@ import { listAnalysisRunsForProject } from "@/server/analysis-runs/list-analysis
 import { appendAnalysisRunSearchParams } from "@/features/analysis-runs/lib/build-run-query";
 import { AnalysisRunSelector } from "@/features/analysis-runs/components/AnalysisRunSelector";
 import type { SecurityTestContext } from "@/features/security-testing/types";
+import type { ProjectReviewUiContext } from "@/server/projects/review-ui-context";
 import type { Metadata } from "next";
 import { getTranslator } from "@/lib/i18n/server";
 
@@ -131,7 +132,17 @@ export default async function MissionControlPage({ params, searchParams }: PageP
     }
   }
 
-  const reviewContext = await getProjectReviewUiContext(auth.supabase, projectId);
+  let reviewContext: ProjectReviewUiContext | null = null;
+  try {
+    reviewContext = await getProjectReviewUiContext(auth.supabase, projectId);
+  } catch (error) {
+    console.error({
+      component: "mission-control-page",
+      event: "review_context_failed",
+      projectId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 
   const adminClient = tryCreateMissionControlAdminClient();
   const analysisRuns =
@@ -149,7 +160,11 @@ export default async function MissionControlPage({ params, searchParams }: PageP
       auth.supabase,
       projectId,
       auth.organizationId,
-      isolationEnabled && analysisRunId && !recoveryMode ? { analysisRunId } : undefined
+      {
+        analysisRunId:
+          isolationEnabled && analysisRunId && !recoveryMode ? analysisRunId : undefined,
+        admin: adminClient,
+      }
     ));
   } catch (error) {
     console.error({

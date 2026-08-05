@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { normalizeProductionVerdictPayload } from "./normalize-verdict-payload";
 
 export const PRODUCTION_VERDICT_VERSION = "1.0.0";
 
@@ -141,6 +142,7 @@ export function parseProductionVerdict(data: unknown): ProductionVerdictV1 {
 }
 
 export function safeParseProductionVerdict(data: unknown): ProductionVerdictV1 | null {
-  const result = ProductionVerdictSchema.safeParse(data);
+  const normalized = normalizeProductionVerdictPayload(data);
+  const result = ProductionVerdictSchema.safeParse(normalized);
   return result.success ? result.data : null;
 }

@@ -18,6 +18,7 @@ import { getProductionReviewState } from "@/server/review-cancel/get-production-
 
 export type MissionControlViewOptions = {
   analysisRunId?: string | null;
+  admin?: SupabaseClient | null;
 };
 
 export async function getMissionControlView(
@@ -27,6 +28,7 @@ export async function getMissionControlView(
   options?: MissionControlViewOptions
 ): Promise<{ view: MissionControlView; verdict: Awaited<ReturnType<typeof getCurrentProductionVerdict>> }> {
   const analysisRunId = options?.analysisRunId ?? null;
+  const dataClient = options?.admin ?? supabase;
 
   const feedBase = supabase
     .from("mission_control_feed_events")
@@ -122,7 +124,7 @@ export async function getMissionControlView(
     latestReviewScan,
   ] = await Promise.all([
     supabase.from("projects").select("id, name").eq("id", projectId).maybeSingle(),
-    getProductionReviewState(supabase, { organizationId, projectId }).catch((error) => {
+    getProductionReviewState(dataClient, { organizationId, projectId }).catch((error) => {
       console.warn({
         component: "mission-control-view",
         event: "review_state_failed",
@@ -165,8 +167,8 @@ export async function getMissionControlView(
   const feedRows = { data: feedRowsData ?? [] };
 
   const verdict = analysisRunId
-    ? await getProductionVerdictByScan(supabase, analysisRunId)
-    : await getCurrentProductionVerdict(supabase, projectId);
+    ? await getProductionVerdictByScan(dataClient, analysisRunId)
+    : await getCurrentProductionVerdict(dataClient, projectId);
 
   const scanInProgress = analysisRunId
     ? reviewState.hasActiveReview && reviewState.scanId === analysisRunId

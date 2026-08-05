@@ -13,7 +13,6 @@ import {
   isStaleActiveReviewScan,
   REVIEW_STALE_FAILURE_CODE,
 } from "@/server/review-recovery/stale-review";
-import { isScanJobsInfrastructureMissing } from "@/server/jobs/legacy-inline-scan-run";
 import { COMMIT_SUPERSEDED_CODE } from "@/server/review-start/release-active-review-for-new-head";
 
 function idleState(): ProductionReviewState {
@@ -86,9 +85,12 @@ export async function getProductionReviewState(
       .maybeSingle();
     activeJob = (data as Record<string, unknown> | null) ?? null;
   } catch (error) {
-    if (!isScanJobsInfrastructureMissing(error)) {
-      throw error;
-    }
+    console.warn({
+      component: "production-review-state",
+      event: "scan_jobs_query_failed",
+      projectId: input.projectId,
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 
   if (activeJob?.scan_id) {

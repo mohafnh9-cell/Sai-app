@@ -122,6 +122,7 @@ export async function getSecurityTestContext(
       : buildDefaultSecurityTestOptions(t);
 
   let campaignRow = null;
+  let executions: Awaited<ReturnType<typeof listAttackExecutionsForCampaign>> = [];
   try {
     campaignRow = scopedRunId
       ? await getAttackCampaignByScanId(admin, scopedRunId, input.organizationId)
@@ -132,6 +133,10 @@ export async function getSecurityTestContext(
             limit: 1,
           }))[0] ?? null
         : null;
+
+    executions = campaignRow
+      ? await listAttackExecutionsForCampaign(admin, campaignRow.id, input.organizationId)
+      : [];
   } catch (error) {
     console.warn({
       component: "security-test-context",
@@ -141,11 +146,8 @@ export async function getSecurityTestContext(
       error: error instanceof Error ? error.message : String(error),
     });
     campaignRow = null;
+    executions = [];
   }
-
-  const executions = campaignRow
-    ? await listAttackExecutionsForCampaign(admin, campaignRow.id, input.organizationId)
-    : [];
 
   const latestCampaign = campaignRow
     ? {
