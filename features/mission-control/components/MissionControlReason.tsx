@@ -25,7 +25,7 @@ export function MissionControlReason({
     statusMessage: verdictStatusMessage(verdict.status, translate),
   });
 
-  const topBlocker = verdict.topPriorities[0] ?? null;
+  const topBlocker = verdict.topPriorities?.[0] ?? null;
 
   if (reviewInProgress || displayPhase === "preparing") {
     return (

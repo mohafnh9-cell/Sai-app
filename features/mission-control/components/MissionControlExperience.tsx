@@ -117,7 +117,7 @@ export function MissionControlExperience({
     reviewInProgress,
   });
 
-  const topPriority = verdict?.topPriorities[0] ?? null;
+  const topPriority = verdict?.topPriorities?.[0] ?? null;
   const safeFixPromptInput = useMemo(() => {
     if (!topPriority || !verdict || verdict.status === "ready_to_ship") return null;
     return fixPromptInputFromPriority(topPriority, {

@@ -178,7 +178,9 @@ export default async function MissionControlPage({ params, searchParams }: PageP
     if (isolationEnabled && analysisRunId && !recoveryMode) {
       redirect(`/projects/${projectId}/mission-control?recovery=1`);
     }
-    throw error;
+    ({ view, verdict } = await getMissionControlView(auth.supabase, projectId, auth.organizationId, {
+      admin: adminClient,
+    }));
   }
 
   const scanForContext = analysisRunId

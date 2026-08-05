@@ -83,7 +83,7 @@ export function verdictExperienceFromVerdict(
       : null;
 
   const evaluatedAreaCount =
-    verdict.evaluatedAreas.length + verdict.partiallyEvaluatedAreas.length;
+    (verdict.evaluatedAreas?.length ?? 0) + (verdict.partiallyEvaluatedAreas?.length ?? 0);
 
   const showReadyMoment =
     verdict.status === "ready_to_ship" &&

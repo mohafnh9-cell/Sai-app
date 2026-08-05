@@ -80,7 +80,7 @@ export function MissionControlPrimaryAction({
   const { t: tm } = useI18n("missionControl");
   const { t: ta } = useI18n("attackCenter");
 
-  const topPriority = verdict?.topPriorities[0] ?? null;
+  const topPriority = verdict?.topPriorities?.[0] ?? null;
 
   const fixPromptInput = useMemo(() => {
     if (!topPriority || !verdict) return null;

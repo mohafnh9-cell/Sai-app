@@ -33,6 +33,12 @@ export function normalizeProductionVerdictPayload(data: unknown): unknown {
 
   const normalized: Record<string, unknown> = { ...source };
 
+  if (!normalized.version) normalized.version = "1.0.0";
+  if (normalized.projectedScoreIsEstimate === undefined) {
+    normalized.projectedScoreIsEstimate = false;
+  }
+  if (normalized.branch === undefined) normalized.branch = null;
+
   if (!Array.isArray(normalized.topPriorities)) normalized.topPriorities = [];
   if (!Array.isArray(normalized.evaluatedAreas)) normalized.evaluatedAreas = [];
   if (!Array.isArray(normalized.partiallyEvaluatedAreas)) normalized.partiallyEvaluatedAreas = [];

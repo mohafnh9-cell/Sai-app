@@ -15,13 +15,75 @@ import {
 import type { MissionControlView, MissionFeedItem } from "@/features/mission-control/types";
 import { getCurrentProductionVerdict, getProductionVerdictByScan } from "@/server/production-verdict/service";
 import { getProductionReviewState } from "@/server/review-cancel/get-production-review-state";
+import { coerceVerdictForUi } from "@/brain/production-verdict/coerce-verdict-for-ui";
 
 export type MissionControlViewOptions = {
   analysisRunId?: string | null;
   admin?: SupabaseClient | null;
 };
 
+function emptyReviewState() {
+  return {
+    hasActiveReview: false,
+    scanId: null,
+    scanJobId: null,
+    status: "idle" as const,
+    isCancellable: false,
+    commitSha: null,
+    createdAt: null,
+    startedAt: null,
+    completedAt: null,
+    cancelledAt: null,
+    failureMessage: null,
+  };
+}
+
+async function buildEmptyMissionControlView(
+  supabase: SupabaseClient,
+  projectId: string
+): Promise<{ view: MissionControlView; verdict: null }> {
+  const { data: project } = await supabase
+    .from("projects")
+    .select("name")
+    .eq("id", projectId)
+    .maybeSingle();
+  const { locale, t } = await getTranslator("missionControl");
+  const view = buildMissionControlView(
+    {
+      projectId,
+      projectName: project?.name ?? "Project",
+      verdict: null,
+      scanInProgress: false,
+      detectedStack: null,
+      feedFromDb: [],
+      t,
+    },
+    locale
+  );
+  return { view, verdict: null };
+}
+
 export async function getMissionControlView(
+  supabase: SupabaseClient,
+  projectId: string,
+  organizationId: string,
+  options?: MissionControlViewOptions
+): Promise<{ view: MissionControlView; verdict: Awaited<ReturnType<typeof getCurrentProductionVerdict>> }> {
+  try {
+    return await loadMissionControlView(supabase, projectId, organizationId, options);
+  } catch (error) {
+    console.error({
+      component: "mission-control-view",
+      event: "fatal_load_failed",
+      projectId,
+      analysisRunId: options?.analysisRunId ?? null,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return buildEmptyMissionControlView(supabase, projectId);
+  }
+}
+
+async function loadMissionControlView(
   supabase: SupabaseClient,
   projectId: string,
   organizationId: string,
@@ -166,9 +228,10 @@ export async function getMissionControlView(
   const completedJobsResult = { data: completedJobsData ?? [] };
   const feedRows = { data: feedRowsData ?? [] };
 
-  const verdict = analysisRunId
+  const rawVerdict = analysisRunId
     ? await getProductionVerdictByScan(dataClient, analysisRunId)
     : await getCurrentProductionVerdict(dataClient, projectId);
+  const verdict = coerceVerdictForUi(rawVerdict);
 
   const scanInProgress = analysisRunId
     ? reviewState.hasActiveReview && reviewState.scanId === analysisRunId
@@ -207,25 +270,37 @@ export async function getMissionControlView(
 
   const { locale, t } = await getTranslator("missionControl");
 
-  const view = buildMissionControlView(
-    {
+  let view: MissionControlView;
+  try {
+    view = buildMissionControlView(
+      {
+        projectId,
+        projectName: project?.name ?? "Project",
+        verdict,
+        scanInProgress,
+        detectedStack: (latestScan.data?.detected_stack as Record<string, unknown>) ?? null,
+        feedFromDb,
+        sessionProgress: typeof meta.progress === "number" ? meta.progress : null,
+        sessionPhase: typeof meta.phase === "string" ? meta.phase : null,
+        sessionEtaSeconds: typeof meta.etaSeconds === "number" ? meta.etaSeconds : null,
+        teamExecution: Object.keys(teamExecution).length > 0 ? teamExecution : undefined,
+        businessLogicMetrics,
+        llmMetrics,
+        cancelledReview,
+        t,
+      },
+      locale
+    );
+  } catch (buildError) {
+    console.error({
+      component: "mission-control-view",
+      event: "view_build_failed",
       projectId,
-      projectName: project?.name ?? "Project",
-      verdict,
-      scanInProgress,
-      detectedStack: (latestScan.data?.detected_stack as Record<string, unknown>) ?? null,
-      feedFromDb,
-      sessionProgress: typeof meta.progress === "number" ? meta.progress : null,
-      sessionPhase: typeof meta.phase === "string" ? meta.phase : null,
-      sessionEtaSeconds: typeof meta.etaSeconds === "number" ? meta.etaSeconds : null,
-      teamExecution: Object.keys(teamExecution).length > 0 ? teamExecution : undefined,
-      businessLogicMetrics,
-      llmMetrics,
-      cancelledReview,
-      t,
-    },
-    locale
-  );
+      analysisRunId,
+      error: buildError instanceof Error ? buildError.message : String(buildError),
+    });
+    return buildEmptyMissionControlView(supabase, projectId);
+  }
 
   return { view, verdict };
 }

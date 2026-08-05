@@ -208,7 +208,7 @@ export function buildMissionControlView(
           ? t("status.review")
           : t("status.idle");
 
-  const top = input.verdict?.topPriorities[0];
+  const top = input.verdict?.topPriorities?.[0];
   const objective = {
     title:
       top?.title ??
@@ -247,7 +247,8 @@ export function buildMissionControlView(
     verdict: {
       display: verdictDisplay,
       confidence: input.verdict?.confidence ?? "medium",
-      criticalCampaigns: input.verdict?.topPriorities.filter((p) => p.severity === "critical").length ?? 0,
+      criticalCampaigns:
+        input.verdict?.topPriorities?.filter((p) => p.severity === "critical").length ?? 0,
       replayStatusLabel:
         objective.replayStatus === "passed"
           ? t("verdict.replayStatus.passed")
