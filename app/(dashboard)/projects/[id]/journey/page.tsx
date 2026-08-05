@@ -11,7 +11,7 @@ import { ProjectWorkflowNav } from "@/features/mission-control/components/Projec
 import { shouldShowSecurityTestNav } from "@/features/mission-control/lib/navigation";
 import { projectVerdictHref } from "@/lib/navigation/project-hrefs";
 import { ProductionJourneyView } from "@/features/production-journey/components/ProductionJourneyView";
-import { withAnalysisRunQuery } from "@/features/analysis-runs/lib/build-run-query";
+import { appendAnalysisRunSearchParams } from "@/features/analysis-runs/lib/build-run-query";
 import { resolveAnalysisRunForProject } from "@/server/analysis-runs/resolve-analysis-run";
 import { createAdminClient } from "@/server/security-scanner/admin-client";
 import type { Metadata } from "next";
@@ -22,6 +22,14 @@ const routeUuidSchema = z.string().uuid();
 function parseRouteUuid(value: string): string | null {
   const parsed = routeUuidSchema.safeParse(value);
   return parsed.success ? parsed.data : null;
+}
+
+function hrefWithAnalysisRun(href: string, analysisRunId?: string | null): string {
+  if (!analysisRunId) return href;
+  const params = new URLSearchParams();
+  appendAnalysisRunSearchParams(params, analysisRunId);
+  const qs = params.toString();
+  return qs ? `${href}?${qs}` : href;
 }
 
 interface JourneyPageProps {
@@ -84,7 +92,7 @@ export default async function ProjectJourneyPage({ params, searchParams }: Journ
     }
 
     if (!requestedRunId && resolved.runId) {
-      redirect(withAnalysisRunQuery(`/projects/${projectId}/journey`, resolved.runId));
+      redirect(hrefWithAnalysisRun(`/projects/${projectId}/journey`, resolved.runId));
     }
 
     analysisRunId = resolved.runId;
@@ -117,7 +125,7 @@ export default async function ProjectJourneyPage({ params, searchParams }: Journ
     ? `/projects/${projectId}/scans/${latestScan.id}/report`
     : undefined;
 
-  const backHref = withAnalysisRunQuery(
+  const backHref = hrefWithAnalysisRun(
     projectVerdictHref(projectId),
     isolationEnabled ? analysisRunId : undefined
   );

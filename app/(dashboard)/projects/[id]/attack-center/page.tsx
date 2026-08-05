@@ -16,7 +16,7 @@ import { getSecurityTestContext } from "@/server/attack-simulation/get-security-
 import { getAttackCampaignByScanId } from "@/server/attack-simulation/persistence/campaign-repository";
 import { isAnalysisRunOwnedByProject } from "@/server/analysis-runs/get-analysis-run-snapshot";
 import { resolveAnalysisRunForMissionControl } from "@/server/analysis-runs/resolve-analysis-run";
-import { withAnalysisRunQuery } from "@/features/analysis-runs/lib/build-run-query";
+import { appendAnalysisRunSearchParams } from "@/features/analysis-runs/lib/build-run-query";
 import type { AttackCenterCapability } from "@/features/attack-simulation/api-types";
 import type { SecurityTestContext } from "@/features/security-testing/types";
 import type { AttackCenterSnapshot } from "@/server/attack-simulation/ui/types";
@@ -29,6 +29,14 @@ const routeUuidSchema = z.string().uuid();
 function parseRouteUuid(value: string): string | null {
   const parsed = routeUuidSchema.safeParse(value);
   return parsed.success ? parsed.data : null;
+}
+
+function hrefWithAnalysisRun(href: string, analysisRunId?: string | null): string {
+  if (!analysisRunId) return href;
+  const params = new URLSearchParams();
+  appendAnalysisRunSearchParams(params, analysisRunId);
+  const qs = params.toString();
+  return qs ? `${href}?${qs}` : href;
 }
 
 interface PageProps {
@@ -88,7 +96,7 @@ export default async function AttackCenterPage({ params, searchParams }: PagePro
     }
 
     if (!requestedRunId && resolved.runId) {
-      redirect(withAnalysisRunQuery(`/projects/${projectId}/attack-center`, resolved.runId));
+      redirect(hrefWithAnalysisRun(`/projects/${projectId}/attack-center`, resolved.runId));
     }
 
     analysisRunId = resolved.runId;
@@ -158,7 +166,7 @@ export default async function AttackCenterPage({ params, searchParams }: PagePro
   }
 
   const { t: ta } = await getTranslator("attackCenter");
-  const missionControlHref = withAnalysisRunQuery(
+  const missionControlHref = hrefWithAnalysisRun(
     `/projects/${projectId}/mission-control`,
     isolationEnabled ? analysisRunId : undefined
   );
