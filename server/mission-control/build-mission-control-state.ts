@@ -15,6 +15,7 @@ import {
   deriveScanAction,
   deriveSecurityAction,
   deriveSecurityRunning,
+  derivePrimaryActionKind,
   resolveActiveRun,
   resolveLatestRun,
 } from "./derive-mission-control-ui";
@@ -38,6 +39,9 @@ export type BuildMissionControlStateInput = {
   };
   ui: {
     openTechnicalDetails: boolean;
+    onboarded?: boolean;
+    connected?: boolean;
+    reviewComplete?: boolean;
   };
 };
 
@@ -83,6 +87,11 @@ export function buildMissionControlState(input: BuildMissionControlStateInput): 
 
   const securityPhase = input.securityTestContext?.phase ?? "needs_review";
   const securityRunning = deriveSecurityRunning(securityPhase);
+  const primaryActionKind = derivePrimaryActionKind({
+    verdict: missionLoad.verdict,
+    securityPhase,
+    reviewInProgress,
+  });
 
   const progress = reviewInProgress ? (reviewContext?.activeScan?.progress ?? null) : null;
   const progressMessage = reviewInProgress
@@ -119,7 +128,6 @@ export function buildMissionControlState(input: BuildMissionControlStateInput): 
     recoveryReason: missionLoad.recoveryReason,
     productionVerdict: missionLoad.verdict,
     view: missionLoad.view,
-    reviewContext: input.reviewContext,
     securityTestContext: input.securityTestContext,
     protectionCenter: input.protectionCenter,
     status: {
@@ -150,6 +158,9 @@ export function buildMissionControlState(input: BuildMissionControlStateInput): 
         reviewInProgress,
         attackCenterEnabled: input.flags.attackCenterEnabled,
       }),
+      primary: {
+        kind: primaryActionKind,
+      },
     },
     flags: {
       analysisRunIsolationEnabled: input.flags.analysisRunIsolationEnabled,
@@ -165,6 +176,11 @@ export function buildMissionControlState(input: BuildMissionControlStateInput): 
       fixPromptContext: input.fixPromptContext,
       attackCenterHref: input.securityTestContext?.attackCenterHref,
       openTechnicalDetails: input.ui.openTechnicalDetails,
+      showAnalysisRunSelector:
+        input.flags.analysisRunIsolationEnabled && analysisRuns.length > 1,
+      showOnboardedBanner: Boolean(input.ui.onboarded && missionLoad.verdict),
+      showConnectedBanner: Boolean(input.ui.connected),
+      showReviewCompleteBanner: Boolean(input.ui.reviewComplete && missionLoad.verdict),
     },
   };
 }

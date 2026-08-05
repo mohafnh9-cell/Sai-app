@@ -13,7 +13,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { AnalyzeProjectButton } from "@/features/projects/components/AnalyzeProjectButton";
+import { AnalyzeProjectScanContainer } from "@/features/projects/components/AnalyzeProjectScanContainer";
 import type { ProjectReviewUiContext } from "@/server/projects/review-ui-context";
 import { useI18n } from "@/lib/i18n/client";
 import {
@@ -120,7 +120,7 @@ export function ProjectScanOverview({
           </h2>
           <p className="text-sm text-muted-foreground">{t("reviewHistory.subtitle")}</p>
         </div>
-        <AnalyzeProjectButton
+        <AnalyzeProjectScanContainer
           projectId={projectId}
           initialContext={reviewContext}
           size="sm"

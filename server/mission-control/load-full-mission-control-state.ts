@@ -21,6 +21,9 @@ export async function loadFullMissionControlState(
     analysisRunId: string | null;
     manualRecovery?: boolean;
     openTechnicalDetails?: boolean;
+    onboarded?: boolean;
+    connected?: boolean;
+    reviewComplete?: boolean;
   }
 ): Promise<MissionControlState | null> {
   const { projectId, organizationId, admin } = input;
@@ -145,6 +148,9 @@ export async function loadFullMissionControlState(
     },
     ui: {
       openTechnicalDetails: input.openTechnicalDetails ?? false,
+      onboarded: input.onboarded,
+      connected: input.connected,
+      reviewComplete: input.reviewComplete,
     },
   });
 }

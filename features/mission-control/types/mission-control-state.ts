@@ -3,8 +3,15 @@ import type { FixPromptContext } from "@/features/production-verdict/fix-prompt-
 import type { SecurityTestContext } from "@/features/security-testing/types";
 import type { ProtectionCenterSnapshot } from "@/features/continuous-protection/types";
 import type { AnalysisRunListItem } from "@/server/analysis-runs/list-analysis-runs";
-import type { ProjectReviewUiContext } from "@/server/projects/review-ui-context";
 import type { MissionControlView } from "../types";
+
+export type MissionControlPrimaryActionKind =
+  | "copy_safe_fix"
+  | "verify_protection"
+  | "run_review_again"
+  | "deploy"
+  | "run_review"
+  | "none";
 
 export type MissionControlRecoveryReason =
   | "scoped_verdict_missing"
@@ -29,7 +36,6 @@ export type MissionControlState = {
 
   productionVerdict: ProductionVerdictV1 | null;
   view: MissionControlView;
-  reviewContext: ProjectReviewUiContext | null;
   securityTestContext: SecurityTestContext | null;
   protectionCenter: ProtectionCenterSnapshot | null;
 
@@ -58,6 +64,9 @@ export type MissionControlState = {
       disabled: boolean;
       showSpinner: boolean;
     };
+    primary: {
+      kind: MissionControlPrimaryActionKind;
+    };
   };
 
   flags: {
@@ -75,6 +84,10 @@ export type MissionControlState = {
     fixPromptContext?: FixPromptContext;
     attackCenterHref?: string;
     openTechnicalDetails: boolean;
+    showAnalysisRunSelector: boolean;
+    showOnboardedBanner: boolean;
+    showConnectedBanner: boolean;
+    showReviewCompleteBanner: boolean;
   };
 };
 

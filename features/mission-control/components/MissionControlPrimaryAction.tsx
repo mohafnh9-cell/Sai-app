@@ -7,73 +7,36 @@ import type { ProductionVerdictV1 } from "@/brain/production-verdict/schema";
 import { CopySafeFixPromptButton } from "@/features/production-verdict/components/CopySafeFixPromptButton";
 import type { FixPromptContext } from "@/features/production-verdict/fix-prompt-context";
 import { AnalyzeProjectButton } from "@/features/projects/components/AnalyzeProjectButton";
-import type { ProjectReviewUiContext } from "@/server/projects/review-ui-context";
-import type { SecurityTestPhase } from "@/features/security-testing/types";
+import type { MissionControlPrimaryActionKind } from "@/features/mission-control/types/mission-control-state";
 import { PrimaryActionButton } from "@/features/security-testing/components/SecurityTestHero";
 import { useI18n } from "@/lib/i18n/client";
 
-export type MissionControlPrimaryActionKind =
-  | "copy_safe_fix"
-  | "verify_protection"
-  | "run_review_again"
-  | "deploy"
-  | "run_review"
-  | "none";
-
-export function derivePrimaryActionKind(input: {
-  verdict: ProductionVerdictV1 | null;
-  displayPhase: SecurityTestPhase;
-  reviewInProgress: boolean;
-}): MissionControlPrimaryActionKind {
-  const { verdict, displayPhase, reviewInProgress } = input;
-
-  if (reviewInProgress || displayPhase === "preparing" || displayPhase === "running") {
-    return "none";
-  }
-
-  if (!verdict) {
-    return "run_review";
-  }
-
-  if (verdict.status === "ready_to_ship") {
-    return "run_review_again";
-  }
-
-  if (displayPhase === "protected" || displayPhase === "completed_clean") {
-    return "run_review_again";
-  }
-
-  if (displayPhase === "fix_ready" || displayPhase === "issues_found") {
-    return "verify_protection";
-  }
-
-  if ((verdict.topPriorities?.length ?? 0) > 0) {
-    return "copy_safe_fix";
-  }
-
-  return "run_review_again";
-}
+export type { MissionControlPrimaryActionKind };
 
 export function MissionControlPrimaryAction({
   kind,
   verdict,
-  projectId,
   projectName,
   fixPromptContext,
-  reviewContext,
   reportHref,
   attackCenterHref,
-  analysisRunIsolationEnabled = false,
+  scanLabel,
+  scanLoading,
+  scanDisabled,
+  scanProgress,
+  onStartScan,
 }: {
   kind: MissionControlPrimaryActionKind;
   verdict: ProductionVerdictV1 | null;
-  projectId: string;
   projectName: string;
   fixPromptContext?: FixPromptContext;
-  reviewContext: ProjectReviewUiContext | null;
   reportHref?: string;
   attackCenterHref?: string;
-  analysisRunIsolationEnabled?: boolean;
+  scanLabel: string;
+  scanLoading: boolean;
+  scanDisabled: boolean;
+  scanProgress: string | null;
+  onStartScan: () => void;
 }) {
   const router = useRouter();
   const { t: tp } = useI18n("projects");
@@ -98,10 +61,7 @@ export function MissionControlPrimaryAction({
 
   return (
     <section className="space-y-3" aria-labelledby="mission-control-primary-action-heading">
-      <h2
-        id="mission-control-primary-action-heading"
-        className="sr-only"
-      >
+      <h2 id="mission-control-primary-action-heading" className="sr-only">
         {tm("sections.primaryAction")}
       </h2>
       <div className="flex justify-center sm:justify-start">
@@ -124,14 +84,15 @@ export function MissionControlPrimaryAction({
           </PrimaryActionButton>
         ) : null}
 
-        {kind === "run_review_again" && reviewContext ? (
+        {kind === "run_review_again" ? (
           <AnalyzeProjectButton
-            projectId={projectId}
-            initialContext={reviewContext}
-            analysisRunIsolationEnabled={analysisRunIsolationEnabled}
+            label={scanLabel}
+            loading={scanLoading}
+            disabled={scanDisabled}
+            progress={scanProgress}
+            onClick={onStartScan}
             size="default"
             className="h-12 min-w-[240px] rounded-full text-base px-8"
-            labelOverride={tm("actions.reviewAgain")}
           />
         ) : null}
 
@@ -141,14 +102,15 @@ export function MissionControlPrimaryAction({
           </PrimaryActionButton>
         ) : null}
 
-        {kind === "run_review" && reviewContext ? (
+        {kind === "run_review" ? (
           <AnalyzeProjectButton
-            projectId={projectId}
-            initialContext={reviewContext}
-            analysisRunIsolationEnabled={analysisRunIsolationEnabled}
+            label={scanLabel}
+            loading={scanLoading}
+            disabled={scanDisabled}
+            progress={scanProgress}
+            onClick={onStartScan}
             size="default"
             className="h-12 min-w-[240px] rounded-full text-base px-8"
-            labelOverride={tp("runProductionReview")}
           />
         ) : null}
       </div>

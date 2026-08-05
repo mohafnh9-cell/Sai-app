@@ -1,6 +1,6 @@
 "use client";
 
-import { AnalyzeProjectButton } from "@/features/projects/components/AnalyzeProjectButton";
+import { AnalyzeProjectScanContainer } from "@/features/projects/components/AnalyzeProjectScanContainer";
 import type { ProjectReviewUiContext } from "@/server/projects/review-ui-context";
 
 export function RunSecurityScanButton({
@@ -13,7 +13,7 @@ export function RunSecurityScanButton({
   initialContext: ProjectReviewUiContext;
 }) {
   return (
-    <AnalyzeProjectButton
+    <AnalyzeProjectScanContainer
       projectId={projectId}
       initialContext={initialContext}
       size="sm"

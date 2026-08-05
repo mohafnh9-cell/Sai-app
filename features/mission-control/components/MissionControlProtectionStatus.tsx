@@ -5,63 +5,16 @@ import {
   protectionStatusAccent,
   protectionStatusTone,
 } from "@/features/continuous-protection/types";
-import { useProtectionCenter } from "@/features/continuous-protection/hooks/useProtectionCenter";
 import { useI18n } from "@/lib/i18n/client";
 import { formatRelativeLocalized } from "@/lib/i18n/format";
 
-type MissionControlProtectionStatusProps = {
-  projectId: string;
-  initialData?: ProtectionCenterSnapshot | null;
-  enabled?: boolean;
-};
-
-function statusLabelKey(status: ProtectionCenterSnapshot["status"]): string {
-  return `protection.status.${status}`;
-}
-
-function ProtectionStatusSkeleton() {
-  return (
-    <section
-      className="rounded-3xl border border-border/60 bg-card/40 p-6 sm:p-8 space-y-4 animate-pulse"
-      aria-busy="true"
-      aria-label="Loading protection status"
-    >
-      <div className="h-3 w-32 rounded bg-muted" />
-      <div className="h-8 w-48 rounded bg-muted" />
-      <div className="h-4 w-full max-w-md rounded bg-muted" />
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="h-12 rounded bg-muted" />
-        <div className="h-12 rounded bg-muted" />
-      </div>
-    </section>
-  );
-}
-
 export function MissionControlProtectionStatus({
-  projectId,
-  initialData = null,
-  enabled = true,
-}: MissionControlProtectionStatusProps) {
+  model,
+}: {
+  model: ProtectionCenterSnapshot;
+}) {
   const { t, locale } = useI18n("missionControl");
   const { t: tc } = useI18n("common");
-  const { data: model, isLoading, isFetched } = useProtectionCenter(projectId, initialData, enabled);
-
-  if (isLoading && !model) {
-    return <ProtectionStatusSkeleton />;
-  }
-
-  if (isFetched && !model) {
-    return (
-      <section
-        className="rounded-3xl border border-dashed border-border/60 bg-card/30 p-6 sm:p-8 text-sm text-muted-foreground"
-        role="status"
-      >
-        {t("protection.unavailable")}
-      </section>
-    );
-  }
-
-  if (!model) return null;
 
   const relativeLabels = {
     never: tc("never"),
@@ -91,7 +44,7 @@ export function MissionControlProtectionStatus({
           id="mission-control-protection-heading"
           className={`text-2xl sm:text-3xl font-semibold tracking-tight break-words ${protectionStatusAccent(model.status)}`}
         >
-          {t(statusLabelKey(model.status))}
+          {t(`protection.status.${model.status}`)}
         </p>
         <p className="text-sm text-muted-foreground leading-relaxed">{model.statusHeadline}</p>
       </div>

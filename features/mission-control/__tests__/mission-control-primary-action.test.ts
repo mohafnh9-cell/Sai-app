@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { derivePrimaryActionKind } from "@/features/mission-control/components/MissionControlPrimaryAction";
+import { derivePrimaryActionKind } from "@/server/mission-control/derive-mission-control-ui";
 import type { ProductionVerdictV1 } from "@/brain/production-verdict/schema";
 
 function minimalVerdict(overrides?: Partial<ProductionVerdictV1>): ProductionVerdictV1 {
@@ -44,7 +44,7 @@ describe("derivePrimaryActionKind", () => {
     expect(
       derivePrimaryActionKind({
         verdict: minimalVerdict(),
-        displayPhase: "ready",
+        securityPhase: "ready",
         reviewInProgress: false,
       })
     ).toBe("copy_safe_fix");
@@ -54,7 +54,7 @@ describe("derivePrimaryActionKind", () => {
     expect(
       derivePrimaryActionKind({
         verdict: minimalVerdict({ status: "ready_to_ship", topPriorities: [] }),
-        displayPhase: "ready",
+        securityPhase: "ready",
         reviewInProgress: false,
       })
     ).toBe("run_review_again");
@@ -64,7 +64,7 @@ describe("derivePrimaryActionKind", () => {
     expect(
       derivePrimaryActionKind({
         verdict: minimalVerdict(),
-        displayPhase: "protected",
+        securityPhase: "protected",
         reviewInProgress: false,
       })
     ).toBe("run_review_again");
@@ -74,7 +74,7 @@ describe("derivePrimaryActionKind", () => {
     expect(
       derivePrimaryActionKind({
         verdict: minimalVerdict(),
-        displayPhase: "fix_ready",
+        securityPhase: "fix_ready",
         reviewInProgress: false,
       })
     ).toBe("verify_protection");
@@ -84,7 +84,7 @@ describe("derivePrimaryActionKind", () => {
     expect(
       derivePrimaryActionKind({
         verdict: minimalVerdict(),
-        displayPhase: "preparing",
+        securityPhase: "preparing",
         reviewInProgress: true,
       })
     ).toBe("none");
@@ -94,7 +94,7 @@ describe("derivePrimaryActionKind", () => {
     expect(
       derivePrimaryActionKind({
         verdict: null,
-        displayPhase: "needs_review",
+        securityPhase: "needs_review",
         reviewInProgress: false,
       })
     ).toBe("run_review");

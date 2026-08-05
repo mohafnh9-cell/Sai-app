@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import type { MissionControlState } from "@/features/mission-control/types/mission-control-state";
 import { analysisRunKeys } from "@/features/analysis-runs/lib/query-keys";
 import { appendAnalysisRunSearchParams } from "@/features/analysis-runs/lib/build-run-query";
@@ -34,7 +34,6 @@ export function useMissionControlState(
   }
 ) {
   const router = useRouter();
-  const queryClient = useQueryClient();
   const analysisRunId = options.analysisRunId ?? options.initialState.analysisRunId;
   const [scanStarting, setScanStarting] = useState(false);
   const [securityStarting, setSecurityStarting] = useState(false);
@@ -66,17 +65,10 @@ export function useMissionControlState(
 
   const state = query.data ?? options.initialState;
 
-  useEffect(() => {
-    queryClient.setQueryData(analysisRunKeys.list(projectId), state.analysisRuns);
-  }, [projectId, queryClient, state.analysisRuns]);
-
   const refresh = useCallback(async () => {
-    await queryClient.invalidateQueries({
-      queryKey: analysisRunKeys.missionControl(projectId, analysisRunId),
-    });
-    await queryClient.invalidateQueries({ queryKey: analysisRunKeys.list(projectId) });
+    await query.refetch();
     router.refresh();
-  }, [analysisRunId, projectId, queryClient, router]);
+  }, [query, router]);
 
   const startScan = useCallback(async () => {
     if (scanStarting || state.actions.scan.disabled) return;
@@ -128,7 +120,6 @@ export function useMissionControlState(
         throw new Error(body?.error ?? "Failed to start scan");
       }
 
-      void queryClient.invalidateQueries({ queryKey: analysisRunKeys.list(projectId) });
       if (navigateMissionControlToRun(projectId, resolvedScanId)) return;
       await refresh();
     } catch (cause) {
@@ -136,7 +127,7 @@ export function useMissionControlState(
     } finally {
       setScanStarting(false);
     }
-  }, [projectId, queryClient, refresh, scanStarting, state]);
+  }, [projectId, refresh, scanStarting, state]);
 
   const startSecurityTest = useCallback(async () => {
     if (securityStarting || state.actions.security.disabled) return;

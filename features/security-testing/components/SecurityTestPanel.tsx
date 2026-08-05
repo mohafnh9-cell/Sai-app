@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import type { SecurityTestContext, SecurityTestOption } from "../types";
 import type { ProjectReviewUiContext } from "@/server/projects/review-ui-context";
-import { AnalyzeProjectButton } from "@/features/projects/components/AnalyzeProjectButton";
+import { AnalyzeProjectScanContainer } from "@/features/projects/components/AnalyzeProjectScanContainer";
 import { useI18n } from "@/lib/i18n/client";
 import { PrimaryActionButton, SecurityTestHero } from "./SecurityTestHero";
 import { DEFAULT_SECURITY_TEST_IDS } from "../user-test-catalog";
@@ -112,7 +112,7 @@ export function SecurityTestPanel({
 
     if (context.phase === "needs_review") {
       return (
-        <AnalyzeProjectButton
+        <AnalyzeProjectScanContainer
           projectId={projectId}
           initialContext={reviewContext}
           showCommitHint={!compact}

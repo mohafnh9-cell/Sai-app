@@ -4,7 +4,6 @@ import { useCallback } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useI18n } from "@/lib/i18n/client";
 import type { AnalysisRunListItem } from "@/server/analysis-runs/list-analysis-runs";
-import { useAnalysisRuns } from "../hooks/useAnalysisRuns";
 
 function shortSha(sha: string | null): string {
   if (!sha) return "—";
@@ -26,7 +25,7 @@ function formatRunLabel(
 }
 
 export function AnalysisRunSelector({
-  runs: initialRuns,
+  runs,
   activeRunId,
 }: {
   runs: AnalysisRunListItem[];
@@ -36,11 +35,6 @@ export function AnalysisRunSelector({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { t } = useI18n("missionControl");
-  const projectId = pathname.match(/\/projects\/([^/]+)/)?.[1] ?? "";
-  const { data: runs = initialRuns } = useAnalysisRuns(projectId, {
-    initialRuns,
-    enabled: Boolean(projectId),
-  });
 
   const onChange = useCallback(
     (runId: string) => {
@@ -65,7 +59,7 @@ export function AnalysisRunSelector({
       </label>
       <select
         id="analysis-run-select"
-        className="mt-2 w-full rounded-xl border border-border/60 bg-background px-3 py-2.5 text-sm"
+        className="mt-2 w-full rounded-xl border border-border/60 bg-background px-3 py-3 text-sm"
         value={activeRunId ?? runs[0]?.runId ?? ""}
         onChange={(event) => onChange(event.target.value)}
       >

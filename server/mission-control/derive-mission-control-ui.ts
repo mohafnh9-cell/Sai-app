@@ -4,6 +4,7 @@ import type { ProductionVerdictV1 } from "@/brain/production-verdict/schema";
 import type { AnalysisRunListItem } from "@/server/analysis-runs/list-analysis-runs";
 import type { ProductionReviewState } from "@/lib/review/production-review-state";
 import type {
+  MissionControlPrimaryActionKind,
   MissionControlScanButtonLabel,
   MissionControlSecurityButtonLabel,
 } from "@/features/mission-control/types/mission-control-state";
@@ -155,4 +156,38 @@ export function deriveSecurityAction(input: {
 
 export function deriveSecurityRunning(phase: SecurityTestPhase): boolean {
   return phase === "preparing" || phase === "running";
+}
+
+export function derivePrimaryActionKind(input: {
+  verdict: ProductionVerdictV1 | null;
+  securityPhase: SecurityTestPhase;
+  reviewInProgress: boolean;
+}): MissionControlPrimaryActionKind {
+  const { verdict, securityPhase, reviewInProgress } = input;
+
+  if (reviewInProgress || securityPhase === "preparing" || securityPhase === "running") {
+    return "none";
+  }
+
+  if (!verdict) {
+    return "run_review";
+  }
+
+  if (verdict.status === "ready_to_ship") {
+    return "run_review_again";
+  }
+
+  if (securityPhase === "protected" || securityPhase === "completed_clean") {
+    return "run_review_again";
+  }
+
+  if (securityPhase === "fix_ready" || securityPhase === "issues_found") {
+    return "verify_protection";
+  }
+
+  if ((verdict.topPriorities?.length ?? 0) > 0) {
+    return "copy_safe_fix";
+  }
+
+  return "run_review_again";
 }

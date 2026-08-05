@@ -1,7 +1,7 @@
 "use client";
 
 import { Loader2 } from "lucide-react";
-import { AnalyzeProjectButton } from "@/features/projects/components/AnalyzeProjectButton";
+import { AnalyzeProjectScanContainer } from "@/features/projects/components/AnalyzeProjectScanContainer";
 import type { ProjectReviewUiContext } from "@/server/projects/review-ui-context";
 import { useI18n } from "@/lib/i18n/client";
 
@@ -53,7 +53,7 @@ export function AnalyzeApplicationPrompt({
             {t("analyze.preparingCta")}
           </div>
         ) : (
-          <AnalyzeProjectButton
+          <AnalyzeProjectScanContainer
             projectId={projectId}
             initialContext={reviewContext}
             showCommitHint

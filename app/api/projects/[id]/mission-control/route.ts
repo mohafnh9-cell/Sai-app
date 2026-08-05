@@ -70,6 +70,9 @@ export async function GET(
     analysisRunId,
     manualRecovery,
     openTechnicalDetails: searchParams.get("technical") === "open",
+    onboarded: searchParams.get("onboarded") === "1",
+    connected: searchParams.get("connected") === "1",
+    reviewComplete: searchParams.get("reviewComplete") === "1",
   });
 
   if (!state) {
