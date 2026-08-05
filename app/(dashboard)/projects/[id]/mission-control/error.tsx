@@ -5,11 +5,31 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 
+function logClientError(error: Error & { digest?: string; cause?: unknown }) {
+  console.error({
+    component: "mission-control-error-boundary",
+    event: "client_error_boundary",
+    name: error.name,
+    message: error.message,
+    stack: error.stack,
+    digest: error.digest ?? null,
+    cause:
+      error.cause instanceof Error
+        ? {
+            name: error.cause.name,
+            message: error.cause.message,
+            stack: error.cause.stack,
+          }
+        : error.cause ?? null,
+    at: new Date().toISOString(),
+  });
+}
+
 export default function MissionControlError({
   error,
   reset,
 }: {
-  error: Error & { digest?: string };
+  error: Error & { digest?: string; cause?: unknown };
   reset: () => void;
 }) {
   const pathname = usePathname();
@@ -18,6 +38,8 @@ export default function MissionControlError({
   const recoveryHref = `${pathname}?recovery=1`;
 
   useEffect(() => {
+    logClientError(error);
+
     const run = searchParams.get("run");
     if (run) {
       const params = new URLSearchParams(searchParams.toString());
@@ -26,8 +48,6 @@ export default function MissionControlError({
       router.replace(`${pathname}${qs ? `?${qs}` : ""}`);
       return;
     }
-
-    console.error("Mission Control render failed", error);
   }, [error, pathname, router, searchParams]);
 
   return (
@@ -35,8 +55,8 @@ export default function MissionControlError({
       <div className="max-w-md space-y-3">
         <h1 className="text-2xl font-semibold tracking-tight">Mission Control couldn&apos;t load</h1>
         <p className="text-sm text-muted-foreground">
-          Something went wrong while loading your Production Verdict. We&apos;re opening the current
-          production view automatically, or you can try again.
+          Something went wrong while loading your Production Verdict. Check server logs for
+          mission-control-trace / instrumentation.onRequestError entries.
         </p>
         {error.message ? (
           <p className="text-xs text-muted-foreground/80 break-all">{error.message}</p>

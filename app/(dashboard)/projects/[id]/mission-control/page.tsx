@@ -27,6 +27,8 @@ import type { ProjectReviewUiContext } from "@/server/projects/review-ui-context
 import type { Metadata } from "next";
 import { getTranslator } from "@/lib/i18n/server";
 import { toRscSafe } from "@/lib/rsc/to-rsc-safe";
+import { findNonSerializablePaths } from "@/lib/rsc/find-non-serializable-path";
+import { missionControlTrace, traceAwait } from "@/lib/debug/mission-control-trace";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -67,26 +69,36 @@ function buildMissionControlSearchParams(input: {
 export default async function MissionControlPage({ params, searchParams }: PageProps) {
   const { id: projectId } = await params;
   const query = await searchParams;
-  const auth = await getCachedServerAuthContext();
+  const traceCtx = { projectId, runId: query.run ?? null };
+
+  missionControlTrace("MissionControlPage", "START", traceCtx);
+
+  const auth = await traceAwait("getCachedServerAuthContext", traceCtx, () =>
+    getCachedServerAuthContext()
+  );
   if (!auth?.organizationId) redirect("/login");
+  const organizationId = auth.organizationId;
 
   const isolationEnabled = isFeatureEnabled("analysis_run_isolation", {
-    organizationId: auth.organizationId,
+    organizationId,
   });
 
   const continuousProtectionEnabled = isFeatureEnabled("continuous_protection", {
-    organizationId: auth.organizationId,
+    organizationId,
   });
 
   const attackCenterEnabled = isFeatureEnabled("attack_simulation", {
-    organizationId: auth.organizationId,
+    organizationId,
   });
 
-  const { data: project } = await auth.supabase
-    .from("projects")
-    .select("id, name, framework")
-    .eq("id", projectId)
-    .maybeSingle();
+  const projectResult = await traceAwait("projects.select", traceCtx, async () =>
+    auth.supabase
+      .from("projects")
+      .select("id, name, framework")
+      .eq("id", projectId)
+      .maybeSingle()
+  );
+  const project = projectResult.data;
 
   if (!project) notFound();
 
@@ -114,11 +126,16 @@ export default async function MissionControlPage({ params, searchParams }: PageP
     } else {
       let resolved: Awaited<ReturnType<typeof resolveAnalysisRunForMissionControl>>;
       try {
-        resolved = await resolveAnalysisRunForMissionControl(admin, {
-          projectId,
-          organizationId: auth.organizationId,
-          requestedRunId: query.run,
-        });
+        resolved = await traceAwait(
+          "resolveAnalysisRunForMissionControl",
+          { ...traceCtx, analysisRunId: query.run ?? null },
+          () =>
+            resolveAnalysisRunForMissionControl(admin, {
+              projectId,
+              organizationId,
+              requestedRunId: query.run,
+            })
+        );
       } catch (error) {
         console.error({
           component: "mission-control-page",
@@ -166,7 +183,9 @@ export default async function MissionControlPage({ params, searchParams }: PageP
 
   let reviewContext: ProjectReviewUiContext | null = null;
   try {
-    reviewContext = await getProjectReviewUiContext(auth.supabase, projectId);
+    reviewContext = await traceAwait("getProjectReviewUiContext", traceCtx, () =>
+      getProjectReviewUiContext(auth.supabase, projectId)
+    );
   } catch (error) {
     console.error({
       component: "mission-control-page",
@@ -178,23 +197,25 @@ export default async function MissionControlPage({ params, searchParams }: PageP
 
   const adminClient = tryCreateMissionControlAdminClient();
   const analysisRuns =
-    isolationEnabled && auth.organizationId && adminClient
-      ? await listAnalysisRunsForProject(adminClient, {
-          projectId,
-          organizationId: auth.organizationId,
-        }).catch(() => [])
+    isolationEnabled && adminClient
+      ? await traceAwait("listAnalysisRunsForProject", traceCtx, async () =>
+          listAnalysisRunsForProject(adminClient, {
+            projectId,
+            organizationId,
+          }).catch(() => [])
+        )
       : [];
 
-  const missionLoad = await loadMissionControlWithRecovery(
-    auth.supabase,
-    projectId,
-    auth.organizationId,
-    {
-      analysisRunId,
-      isolationEnabled,
-      manualRecovery,
-      admin: adminClient,
-    }
+  const missionLoad = await traceAwait(
+    "loadMissionControlWithRecovery",
+    { ...traceCtx, analysisRunId },
+    async () =>
+      loadMissionControlWithRecovery(auth.supabase, projectId, organizationId, {
+        analysisRunId,
+        isolationEnabled,
+        manualRecovery,
+        admin: adminClient,
+      })
   );
 
   const { view, verdict, runScoped, activeRunId, recoveryReason } = missionLoad;
@@ -202,26 +223,37 @@ export default async function MissionControlPage({ params, searchParams }: PageP
   const findingsRunId = runScoped && activeRunId ? activeRunId : null;
 
   const scanForContext = findingsRunId
-    ? await auth.supabase
-        .from("scans")
-        .select("id, detected_stack, status")
-        .eq("id", findingsRunId)
-        .eq("project_id", projectId)
-        .maybeSingle()
-    : await auth.supabase
-        .from("scans")
-        .select("id, detected_stack, status")
-        .eq("project_id", projectId)
-        .eq("status", "completed")
-        .order("completed_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+    ? await traceAwait(
+        "scans.select.runScoped",
+        { ...traceCtx, scanId: findingsRunId },
+        async () =>
+          auth.supabase
+            .from("scans")
+            .select("id, detected_stack, status")
+            .eq("id", findingsRunId)
+            .eq("project_id", projectId)
+            .maybeSingle()
+      )
+    : await traceAwait("scans.select.latestCompleted", traceCtx, async () =>
+        auth.supabase
+          .from("scans")
+          .select("id, detected_stack, status")
+          .eq("project_id", projectId)
+          .eq("status", "completed")
+          .order("completed_at", { ascending: false })
+          .limit(1)
+          .maybeSingle()
+      );
 
   const contextScan = scanForContext.data;
 
   const runFindings =
     isolationEnabled && findingsRunId
-      ? await loadAnalysisRunFindingsForFixPrompt(auth.supabase, findingsRunId)
+      ? await traceAwait(
+          "loadAnalysisRunFindingsForFixPrompt",
+          { ...traceCtx, scanId: findingsRunId },
+          async () => loadAnalysisRunFindingsForFixPrompt(auth.supabase, findingsRunId)
+        )
       : undefined;
 
   const latestReportHref =
@@ -246,12 +278,17 @@ export default async function MissionControlPage({ params, searchParams }: PageP
     try {
       const admin = adminClient ?? tryCreateMissionControlAdminClient();
       if (admin) {
-        const fullContext = await getSecurityTestContext(admin, {
-          projectId,
-          organizationId: auth.organizationId,
-          analysisRunId: runScoped && activeRunId ? activeRunId : undefined,
-          isolationEnabled,
-        });
+        const fullContext = await traceAwait(
+          "getSecurityTestContext",
+          { ...traceCtx, analysisRunId: runScoped && activeRunId ? activeRunId : null },
+          () =>
+            getSecurityTestContext(admin, {
+              projectId,
+              organizationId,
+              analysisRunId: runScoped && activeRunId ? activeRunId : undefined,
+              isolationEnabled,
+            })
+        );
         const { hypotheses: _hypotheses, analysisRunId: _runId, ...publicContext } = fullContext;
         securityTestContext = publicContext;
       }
@@ -289,8 +326,10 @@ export default async function MissionControlPage({ params, searchParams }: PageP
     continuousProtectionEnabled && Boolean(verdict) && !viewingHistoricalRun;
 
   const protectionCenter =
-    showProtectionStatus && auth.organizationId && adminClient
-      ? await getProtectionCenterModel(adminClient, projectId).catch(() => null)
+    showProtectionStatus && adminClient
+      ? await traceAwait("getProtectionCenterModel", traceCtx, async () =>
+          getProtectionCenterModel(adminClient, projectId).catch(() => null)
+        )
       : null;
 
   const showRecoveryBanner =
@@ -301,7 +340,7 @@ export default async function MissionControlPage({ params, searchParams }: PageP
       ? "analysisRun.autoRecoveryBanner"
       : "analysisRun.recoveryBanner";
 
-  const experienceProps = toRscSafe({
+  const rawExperienceProps = {
     view,
     verdict,
     projectName: project.name,
@@ -317,6 +356,31 @@ export default async function MissionControlPage({ params, searchParams }: PageP
     protectionCenter,
     showProtectionStatus,
     isVerdictStale: Boolean(reviewContext?.isStale && !viewingHistoricalRun),
+  };
+
+  const rscIssues = findNonSerializablePaths(rawExperienceProps, {
+    rootLabel: "experienceProps",
+  });
+  if (rscIssues.length > 0) {
+    console.error({
+      component: "mission-control-rsc-audit",
+      event: "non_serializable_props_detected",
+      projectId,
+      runId: activeRunId,
+      scanId: findingsRunId,
+      issues: rscIssues,
+    });
+  }
+
+  const experienceProps = toRscSafe(rawExperienceProps);
+
+  missionControlTrace("MissionControlPage", "END", {
+    ...traceCtx,
+    analysisRunId: activeRunId,
+    scanId: findingsRunId,
+    runScoped,
+    hasVerdict: Boolean(verdict),
+    rscIssueCount: rscIssues.length,
   });
 
   return (
