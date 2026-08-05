@@ -51,11 +51,32 @@ export async function getMissionControlView(
     .order("completed_at", { ascending: false })
     .limit(5);
 
-  const feedQuery = analysisRunId ? feedBase.eq("scan_id", analysisRunId) : feedBase;
-  const activeJobQuery = analysisRunId ? activeJobBase.eq("scan_id", analysisRunId) : activeJobBase;
-  const completedJobsQuery = analysisRunId
-    ? completedJobsBase.eq("scan_id", analysisRunId)
-    : completedJobsBase;
+  async function loadScopedRows<T>(
+    scopedQuery: PromiseLike<{ data: T | null; error: { message?: string } | null }>,
+    fallbackQuery: PromiseLike<{ data: T | null; error: { message?: string } | null }>,
+    label: string
+  ): Promise<T | null> {
+    const scoped = await scopedQuery;
+    if (!scoped.error) return scoped.data;
+    console.warn({
+      component: "mission-control-view",
+      event: "scoped_query_fallback",
+      label,
+      analysisRunId,
+      error: scoped.error.message,
+    });
+    const fallback = await fallbackQuery;
+    if (fallback.error) {
+      console.warn({
+        component: "mission-control-view",
+        event: "query_failed",
+        label,
+        analysisRunId,
+        error: fallback.error.message,
+      });
+    }
+    return fallback.data;
+  }
 
   const latestScanQuery = analysisRunId
     ? supabase
@@ -94,20 +115,54 @@ export async function getMissionControlView(
   const [
     { data: project },
     reviewState,
-    activeScanJob,
-    completedJobsResult,
+    activeScanJobData,
+    completedJobsData,
     latestScan,
-    feedRows,
+    feedRowsData,
     latestReviewScan,
   ] = await Promise.all([
     supabase.from("projects").select("id, name").eq("id", projectId).maybeSingle(),
-    getProductionReviewState(supabase, { organizationId, projectId }),
-    activeJobQuery.maybeSingle(),
-    completedJobsQuery,
+    getProductionReviewState(supabase, { organizationId, projectId }).catch((error) => {
+      console.warn({
+        component: "mission-control-view",
+        event: "review_state_failed",
+        projectId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return {
+        hasActiveReview: false,
+        scanId: null,
+        scanJobId: null,
+        status: "idle" as const,
+        isCancellable: false,
+        commitSha: null,
+        createdAt: null,
+        startedAt: null,
+        completedAt: null,
+        cancelledAt: null,
+        failureMessage: null,
+      };
+    }),
+    analysisRunId
+      ? loadScopedRows(activeJobBase.eq("scan_id", analysisRunId).maybeSingle(), activeJobBase.maybeSingle(), "active_job")
+      : activeJobBase.maybeSingle().then((result) => result.data),
+    analysisRunId
+      ? loadScopedRows(
+          completedJobsBase.eq("scan_id", analysisRunId),
+          completedJobsBase,
+          "completed_jobs"
+        )
+      : completedJobsBase.then((result) => result.data ?? []),
     latestScanQuery,
-    feedQuery,
+    analysisRunId
+      ? loadScopedRows(feedBase.eq("scan_id", analysisRunId), feedBase, "feed")
+      : feedBase.then((result) => result.data ?? []),
     latestReviewScanQuery,
   ]);
+
+  const activeScanJob = { data: activeScanJobData };
+  const completedJobsResult = { data: completedJobsData ?? [] };
+  const feedRows = { data: feedRowsData ?? [] };
 
   const verdict = analysisRunId
     ? await getProductionVerdictByScan(supabase, analysisRunId)

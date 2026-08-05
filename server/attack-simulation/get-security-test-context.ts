@@ -121,15 +121,27 @@ export async function getSecurityTestContext(
       ? buildSecurityTestOptionsFromHypotheses(hypotheses, t)
       : buildDefaultSecurityTestOptions(t);
 
-  const campaignRow = scopedRunId
-    ? await getAttackCampaignByScanId(admin, scopedRunId, input.organizationId)
-    : useProjectFallbacks
-      ? (await listAttackCampaignsForProject(admin, {
-          projectId: input.projectId,
-          organizationId: input.organizationId,
-          limit: 1,
-        }))[0] ?? null
-      : null;
+  let campaignRow = null;
+  try {
+    campaignRow = scopedRunId
+      ? await getAttackCampaignByScanId(admin, scopedRunId, input.organizationId)
+      : useProjectFallbacks
+        ? (await listAttackCampaignsForProject(admin, {
+            projectId: input.projectId,
+            organizationId: input.organizationId,
+            limit: 1,
+          }))[0] ?? null
+        : null;
+  } catch (error) {
+    console.warn({
+      component: "security-test-context",
+      event: "campaign_load_failed",
+      projectId: input.projectId,
+      analysisRunId: scopedRunId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    campaignRow = null;
+  }
 
   const executions = campaignRow
     ? await listAttackExecutionsForCampaign(admin, campaignRow.id, input.organizationId)

@@ -15,6 +15,7 @@
   },
   "analysisRun": {
     "historicalBanner": "You are viewing a previous analysis run. Start a new review to update the active run.",
+    "recoveryBanner": "Showing the current production view without run scoping. Pick a run from the selector when you are ready.",
     "selector": {
       "label": "Analysis run",
       "hint": "Production Verdict, Security Test, and Safe Fix reflect this run.",
