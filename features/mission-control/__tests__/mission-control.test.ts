@@ -154,6 +154,25 @@ describe("Mission Control sections", () => {
     expect(view.verdict.deploymentRecommendation.length).toBeGreaterThan(10);
   });
 
+  it("tolerates partial verdict objects missing topPriorities arrays", () => {
+    const partial = {
+      ...minimalVerdict(),
+      topPriorities: undefined,
+      evaluatedAreas: undefined,
+      partiallyEvaluatedAreas: undefined,
+    } as unknown as ProductionVerdictV1;
+
+    expect(() =>
+      buildMissionControlView({
+        projectId: "p",
+        projectName: "x",
+        verdict: partial,
+        scanInProgress: false,
+        feedFromDb: [],
+      })
+    ).not.toThrow();
+  });
+
   it("reflects Business Logic Team execution states from metadata overrides", () => {
     const statuses = ["queued", "running", "completed", "skipped", "failed"] as const;
     for (const status of statuses) {

@@ -37,6 +37,42 @@ describe("loadAnalysisRunFindingsForFixPrompt", () => {
     expect(findings[0]?.file_path).toBe("app/api/route.ts");
   });
 
+  it("omits optional fields instead of undefined for RSC serialization", async () => {
+    const client = {
+      from: (table: string) => {
+        if (table !== "scan_findings") throw new Error(`unexpected ${table}`);
+        return {
+          select: () => ({
+            eq: async () => ({
+              data: [
+                {
+                  id: "f2",
+                  title: "Open route",
+                  description: null,
+                  severity: "medium",
+                  recommendation: null,
+                  category: "api",
+                  file_path: "app/route.ts",
+                  start_line: null,
+                  rule_id: "api.open",
+                  confidence: "medium",
+                  fingerprint: "fp2",
+                },
+              ],
+              error: null,
+            }),
+          }),
+        };
+      },
+    } as never;
+
+    const findings = await loadAnalysisRunFindingsForFixPrompt(client, "run-2");
+    expect(findings[0]).not.toHaveProperty("description");
+    expect(findings[0]).not.toHaveProperty("recommendation");
+    expect(findings[0]).not.toHaveProperty("start_line");
+    expect(JSON.stringify(findings)).not.toContain("undefined");
+  });
+
   it("returns empty array on query error", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const client = {

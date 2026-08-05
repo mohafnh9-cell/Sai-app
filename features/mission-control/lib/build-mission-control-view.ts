@@ -238,7 +238,7 @@ export function buildMissionControlView(
       statusLabel: headerStatus,
       progressPercent: progress,
       etaLabel: input.scanInProgress ? formatEta(input.sessionEtaSeconds ?? 102) : "—",
-      currentPhase: currentPhase.replace(" Team", " Analysis"),
+      currentPhase: String(currentPhase).replace(" Team", " Analysis"),
     },
     teams,
     teamReasons,

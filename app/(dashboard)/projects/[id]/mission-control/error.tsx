@@ -27,6 +27,9 @@ export default function MissionControlError({
           Something went wrong while loading your Production Verdict. Try again, or open the current
           production view without run scoping.
         </p>
+        {error.message ? (
+          <p className="text-xs text-muted-foreground/80 break-all">{error.message}</p>
+        ) : null}
         {error.digest ? (
           <p className="text-xs text-muted-foreground/80">Reference: {error.digest}</p>
         ) : null}

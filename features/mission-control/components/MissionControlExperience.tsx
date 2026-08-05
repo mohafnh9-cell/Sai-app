@@ -82,14 +82,14 @@ export function MissionControlExperience({
         : phase;
 
   const reviewInProgress = Boolean(
-    reviewContext?.productionReviewState.hasActiveReview ||
+    reviewContext?.productionReviewState?.hasActiveReview ||
       activeSecurityTestContext?.reviewInProgress
   );
 
   useEffect(() => {
     if (runScoped || !guidedFlowActive) return;
     if (displayPhase === "ready") return;
-    if (verdict && !reviewContext?.productionReviewState.hasActiveReview) return;
+    if (verdict && !reviewContext?.productionReviewState?.hasActiveReview) return;
     if (phase === "preparing" && verdict) return;
     const shouldPoll =
       activeSecurityTestContext?.reviewInProgress ||
@@ -105,7 +105,7 @@ export function MissionControlExperience({
     displayPhase,
     guidedFlowActive,
     phase,
-    reviewContext?.productionReviewState.hasActiveReview,
+    reviewContext?.productionReviewState?.hasActiveReview,
     router,
     runScoped,
     verdict,

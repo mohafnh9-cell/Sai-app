@@ -63,12 +63,8 @@ export function normalizeProductionVerdictPayload(data: unknown): unknown {
 
   normalized.generatedAt = normalizeGeneratedAt(normalized.generatedAt);
 
-  if (normalized.branch === undefined) normalized.branch = null;
   if (normalized.commitSha === undefined && normalized.commit_sha !== undefined) {
     normalized.commitSha = normalized.commit_sha;
-  }
-  if (normalized.projectedScoreIsEstimate === undefined) {
-    normalized.projectedScoreIsEstimate = false;
   }
 
   normalized.blockersCount = asNumber(normalized.blockersCount);

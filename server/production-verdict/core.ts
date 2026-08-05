@@ -369,14 +369,14 @@ export async function getProductionVerdictByScan(
 
 export async function getCurrentProductionVerdict(
   admin: SupabaseClient,
-  repositoryId: string
+  projectId: string
 ): Promise<ProductionVerdictV1 | null> {
-  log("verdict_read_started", { repositoryId });
+  log("verdict_read_started", { projectId });
 
   const { data: state } = await admin
     .from("repository_scan_state")
     .select("current_verdict_id")
-    .eq("repository_id", repositoryId)
+    .eq("repository_id", projectId)
     .maybeSingle();
 
   if (state?.current_verdict_id) {
@@ -387,15 +387,15 @@ export async function getCurrentProductionVerdict(
       .maybeSingle();
 
     if (error && isMissingTableError(error.message)) {
-      log("migration_missing", { repositoryId });
+      log("migration_missing", { projectId });
       return null;
     }
 
     if (data?.verdict) {
-      log("verdict_read_completed", { repositoryId, source: "current_verdict_id" });
+      log("verdict_read_completed", { projectId, source: "current_verdict_id" });
       const parsed = safeParseProductionVerdict(data.verdict);
       if (!parsed) {
-        log("verdict_parse_failed", { repositoryId, source: "current_verdict_id" });
+        log("verdict_parse_failed", { projectId, source: "current_verdict_id" });
         return null;
       }
       return parsed;
@@ -405,29 +405,29 @@ export async function getCurrentProductionVerdict(
   const { data, error } = await admin
     .from("production_verdicts")
     .select("verdict")
-    .eq("repository_id", repositoryId)
+    .eq("project_id", projectId)
     .order("generated_at", { ascending: false })
     .limit(1)
     .maybeSingle();
 
   if (error) {
     if (isMissingTableError(error.message)) {
-      log("migration_missing", { repositoryId });
+      log("migration_missing", { projectId });
     } else {
-      log("verdict_read_failed", { repositoryId, error: error.message });
+      log("verdict_read_failed", { projectId, error: error.message });
     }
     return null;
   }
 
   if (!data?.verdict) {
-    log("verdict_read_empty", { repositoryId });
+    log("verdict_read_empty", { projectId });
     return null;
   }
 
-  log("verdict_read_completed", { repositoryId, source: "latest_by_repo" });
+  log("verdict_read_completed", { projectId, source: "latest_by_project" });
   const parsed = safeParseProductionVerdict(data.verdict);
   if (!parsed) {
-    log("verdict_parse_failed", { repositoryId, source: "latest_by_repo" });
+    log("verdict_parse_failed", { projectId, source: "latest_by_project" });
     return null;
   }
   return parsed;

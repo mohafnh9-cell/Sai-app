@@ -117,7 +117,7 @@ export function MissionControlProtectionStatus({
         {t("protection.lastChecked")}: {lastChecked}
       </p>
 
-      {model.worriesTop3.length > 0 ? (
+      {model.worriesTop3?.length ? (
         <div className="space-y-2">
           <p className="text-sm font-medium">{t("protection.worriesTitle")}</p>
           <ul className="space-y-1.5 text-sm text-muted-foreground">

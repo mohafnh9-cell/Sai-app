@@ -101,11 +101,26 @@ export default async function MissionControlPage({ params, searchParams }: PageP
         projectId,
       });
     } else {
-      const resolved = await resolveAnalysisRunForMissionControl(admin, {
-        projectId,
-        organizationId: auth.organizationId,
-        requestedRunId: query.run,
-      });
+      let resolved: Awaited<ReturnType<typeof resolveAnalysisRunForMissionControl>>;
+      try {
+        resolved = await resolveAnalysisRunForMissionControl(admin, {
+          projectId,
+          organizationId: auth.organizationId,
+          requestedRunId: query.run,
+        });
+      } catch (error) {
+        console.error({
+          component: "mission-control-page",
+          event: "analysis_run_resolve_failed",
+          projectId,
+          run: query.run,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        if (query.run && !recoveryMode) {
+          redirect(`/projects/${projectId}/mission-control?recovery=1`);
+        }
+        resolved = { runId: null, source: "none", valid: true };
+      }
 
       if (query.run && !resolved.valid) {
         redirect(
@@ -256,8 +271,8 @@ export default async function MissionControlPage({ params, searchParams }: PageP
     isolationEnabled &&
     !recoveryMode &&
     analysisRunId &&
-    reviewContext?.productionReviewState.scanId &&
-    reviewContext.productionReviewState.hasActiveReview &&
+    reviewContext?.productionReviewState?.scanId &&
+    reviewContext.productionReviewState?.hasActiveReview &&
     reviewContext.productionReviewState.scanId !== analysisRunId;
 
   const showSecurityTest = shouldShowSecurityTestNav({

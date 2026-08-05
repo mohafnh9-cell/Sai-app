@@ -25,17 +25,28 @@ export async function loadAnalysisRunFindingsForFixPrompt(
     return [];
   }
 
-  return (data ?? []).map((row) => ({
-    id: row.id as string,
-    title: row.title as string,
-    description: (row.description as string | null) ?? undefined,
-    severity: row.severity as string,
-    category: row.category as string,
-    recommendation: (row.recommendation as string | null) ?? undefined,
-    file_path: row.file_path as string,
-    start_line: (row.start_line as number | null) ?? undefined,
-    rule_id: row.rule_id as string,
-    confidence: row.confidence as string,
-    fingerprint: row.fingerprint as string,
-  }));
+  return (data ?? []).map((row) => {
+    const finding: ScanFinding = {
+      id: row.id as string,
+      title: row.title as string,
+      severity: row.severity as string,
+      category: row.category as string,
+      file_path: row.file_path as string,
+      rule_id: row.rule_id as string,
+      confidence: row.confidence as string,
+      fingerprint: row.fingerprint as string,
+    };
+
+    if (row.description != null) {
+      finding.description = row.description as string;
+    }
+    if (row.recommendation != null) {
+      finding.recommendation = row.recommendation as string;
+    }
+    if (row.start_line != null) {
+      finding.start_line = row.start_line as number;
+    }
+
+    return finding;
+  });
 }
