@@ -15,6 +15,14 @@ import { withAnalysisRunQuery } from "@/features/analysis-runs/lib/build-run-que
 import { resolveAnalysisRunForProject } from "@/server/analysis-runs/resolve-analysis-run";
 import { createAdminClient } from "@/server/security-scanner/admin-client";
 import type { Metadata } from "next";
+import { z } from "zod";
+
+const routeUuidSchema = z.string().uuid();
+
+function parseRouteUuid(value: string): string | null {
+  const parsed = routeUuidSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
+}
 
 interface JourneyPageProps {
   params: Promise<{ id: string }>;
@@ -27,8 +35,20 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function ProjectJourneyPage({ params, searchParams }: JourneyPageProps) {
-  const { id } = await params;
+  const { id: rawProjectId } = await params;
+  const projectId = parseRouteUuid(rawProjectId);
+  if (!projectId) notFound();
+
   const query = await searchParams;
+  let requestedRunId: string | undefined;
+  if (query.run !== undefined) {
+    const parsedRunId = parseRouteUuid(query.run);
+    if (!parsedRunId) {
+      redirect(`/projects/${projectId}/journey`);
+    }
+    requestedRunId = parsedRunId;
+  }
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -49,22 +69,22 @@ export default async function ProjectJourneyPage({ params, searchParams }: Journ
       isFeatureEnabled("analysis_run_isolation", { organizationId: auth.organizationId })
   );
 
-  let analysisRunId: string | null = query.run ?? null;
+  let analysisRunId: string | null = requestedRunId ?? null;
 
   if (isolationEnabled && auth?.organizationId) {
     const admin = createAdminClient();
     const resolved = await resolveAnalysisRunForProject(admin, {
-      projectId: id,
+      projectId,
       organizationId: auth.organizationId,
-      requestedRunId: query.run,
+      requestedRunId,
     });
 
-    if (query.run && !resolved.valid) {
-      redirect(`/projects/${id}/journey`);
+    if (requestedRunId && !resolved.valid) {
+      redirect(`/projects/${projectId}/journey`);
     }
 
-    if (!query.run && resolved.runId) {
-      redirect(withAnalysisRunQuery(`/projects/${id}/journey`, resolved.runId));
+    if (!requestedRunId && resolved.runId) {
+      redirect(withAnalysisRunQuery(`/projects/${projectId}/journey`, resolved.runId));
     }
 
     analysisRunId = resolved.runId;
@@ -77,28 +97,28 @@ export default async function ProjectJourneyPage({ params, searchParams }: Journ
   const { data: project } = await supabase
     .from("projects")
     .select("id, name")
-    .eq("id", id)
+    .eq("id", projectId)
     .maybeSingle();
 
   if (!project) notFound();
 
-  const journey = await getProductionJourneyByProject(supabase, id, user.id).catch(() => null);
+  const journey = await getProductionJourneyByProject(supabase, projectId, user.id).catch(() => null);
 
   const { data: latestScan } = await supabase
     .from("scans")
     .select("id")
-    .eq("project_id", id)
+    .eq("project_id", projectId)
     .eq("status", "completed")
     .order("completed_at", { ascending: false })
     .limit(1)
     .maybeSingle();
 
   const latestReportHref = latestScan?.id
-    ? `/projects/${id}/scans/${latestScan.id}/report`
+    ? `/projects/${projectId}/scans/${latestScan.id}/report`
     : undefined;
 
   const backHref = withAnalysisRunQuery(
-    projectVerdictHref(id),
+    projectVerdictHref(projectId),
     isolationEnabled ? analysisRunId : undefined
   );
   const backLabel = tm("page.backToMissionControl");
@@ -121,7 +141,7 @@ export default async function ProjectJourneyPage({ params, searchParams }: Journ
         </div>
 
         <ProjectWorkflowNav
-          projectId={id}
+          projectId={projectId}
           analysisRunId={isolationEnabled ? analysisRunId : undefined}
           showSecurityTest={missionControlEnabled ? showSecurityTest : false}
         />
@@ -129,7 +149,7 @@ export default async function ProjectJourneyPage({ params, searchParams }: Journ
         {journey ? (
           <ProductionJourneyView
             journey={journey}
-            projectId={id}
+            projectId={projectId}
             analysisRunLinksEnabled={isolationEnabled}
           />
         ) : (

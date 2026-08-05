@@ -213,6 +213,9 @@ describe("executeScanRunJob", () => {
       token: "gh-token",
       userId: "user-1",
     });
+    const { ensureProductionVerdictForCompletedScan } = await import(
+      "@/server/production-verdict/ensure-verdict-for-scan"
+    );
 
     const admin = createAdminMock({ scanStatus: "completed", jobStatus: "running" });
     const { executeScanRunJob } = await import("../run-scan-job");
@@ -227,5 +230,26 @@ describe("executeScanRunJob", () => {
 
     expect(runMock).not.toHaveBeenCalled();
     expect(admin.updates.some((row) => row.status === "completed")).toBe(true);
+    expect(ensureProductionVerdictForCompletedScan).toHaveBeenCalled();
+  });
+
+  it("backfills verdict when the job is already completed", async () => {
+    const { ensureProductionVerdictForCompletedScan } = await import(
+      "@/server/production-verdict/ensure-verdict-for-scan"
+    );
+
+    const admin = createAdminMock({ scanStatus: "completed", jobStatus: "completed" });
+    const { executeScanRunJob } = await import("../run-scan-job");
+
+    await executeScanRunJob(admin as never, {
+      scanJobId: "job-5",
+      scanId: "scan-5",
+      organizationId: "org-1",
+      projectId: "project-1",
+      userId: "user-1",
+    });
+
+    expect(runMock).not.toHaveBeenCalled();
+    expect(ensureProductionVerdictForCompletedScan).toHaveBeenCalled();
   });
 });

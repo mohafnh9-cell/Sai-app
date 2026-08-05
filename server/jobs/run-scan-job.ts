@@ -42,6 +42,24 @@ export async function executeScanRunJob(
   let runPayload = payload;
   const existingJob = await getScanJob(admin, payload.scanJobId);
   if (existingJob && isTerminalScanJobStatus(existingJob.status)) {
+    if (existingJob.status === "completed") {
+      const { data: terminalScan } = await admin
+        .from("scans")
+        .select("status")
+        .eq("id", payload.scanId)
+        .maybeSingle();
+      if (
+        terminalScan?.status === "completed" &&
+        payload.persistMode !== "review_only"
+      ) {
+        await ensureProductionVerdictForCompletedScan(admin, {
+          organizationId: payload.organizationId,
+          projectId: payload.projectId,
+          scanId: payload.scanId,
+          scanJobId: payload.scanJobId,
+        });
+      }
+    }
     log("info", "scan_job_already_terminal", {
       scanJobId: payload.scanJobId,
       status: existingJob.status,
@@ -253,18 +271,6 @@ export async function executeScanRunJob(
     throw new Error("SCAN_DID_NOT_COMPLETE");
   }
 
-  if (!payload.finalize) {
-    const earlyComplete = await markScanJobCompleted(admin, payload.scanJobId);
-    if (earlyComplete.updated) {
-      log("info", "scan_job_completed_after_scan", {
-        scanJobId: payload.scanJobId,
-        scanId: payload.scanId,
-        organizationId: payload.organizationId,
-        projectId: payload.projectId,
-      });
-    }
-  }
-
   if (payload.finalize) {
     const jobBeforeFinalize = await getScanJob(admin, payload.scanJobId);
     if (jobBeforeFinalize?.metadata?.finalizeCompleted === true) {
@@ -339,16 +345,16 @@ export async function executeScanRunJob(
   }
 
   const completedTransition = await markScanJobCompleted(admin, payload.scanJobId);
-  if (!completedTransition.updated) {
+  if (completedTransition.updated) {
+    log("info", "scan_job_completed", {
+      scanJobId: payload.scanJobId,
+      scanId: payload.scanId,
+      organizationId: payload.organizationId,
+      projectId: payload.projectId,
+    });
+  } else {
     log("info", "scan_job_complete_noop", { scanJobId: payload.scanJobId });
-    return;
   }
-  log("info", "scan_job_completed", {
-    scanJobId: payload.scanJobId,
-    scanId: payload.scanId,
-    organizationId: payload.organizationId,
-    projectId: payload.projectId,
-  });
 
   if (payload.persistMode !== "review_only") {
     await ensureProductionVerdictForCompletedScan(admin, {

@@ -9,6 +9,7 @@ import {
 } from "./scan-job-store";
 import { isTerminalScanJobStatus } from "./job-transitions";
 import { executeScanRunJob } from "./run-scan-job";
+import { ensureProductionVerdictForCompletedScan } from "@/server/production-verdict/ensure-verdict-for-scan";
 import { buildScanRunPayloadFromRow } from "./kick-stuck-scan-run";
 import type { ScanRunPayload } from "./types";
 
@@ -95,6 +96,14 @@ export async function reconcileOrphanScanJobWithTerminalScan(
   const transitioned = await markScanJobCompleted(admin, job.id);
   if (transitioned.updated) {
     log("orphan_marked_completed", { scanJobId: job.id, scanId: input.scan.id });
+    if (job.job_type !== "automatic_review" && job.metadata?.persistMode !== "review_only") {
+      await ensureProductionVerdictForCompletedScan(admin, {
+        organizationId: job.organization_id,
+        projectId: job.project_id ?? (input.scan.repository_id as string),
+        scanId: input.scan.id as string,
+        scanJobId: job.id,
+      }).catch(() => undefined);
+    }
   }
   return transitioned.updated;
 }

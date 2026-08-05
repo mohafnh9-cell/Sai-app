@@ -22,6 +22,14 @@ import type { SecurityTestContext } from "@/features/security-testing/types";
 import type { AttackCenterSnapshot } from "@/server/attack-simulation/ui/types";
 import type { Metadata } from "next";
 import { getTranslator } from "@/lib/i18n/server";
+import { z } from "zod";
+
+const routeUuidSchema = z.string().uuid();
+
+function parseRouteUuid(value: string): string | null {
+  const parsed = routeUuidSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
+}
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -30,16 +38,30 @@ interface PageProps {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { id } = await params;
+  const projectId = parseRouteUuid(id);
   const { t } = await getTranslator("attackCenter");
+  if (!projectId) return { title: t("page.title") };
   const auth = await getCachedServerAuthContext();
   if (!auth?.organizationId) return { title: t("page.title") };
-  const { data } = await auth.supabase.from("projects").select("name").eq("id", id).maybeSingle();
+  const { data } = await auth.supabase.from("projects").select("name").eq("id", projectId).maybeSingle();
   return { title: data?.name ? `${data.name} — ${t("page.title")}` : t("page.title") };
 }
 
 export default async function AttackCenterPage({ params, searchParams }: PageProps) {
-  const { id: projectId } = await params;
+  const { id: rawProjectId } = await params;
+  const projectId = parseRouteUuid(rawProjectId);
+  if (!projectId) notFound();
+
   const query = await searchParams;
+  let requestedRunId: string | undefined;
+  if (query.run !== undefined) {
+    const parsedRunId = parseRouteUuid(query.run);
+    if (!parsedRunId) {
+      redirect(`/projects/${projectId}/attack-center`);
+    }
+    requestedRunId = parsedRunId;
+  }
+
   const auth = await getCachedServerAuthContext();
   if (!auth?.organizationId) redirect("/login");
 
@@ -51,31 +73,31 @@ export default async function AttackCenterPage({ params, searchParams }: PagePro
     organizationId: auth.organizationId,
   });
 
-  let analysisRunId: string | null = query.run ?? null;
+  let analysisRunId: string | null = requestedRunId ?? null;
 
   if (isolationEnabled) {
     const admin = createAdminClient();
     const resolved = await resolveAnalysisRunForMissionControl(admin, {
       projectId,
       organizationId: auth.organizationId,
-      requestedRunId: query.run,
+      requestedRunId,
     });
 
-    if (query.run && !resolved.valid) {
+    if (requestedRunId && !resolved.valid) {
       redirect(`/projects/${projectId}/attack-center`);
     }
 
-    if (!query.run && resolved.runId) {
+    if (!requestedRunId && resolved.runId) {
       redirect(withAnalysisRunQuery(`/projects/${projectId}/attack-center`, resolved.runId));
     }
 
     analysisRunId = resolved.runId;
-  } else if (query.run) {
+  } else if (requestedRunId) {
     const admin = createAdminClient();
     const owned = await isAnalysisRunOwnedByProject(admin, {
       projectId,
       organizationId: auth.organizationId,
-      runId: query.run,
+      runId: requestedRunId,
     });
     if (!owned) {
       redirect(`/projects/${projectId}/attack-center`);
