@@ -103,12 +103,7 @@ export default async function ProjectJourneyPage({ params, searchParams }: Journ
   );
   const backLabel = tm("page.backToMissionControl");
 
-  const showSecurityTest = shouldShowSecurityTestNav({
-    attackCenterEnabled,
-    hasVerdict: Boolean(journey?.currentStatus),
-    verdictReadyToShip: journey?.currentStatus === "ready_to_ship",
-    securityTestPhase: null,
-  });
+  const showSecurityTest = shouldShowSecurityTestNav({ attackCenterEnabled });
 
   return (
     <div className={missionControlEnabled ? "app-cinematic-bg min-h-full" : "p-6 space-y-6 max-w-6xl"}>

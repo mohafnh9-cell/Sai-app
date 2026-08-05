@@ -6,38 +6,14 @@ describe("shouldShowSecurityTestNav", () => {
     expect(
       shouldShowSecurityTestNav({
         attackCenterEnabled: false,
-        hasVerdict: true,
-        verdictReadyToShip: false,
       })
     ).toBe(false);
   });
 
-  it("shows when verdict exists and not ready to ship", () => {
+  it("shows when attack center enabled", () => {
     expect(
       shouldShowSecurityTestNav({
         attackCenterEnabled: true,
-        hasVerdict: true,
-        verdictReadyToShip: false,
-      })
-    ).toBe(true);
-  });
-
-  it("hides on ready to ship unless security test is active", () => {
-    expect(
-      shouldShowSecurityTestNav({
-        attackCenterEnabled: true,
-        hasVerdict: true,
-        verdictReadyToShip: true,
-        securityTestPhase: null,
-      })
-    ).toBe(false);
-
-    expect(
-      shouldShowSecurityTestNav({
-        attackCenterEnabled: true,
-        hasVerdict: true,
-        verdictReadyToShip: true,
-        securityTestPhase: "running",
       })
     ).toBe(true);
   });

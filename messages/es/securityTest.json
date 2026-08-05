@@ -1,11 +1,11 @@
 {
-  "title": "Validación de seguridad",
+  "title": "Probar seguridad",
   "estimatedTime": "Tiempo estimado:",
   "progressSteps": {
-    "choose": "Analizar aplicación",
-    "run": "Veredicto de producción",
-    "fix": "Validar bloqueador",
-    "verify": "Verificar y desplegar"
+    "choose": "Escanear código",
+    "run": "Production Verdict",
+    "fix": "Probar seguridad",
+    "verify": "Probar seguridad"
   },
   "estimatedDuration": "Unos 2 minutos",
   "safetyNote": "Nada en producción se modificará. SequrAI solo ejecuta simulaciones seguras.",
@@ -13,13 +13,13 @@
   "emptyState": {
     "headline": "Valida tus bloqueadores de despliegue",
     "description": "SequrAI reproduce cada problema de forma segura para que puedas confirmarlo antes de corregirlo.",
-    "primaryAction": "Volver a Mission Control"
+    "primaryAction": "Volver a Production Verdict"
   },
   "phases": {
     "needs_review": {
       "headline": "¿Está tu aplicación lista para producción?",
       "description": "Empieza con un análisis de producción de tu último código.",
-      "primaryAction": "Analizar aplicación",
+      "primaryAction": "Escanear código",
       "waitMessage": ""
     },
     "preparing": {
@@ -31,7 +31,7 @@
     "ready": {
       "headline": "Tu veredicto de producción está listo",
       "description": "Revisa tus bloqueadores de despliegue y valida los más importantes.",
-      "primaryAction": "Validar bloqueador",
+      "primaryAction": "Probar seguridad",
       "waitMessage": ""
     },
     "running": {
@@ -49,19 +49,19 @@
     "fix_ready": {
       "headline": "Listo para proteger tu aplicación",
       "description": "Aplica la corrección recomendada y verifica que el problema quedó resuelto.",
-      "primaryAction": "Ver corrección",
+      "primaryAction": "Corregir con IA",
       "waitMessage": ""
     },
     "protected": {
       "headline": "Listo para producción",
       "description": "Protección verificada. El problema ya no se reproduce.",
-      "primaryAction": "Volver a Mission Control",
+      "primaryAction": "Volver a Production Verdict",
       "waitMessage": ""
     },
     "completed_clean": {
       "headline": "Listo para producción",
       "description": "No se reprodujeron problemas durante la validación. Tu aplicación parece segura para desplegar.",
-      "primaryAction": "Volver a Mission Control",
+      "primaryAction": "Volver a Production Verdict",
       "waitMessage": ""
     }
   },

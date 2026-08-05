@@ -313,12 +313,7 @@ export default async function MissionControlPage({ params, searchParams }: PageP
     reviewContext.productionReviewState?.hasActiveReview &&
     reviewContext.productionReviewState.scanId !== activeRunId;
 
-  const showSecurityTest = shouldShowSecurityTestNav({
-    attackCenterEnabled,
-    hasVerdict: Boolean(verdict),
-    verdictReadyToShip: verdict?.status === "ready_to_ship",
-    securityTestPhase: securityTestContext?.phase ?? null,
-  });
+  const showSecurityTest = shouldShowSecurityTestNav({ attackCenterEnabled });
 
   const showProtectionStatus =
     continuousProtectionEnabled && Boolean(verdict) && !viewingHistoricalRun;
@@ -354,6 +349,7 @@ export default async function MissionControlPage({ params, searchParams }: PageP
     protectionCenter,
     showProtectionStatus,
     isVerdictStale: Boolean(reviewContext?.isStale && !viewingHistoricalRun),
+    attackCenterEnabled,
   };
 
   const rscIssues = findNonSerializablePaths(rawExperienceProps, {

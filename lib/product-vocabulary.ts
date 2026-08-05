@@ -1,36 +1,39 @@
 /**
  * Canonical product vocabulary for user-facing copy.
- * Sprint 3 — single source of truth. Do not introduce synonyms in UI.
+ * UX Sprint — three actions: scan, test security, fix with AI.
  */
 export const PRODUCT_VOCABULARY = {
-  missionControl: "Mission Control",
+  scanCode: "Scan code",
+  testSecurity: "Test security",
+  fixWithAi: "Fix with AI",
+  openInCursor: "Open in Cursor",
   productionVerdict: "Production Verdict",
-  productionReview: "Production Review",
-  securityTest: "Security Test",
-  safeFix: "Safe Fix",
-  verification: "Verification",
+  productionScore: "Production Score",
   history: "History",
   evidence: "Evidence",
   github: "GitHub",
   cursorConnection: "Cursor Connection",
   project: "Project",
-  nextAction: "Next Action",
   deploymentBlockers: "Deployment Blockers",
+  mainBlocker: "Main blocker",
 } as const;
 
 export type ProductVocabularyKey = keyof typeof PRODUCT_VOCABULARY;
 
 /** @deprecated Use PRODUCT_VOCABULARY keys directly */
 export const LEGACY_TERM_REPLACEMENTS: Record<string, string> = {
-  "Deploy answer": PRODUCT_VOCABULARY.productionVerdict,
-  Dashboard: PRODUCT_VOCABULARY.missionControl,
-  Integrations: PRODUCT_VOCABULARY.github,
-  "Attack Center": PRODUCT_VOCABULARY.securityTest,
-  Validate: PRODUCT_VOCABULARY.verification,
+  "Run Production Review": PRODUCT_VOCABULARY.scanCode,
+  "Run Review": PRODUCT_VOCABULARY.scanCode,
+  "Run Scan": PRODUCT_VOCABULARY.scanCode,
+  "Red Team": PRODUCT_VOCABULARY.testSecurity,
+  "Attack Center": PRODUCT_VOCABULARY.testSecurity,
+  "Attack Simulation": PRODUCT_VOCABULARY.testSecurity,
+  Validation: PRODUCT_VOCABULARY.testSecurity,
+  "Security Test": PRODUCT_VOCABULARY.testSecurity,
+  "Safe Fix": PRODUCT_VOCABULARY.fixWithAi,
+  "Copy Safe Fix": PRODUCT_VOCABULARY.openInCursor,
+  "Mission Control": "Projects",
   "Technical Details": PRODUCT_VOCABULARY.evidence,
-  "Production analysis": PRODUCT_VOCABULARY.productionReview,
-  "Analyze application": PRODUCT_VOCABULARY.productionReview,
-  "Analyze project": PRODUCT_VOCABULARY.productionReview,
   "Production Verdict History": PRODUCT_VOCABULARY.history,
   "Cursor MCP": PRODUCT_VOCABULARY.cursorConnection,
 };

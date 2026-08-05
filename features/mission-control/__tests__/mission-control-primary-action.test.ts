@@ -50,14 +50,14 @@ describe("derivePrimaryActionKind", () => {
     ).toBe("copy_safe_fix");
   });
 
-  it("returns deploy when ready to ship", () => {
+  it("returns run_review_again when ready to ship", () => {
     expect(
       derivePrimaryActionKind({
         verdict: minimalVerdict({ status: "ready_to_ship", topPriorities: [] }),
         displayPhase: "ready",
         reviewInProgress: false,
       })
-    ).toBe("deploy");
+    ).toBe("run_review_again");
   });
 
   it("returns run_review_again after protection verified", () => {

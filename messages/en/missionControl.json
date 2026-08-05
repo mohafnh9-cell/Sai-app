@@ -1,17 +1,47 @@
 {
   "page": {
-    "title": "Mission Control",
-    "backToMissionControl": "Mission Control",
+    "title": "Production Verdict",
+    "backToMissionControl": "Projects",
     "backToProjects": "Projects"
   },
   "subNav": {
     "productionVerdict": "Production Verdict",
-    "securityTest": "Security Test",
+    "securityTest": "Test security",
     "verdict": "Production Verdict",
-    "validate": "Security Test",
+    "validate": "Test security",
     "history": "History",
     "technical": "Technical",
     "ariaLabel": "Project sections"
+  },
+  "projectHome": {
+    "repositoryConnected": "Repository connected",
+    "repositoryNotConnected": "Repository not connected",
+    "lastAnalysis": "Last analysis",
+    "lastAnalysisNever": "Not yet analyzed",
+    "scanCode": {
+      "title": "Scan code",
+      "description": "Analyze the repository and generate a new Production Verdict.",
+      "cta": "Scan code"
+    },
+    "testSecurity": {
+      "title": "Test security",
+      "description": "Simulate real attacks against your application.",
+      "cta": "Test security"
+    },
+    "aiFix": {
+      "title": "Fix with AI",
+      "description": "Generate AI fixes for detected problems.",
+      "cta": "Fix with AI",
+      "openInCursor": "Open in Cursor"
+    },
+    "verdictSummary": {
+      "title": "Production Verdict",
+      "score": "Production Score",
+      "mainBlocker": "Main blocker",
+      "noBlocker": "No blockers found",
+      "viewVerdict": "View Production Verdict",
+      "scanAgain": "Scan code again"
+    }
   },
   "analysisRun": {
     "historicalBanner": "You are viewing a previous analysis run. Start a new review to update the active run.",
@@ -19,7 +49,7 @@
     "autoRecoveryBanner": "This analysis run has no Production Verdict yet. Showing your current production view instead.",
     "selector": {
       "label": "Analysis run",
-      "hint": "Production Verdict, Security Test, and Safe Fix reflect this run.",
+      "hint": "Production Verdict, security test, and AI fixes reflect this run.",
       "noScore": "—",
       "runOption": "{sha} · {score} · {status}"
     }
@@ -92,11 +122,11 @@
     "engineeringPlanPending": "Engineering Plan Pending",
     "replayPassed": "Replay Passed",
     "replayPending": "Replay Pending",
-    "generateFix": "Copy Safe Fix",
+    "generateFix": "Fix with AI",
     "startAnalysis": "Start Analysis",
     "viewDetails": "View Details",
     "reviewVerdict": "Review Production Verdict",
-    "runAnalysis": "Run production analysis"
+    "runAnalysis": "Scan code"
   },
   "verdict": {
     "title": "Production Verdict",
@@ -131,8 +161,8 @@
     "primaryAction": "Next step",
     "history": "History",
     "historyDescription": "View History and readiness trends",
-    "reviewInProgress": "Production Review is running…",
-    "securityTestRunning": "Security Test is running. Results will update your Production Verdict when complete."
+    "reviewInProgress": "Scanning code…",
+    "securityTestRunning": "Security test in progress. Results will update your Production Verdict when complete."
   },
   "technical": {
     "repository": "Repository",
@@ -143,8 +173,8 @@
     "logs": "Logs"
   },
   "actions": {
-    "reviewAgain": "Run Production Review again",
-    "generateProtection": "Copy Safe Fix",
+    "reviewAgain": "Scan code again",
+    "generateProtection": "Fix with AI",
     "deploy": "Deploy"
   },
   "protection": {
@@ -165,12 +195,12 @@
     }
   },
   "history": {
-    "lastReview": "Last Production Review: {time}",
+    "lastReview": "Last scan: {time}",
     "staleVerdict": "Your latest code changes haven't been reviewed yet.",
     "openLinkAriaLabel": "View Production Review history"
   },
   "empty": {
     "noVerdictTitle": "No Production Verdict yet",
-    "noVerdictBody": "Run a Production Review to see whether this application is ready to deploy."
+    "noVerdictBody": "Scan your code to see whether this application is ready to deploy."
   }
 }

@@ -7,7 +7,7 @@ import { useI18n } from "@/lib/i18n/client";
 import { withAnalysisRunQuery } from "@/features/analysis-runs/lib/build-run-query";
 
 /**
- * Canonical project navigation — Production Verdict, Security Test (conditional), History.
+ * Canonical project navigation — Production Verdict, Test security, History.
  */
 export function ProjectWorkflowNav({
   projectId,

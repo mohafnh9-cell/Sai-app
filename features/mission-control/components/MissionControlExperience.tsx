@@ -11,17 +11,15 @@ import type { ProjectReviewUiContext } from "@/server/projects/review-ui-context
 import { useSecurityTestContext } from "@/features/analysis-runs/hooks/useSecurityTestContext";
 import { TERMINAL_DISPLAY_PHASES } from "@/features/security-testing/lib/derive-phase";
 import { useI18n } from "@/lib/i18n/client";
-import { AnalyzeApplicationPrompt } from "./production-readiness/AnalyzeApplicationPrompt";
 import { DeploymentBlockersList } from "./production-readiness/DeploymentBlockersList";
+import { ProjectHomeActions } from "./ProjectHomeActions";
 import { MissionControlHero } from "./MissionControlHero";
-import { MissionControlReason } from "./MissionControlReason";
 import {
   MissionControlPrimaryAction,
   derivePrimaryActionKind,
 } from "./MissionControlPrimaryAction";
 import { SafeFixHeroCard } from "@/features/production-verdict/components/SafeFixHeroCard";
 import { fixPromptInputFromPriority, findingsByIdMap } from "@/brain/fix-prompt";
-import { MissionControlHistorySection } from "./MissionControlHistorySection";
 import { MissionControlTechnicalDetails } from "./MissionControlTechnicalDetails";
 import { MissionControlProtectionStatus } from "./MissionControlProtectionStatus";
 import type { ProtectionCenterSnapshot } from "@/features/continuous-protection/types";
@@ -42,6 +40,7 @@ export function MissionControlExperience({
   protectionCenter = null,
   showProtectionStatus = false,
   isVerdictStale = false,
+  attackCenterEnabled = false,
 }: {
   view: MissionControlView;
   verdict: ProductionVerdictV1 | null;
@@ -58,6 +57,7 @@ export function MissionControlExperience({
   protectionCenter?: ProtectionCenterSnapshot | null;
   showProtectionStatus?: boolean;
   isVerdictStale?: boolean;
+  attackCenterEnabled?: boolean;
 }) {
   const router = useRouter();
   const { t, locale } = useI18n("missionControl");
@@ -137,45 +137,31 @@ export function MissionControlExperience({
   const blockers = verdict?.topPriorities ?? [];
   const showBlockers = blockers.length > 0 && verdict?.status !== "ready_to_ship";
 
-  const needsInitialReview =
-    !verdict &&
-    (displayPhase === "needs_review" ||
-      displayPhase === "preparing" ||
-      !guidedFlowActive);
-
   return (
     <div className="space-y-10 max-w-2xl mx-auto">
-      {needsInitialReview && reviewContext ? (
-        <AnalyzeApplicationPrompt
-          projectId={view.projectId}
-          reviewContext={reviewContext}
-          preparing={displayPhase === "preparing" || reviewInProgress}
-          waitMessage={
-            reviewInProgress || displayPhase === "preparing"
-              ? t("sections.reviewInProgress")
-              : null
-          }
-          analysisRunIsolationEnabled={analysisRunIsolationEnabled}
-        />
+      <ProjectHomeActions
+        projectId={view.projectId}
+        reviewContext={reviewContext}
+        verdict={verdict}
+        analysisRunId={analysisRunId}
+        attackCenterEnabled={attackCenterEnabled}
+        attackCenterHref={activeSecurityTestContext?.attackCenterHref}
+        analysisRunIsolationEnabled={analysisRunIsolationEnabled}
+        reviewInProgress={reviewInProgress}
+      />
+
+      {reviewInProgress && !verdict && reviewContext ? (
+        <div
+          className="rounded-2xl border border-border/60 bg-muted/20 px-5 py-4 text-sm text-muted-foreground text-center"
+          role="status"
+        >
+          {t("sections.reviewInProgress")}
+        </div>
       ) : null}
 
       {verdict ? (
         <>
           <MissionControlHero verdict={verdict} />
-
-          {showProtectionStatus && (
-            <MissionControlProtectionStatus
-              projectId={view.projectId}
-              initialData={protectionCenter}
-              enabled={showProtectionStatus}
-            />
-          )}
-
-          <MissionControlReason
-            verdict={verdict}
-            displayPhase={displayPhase}
-            reviewInProgress={reviewInProgress}
-          />
 
           {showBlockers ? (
             <DeploymentBlockersList blockers={blockers} />
@@ -185,6 +171,10 @@ export function MissionControlExperience({
             <SafeFixHeroCard
               topPriority={topPriority}
               fixPromptInput={safeFixPromptInput}
+              labels={{
+                eyebrow: t("projectHome.aiFix.title"),
+                copyLabel: t("projectHome.aiFix.openInCursor"),
+              }}
             />
           ) : null}
 
@@ -200,12 +190,13 @@ export function MissionControlExperience({
             analysisRunIsolationEnabled={analysisRunIsolationEnabled}
           />
 
-          <MissionControlHistorySection
-            projectId={view.projectId}
-            analysisRunId={analysisRunId}
-            lastReviewAt={protectionCenter?.lastCheckedAt ?? verdict.generatedAt}
-            isVerdictStale={isVerdictStale}
-          />
+          {showProtectionStatus && (
+            <MissionControlProtectionStatus
+              projectId={view.projectId}
+              initialData={protectionCenter}
+              enabled={showProtectionStatus}
+            />
+          )}
 
           <MissionControlTechnicalDetails
             view={view}
@@ -215,19 +206,6 @@ export function MissionControlExperience({
             openByDefault={openTechnicalDetails}
           />
         </>
-      ) : null}
-
-      {!verdict && !reviewContext && !needsInitialReview ? (
-        <section
-          className="rounded-3xl border border-dashed border-border/60 bg-card/30 px-8 py-16 text-center space-y-3"
-          role="status"
-          aria-labelledby="mission-control-empty-heading"
-        >
-          <h2 id="mission-control-empty-heading" className="text-lg font-semibold">
-            {t("empty.noVerdictTitle")}
-          </h2>
-          <p className="text-sm text-muted-foreground max-w-md mx-auto">{t("empty.noVerdictBody")}</p>
-        </section>
       ) : null}
 
       {view.cancelledReview ? (

@@ -12,9 +12,9 @@
     "showDetails": "Detalles técnicos"
   },
   "back": "← Volver",
-  "deployWithConfidence": "Volver a Mission Control",
+  "deployWithConfidence": "Volver a Production Verdict",
   "campaign": {
-    "title": "Validación de seguridad",
+    "title": "Probar seguridad",
     "checksDone": "{done} de {total} comprobaciones completadas",
     "testDetails": "Detalles de la prueba",
     "show": "Mostrar",
@@ -61,6 +61,6 @@
   },
   "page": {
     "title": "Prueba de seguridad",
-    "backToMissionControl": "Mission Control"
+    "backToMissionControl": "Production Verdict"
   }
 }

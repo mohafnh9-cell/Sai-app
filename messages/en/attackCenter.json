@@ -12,9 +12,9 @@
     "showDetails": "Evidence"
   },
   "back": "← Back",
-  "deployWithConfidence": "Return to Mission Control",
+  "deployWithConfidence": "Back to Production Verdict",
   "campaign": {
-    "title": "Security Test",
+    "title": "Test security",
     "checksDone": "{done} of {total} checks done",
     "testDetails": "Test details",
     "show": "Show",
@@ -22,7 +22,7 @@
     "technicalDetails": "Evidence"
   },
   "execution": {
-    "title": "Security Test",
+    "title": "Test security",
     "inProgress": "Testing in progress",
     "waitMessage": "Please wait while this check finishes.",
     "technicalDetails": "Evidence"
@@ -34,12 +34,12 @@
     "severity": "Severity",
     "critical": "Critical",
     "evidenceSummary": "SequrAI successfully reproduced the issue under safe conditions.",
-    "protectTitle": "Apply Safe Fix",
-    "howToProtect": "Apply Safe Fix",
-    "protectionVerified": "Verification complete",
-    "attackBlocked": "Issue blocked — Verification passed",
-    "applyThenVerify": "Apply the Safe Fix above, then run Verification.",
-    "verifyProtection": "Verification",
+    "protectTitle": "Fix with AI",
+    "howToProtect": "Fix with AI",
+    "protectionVerified": "Security test complete",
+    "attackBlocked": "Issue blocked — security test passed",
+    "applyThenVerify": "Apply the AI fix above, then test security again.",
+    "verifyProtection": "Test security",
     "technicalDetails": "Evidence",
     "detailedEvidenceAvailable": "Detailed Evidence is available in your Production Review.",
     "whatWeSaw": "What we observed",
@@ -47,7 +47,7 @@
     "observed": "Observed:",
     "protectionForCursor": "Safe Fix for Cursor",
     "copied": "Copied",
-    "copyProtection": "Copy Safe Fix",
+    "copyProtection": "Open in Cursor",
     "reference": "Reference:",
     "back": "← Back"
   },
@@ -60,7 +60,7 @@
     "requestFailed": "Security Test request failed."
   },
   "page": {
-    "title": "Security Test",
-    "backToMissionControl": "Mission Control"
+    "title": "Test security",
+    "backToMissionControl": "Production Verdict"
   }
 }

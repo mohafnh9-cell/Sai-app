@@ -1,41 +1,41 @@
 {
-  "title": "Security Test",
+  "title": "Test security",
   "estimatedTime": "Estimated time:",
   "progressSteps": {
-    "choose": "Run Production Review",
+    "choose": "Scan code",
     "run": "Production Verdict",
-    "fix": "Security Test",
-    "verify": "Verification"
+    "fix": "Test security",
+    "verify": "Test security"
   },
   "estimatedDuration": "About 2 minutes",
   "safetyNote": "Nothing in production will be modified. SequrAI only runs safe simulations.",
   "stepLabel": "Step {n}",
   "emptyState": {
-    "headline": "Run a Security Test on your deployment blockers",
+    "headline": "Test security on your deployment blockers",
     "description": "SequrAI reproduces each issue safely so you can confirm it before fixing.",
-    "primaryAction": "Back to Mission Control"
+    "primaryAction": "Back to Production Verdict"
   },
   "phases": {
     "needs_review": {
       "headline": "Is your application ready for production?",
       "description": "Start with a Production Review of your latest code.",
-      "primaryAction": "Run Production Review",
+      "primaryAction": "Scan code",
       "waitMessage": ""
     },
     "preparing": {
-      "headline": "Production Review in progress…",
-      "description": "SequrAI is reviewing your repository to build your Production Verdict.",
+      "headline": "Scanning code…",
+      "description": "SequrAI is scanning your repository to build your Production Verdict.",
       "primaryAction": "Please wait…",
       "waitMessage": "Reading architecture, dependencies, and security patterns…"
     },
     "ready": {
       "headline": "Your Production Verdict is ready",
-      "description": "Review your deployment blockers and run a Security Test on the ones that matter most.",
-      "primaryAction": "Run Security Test",
+      "description": "Review your deployment blockers and test security on the ones that matter most.",
+      "primaryAction": "Test security",
       "waitMessage": ""
     },
     "running": {
-      "headline": "Security Test running…",
+      "headline": "Testing security…",
       "description": "SequrAI is safely reproducing the issue to collect Evidence.",
       "primaryAction": "View progress",
       "waitMessage": "Checking authentication… testing authorization… testing session isolation…"
@@ -47,21 +47,21 @@
       "waitMessage": ""
     },
     "fix_ready": {
-      "headline": "Ready for Safe Fix",
-      "description": "Apply the Safe Fix, then run Verification to confirm the issue is closed.",
-      "primaryAction": "View Safe Fix",
+      "headline": "Ready to fix with AI",
+      "description": "Apply the AI fix, then test security again to confirm the issue is closed.",
+      "primaryAction": "Fix with AI",
       "waitMessage": ""
     },
     "protected": {
       "headline": "Ready for production",
-      "description": "Verification complete. The issue no longer reproduces.",
-      "primaryAction": "Return to Mission Control",
+      "description": "Security test complete. The issue no longer reproduces.",
+      "primaryAction": "Back to Production Verdict",
       "waitMessage": ""
     },
     "completed_clean": {
       "headline": "Ready for production",
-      "description": "No issues reproduced during the Security Test. Your application looks safe to deploy.",
-      "primaryAction": "Return to Mission Control",
+      "description": "No issues reproduced during the security test. Your application looks safe to deploy.",
+      "primaryAction": "Back to Production Verdict",
       "waitMessage": ""
     }
   },
@@ -129,7 +129,7 @@
     "invalidAnalysisRun": "That analysis run does not belong to this project.",
     "notEnabled": "Security testing is not enabled for this project.",
     "selectAtLeastOne": "Select at least one test.",
-    "needsReviewFirst": "Run a Production Review first so SequrAI knows which version to test.",
+    "needsReviewFirst": "Scan your code first so SequrAI knows which version to test.",
     "mapFailed": "Could not map selected tests to attack scenarios."
   },
   "tests": {

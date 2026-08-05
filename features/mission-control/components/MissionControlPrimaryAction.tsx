@@ -36,7 +36,7 @@ export function derivePrimaryActionKind(input: {
   }
 
   if (verdict.status === "ready_to_ship") {
-    return "deploy";
+    return "run_review_again";
   }
 
   if (displayPhase === "protected" || displayPhase === "completed_clean") {
@@ -78,7 +78,6 @@ export function MissionControlPrimaryAction({
   const router = useRouter();
   const { t: tp } = useI18n("projects");
   const { t: tm } = useI18n("missionControl");
-  const { t: ta } = useI18n("attackCenter");
 
   const topPriority = verdict?.topPriorities?.[0] ?? null;
 
@@ -114,14 +113,14 @@ export function MissionControlPrimaryAction({
             size="default"
             variant="default"
             className="h-12 min-w-[240px] rounded-full text-base px-8"
-            label={tp("copySafeFix")}
+            label={tm("projectHome.aiFix.openInCursor")}
             copiedLabel={tp("copiedSafeFix")}
           />
         ) : null}
 
         {kind === "verify_protection" && attackCenterHref ? (
           <PrimaryActionButton onClick={() => router.push(attackCenterHref)}>
-            {ta("finding.verifyProtection")}
+            {tm("projectHome.testSecurity.cta")}
           </PrimaryActionButton>
         ) : null}
 
