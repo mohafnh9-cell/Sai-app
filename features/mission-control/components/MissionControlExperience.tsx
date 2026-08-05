@@ -147,7 +147,6 @@ export function MissionControlExperience({
         attackCenterEnabled={attackCenterEnabled}
         attackCenterHref={activeSecurityTestContext?.attackCenterHref}
         analysisRunIsolationEnabled={analysisRunIsolationEnabled}
-        reviewInProgress={reviewInProgress}
       />
 
       {reviewInProgress && !verdict && reviewContext ? (
