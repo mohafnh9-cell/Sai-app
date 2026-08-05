@@ -7,10 +7,8 @@ import { getTranslator } from "@/lib/i18n/server";
 import { getCachedServerAuthContext } from "@/lib/server/request-cache";
 import { isFeatureEnabled } from "@/server/feature-flags";
 import { getProductionJourneyByProject } from "@/server/production-journey/service";
-import {
-  ProjectWorkflowNav,
-  shouldShowSecurityTestNav,
-} from "@/features/mission-control/components/ProjectWorkflowNav";
+import { ProjectWorkflowNav } from "@/features/mission-control/components/ProjectWorkflowNav";
+import { shouldShowSecurityTestNav } from "@/features/mission-control/lib/navigation";
 import { projectVerdictHref } from "@/lib/navigation/project-hrefs";
 import { ProductionJourneyView } from "@/features/production-journey/components/ProductionJourneyView";
 import { withAnalysisRunQuery } from "@/features/analysis-runs/lib/build-run-query";

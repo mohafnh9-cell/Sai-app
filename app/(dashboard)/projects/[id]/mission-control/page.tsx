@@ -4,10 +4,8 @@ import { Suspense } from "react";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MissionControlExperience } from "@/features/mission-control/components/MissionControlExperience";
-import {
-  ProjectWorkflowNav,
-  shouldShowSecurityTestNav,
-} from "@/features/mission-control/components/ProjectWorkflowNav";
+import { ProjectWorkflowNav } from "@/features/mission-control/components/ProjectWorkflowNav";
+import { shouldShowSecurityTestNav } from "@/features/mission-control/lib/navigation";
 import { ProjectOnboardedBanner } from "@/features/projects/components/ProjectOnboardedBanner";
 import { loadMissionControlWithRecovery } from "@/server/mission-control/load-mission-control-with-recovery";
 import { getCachedServerAuthContext } from "@/lib/server/request-cache";

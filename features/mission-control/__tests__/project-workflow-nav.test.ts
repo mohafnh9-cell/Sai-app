@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { shouldShowSecurityTestNav } from "@/features/mission-control/components/ProjectWorkflowNav";
+import { shouldShowSecurityTestNav } from "@/features/mission-control/lib/navigation";
 
 describe("shouldShowSecurityTestNav", () => {
   it("hides when attack center disabled", () => {
