@@ -3,59 +3,66 @@
 import { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { fixPromptInputFromPriority, findingsByIdMap } from "@/brain/fix-prompt";
-import type { ProductionVerdictV1 } from "@/brain/production-verdict/schema";
 import { CopySafeFixPromptButton } from "@/features/production-verdict/components/CopySafeFixPromptButton";
-import type { FixPromptContext } from "@/features/production-verdict/fix-prompt-context";
 import { AnalyzeProjectButton } from "@/features/projects/components/AnalyzeProjectButton";
-import type { MissionControlPrimaryActionKind } from "@/features/mission-control/types/mission-control-state";
+import type { MissionControlState } from "@/features/mission-control/types/mission-control-state";
 import { PrimaryActionButton } from "@/features/security-testing/components/SecurityTestHero";
 import { useI18n } from "@/lib/i18n/client";
 
-export type { MissionControlPrimaryActionKind };
+const SCAN_LABEL_KEYS = {
+  cta: "projectHome.scanCode.cta",
+  running: "projectHome.scanCode.running",
+  rescan: "projectHome.scanCode.rescan",
+  retry: "projectHome.scanCode.retry",
+} as const;
 
 export function MissionControlPrimaryAction({
-  kind,
-  verdict,
-  projectName,
-  fixPromptContext,
-  reportHref,
-  attackCenterHref,
-  scanLabel,
-  scanLoading,
-  scanDisabled,
-  scanProgress,
+  state,
+  scanAction,
   onStartScan,
+  hidden = false,
 }: {
-  kind: MissionControlPrimaryActionKind;
-  verdict: ProductionVerdictV1 | null;
-  projectName: string;
-  fixPromptContext?: FixPromptContext;
-  reportHref?: string;
-  attackCenterHref?: string;
-  scanLabel: string;
-  scanLoading: boolean;
-  scanDisabled: boolean;
-  scanProgress: string | null;
+  state: MissionControlState;
+  scanAction: MissionControlState["actions"]["scan"] & {
+    label: MissionControlState["actions"]["scan"]["label"];
+  };
   onStartScan: () => void;
+  hidden?: boolean;
 }) {
   const router = useRouter();
   const { t: tp } = useI18n("projects");
   const { t: tm } = useI18n("missionControl");
 
+  const kind = hidden ? "none" : state.actions.primary.kind;
+  const verdict = state.productionVerdict;
   const topPriority = verdict?.topPriorities?.[0] ?? null;
 
   const fixPromptInput = useMemo(() => {
     if (!topPriority || !verdict) return null;
     return fixPromptInputFromPriority(topPriority, {
-      projectName,
-      stack: fixPromptContext?.stack,
-      findingsById: fixPromptContext?.findings
-        ? findingsByIdMap(fixPromptContext.findings)
+      projectName: state.projectName,
+      stack: state.ui.fixPromptContext?.stack,
+      findingsById: state.ui.fixPromptContext?.findings
+        ? findingsByIdMap(state.ui.fixPromptContext.findings)
         : undefined,
       currentVerdictStatus: verdict.status,
       currentScore: verdict.score,
     });
-  }, [fixPromptContext, projectName, topPriority, verdict]);
+  }, [state.projectName, state.ui.fixPromptContext, topPriority, verdict]);
+
+  const scanProgress =
+    state.status.reviewInProgress && state.status.progressMessage
+      ? state.status.progressMessage
+      : state.status.reviewInProgress && state.status.progress != null
+        ? `${state.status.progress}%`
+        : null;
+
+  const scanLabel =
+    kind === "run_review"
+      ? tp("runProductionReview")
+      : kind === "run_review_again"
+        ? tm("actions.reviewAgain")
+        : tm(SCAN_LABEL_KEYS[scanAction.label]);
 
   if (kind === "none") return null;
 
@@ -78,17 +85,17 @@ export function MissionControlPrimaryAction({
           />
         ) : null}
 
-        {kind === "verify_protection" && attackCenterHref ? (
-          <PrimaryActionButton onClick={() => router.push(attackCenterHref)}>
+        {kind === "verify_protection" && state.ui.attackCenterHref ? (
+          <PrimaryActionButton onClick={() => router.push(state.ui.attackCenterHref!)}>
             {tm("projectHome.testSecurity.cta")}
           </PrimaryActionButton>
         ) : null}
 
-        {kind === "run_review_again" ? (
+        {kind === "run_review_again" || kind === "run_review" ? (
           <AnalyzeProjectButton
             label={scanLabel}
-            loading={scanLoading}
-            disabled={scanDisabled}
+            loading={scanAction.showSpinner}
+            disabled={scanAction.disabled}
             progress={scanProgress}
             onClick={onStartScan}
             size="default"
@@ -96,22 +103,10 @@ export function MissionControlPrimaryAction({
           />
         ) : null}
 
-        {kind === "deploy" && reportHref ? (
-          <PrimaryActionButton onClick={() => router.push(reportHref)}>
+        {kind === "deploy" && state.ui.reportHref ? (
+          <PrimaryActionButton onClick={() => router.push(state.ui.reportHref!)}>
             {tm("actions.deploy")}
           </PrimaryActionButton>
-        ) : null}
-
-        {kind === "run_review" ? (
-          <AnalyzeProjectButton
-            label={scanLabel}
-            loading={scanLoading}
-            disabled={scanDisabled}
-            progress={scanProgress}
-            onClick={onStartScan}
-            size="default"
-            className="h-12 min-w-[240px] rounded-full text-base px-8"
-          />
         ) : null}
       </div>
     </section>

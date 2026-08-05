@@ -4,7 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { MissionControlState } from "@/features/mission-control/types/mission-control-state";
 import { isFeatureEnabled } from "@/server/feature-flags";
 import { listAnalysisRunsForProject } from "@/server/analysis-runs/list-analysis-runs";
-import { getProjectReviewUiContext } from "@/server/projects/review-ui-context";
+import { loadMissionControlReviewSignals } from "./load-mission-control-review-signals";
 import { getSecurityTestContext } from "@/server/attack-simulation/get-security-test-context";
 import { getProtectionCenterModel } from "@/server/continuous-protection/protection-context";
 import { loadMissionControlWithRecovery } from "./load-mission-control-with-recovery";
@@ -56,16 +56,11 @@ export async function loadFullMissionControlState(
   const { verdict, runScoped, activeRunId } = missionLoad;
   const findingsRunId = runScoped && activeRunId ? activeRunId : null;
 
-  let reviewContext = null;
-  try {
-    reviewContext = await getProjectReviewUiContext(supabase, projectId, {
-      analysisRunId: isolationEnabled ? activeRunId : null,
-      analysisRuns,
-      scopedVerdictGeneratedAt: verdict?.generatedAt ?? null,
-    });
-  } catch {
-    reviewContext = null;
-  }
+  const reviewSignals = await loadMissionControlReviewSignals(supabase, {
+    projectId,
+    organizationId,
+    admin,
+  });
 
   const scanForContext = findingsRunId
     ? await supabase
@@ -106,7 +101,7 @@ export async function loadFullMissionControlState(
     : undefined;
 
   let securityTestContext = null;
-  if (attackCenterEnabled && reviewContext && admin) {
+  if (attackCenterEnabled && admin) {
     try {
       const fullContext = await getSecurityTestContext(admin, {
         projectId,
@@ -135,7 +130,7 @@ export async function loadFullMissionControlState(
     framework: project.framework ?? null,
     missionLoad,
     analysisRuns,
-    reviewContext,
+    reviewSignals,
     securityTestContext,
     protectionCenter,
     fixPromptContext,

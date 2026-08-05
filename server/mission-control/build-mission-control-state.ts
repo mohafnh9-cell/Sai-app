@@ -3,7 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { MissionControlState } from "@/features/mission-control/types/mission-control-state";
 import type { MissionControlLoadResult } from "./load-mission-control-with-recovery";
-import type { ProjectReviewUiContext } from "@/server/projects/review-ui-context";
+import type { MissionControlReviewSignals } from "./load-mission-control-review-signals";
 import type { SecurityTestContext } from "@/features/security-testing/types";
 import type { ProtectionCenterSnapshot } from "@/features/continuous-protection/types";
 import type { AnalysisRunListItem } from "@/server/analysis-runs/list-analysis-runs";
@@ -26,7 +26,7 @@ export type BuildMissionControlStateInput = {
   framework: string | null;
   missionLoad: MissionControlLoadResult;
   analysisRuns: AnalysisRunListItem[];
-  reviewContext: ProjectReviewUiContext | null;
+  reviewSignals: MissionControlReviewSignals;
   securityTestContext: SecurityTestContext | null;
   protectionCenter: ProtectionCenterSnapshot | null;
   fixPromptContext?: FixPromptContext;
@@ -46,24 +46,11 @@ export type BuildMissionControlStateInput = {
 };
 
 export function buildMissionControlState(input: BuildMissionControlStateInput): MissionControlState {
-  const { missionLoad, reviewContext, analysisRuns } = input;
+  const { missionLoad, reviewSignals, analysisRuns } = input;
   const activeRunId = missionLoad.activeRunId;
   const activeRun = resolveActiveRun(analysisRuns, activeRunId);
   const latestRun = resolveLatestRun(analysisRuns);
-  const productionReviewState =
-    reviewContext?.productionReviewState ?? {
-      hasActiveReview: false,
-      scanId: null,
-      scanJobId: null,
-      status: "idle" as const,
-      isCancellable: false,
-      commitSha: null,
-      createdAt: null,
-      startedAt: null,
-      completedAt: null,
-      cancelledAt: null,
-      failureMessage: null,
-    };
+  const productionReviewState = reviewSignals.productionReviewState;
 
   const reviewInProgress = deriveReviewInProgress({
     productionReviewState,
@@ -93,10 +80,8 @@ export function buildMissionControlState(input: BuildMissionControlStateInput): 
     reviewInProgress,
   });
 
-  const progress = reviewInProgress ? (reviewContext?.activeScan?.progress ?? null) : null;
-  const progressMessage = reviewInProgress
-    ? (reviewContext?.activeScan?.progressMessage ?? null)
-    : null;
+  const progress = reviewInProgress ? reviewSignals.progress : null;
+  const progressMessage = reviewInProgress ? reviewSignals.progressMessage : null;
 
   const viewingHistoricalRun =
     input.flags.analysisRunIsolationEnabled &&
@@ -138,12 +123,11 @@ export function buildMissionControlState(input: BuildMissionControlStateInput): 
       lastAnalysisAt,
       hasCompletedAnalysis,
       hasVerdict: Boolean(missionLoad.verdict),
-      repositoryConnected: Boolean(reviewContext?.githubConnected),
-      repositoryOutOfSync: Boolean(reviewContext?.repositoryOutOfSync),
+      repositoryConnected: reviewSignals.repositoryConnected,
+      repositoryOutOfSync: reviewSignals.repositoryOutOfSync,
       currentCommitSha:
         activeRun?.commitSha ??
-        productionReviewState.commitSha ??
-        reviewContext?.githubHeadSha ??
+        reviewSignals.currentCommitSha ??
         null,
     },
     actions: {
@@ -151,7 +135,7 @@ export function buildMissionControlState(input: BuildMissionControlStateInput): 
         reviewInProgress,
         hasCompletedAnalysis,
         productionReviewState,
-        githubNeedsReconnect: Boolean(reviewContext?.githubNeedsReconnect),
+        githubNeedsReconnect: reviewSignals.githubNeedsReconnect,
       }),
       security: deriveSecurityAction({
         phase: securityPhase,
@@ -171,7 +155,7 @@ export function buildMissionControlState(input: BuildMissionControlStateInput): 
       viewingHistoricalRun,
       showRecoveryBanner,
       showProtectionStatus,
-      isVerdictStale: Boolean(reviewContext?.isStale && !viewingHistoricalRun),
+      isVerdictStale: reviewSignals.isVerdictStale && !viewingHistoricalRun,
       reportHref: input.reportHref,
       fixPromptContext: input.fixPromptContext,
       attackCenterHref: input.securityTestContext?.attackCenterHref,

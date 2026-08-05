@@ -9,7 +9,6 @@ import {
 import { getCachedServerAuthContext } from "@/lib/server/request-cache";
 import { isFeatureEnabled } from "@/server/feature-flags";
 import { createAdminClient } from "@/server/security-scanner/admin-client";
-import { getProjectReviewUiContext } from "@/server/projects/review-ui-context";
 import { loadAttackCenterListState } from "@/server/attack-simulation/api/load-attack-center-list";
 import { buildAttackCenterCapability } from "@/server/attack-simulation/api/attack-center-contract";
 import { attackCenterErrorFromUnknown } from "@/server/attack-simulation/api/errors";
@@ -91,26 +90,6 @@ export default async function AttackCenterPage({ params, searchParams }: PagePro
 
   if (!project) notFound();
 
-  const reportScanId = analysisRunId
-    ? analysisRunId
-    : (
-        await auth.supabase
-          .from("scans")
-          .select("id")
-          .eq("project_id", projectId)
-          .eq("status", "completed")
-          .order("completed_at", { ascending: false })
-          .limit(1)
-          .maybeSingle()
-      ).data?.id;
-
-  const latestReportHref = reportScanId
-    ? `/projects/${projectId}/scans/${reportScanId}/report`
-    : undefined;
-
-  const reviewContext = await getProjectReviewUiContext(auth.supabase, projectId);
-  if (!reviewContext) notFound();
-
   const admin = createAdminClient();
   let initialSnapshot: AttackCenterSnapshot | null = null;
   let initialCapability: AttackCenterCapability | null = buildAttackCenterCapability({
@@ -180,7 +159,6 @@ export default async function AttackCenterPage({ params, searchParams }: PagePro
           projectId={projectId}
           initialSnapshot={initialSnapshot}
           initialCapability={initialCapability}
-          reviewContext={reviewContext}
           securityTestContext={securityTestContext}
           initialCampaignId={
             initialCampaignId ??

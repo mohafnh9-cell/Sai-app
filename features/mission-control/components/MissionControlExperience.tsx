@@ -16,18 +16,6 @@ import { MissionControlProtectionStatus } from "./MissionControlProtectionStatus
 import { AnalysisRunSelector } from "@/features/analysis-runs/components/AnalysisRunSelector";
 import { ProjectOnboardedBanner } from "@/features/projects/components/ProjectOnboardedBanner";
 
-const SCAN_LABEL_KEYS = {
-  cta: "projectHome.scanCode.cta",
-  running: "projectHome.scanCode.running",
-  rescan: "projectHome.scanCode.rescan",
-  retry: "projectHome.scanCode.retry",
-} as const;
-
-const PRIMARY_SCAN_LABEL_KEYS = {
-  run_review: "actions.reviewAgain",
-  run_review_again: "actions.reviewAgain",
-} as const;
-
 export function MissionControlExperience({
   initialState,
 }: {
@@ -69,20 +57,6 @@ export function MissionControlExperience({
 
   const blockers = verdict?.topPriorities ?? [];
   const showBlockers = blockers.length > 0 && verdict?.status !== "ready_to_ship";
-
-  const scanProgress =
-    state.status.reviewInProgress && state.status.progressMessage
-      ? state.status.progressMessage
-      : state.status.reviewInProgress && state.status.progress != null
-        ? `${state.status.progress}%`
-        : null;
-
-  const primaryScanLabel =
-    primaryActionKind === "run_review"
-      ? tp("runProductionReview")
-      : primaryActionKind === "run_review_again"
-        ? t(PRIMARY_SCAN_LABEL_KEYS.run_review_again)
-        : t(SCAN_LABEL_KEYS[scanAction.label]);
 
   const recoveryBannerKey =
     state.recoveryReason === "scoped_verdict_missing"
@@ -178,17 +152,10 @@ export function MissionControlExperience({
           ) : null}
 
           <MissionControlPrimaryAction
-            kind={showSafeFixCard ? "none" : primaryActionKind}
-            verdict={verdict}
-            projectName={state.projectName}
-            fixPromptContext={state.ui.fixPromptContext}
-            reportHref={state.ui.reportHref}
-            attackCenterHref={state.ui.attackCenterHref}
-            scanLabel={primaryScanLabel}
-            scanLoading={scanAction.showSpinner}
-            scanDisabled={scanAction.disabled}
-            scanProgress={scanProgress}
+            state={state}
+            scanAction={scanAction}
             onStartScan={() => void startScan()}
+            hidden={Boolean(showSafeFixCard)}
           />
 
           {state.ui.showProtectionStatus && state.protectionCenter ? (

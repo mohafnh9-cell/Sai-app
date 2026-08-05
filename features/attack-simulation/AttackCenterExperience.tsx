@@ -14,7 +14,6 @@ import { AttackExecutionViewPanel } from "./components/AttackExecutionViewPanel"
 import { AttackFindingViewPanel } from "./components/AttackFindingViewPanel";
 import type { SecurityTestContext } from "@/features/security-testing/types";
 import { SecurityTestProgressSteps } from "@/features/security-testing/components/SecurityTestProgressSteps";
-import type { ProjectReviewUiContext } from "@/server/projects/review-ui-context";
 import {
   buildLiveProgressSteps,
   deriveLiveTestPhase,
@@ -27,7 +26,6 @@ export function AttackCenterExperience({
   initialSnapshot,
   initialCampaignId,
   initialCapability = null,
-  reviewContext,
   securityTestContext = null,
   analysisRunId = null,
 }: {
@@ -35,7 +33,6 @@ export function AttackCenterExperience({
   initialSnapshot: AttackCenterSnapshot | null;
   initialCampaignId?: string | null;
   initialCapability?: AttackCenterCapability | null;
-  reviewContext?: ProjectReviewUiContext | null;
   securityTestContext?: SecurityTestContext | null;
   analysisRunId?: string | null;
 }) {
