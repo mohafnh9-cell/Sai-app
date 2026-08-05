@@ -68,7 +68,11 @@ export async function executeScanRunJob(
     return;
   }
 
-  if (scanBeforeRun?.status && !isActiveReviewScanStatus(scanBeforeRun.status as string)) {
+  if (
+    scanBeforeRun?.status &&
+    !isActiveReviewScanStatus(scanBeforeRun.status as string) &&
+    scanBeforeRun.status !== "completed"
+  ) {
     await markScanJobFailed(admin, payload.scanJobId, {
       failureCode: "STALE_WORKER_REJECTED",
       failureMessage: `Review is no longer active (status ${scanBeforeRun.status})`,
@@ -133,6 +137,7 @@ export async function executeScanRunJob(
     stage: "scan_started",
   });
 
+  if (scanBeforeRun?.status !== "completed") {
   const tokenResult = await resolveOrganizationGitHubToken(
     admin,
     payload.organizationId,
@@ -149,7 +154,6 @@ export async function executeScanRunJob(
 
   const runner = new InlineScanJobRunner(admin);
 
-  if (scanBeforeRun?.status !== "completed") {
     try {
       const githubRepo = await loadGithubRepo(admin, payload.projectId);
       const aligned = await alignScanWithRemoteHead(admin, {
@@ -247,6 +251,18 @@ export async function executeScanRunJob(
       failureMessage: `Scan ended with status ${completed?.status ?? "unknown"}`,
     });
     throw new Error("SCAN_DID_NOT_COMPLETE");
+  }
+
+  if (!payload.finalize) {
+    const earlyComplete = await markScanJobCompleted(admin, payload.scanJobId);
+    if (earlyComplete.updated) {
+      log("info", "scan_job_completed_after_scan", {
+        scanJobId: payload.scanJobId,
+        scanId: payload.scanId,
+        organizationId: payload.organizationId,
+        projectId: payload.projectId,
+      });
+    }
   }
 
   if (payload.finalize) {

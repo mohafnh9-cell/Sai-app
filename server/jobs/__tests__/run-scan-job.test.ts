@@ -13,6 +13,14 @@ vi.mock("@/server/security-scanner/scan-job-runner", () => ({
   },
 }));
 
+vi.mock("@/server/production-verdict/ensure-verdict-for-scan", () => ({
+  ensureProductionVerdictForCompletedScan: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("@/server/cache/read-cache", () => ({
+  invalidateProjectCache: vi.fn(),
+}));
+
 function createAdminMock(options?: {
   scanStatus?: string;
   jobStatus?: string;
@@ -97,8 +105,14 @@ function createAdminMock(options?: {
         return {
           select: () => ({
             eq: () => ({
-              maybeSingle: () => Promise.resolve({ data: { status: scanStatus } }),
-              single: () => Promise.resolve({ data: { status: scanStatus } }),
+              maybeSingle: () =>
+                Promise.resolve({
+                  data: { status: scanStatus, commit_sha: "abc123" },
+                }),
+              single: () =>
+                Promise.resolve({
+                  data: { status: scanStatus, commit_sha: "abc123" },
+                }),
             }),
           }),
         };
@@ -134,7 +148,7 @@ describe("executeScanRunJob", () => {
       userId: "user-1",
     });
 
-    const admin = createAdminMock({ scanStatus: "failed", jobStatus: "queued" });
+    const admin = createAdminMock({ scanStatus: "scanning", jobStatus: "queued" });
     const { executeScanRunJob } = await import("../run-scan-job");
 
     await expect(

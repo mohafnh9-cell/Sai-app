@@ -14,6 +14,7 @@ import {
   REVIEW_STALE_FAILURE_CODE,
 } from "@/server/review-recovery/stale-review";
 import { COMMIT_SUPERSEDED_CODE } from "@/server/review-start/release-active-review-for-new-head";
+import { reconcileOrphanScanJobWithTerminalScan } from "@/server/jobs/reconcile-orphan-scan-job";
 
 function idleState(): ProductionReviewState {
   return {
@@ -105,7 +106,26 @@ export async function getProductionReviewState(
 
     if (scan) {
       const scanStatus = String(scan.status ?? "");
-      const jobStatus = String(activeJob.status ?? "");
+      let jobStatus = String(activeJob.status ?? "");
+
+      if (
+        (jobStatus === "queued" || jobStatus === "running") &&
+        ["completed", "failed", "cancelled"].includes(scanStatus)
+      ) {
+        await reconcileOrphanScanJobWithTerminalScan(admin, {
+          jobId: activeJob.id as string,
+          scan: scan as Record<string, unknown>,
+        }).catch(() => undefined);
+        const { data: refreshedJob } = await admin
+          .from("scan_jobs")
+          .select("id, status")
+          .eq("id", activeJob.id as string)
+          .maybeSingle();
+        if (refreshedJob?.status) {
+          jobStatus = String(refreshedJob.status);
+        }
+      }
+
       let uiStatus = mapScanStatusToProductionReviewUiStatus(scanStatus);
       let failureMessage: string | null = null;
 

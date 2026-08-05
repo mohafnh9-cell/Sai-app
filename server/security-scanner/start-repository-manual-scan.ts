@@ -18,6 +18,7 @@ import {
 } from "@/server/review-start/resolve-latest-review-commit";
 import { releaseActiveReviewForNewHead } from "@/server/review-start/release-active-review-for-new-head";
 import { resolveReviewIdempotency } from "@/brain/review-engine/idempotency";
+import { reconcileProjectOrphanScanJobs } from "@/server/jobs/reconcile-orphan-scan-job";
 
 export type StartRepositoryManualScanInput = {
   repositoryId: string;
@@ -83,6 +84,7 @@ export async function startRepositoryManualScan(
 
   const now = Date.now();
   await expireStaleActiveReviewsForRepository(ctx.admin, repositoryId);
+  await reconcileProjectOrphanScanJobs(ctx.admin, repositoryId).catch(() => undefined);
 
   const webScanLimit = webScansPerRepositoryPerHourLimit();
   if (webScanLimit != null) {
