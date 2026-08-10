@@ -91,7 +91,7 @@ function mapCorrelatedVerification(
 ): FindingVerificationStatus {
   if (confirmed) return "CONFIRMED";
   if (attackOutcome === "not_exploitable") return "FALSE_POSITIVE";
-  if (attackOutcome === "inconclusive") return "LIKELY";
+  if (attackOutcome === "inconclusive") return "UNVERIFIED";
   return "NOT_REPRODUCED";
 }
 
@@ -301,6 +301,9 @@ export function countAuditFindings(findings: ConsolidatedAuditFinding[]) {
         break;
       case "NOT_APPLICABLE":
         counts.notApplicable += 1;
+        break;
+      case "UNVERIFIED":
+        counts.notReproduced += 1;
         break;
     }
   }

@@ -40,11 +40,16 @@ describe("attack center contract", () => {
     expect(body.capability.enabled).toBe(true);
   });
 
-  it("returns disabled capability without throwing", () => {
-    delete process.env.SEQURAI_INTERNAL_ORG_IDS;
-    const body = buildAttackCenterDisabledResponse({
+  it("returns disabled capability when attack simulation is internal-only", async () => {
+    vi.resetModules();
+    vi.stubEnv("SEQURAI_FEATURE_FLAGS_JSON", JSON.stringify({ attack_simulation: "internal" }));
+    vi.stubEnv("SEQURAI_INTERNAL_ORG_IDS", "");
+    const { buildAttackCenterDisabledResponse: buildDisabled } = await import("../api/attack-center-contract");
+    const body = buildDisabled({
       organizationId: "00000000-0000-4000-8000-000000000099",
     });
+    vi.unstubAllEnvs();
+    vi.resetModules();
     expect(body.ok).toBe(true);
     expect(body.campaigns).toEqual([]);
     expect(body.capability.enabled).toBe(false);

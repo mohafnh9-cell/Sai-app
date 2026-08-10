@@ -86,6 +86,23 @@ describe("attack preconditions", () => {
     if (!result.ok) expect(result.failureCode).toBe("external_target_disallowed");
   });
 
+  it("allows allowlisted sandbox targets", () => {
+    const result = validate({
+      runtimeMode: "sandbox",
+      targetUrl: "http://127.0.0.1:4242/api/health",
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it("rejects non-allowlisted sandbox targets", () => {
+    const result = validate({
+      runtimeMode: "sandbox",
+      targetUrl: "https://evil.example.com/api",
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.failureCode).toBe("sandbox_target_allowlisted");
+  });
+
   it("rejects commit sha mismatch against authorization", () => {
     const now = Date.now();
     const result = validateAttackPreconditions({

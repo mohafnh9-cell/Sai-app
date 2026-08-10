@@ -19,6 +19,8 @@ function verificationLabel(status: string, t: McpTranslator): string {
       return t("fullProductAudit.verification.falsePositive");
     case "NOT_APPLICABLE":
       return t("fullProductAudit.verification.notApplicable");
+    case "UNVERIFIED":
+      return t("fullProductAudit.verification.unverified");
     default:
       return status;
   }
@@ -78,7 +80,21 @@ export function formatFullProductAuditResponse(
     lines.push("", t("fullProductAudit.safeFixAvailable"));
   }
 
-  if (result.engines.securityTesting.skippedReason) {
+  lines.push(
+    "",
+    t("fullProductAudit.staticAnalysisHeader"),
+    t("fullProductAudit.staticAnalysisSummary", {
+      count: String(result.engines.codeReview.findingsCount),
+    })
+  );
+
+  lines.push("", t("fullProductAudit.dynamicTestingHeader"));
+  if (
+    result.engines.securityTesting.runtimeMode === "mock" &&
+    result.engines.securityTesting.dynamicTargetSource === "none"
+  ) {
+    lines.push(t("fullProductAudit.dynamicTestingSkippedNoTarget"));
+  } else if (result.engines.securityTesting.skippedReason) {
     lines.push(
       "",
       t("fullProductAudit.securityTestsSkipped", {
@@ -87,12 +103,13 @@ export function formatFullProductAuditResponse(
     );
   } else if (result.engines.securityTesting.adaptersExecuted.length > 0) {
     lines.push(
-      "",
-      t("fullProductAudit.securityTestsRun", {
+      t("fullProductAudit.dynamicTestingSummary", {
         count: String(result.engines.securityTesting.adaptersExecuted.length),
         mode: result.engines.securityTesting.runtimeMode ?? "mock",
       })
     );
+  } else {
+    lines.push(t("fullProductAudit.dynamicTestingSkippedNoTarget"));
   }
 
   if (result.timedOut) {

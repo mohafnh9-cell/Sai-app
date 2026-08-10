@@ -23,6 +23,8 @@ export const STATIC_RULE_TO_ADAPTERS: Readonly<Record<string, readonly string[]>
   "injection.deserialization": ["injection-probe-safe"],
   "web.next-xss": ["injection-probe-safe"],
   "web.permissive-cors": ["cors-misconfiguration"],
+  "web.webhook": ["webhook-signature-bypass"],
+  "reliability.idempotency": ["idempotency-replay"],
   "web.csrf-missing": ["security-headers-probe"],
   "database.unsafe-raw-query": ["injection-probe-safe"],
   "supabase.rls": ["idor-cross-tenant"],

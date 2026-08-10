@@ -6,7 +6,8 @@ export type FindingVerificationStatus =
   | "POTENTIAL"
   | "NOT_REPRODUCED"
   | "FALSE_POSITIVE"
-  | "NOT_APPLICABLE";
+  | "NOT_APPLICABLE"
+  | "UNVERIFIED";
 
 export type PostFixStatus = "FIXED" | "STILL_VULNERABLE" | "REGRESSION" | "NOT_VERIFIED";
 
@@ -80,6 +81,7 @@ export type FullProductAuditEngineSummary = {
     adaptersExecuted: string[];
     adaptersSelectedFromFindings: string[];
     runtimeMode: string | null;
+    dynamicTargetSource: string | null;
     skippedReason: string | null;
   };
 };

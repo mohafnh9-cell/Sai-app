@@ -2,6 +2,7 @@ import type { AttackAuthorizationRecord } from "@/server/ai-red-team/authorizati
 import { validateAttackAuthorization } from "@/server/ai-red-team/authorization/types";
 import type { AttackCampaign } from "../contracts/attack-campaign";
 import type { AttackRuntimeMode } from "../contracts/enums";
+import { DEFAULT_SANDBOX_HOST_ALLOWLIST } from "../runtime/guards";
 
 export type PreconditionCheck = {
   code: string;
@@ -143,14 +144,40 @@ export function validateAttackPreconditions(
     );
 
     if (input.targetUrl) {
-      checks.push(
-        check(
-          "external_target_disallowed",
-          false,
-          "No external target configured",
-          "External targets are not allowed for static/mock/sandbox runtimes"
-        )
-      );
+      if (runtimeMode === "sandbox") {
+        let hostname = "";
+        let validUrl = true;
+        try {
+          hostname = new URL(input.targetUrl).hostname.toLowerCase();
+        } catch {
+          validUrl = false;
+        }
+        const allowlisted =
+          validUrl &&
+          DEFAULT_SANDBOX_HOST_ALLOWLIST.some(
+            (entry) =>
+              hostname === entry.toLowerCase() || hostname.endsWith(`.${entry.toLowerCase()}`)
+          );
+        checks.push(
+          check(
+            "sandbox_target_allowlisted",
+            allowlisted,
+            "Sandbox target hostname is allowlisted for dynamic probes",
+            validUrl
+              ? `Sandbox target hostname ${hostname} is not allowlisted`
+              : "Sandbox target URL is invalid"
+          )
+        );
+      } else {
+        checks.push(
+          check(
+            "external_target_disallowed",
+            false,
+            "No external target configured",
+            "External targets are not allowed for static/mock/sandbox runtimes"
+          )
+        );
+      }
     }
   }
 

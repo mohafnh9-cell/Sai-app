@@ -117,6 +117,11 @@
   },
   "fullProductAudit": {
     "intro": "SequrAI has completed a Full Product Audit — static code review plus security testing.",
+    "staticAnalysisHeader": "STATIC ANALYSIS",
+    "staticAnalysisSummary": "Code review findings: {count}",
+    "dynamicTestingHeader": "DYNAMIC TESTING",
+    "dynamicTestingSummary": "Security tests executed: {count} in {mode} mode.",
+    "dynamicTestingSkippedNoTarget": "SequrAI did not run dynamic attacks because no authorized target environment is configured.",
     "productionReadiness": "Production Readiness",
     "securityScore": "Security Score: {score}/100",
     "scoreUnavailable": "unavailable",
@@ -137,7 +142,8 @@
       "potential": "Detected by code review — not yet confirmed dynamically.",
       "notReproduced": "Static suspicion — security test did not reproduce.",
       "falsePositive": "Static suspicion disproved by security test.",
-      "notApplicable": "Informational or not applicable to this application."
+      "notApplicable": "Informational or not applicable to this application.",
+      "unverified": "Dynamic test ran but did not produce conclusive exploit evidence."
     }
   },
   "discoverApplication": {

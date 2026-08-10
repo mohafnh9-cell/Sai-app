@@ -1,5 +1,6 @@
 import type { AttackRuntimeMode } from "../contracts/enums";
 import { resolveAttackAdapterModule } from "../adapters/registry";
+import { tryExecuteDynamicHttpStep } from "../dynamic/execute-dynamic-step";
 import type {
   SafeRuntimeAdapter,
   SafeRuntimeCleanupInput,
@@ -57,11 +58,14 @@ function executeWithAttackAdapter(input: SafeRuntimeStepInput): SafeRuntimeStepR
   });
 }
 
-function executeModeStep(
+async function executeModeStep(
   input: SafeRuntimeStepInput,
   classification: SafeRuntimeStepResult["classification"],
-  sandboxRequest?: () => SafeRuntimeStepResult
-): SafeRuntimeStepResult {
+  sandboxRequest?: () => SafeRuntimeStepResult | Promise<SafeRuntimeStepResult>
+): Promise<SafeRuntimeStepResult> {
+  const dynamic = await tryExecuteDynamicHttpStep(input);
+  if (dynamic) return dynamic;
+
   const adapterResult = executeWithAttackAdapter(input);
   if (adapterResult) return adapterResult;
   if (sandboxRequest) return sandboxRequest();
@@ -97,10 +101,10 @@ export const sandboxRuntimeAdapter: SafeRuntimeAdapter = {
           outcome: "completed",
           classification: "sandbox",
           expectedBehavior: "Sandbox request stays within allowlisted hosts",
-          observedBehavior: `Sandbox fixture response for ${input.guard.network.url}`,
+          observedBehavior: `No dynamic probe available for ${input.adapterId ?? "unknown"} — sandbox fixture fallback`,
           statusCode: 200,
-          sideEffects: { sandbox: true },
-          auditTrail: ["sandbox:fixture_response"],
+          sideEffects: { sandbox: true, dynamicFallback: true },
+          auditTrail: ["sandbox:fixture_fallback"],
           durationMs: 2,
         };
       }
@@ -114,18 +118,7 @@ export const authorizedStagingRuntimeAdapter: SafeRuntimeAdapter = {
   async executeStep(input) {
     const blocked = guardOrProceed(input);
     if (blocked) return blocked;
-    const adapterResult = executeWithAttackAdapter(input);
-    if (adapterResult) return adapterResult;
-    return {
-      outcome: "completed",
-      classification: "authorized_staging",
-      expectedBehavior: "Authorized staging step completes within approved scope",
-      observedBehavior: `${input.stepLabel} executed against authorized staging target`,
-      statusCode: input.stepKind === "execute_request" ? 200 : null,
-      sideEffects: { authorizedStaging: true },
-      auditTrail: ["authorized_staging:simulated_step"],
-      durationMs: 3,
-    };
+    return executeModeStep(input, "authorized_staging");
   },
 };
 

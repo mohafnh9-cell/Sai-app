@@ -54,7 +54,8 @@ describe("MVP attack adapter modules", () => {
       scenario: { adapterId: "idor-cross-tenant", title: "Cross-tenant IDOR", category: "authorization" },
     });
 
-    expect(evaluation.outcome).toBe("confirmed");
+    expect(evaluation.outcome).toBe("inconclusive");
+    expect(evaluation.confirmationStatus).toBe("potential");
   });
 
   it("idor adapter reports protection signals when simulationOutcome is protected", async () => {

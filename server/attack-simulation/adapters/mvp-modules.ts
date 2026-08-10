@@ -1,5 +1,6 @@
 import { createMvpAttackAdapter, observeFromExecute, requestStep, verifyFromExecute } from "./shared";
 import type { MvpAttackAdapterConfig } from "./types";
+import { adapterSupportsDynamicExecution } from "../dynamic/probes";
 
 const MVP_ATTACK_ADAPTER_CONFIGS: readonly MvpAttackAdapterConfig[] = [
   {
@@ -379,6 +380,9 @@ const MVP_ATTACK_ADAPTER_CONFIGS: readonly MvpAttackAdapterConfig[] = [
   },
 ];
 
-export const MVP_ATTACK_ADAPTER_MODULES = MVP_ATTACK_ADAPTER_CONFIGS.map(createMvpAttackAdapter);
+export const MVP_ATTACK_ADAPTER_MODULES = MVP_ATTACK_ADAPTER_CONFIGS.map((config) => ({
+  ...createMvpAttackAdapter(config),
+  supportsDynamicExecution: adapterSupportsDynamicExecution(config.id),
+}));
 
 export { MVP_ATTACK_ADAPTER_CONFIGS };

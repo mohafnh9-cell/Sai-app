@@ -14,6 +14,7 @@ export type AttackAdapterStepContext = {
 
 export interface AttackAdapterModule {
   readonly id: string;
+  readonly supportsDynamicExecution?: boolean;
   executeStep(input: AttackAdapterStepContext): SafeRuntimeStepResult;
 }
 

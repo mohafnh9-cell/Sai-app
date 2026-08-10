@@ -116,12 +116,17 @@ const COMPOUND_PATTERNS: Array<{ pattern: RegExp; tools: string[] }> = [
 const STRONG_SINGLE_RULES: Array<{ pattern: RegExp; tool: string }> = [
   {
     pattern:
-      /\b(audit my product|full audit|complete audit|security audit|find vulnerabilities|busca vulnerabilidades|audita mi producto|auditor[ií]a completa|revisa mi saas|analiza mi saas|analiza mi aplicaci[oó]n|revisa mi aplicaci[oó]n|haz una auditor[ií]a|run a full product audit|attack my application|ataca mi aplicaci[oó]n|prueba de seguridad|security test my app)\b/i,
+      /\b(audit my product|full audit|complete audit|security audit|find vulnerabilities|busca vulnerabilidades|audita mi producto|auditor[ií]a completa|revisa mi saas|analiza mi saas|analiza mi aplicaci[oó]n|revisa mi aplicaci[oó]n|audita mi aplicaci[oó]n|haz una auditor[ií]a|run a full product audit|attack my application|ataca mi aplicaci[oó]n|prueba de seguridad|security test my app)\b/i,
+    tool: "full_product_audit",
+  },
+  {
+    pattern:
+      /\b(ya lo he arreglado|ya lo arreglé|vuelve a comprobarlo|vuelve a comprobar|he solucionado|audita de nuevo|vuelve a auditar|run full product audit again|re-run the audit|re-run full product audit)\b/i,
     tool: "full_product_audit",
   },
   {
     pattern: /\b(verify the fix|review the fix|verifica el fix|revisa el fix)\b/i,
-    tool: "review_now",
+    tool: "full_product_audit",
   },
   {
     pattern:

@@ -117,6 +117,11 @@
   },
   "fullProductAudit": {
     "intro": "SequrAI ha completado una Auditoría Completa del Producto — revisión de código y pruebas de seguridad.",
+    "staticAnalysisHeader": "ANÁLISIS ESTÁTICO",
+    "staticAnalysisSummary": "Hallazgos de revisión de código: {count}",
+    "dynamicTestingHeader": "PRUEBAS DINÁMICAS",
+    "dynamicTestingSummary": "Pruebas de seguridad ejecutadas: {count} en modo {mode}.",
+    "dynamicTestingSkippedNoTarget": "SequrAI no ha ejecutado ataques dinámicos porque no existe un entorno autorizado.",
     "productionReadiness": "Preparación para producción",
     "securityScore": "Puntuación de seguridad: {score}/100",
     "scoreUnavailable": "no disponible",
@@ -137,7 +142,8 @@
       "potential": "Detectado por revisión de código — aún no confirmado dinámicamente.",
       "notReproduced": "Sospecha estática — la prueba de seguridad no la reprodujo.",
       "falsePositive": "Sospecha estática refutada por prueba de seguridad.",
-      "notApplicable": "Informativo o no aplicable a esta aplicación."
+      "notApplicable": "Informativo o no aplicable a esta aplicación.",
+      "unverified": "La prueba dinámica se ejecutó pero no produjo evidencia concluyente."
     }
   },
   "discoverApplication": {

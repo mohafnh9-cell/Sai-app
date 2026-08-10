@@ -41,6 +41,7 @@ export type RunFullProductAuditInput = {
   branch?: string;
   waitForReviewMs?: number;
   waitForSecurityTestsMs?: number;
+  reviewDeps?: import("@/server/review-now/trigger-review").TriggerReviewDependencies;
 };
 
 function buildRecommendation(input: {
@@ -87,7 +88,7 @@ export async function runFullProductAudit(
       githubRepositoryId: input.githubRepositoryId,
       requestedCommitSha: input.commitSha,
       requestedBranch: input.branch,
-    });
+    }, input.reviewDeps);
   } catch (error) {
     if (error instanceof ReviewNowError) {
       throw new FullProductAuditError(error.message, error.code, 422);
@@ -162,6 +163,7 @@ export async function runFullProductAudit(
           adaptersExecuted: [],
           adaptersSelectedFromFindings: [],
           runtimeMode: null,
+          dynamicTargetSource: null,
           skippedReason: "review_incomplete",
         },
       },
@@ -301,6 +303,7 @@ export async function runFullProductAudit(
         adaptersExecuted: securityTests.adaptersExecuted,
         adaptersSelectedFromFindings: securityTests.adaptersSelectedFromFindings,
         runtimeMode: securityTests.runtimeMode,
+        dynamicTargetSource: securityTests.dynamicTargetSource,
         skippedReason: securityTests.skippedReason,
       },
     },

@@ -5,12 +5,13 @@ import { DEFAULT_SECURITY_TEST_IDS } from "@/features/security-testing/user-test
 import { isFeatureEnabled } from "@/server/feature-flags";
 import { getSecurityTestContext } from "@/server/attack-simulation/get-security-test-context";
 import { mapSelectedTestsToHypotheses } from "@/server/attack-simulation/security-test-options";
-import { startAttackCampaign } from "@/server/attack-simulation/start-attack-campaign";
+import { startAttackCampaign, StartAttackCampaignError } from "@/server/attack-simulation/start-attack-campaign";
 import { getAttackCampaignByScanId, getAttackCampaignById, listAttackScenariosForCampaign } from "@/server/attack-simulation/persistence/campaign-repository";
 import { listAttackExecutionsForCampaign } from "@/server/attack-simulation/persistence/execution-repository";
 import { getTranslator } from "@/lib/i18n/server";
 import { pollUntilAttackCampaignTerminal, waitForScanCampaign } from "./poll";
 import { selectAttacksFromFindings } from "./select-attacks-from-findings";
+import { resolveDynamicTargetForAudit } from "./resolve-dynamic-target";
 import type { StaticFindingInput } from "./correlate-findings";
 
 export type SecurityTestRunResult = {
@@ -19,6 +20,7 @@ export type SecurityTestRunResult = {
   adaptersExecuted: string[];
   adaptersSelectedFromFindings: string[];
   runtimeMode: string | null;
+  dynamicTargetSource: string | null;
   skippedReason: string | null;
   timedOut: boolean;
 };
@@ -42,6 +44,7 @@ export async function ensureSecurityTestsForAudit(
       adaptersExecuted: [],
       adaptersSelectedFromFindings: [],
       runtimeMode: null,
+      dynamicTargetSource: null,
       skippedReason: "feature_disabled",
       timedOut: false,
     };
@@ -78,22 +81,47 @@ export async function ensureSecurityTestsForAudit(
         adaptersExecuted: [],
         adaptersSelectedFromFindings: selectedAdapterIds,
         runtimeMode: null,
+        dynamicTargetSource: null,
         skippedReason: "no_plannable_tests",
         timedOut: false,
       };
     }
 
-    const started = await startAttackCampaign(admin, {
-      projectId: input.projectId,
+    const dynamicTarget = await resolveDynamicTargetForAudit(admin, {
       organizationId: input.organizationId,
-      body: {
-        scanId: input.scanId,
-        scanJobId: input.scanJobId,
-        commitSha: input.commitSha,
-        runtimeMode: "mock",
-        hypotheses,
-      },
+      projectId: input.projectId,
     });
+
+    let started;
+    try {
+      started = await startAttackCampaign(admin, {
+        projectId: input.projectId,
+        organizationId: input.organizationId,
+        body: {
+          scanId: input.scanId,
+          scanJobId: input.scanJobId,
+          commitSha: input.commitSha,
+          runtimeMode: dynamicTarget.runtimeMode,
+          targetUrl: dynamicTarget.targetUrl,
+          authorizationId: dynamicTarget.authorization?.id ?? null,
+          hypotheses,
+        },
+      });
+    } catch (error) {
+      if (error instanceof StartAttackCampaignError) {
+        return {
+          campaignId: null,
+          executionIds: [],
+          adaptersExecuted: [],
+          adaptersSelectedFromFindings: selectedAdapterIds,
+          runtimeMode: dynamicTarget.runtimeMode,
+          dynamicTargetSource: dynamicTarget.source,
+          skippedReason: error.code,
+          timedOut: false,
+        };
+      }
+      throw error;
+    }
 
     campaignId = started.campaignId;
     const poll = await pollUntilAttackCampaignTerminal(admin, {
@@ -107,6 +135,7 @@ export async function ensureSecurityTestsForAudit(
       organizationId: input.organizationId,
       executionIds: started.executionIds,
       adaptersSelectedFromFindings: selectedAdapterIds,
+      dynamicTargetSource: dynamicTarget.source,
       skippedReason: null,
       timedOut,
     });
@@ -129,6 +158,7 @@ export async function ensureSecurityTestsForAudit(
       organizationId: input.organizationId,
       executionIds: executions.map((execution) => execution.id),
       adaptersSelectedFromFindings: selectedAdapterIds,
+      dynamicTargetSource: existing.runtimeMode === "mock" ? null : "authorization",
       skippedReason: null,
       timedOut,
     });
@@ -140,6 +170,7 @@ export async function ensureSecurityTestsForAudit(
     adaptersExecuted: [],
     adaptersSelectedFromFindings: selectedAdapterIds,
     runtimeMode: null,
+    dynamicTargetSource: null,
     skippedReason: "campaign_unavailable",
     timedOut,
   };
@@ -152,6 +183,7 @@ async function buildSecurityTestSummary(
     organizationId: string;
     executionIds: string[];
     adaptersSelectedFromFindings: string[];
+    dynamicTargetSource?: string | null;
     skippedReason: string | null;
     timedOut: boolean;
   }
@@ -177,6 +209,7 @@ async function buildSecurityTestSummary(
     adaptersExecuted,
     adaptersSelectedFromFindings: input.adaptersSelectedFromFindings,
     runtimeMode: campaign?.runtimeMode ?? null,
+    dynamicTargetSource: input.dynamicTargetSource ?? null,
     skippedReason: input.skippedReason,
     timedOut: input.timedOut,
   };

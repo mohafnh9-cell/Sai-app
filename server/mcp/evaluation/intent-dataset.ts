@@ -272,9 +272,13 @@ export const MCP_INTENT_EVALUATION_DATASET: EvalPhrase[] = [
   // Sprint 7 — Safe Fix conversation (existing tool)
   { id: "s7-en-01", locale: "en", phrase: "Fix this.", expected: tool(["safe_fix"]) },
   { id: "s7-en-02", locale: "en", phrase: "Prepare the safest fix.", expected: tool(["safe_fix"]) },
-  { id: "s7-en-03", locale: "en", phrase: "Verify the fix.", expected: tool(["review_now"]) },
+  { id: "s7-en-03", locale: "en", phrase: "Verify the fix.", expected: tool(["full_product_audit"]) },
   { id: "s7-en-04", locale: "en", phrase: "Should I trust this fix?", expected: tool(["safe_fix"]) },
+  { id: "s7-en-05", locale: "en", phrase: "I fixed it — check again.", expected: tool(["full_product_audit"]) },
   { id: "s7-es-01", locale: "es", phrase: "Arregla esto.", expected: tool(["safe_fix"]) },
+  { id: "s7-es-02", locale: "es", phrase: "Ya lo he arreglado.", expected: tool(["full_product_audit"]) },
+  { id: "s7-es-03", locale: "es", phrase: "Vuelve a comprobarlo.", expected: tool(["full_product_audit"]) },
+  { id: "s7-es-04", locale: "es", phrase: "Audita mi aplicación.", expected: tool(["full_product_audit"]) },
 ];
 
 export const MCP_INTENT_DATASET_COUNTS = {

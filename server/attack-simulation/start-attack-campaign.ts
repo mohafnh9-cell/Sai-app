@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
+import type { AttackAuthorizationRecord } from "@/server/ai-red-team/authorization/types";
 import type { AttackRuntimeMode } from "./contracts/enums";
 import {
   attackHypothesisListSchema,
@@ -37,6 +38,45 @@ const startAttackCampaignInputSchema = z.object({
 });
 
 export type StartAttackCampaignInput = z.infer<typeof startAttackCampaignInputSchema>;
+
+async function loadCampaignAuthorization(
+  admin: SupabaseClient,
+  input: {
+    organizationId: string;
+    projectId: string;
+    authorizationId: string;
+  }
+): Promise<AttackAuthorizationRecord | null> {
+  const { data } = await admin
+    .from("attack_authorizations")
+    .select("*")
+    .eq("id", input.authorizationId)
+    .eq("organization_id", input.organizationId)
+    .eq("project_id", input.projectId)
+    .maybeSingle();
+
+  if (!data) return null;
+  const row = data as Record<string, unknown>;
+  return {
+    id: row.id as string,
+    organizationId: row.organization_id as string,
+    projectId: row.project_id as string,
+    targetOrigin: row.target_origin as string,
+    environmentType: row.environment_type as AttackAuthorizationRecord["environmentType"],
+    status: row.status as AttackAuthorizationRecord["status"],
+    authorizationMethod: row.authorization_method as string,
+    approvedScope: (row.approved_scope as Record<string, unknown>) ?? {},
+    createdBy: (row.created_by as string | null) ?? null,
+    approvedAt: row.approved_at as string,
+    expiresAt: row.expires_at as string,
+    testCredentialsRef: (row.test_credentials_ref as string | null) ?? null,
+    pathExclusions: (row.path_exclusions as string[]) ?? [],
+    redirectAllowlist: (row.redirect_allowlist as string[]) ?? [],
+    maxRequestBudget: row.max_request_budget as number,
+    maxDurationSeconds: row.max_duration_seconds as number,
+    commitSha: (row.commit_sha as string | null) ?? null,
+  };
+}
 
 export async function startAttackCampaign(
   admin: SupabaseClient,
@@ -94,9 +134,19 @@ export async function startAttackCampaign(
     authorizationId: parsed.data.authorizationId ?? null,
   });
 
+  const authorization =
+    parsed.data.authorizationId != null
+      ? await loadCampaignAuthorization(admin, {
+          organizationId: input.organizationId,
+          projectId: input.projectId,
+          authorizationId: parsed.data.authorizationId,
+        })
+      : null;
+
   const planned = await planAndPersistCampaignFromHypotheses(admin, {
     campaign,
     hypotheses,
+    authorization,
     targetUrl: parsed.data.targetUrl ?? null,
   });
 

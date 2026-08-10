@@ -7,7 +7,7 @@
  * builders also support).
  */
 type Row = Record<string, unknown>;
-type Filter = { col: string; op: "eq" | "neq" | "in" | "gte"; value: unknown };
+type Filter = { col: string; op: "eq" | "neq" | "in" | "gte" | "gt"; value: unknown };
 
 function matches(row: Row, filters: Filter[]): boolean {
   return filters.every((f) => {
@@ -18,6 +18,11 @@ function matches(row: Row, filters: Filter[]): boolean {
       const rowValue = row[f.col];
       if (typeof rowValue === "string" && typeof f.value === "string") return rowValue >= f.value;
       return (rowValue as number) >= (f.value as number);
+    }
+    if (f.op === "gt") {
+      const rowValue = row[f.col];
+      if (typeof rowValue === "string" && typeof f.value === "string") return rowValue > f.value;
+      return (rowValue as number) > (f.value as number);
     }
     return true;
   });
@@ -58,6 +63,10 @@ class FakeQuery
     this.filters.push({ col, op: "gte", value });
     return this;
   }
+  gt(col: string, value: unknown) {
+    this.filters.push({ col, op: "gt", value });
+    return this;
+  }
   is(col: string, value: unknown) {
     this.filters.push({ col, op: "eq", value: value === null ? null : value });
     return this;
@@ -74,7 +83,9 @@ class FakeQuery
 
   insert(row: Row | Row[]) {
     const toInsert = (Array.isArray(row) ? row : [row]).map((r) => ({
-      id: r.id ?? `fake-id-${(fakeIdCounter += 1)}`,
+      id:
+        r.id ??
+        `00000000-0000-4000-8000-${String((fakeIdCounter += 1)).padStart(12, "0")}`,
       created_at: r.created_at ?? new Date().toISOString(),
       updated_at: r.updated_at ?? new Date().toISOString(),
       ...r,
@@ -118,7 +129,9 @@ class FakeQuery
       this.pendingRows = [existing];
     } else {
       const inserted = {
-        id: row.id ?? `fake-id-${(fakeIdCounter += 1)}`,
+        id:
+          row.id ??
+          `00000000-0000-4000-8000-${String((fakeIdCounter += 1)).padStart(12, "0")}`,
         created_at: row.created_at ?? new Date().toISOString(),
         updated_at: new Date().toISOString(),
         ...row,
