@@ -27,6 +27,10 @@ const ERROR_STATUS: Record<string, number> = {
   internal_error: 500,
 };
 
+/** MCP clients should receive a structured response before platform timeouts. */
+export const MCP_FULL_PRODUCT_AUDIT_REVIEW_WAIT_MS = 50_000;
+export const MCP_FULL_PRODUCT_AUDIT_SECURITY_WAIT_MS = 50_000;
+
 export async function fullProductAudit(
   ctx: McpAuthContext,
   input: FullProductAuditInput,
@@ -51,6 +55,8 @@ export async function fullProductAudit(
       githubRepositoryId: (projectRow?.github_repository_id as number | null) ?? null,
       commitSha: input.commitSha,
       branch: input.branch,
+      waitForReviewMs: MCP_FULL_PRODUCT_AUDIT_REVIEW_WAIT_MS,
+      waitForSecurityTestsMs: MCP_FULL_PRODUCT_AUDIT_SECURITY_WAIT_MS,
     });
   } catch (error) {
     if (error instanceof FullProductAuditError) {

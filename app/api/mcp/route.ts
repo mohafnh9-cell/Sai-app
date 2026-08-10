@@ -11,7 +11,7 @@ import { mcpPostBodySchema } from "@/server/mcp/request.schema";
 import { enforceRateLimit } from "@/server/http/rate-limit";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 const MAX_REQUEST_BODY_BYTES = 64 * 1024;
 
@@ -121,7 +121,12 @@ async function handleJsonRpc(body: JsonRpcRequest, auth: NonNullable<Awaited<Ret
       const payload = await executeMcpTool(auth, name, args);
       return jsonRpcResult(id, toolCallResult(payload));
     } catch (error) {
-      return jsonRpcResult(id, toolCallError(error));
+      if (error instanceof McpError) {
+        return jsonRpcResult(id, toolCallError(error));
+      }
+      const message = error instanceof Error ? error.message : "Tool execution failed";
+      console.error("[mcp] tools/call failed", { tool: name, message });
+      return jsonRpcResult(id, toolCallError(new McpError(500, "internal_error", message)));
     }
   }
 

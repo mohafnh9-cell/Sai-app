@@ -8,6 +8,9 @@
     "app/api/inngest/route.ts": {
       "maxDuration": 300
     },
+    "app/api/mcp/route.ts": {
+      "maxDuration": 300
+    },
     "app/api/repositories/**/scans/route.ts": {
       "maxDuration": 60
     }

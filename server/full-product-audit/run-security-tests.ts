@@ -55,10 +55,12 @@ export async function ensureSecurityTestsForAudit(
     fallbackAdapterIds: DEFAULT_SECURITY_TEST_IDS,
   });
 
+  const campaignPollMs = input.waitForScanBootstrapMs ?? 120_000;
+
   const bootstrapWait = await waitForScanCampaign(
     admin,
     { scanId: input.scanId, organizationId: input.organizationId },
-    { maxMs: input.waitForScanBootstrapMs ?? 120_000 }
+    { maxMs: campaignPollMs }
   );
 
   let campaignId = bootstrapWait.campaignId;
@@ -124,10 +126,14 @@ export async function ensureSecurityTestsForAudit(
     }
 
     campaignId = started.campaignId;
-    const poll = await pollUntilAttackCampaignTerminal(admin, {
-      campaignId,
-      organizationId: input.organizationId,
-    });
+    const poll = await pollUntilAttackCampaignTerminal(
+      admin,
+      {
+        campaignId,
+        organizationId: input.organizationId,
+      },
+      { maxMs: campaignPollMs }
+    );
     timedOut = poll.timedOut;
 
     return buildSecurityTestSummary(admin, {
@@ -143,10 +149,14 @@ export async function ensureSecurityTestsForAudit(
 
   const existing = await getAttackCampaignByScanId(admin, input.scanId, input.organizationId);
   if (existing && campaignId) {
-    const poll = await pollUntilAttackCampaignTerminal(admin, {
-      campaignId,
-      organizationId: input.organizationId,
-    });
+    const poll = await pollUntilAttackCampaignTerminal(
+      admin,
+      {
+        campaignId,
+        organizationId: input.organizationId,
+      },
+      { maxMs: campaignPollMs }
+    );
     timedOut = timedOut || poll.timedOut;
     const executions = await listAttackExecutionsForCampaign(
       admin,
