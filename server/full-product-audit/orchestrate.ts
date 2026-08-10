@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { VerdictStatus } from "@/brain/production-verdict/schema";
+import { LIVE_VERDICT_SCAN_SELECT } from "@/server/production-verdict/live-verdict";
 import { getCurrentProductionVerdict, computeLiveProductionVerdict } from "@/server/production-verdict/service";
 import { ReviewNowError, triggerProductionReview } from "@/server/review-now/trigger-review";
 import { isMcpReviewRateLimited } from "@/server/review-now/rate-limit";
@@ -147,7 +148,7 @@ export async function runFullProductAudit(
 
   const { data: scanRow } = await admin
     .from("scans")
-    .select("id, commit_sha, status, metrics")
+    .select(`${LIVE_VERDICT_SCAN_SELECT}, metrics`)
     .eq("id", scanId)
     .maybeSingle();
 
@@ -287,18 +288,7 @@ export async function runFullProductAudit(
   const persistedVerdict = await getCurrentProductionVerdict(admin, input.projectId);
   const liveVerdict = await computeLiveProductionVerdict(admin, {
     projectId: input.projectId,
-    scan: scanRow as {
-      id: string;
-      commit_sha?: string | null;
-      branch?: string | null;
-      status?: string | null;
-      security_score?: number | null;
-      files_analyzed?: number | null;
-      files_scanned?: number | null;
-      files_discovered?: number | null;
-      total_files?: number | null;
-      repository_id?: string | null;
-    },
+    scan: scanRow,
     persisted: persistedVerdict,
   });
   const verdict = liveVerdict ?? persistedVerdict;

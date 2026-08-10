@@ -5,7 +5,7 @@ import type { ProductionVerdictV1 } from "@/brain/production-verdict/schema";
 import { safeParseProductionVerdict } from "@/brain/production-verdict/schema";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-type ScanRow = {
+export type LiveVerdictScanRow = {
   id: string;
   commit_sha?: string | null;
   branch?: string | null;
@@ -18,21 +18,23 @@ type ScanRow = {
   repository_id?: string | null;
 };
 
+/** Keep in sync with computeLiveProductionVerdict scan reads. */
+export const LIVE_VERDICT_SCAN_SELECT =
+  "id, commit_sha, branch, status, security_score, files_analyzed, files_scanned, files_discovered, total_files, repository_id";
+
 /**
  * Recompute the production verdict from persisted scan findings so classification
  * fixes apply even when the stored verdict row was generated before an engine update.
  */
 export async function computeLiveProductionVerdict(
   admin: SupabaseClient,
-  input: { projectId: string; scan?: ScanRow | null; persisted?: ProductionVerdictV1 | null }
+  input: { projectId: string; scan?: LiveVerdictScanRow | null; persisted?: ProductionVerdictV1 | null }
 ): Promise<ProductionVerdictV1 | null> {
   const scan =
     input.scan ??
     (await admin
       .from("scans")
-      .select(
-        "id, commit_sha, branch, status, security_score, files_analyzed, files_scanned, files_discovered, total_files, repository_id"
-      )
+      .select(LIVE_VERDICT_SCAN_SELECT)
       .eq("project_id", input.projectId)
       .eq("status", "completed")
       .order("completed_at", { ascending: false })
