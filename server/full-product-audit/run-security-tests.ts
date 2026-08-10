@@ -11,6 +11,11 @@ import { pollUntilAttackCampaignTerminal, waitForScanCampaign } from "./poll";
 import { selectAttacksFromFindings } from "./select-attacks-from-findings";
 import { resolveDynamicTargetForAudit } from "./resolve-dynamic-target";
 import { buildHypothesesFromStaticFindings } from "./build-hypotheses-from-findings";
+import { collectRequiredDynamicPaths } from "./required-dynamic-paths";
+import {
+  pathsMissingFromApprovedScope,
+  reapproveExpandedDynamicTargetScope,
+} from "@/server/ai-red-team/authorization/dynamic-scope-expansion";
 import {
   resolveDynamicVerificationExecution,
   type DynamicVerificationDecision,
@@ -39,6 +44,7 @@ function emptyDynamicVerification(
     authorizedTarget: null,
     awaitingUrl: false,
     awaitingAuthorization: false,
+    awaitingScopeApproval: false,
     notSafelyTestableCount: 0,
   };
 }
@@ -54,6 +60,8 @@ export async function ensureSecurityTestsForAudit(
     waitForScanBootstrapMs?: number;
     staticFindings?: StaticFindingInput[];
     dynamicVerificationDecision?: DynamicVerificationDecision;
+    dynamicScopeExpansionApproved?: boolean;
+    createdBy?: string | null;
   }
 ): Promise<SecurityTestRunResult> {
   if (!isFeatureEnabled("attack_simulation", { organizationId: input.organizationId })) {
@@ -103,6 +111,91 @@ export async function ensureSecurityTestsForAudit(
     };
   }
 
+  const { t } = await getTranslator("securityTest");
+  const requireMappedRoutes = dynamicTarget.source === "authorization";
+  const built = buildHypothesesFromStaticFindings({
+    staticFindings,
+    selectedAdapterIds,
+    requireMappedRoutes,
+    t,
+  });
+  const hypotheses = built.hypotheses;
+
+  if (hypotheses.length === 0) {
+    return {
+      campaignId: null,
+      executionIds: [],
+      adaptersExecuted: [],
+      adaptersSelectedFromFindings: selectedAdapterIds,
+      runtimeMode: dynamicTarget.runtimeMode,
+      dynamicTargetSource: dynamicTarget.source,
+      skippedReason: requireMappedRoutes ? "no_safely_testable_routes" : "no_plannable_tests",
+      timedOut: false,
+      dynamicVerification: {
+        ...verificationPlan.state,
+        notSafelyTestableCount: built.notSafelyTestableCount,
+      },
+    };
+  }
+
+  let activeAuthorization = dynamicTarget.authorization;
+  if (dynamicTarget.source === "authorization" && activeAuthorization) {
+    const requiredDynamicPaths = collectRequiredDynamicPaths(hypotheses);
+    const allowedPaths = Array.isArray(activeAuthorization.approvedScope?.allowedPaths)
+      ? (activeAuthorization.approvedScope.allowedPaths as string[])
+      : [];
+    const missingPaths = pathsMissingFromApprovedScope(
+      requiredDynamicPaths,
+      allowedPaths,
+      activeAuthorization.pathExclusions
+    );
+
+    if (missingPaths.length > 0) {
+      if (input.dynamicScopeExpansionApproved) {
+        const expansion = await reapproveExpandedDynamicTargetScope(admin, {
+          organizationId: input.organizationId,
+          projectId: input.projectId,
+          targetOrigin: activeAuthorization.targetOrigin,
+          requiredPaths: missingPaths,
+          createdBy: input.createdBy ?? null,
+        });
+        if (!expansion.ok) {
+          return {
+            campaignId: null,
+            executionIds: [],
+            adaptersExecuted: [],
+            adaptersSelectedFromFindings: selectedAdapterIds,
+            runtimeMode: dynamicTarget.runtimeMode,
+            dynamicTargetSource: dynamicTarget.source,
+            skippedReason: expansion.code,
+            timedOut: false,
+            dynamicVerification: {
+              ...verificationPlan.state,
+              notSafelyTestableCount: built.notSafelyTestableCount,
+            },
+          };
+        }
+        activeAuthorization = expansion.authorization;
+      } else {
+        return {
+          campaignId: null,
+          executionIds: [],
+          adaptersExecuted: [],
+          adaptersSelectedFromFindings: selectedAdapterIds,
+          runtimeMode: dynamicTarget.runtimeMode,
+          dynamicTargetSource: dynamicTarget.source,
+          skippedReason: "awaiting_scope_approval",
+          timedOut: false,
+          dynamicVerification: {
+            ...verificationPlan.state,
+            awaitingScopeApproval: true,
+            notSafelyTestableCount: built.notSafelyTestableCount,
+          },
+        };
+      }
+    }
+  }
+
   const campaignPollMs = input.waitForScanBootstrapMs ?? 120_000;
   const bootstrapWait = await waitForScanCampaign(
     admin,
@@ -114,33 +207,6 @@ export async function ensureSecurityTestsForAudit(
   let timedOut = bootstrapWait.timedOut;
 
   if (!campaignId) {
-    const { t } = await getTranslator("securityTest");
-    const requireMappedRoutes = dynamicTarget.source === "authorization";
-    const built = buildHypothesesFromStaticFindings({
-      staticFindings,
-      selectedAdapterIds,
-      requireMappedRoutes,
-      t,
-    });
-    const hypotheses = built.hypotheses;
-
-    if (hypotheses.length === 0) {
-      return {
-        campaignId: null,
-        executionIds: [],
-        adaptersExecuted: [],
-        adaptersSelectedFromFindings: selectedAdapterIds,
-        runtimeMode: dynamicTarget.runtimeMode,
-        dynamicTargetSource: dynamicTarget.source,
-        skippedReason: requireMappedRoutes ? "no_safely_testable_routes" : "no_plannable_tests",
-        timedOut: false,
-        dynamicVerification: {
-          ...verificationPlan.state,
-          notSafelyTestableCount: built.notSafelyTestableCount,
-        },
-      };
-    }
-
     let started;
     try {
       started = await startAttackCampaign(admin, {
@@ -152,7 +218,7 @@ export async function ensureSecurityTestsForAudit(
           commitSha: input.commitSha,
           runtimeMode: dynamicTarget.runtimeMode,
           targetUrl: dynamicTarget.targetUrl,
-          authorizationId: dynamicTarget.authorization?.id ?? null,
+          authorizationId: activeAuthorization?.id ?? dynamicTarget.authorization?.id ?? null,
           hypotheses,
         },
       });

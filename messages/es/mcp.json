@@ -134,12 +134,18 @@
     "dynamicVerificationOfferActions": "Opciones: Autorizar y comprobar | Solo analizar el código",
     "dynamicVerificationUrlPrompt": "¿Dónde está desplegada tu aplicación? Pásame la URL de la aplicación que quieres comprobar.",
     "dynamicVerificationUrlExamples": "Ejemplos: https://miapp.com | https://miapp.vercel.app | https://miapp.netlify.app",
+    "dynamicScopeApprovalHeader": "Actualización de autorización de seguridad",
+    "dynamicScopeApprovalBody": "Necesitamos actualizar la autorización de seguridad para comprobar algunos endpoints de tu aplicación.",
+    "dynamicScopeApprovalRoutesIntro": "Vamos a comprobar las rutas necesarias para verificar estas vulnerabilidades.",
+    "dynamicScopeApprovalAction": "[ Autorizar comprobación ]",
     "skippedReasons": {
       "user_declined_dynamic": "Motivo: las pruebas dinámicas no fueron autorizadas.",
       "dynamic_not_authorized": "Motivo: las pruebas dinámicas no fueron autorizadas.",
       "awaiting_authorization": "Motivo: esperando autorización de la aplicación.",
+      "awaiting_scope_approval": "Necesitamos tu autorización para comprobar las rutas de la aplicación necesarias para estas vulnerabilidades.",
       "no_findings": "Motivo: no se encontraron vulnerabilidades que requieran verificación dinámica.",
-      "no_safely_testable_routes": "SequrAI no pudo identificar de forma segura el endpoint afectado, por lo que esta prueba no se realizó."
+      "no_safely_testable_routes": "SequrAI no pudo identificar de forma segura el endpoint afectado, por lo que esta prueba no se realizó.",
+      "DYNAMIC_VERIFICATION_SKIPPED_UNSAFE_ROUTE": "SequrAI no pudo identificar de forma segura el endpoint afectado, por lo que esta prueba no se realizó."
     },
     "productionReadiness": "Preparación para producción",
     "securityScore": "Puntuación de seguridad: {score}/100",
@@ -209,6 +215,11 @@
     "declinedBody": "La verificación dinámica fue cancelada. El análisis de código sigue disponible.",
     "declinedNext": "Puedes ejecutar la Auditoría Completa solo con análisis de código cuando quieras.",
     "nextActionAudit": "Ejecuta la Auditoría Completa con verificación dinámica.",
+    "scopeExpansionHeader": "Actualización de autorización de seguridad",
+    "scopeExpansionBody": "Vamos a comprobar las rutas necesarias para verificar estas vulnerabilidades.",
+    "scopeExpansionSuccessHeader": "Autorización actualizada",
+    "scopeExpansionSuccessBody": "SequrAI ya puede ejecutar las comprobaciones de seguridad necesarias en {target}.",
+    "scopeExpansionNext": "Ejecuta la Auditoría Completa con verificación dinámica.",
     "errors": {
       "targetRequired": "Se requiere una URL staging o preview.",
       "approveBlocked": "Debes verificar ownership del dominio antes de aprobar la autorización.",

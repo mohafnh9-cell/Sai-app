@@ -13,11 +13,21 @@ import {
   initiateDynamicTargetVerification,
   verifyDynamicTargetOwnership,
 } from "@/server/ai-red-team/authorization/dynamic-target-authorization-service";
+import { reapproveExpandedDynamicTargetScope } from "@/server/ai-red-team/authorization/dynamic-scope-expansion";
+import { loadRequiredDynamicPathsForLatestScan } from "@/server/full-product-audit/load-required-dynamic-paths-for-project";
 
 const paramsSchema = z.object({ id: z.string().uuid() });
 
 const bodySchema = z.object({
-  action: z.enum(["status", "check", "authorize_and_check", "initiate", "verify", "approve"]),
+  action: z.enum([
+    "status",
+    "check",
+    "authorize_and_check",
+    "initiate",
+    "verify",
+    "approve",
+    "approve_scope_expansion",
+  ]),
   targetOrigin: z.string().url().optional(),
   environmentType: z.enum(["preview", "staging"]).optional(),
   verificationMethod: z.enum(["http", "dns"]).optional(),
@@ -163,6 +173,30 @@ export async function POST(
       return NextResponse.json({ verified: false, reason: result.code }, { status: 422 });
     }
     return NextResponse.json({ verified: true, targetOrigin: result.targetOrigin });
+  }
+
+  if (body.data.action === "approve_scope_expansion") {
+    const requiredPaths = await loadRequiredDynamicPathsForLatestScan(admin, {
+      organizationId,
+      projectId,
+    });
+    const expansion = await reapproveExpandedDynamicTargetScope(admin, {
+      organizationId,
+      projectId,
+      targetOrigin: body.data.targetOrigin,
+      requiredPaths,
+      createdBy: access.userId,
+    });
+    if (!expansion.ok) {
+      return NextResponse.json({ error: expansion.code, message: expansion.message }, { status: 403 });
+    }
+    return NextResponse.json({
+      authorized: true,
+      targetOrigin: expansion.authorization.targetOrigin,
+      scopeUpdated: expansion.scopeChanged,
+      message:
+        "Autorización actualizada. SequrAI puede comprobar las rutas necesarias para verificar estas vulnerabilidades.",
+    });
   }
 
   const approved = await approveDynamicTargetAuthorization(admin, {

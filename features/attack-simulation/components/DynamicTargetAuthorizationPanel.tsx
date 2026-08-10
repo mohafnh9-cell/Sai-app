@@ -29,6 +29,7 @@ export function DynamicTargetAuthorizationPanel({
   const [manualFallback, setManualFallback] = useState(
     initialStatus?.verification.status === "pending"
   );
+  const [awaitingScopeApproval, setAwaitingScopeApproval] = useState(false);
   const [phase, setPhase] = useState<
     "idle" | "checking" | "verified" | "preparing" | "testing" | "analyzing"
   >("idle");
@@ -61,10 +62,21 @@ export function DynamicTargetAuthorizationPanel({
       message?: string;
       dynamicTestsExecuted?: boolean;
       timedOut?: boolean;
+      awaitingScopeApproval?: boolean;
     };
     if (!response.ok) {
       throw new Error(body.message ?? body.error ?? "No se pudo completar la auditoría.");
     }
+    if (body.awaitingScopeApproval) {
+      setAwaitingScopeApproval(true);
+      setPhase("verified");
+      setMessage(
+        "Necesitamos actualizar la autorización de seguridad para comprobar algunos endpoints de tu aplicación."
+      );
+      router.refresh();
+      return;
+    }
+    setAwaitingScopeApproval(false);
     setPhase(body.dynamicTestsExecuted ? "analyzing" : "verified");
     setMessage(
       dynamicVerificationDecision === "static_only"
@@ -215,6 +227,44 @@ export function DynamicTargetAuthorizationPanel({
     }
   }
 
+  async function approveScopeExpansion() {
+    if (!targetOrigin.trim() && !status?.targetOrigin) {
+      setError("Introduce la URL de tu aplicación.");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/projects/${projectId}/dynamic-target-authorization`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          action: "approve_scope_expansion",
+          targetOrigin: status?.targetOrigin ?? targetOrigin,
+        }),
+      });
+      const body = (await response.json()) as { error?: string; message?: string };
+      if (!response.ok) {
+        setError(body.error ?? "No se pudo actualizar la autorización.");
+        return;
+      }
+      setAwaitingScopeApproval(false);
+      setMessage(
+        body.message ??
+          "Vamos a comprobar las rutas necesarias para verificar estas vulnerabilidades."
+      );
+      await runFullAudit("authorize");
+    } catch (scopeError) {
+      setError(
+        scopeError instanceof Error
+          ? scopeError.message
+          : "No se pudo actualizar la autorización."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function verifyApplication() {
     if (!targetOrigin.trim()) {
       setError("Introduce la URL de tu aplicación.");
@@ -278,30 +328,43 @@ export function DynamicTargetAuthorizationPanel({
         <div className="space-y-3 text-sm">
           <p className="font-medium text-emerald-600">Aplicación verificada</p>
           <p>Aplicación: {status.targetOrigin}</p>
-          <p>SequrAI ya puede realizar las comprobaciones de seguridad autorizadas.</p>
-          <Button
-            disabled={loading}
-            onClick={() => {
-              setLoading(true);
-              void runFullAudit("authorize")
-                .catch((auditError: unknown) =>
-                  setError(
-                    auditError instanceof Error
-                      ? auditError.message
-                      : "No se pudo completar la auditoría."
-                  )
-                )
-                .finally(() => setLoading(false));
-            }}
-          >
-            {phase === "preparing"
-              ? "Preparando comprobaciones..."
-              : phase === "testing"
-                ? "Ejecutando pruebas controladas..."
-                : phase === "analyzing"
-                  ? "Analizando resultados..."
-                  : "Ejecutar comprobaciones"}
-          </Button>
+          {awaitingScopeApproval ? (
+            <>
+              <p>
+                Vamos a comprobar las rutas necesarias para verificar estas vulnerabilidades.
+              </p>
+              <Button disabled={loading} onClick={() => void approveScopeExpansion()}>
+                Autorizar comprobación
+              </Button>
+            </>
+          ) : (
+            <>
+              <p>SequrAI ya puede realizar las comprobaciones de seguridad autorizadas.</p>
+              <Button
+                disabled={loading}
+                onClick={() => {
+                  setLoading(true);
+                  void runFullAudit("authorize")
+                    .catch((auditError: unknown) =>
+                      setError(
+                        auditError instanceof Error
+                          ? auditError.message
+                          : "No se pudo completar la auditoría."
+                      )
+                    )
+                    .finally(() => setLoading(false));
+                }}
+              >
+                {phase === "preparing"
+                  ? "Preparando comprobaciones..."
+                  : phase === "testing"
+                    ? "Ejecutando pruebas controladas..."
+                    : phase === "analyzing"
+                      ? "Analizando resultados..."
+                      : "Ejecutar comprobaciones"}
+              </Button>
+            </>
+          )}
         </div>
       ) : ownershipConfirmed ? (
         <div className="space-y-4">

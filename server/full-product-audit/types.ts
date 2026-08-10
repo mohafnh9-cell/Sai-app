@@ -93,6 +93,7 @@ export type DynamicVerificationSummary = {
   authorizedTarget: string | null;
   awaitingUrl: boolean;
   awaitingAuthorization: boolean;
+  awaitingScopeApproval: boolean;
   notSafelyTestableCount: number;
 };
 

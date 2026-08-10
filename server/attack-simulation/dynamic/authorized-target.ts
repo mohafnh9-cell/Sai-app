@@ -121,6 +121,22 @@ export function adapterRequiresAuthenticatedIdentity(adapterId: string): boolean
   return adapterId === "idor-cross-tenant" || adapterId === "privilege-escalation";
 }
 
+export function isPathWithinApprovedScope(
+  path: string,
+  allowedPaths: string[],
+  pathExclusions: string[] = []
+): boolean {
+  const normalized = path.startsWith("/") ? path : `/${path}`;
+  for (const excluded of pathExclusions) {
+    if (normalized.startsWith(excluded)) {
+      return false;
+    }
+  }
+  return allowedPaths.some(
+    (prefix) => normalized === prefix || normalized.startsWith(`${prefix}/`)
+  );
+}
+
 export function assertPathAllowed(target: AuthorizedDynamicTarget, path: string): void {
   const normalized = path.startsWith("/") ? path : `/${path}`;
   for (const excluded of target.pathExclusions) {
@@ -128,8 +144,7 @@ export function assertPathAllowed(target: AuthorizedDynamicTarget, path: string)
       throw new Error(`Path ${normalized} is excluded by authorization`);
     }
   }
-  const allowed = target.allowedPaths.some((prefix) => normalized === prefix || normalized.startsWith(`${prefix}/`));
-  if (!allowed && target.authorized) {
+  if (!isPathWithinApprovedScope(normalized, target.allowedPaths, target.pathExclusions) && target.authorized) {
     throw new Error(`Path ${normalized} is outside authorized scope`);
   }
 }

@@ -4,6 +4,7 @@ import { verdictHeadline } from "@/brain/production-verdict/status-rules";
 import type { McpTranslator } from "@/server/mcp/i18n";
 import { buildTextResponse } from "@/server/mcp/response-format";
 import {
+  buildAwaitingScopeApprovalSummary,
   buildAwaitingUrlSummary,
   buildDynamicVerificationOfferSummary,
   buildStaticOnlySummary,
@@ -133,6 +134,8 @@ export function formatFullProductAuditResponse(
 
   if (result.dynamicVerification.decision === "static_only") {
     lines.push(buildStaticOnlySummary(t));
+  } else if (result.dynamicVerification.awaitingScopeApproval) {
+    lines.push(buildAwaitingScopeApprovalSummary(t));
   } else if (result.dynamicVerification.awaitingUrl) {
     lines.push(buildAwaitingUrlSummary(t));
   } else if (result.dynamicVerification.authorizedTarget && result.engines.securityTesting.adaptersExecuted.length > 0) {
@@ -204,7 +207,9 @@ export function formatFullProductAuditResponse(
             : null,
       application: result.dynamicVerification.authorizedTarget,
       awaitingApplicationUrl: result.dynamicVerification.awaitingUrl,
-      awaitingConfirmation: result.dynamicVerification.awaitingAuthorization,
+      awaitingConfirmation:
+        result.dynamicVerification.awaitingAuthorization ||
+        result.dynamicVerification.awaitingScopeApproval,
       checksRun: result.engines.securityTesting.executionsRun,
       checksCompleted: result.engines.securityTesting.executionsCompleted,
       notSafelyTestableCount: result.engines.securityTesting.notSafelyTestableCount,

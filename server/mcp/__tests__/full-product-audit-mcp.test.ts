@@ -79,6 +79,7 @@ describe("MCP full_product_audit integration", () => {
         authorizedTarget: null,
         awaitingUrl: false,
         awaitingAuthorization: false,
+        awaitingScopeApproval: false,
         notSafelyTestableCount: 0,
       },
       safeFixAvailable: false,

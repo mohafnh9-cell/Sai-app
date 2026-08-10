@@ -16,6 +16,8 @@ import {
   verifyDynamicTargetOwnership,
 } from "@/server/ai-red-team/authorization/dynamic-target-authorization-service";
 import { normalizeOrigin } from "@/server/ai-red-team/authorization/types";
+import { reapproveExpandedDynamicTargetScope } from "@/server/ai-red-team/authorization/dynamic-scope-expansion";
+import { loadRequiredDynamicPathsForLatestScan } from "@/server/full-product-audit/load-required-dynamic-paths-for-project";
 
 export type AuthorizeDynamicTargetInput = ProjectSelector & {
   action?:
@@ -25,6 +27,7 @@ export type AuthorizeDynamicTargetInput = ProjectSelector & {
     | "initiate"
     | "verify"
     | "approve"
+    | "approve_scope_expansion"
     | "authorize_and_check"
     | "manual_help"
     | "decline";
@@ -424,6 +427,51 @@ export async function authorizeDynamicTarget(
       targetOrigin,
       summary: buildTextResponse("authorize_dynamic_target" as never, t, lines),
       nextAction: t("authorizeDynamicTarget.nextActionAudit"),
+    };
+  }
+
+  if (action === "approve_scope_expansion") {
+    if (!targetOrigin) {
+      throw new McpError(400, "target_origin_required", t("authorizeDynamicTarget.errors.targetRequired"));
+    }
+
+    const requiredPaths = await loadRequiredDynamicPathsForLatestScan(ctx.admin, {
+      organizationId: ctx.organizationId,
+      projectId: project.id,
+    });
+    const expansion = await reapproveExpandedDynamicTargetScope(ctx.admin, {
+      organizationId: ctx.organizationId,
+      projectId: project.id,
+      targetOrigin,
+      requiredPaths,
+      createdBy: ctx.userId,
+    });
+
+    if (!expansion.ok) {
+      throw new McpError(403, expansion.code, t("authorizeDynamicTarget.errors.approveBlocked"));
+    }
+
+    const lines = expansion.scopeChanged
+      ? [
+          t("authorizeDynamicTarget.scopeExpansionSuccessHeader"),
+          "",
+          t("authorizeDynamicTarget.scopeExpansionSuccessBody", { target: targetOrigin }),
+          "",
+          t("authorizeDynamicTarget.scopeExpansionBody"),
+        ]
+      : [
+          t("authorizeDynamicTarget.alreadyAuthorizedHeader"),
+          "",
+          t("authorizeDynamicTarget.alreadyAuthorizedBody", { target: targetOrigin }),
+        ];
+
+    return {
+      mode: "authorize_dynamic_target",
+      action: "approve_scope_expansion",
+      project: { id: project.id, name: project.name, repositoryFullName: project.repositoryFullName },
+      application: { verified: true, url: targetOrigin },
+      summary: buildTextResponse("authorize_dynamic_target" as never, t, lines),
+      nextAction: t("authorizeDynamicTarget.scopeExpansionNext"),
     };
   }
 

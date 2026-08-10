@@ -68,6 +68,7 @@ export async function POST(
       timedOut: result.timedOut,
       dynamicTestsExecuted: result.engines.securityTesting.executionsRun > 0,
       authorizedApplication: result.dynamicVerification.authorizedTarget,
+      awaitingScopeApproval: result.dynamicVerification.awaitingScopeApproval,
       nextAction: result.nextAction,
       attackCenterHref: `/projects/${projectId}/attack-center`,
     });

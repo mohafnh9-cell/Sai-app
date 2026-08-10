@@ -21,6 +21,10 @@ const t = ((key: string, params?: Record<string, string>) => {
     "fullProductAudit.dynamicVerificationOfferHeader": "Security verification",
     "fullProductAudit.dynamicVerificationOfferBody": `SequrAI found possible vulnerabilities (${params?.count ?? "0"}).`,
     "fullProductAudit.dynamicVerificationOfferActions": "Choose: Authorize and verify | Code analysis only",
+    "fullProductAudit.dynamicScopeApprovalHeader": "Security authorization update",
+    "fullProductAudit.dynamicScopeApprovalBody": "We need to update your security authorization to check some application endpoints.",
+    "fullProductAudit.dynamicScopeApprovalRoutesIntro": "We will check the routes needed to verify these vulnerabilities.",
+    "fullProductAudit.dynamicScopeApprovalAction": "[ Authorize verification ]",
     "fullProductAudit.skippedReasons.dynamic_not_authorized": "Reason: dynamic tests were not authorized.",
     "fullProductAudit.verifyFix": "VERIFY FIX",
   };
@@ -72,6 +76,7 @@ function baseResult(overrides: Partial<FullProductAuditResult>): FullProductAudi
       authorizedTarget: null,
       awaitingUrl: false,
       awaitingAuthorization: false,
+      awaitingScopeApproval: false,
       notSafelyTestableCount: 0,
     },
     safeFixAvailable: false,
@@ -115,6 +120,7 @@ describe("formatFullProductAuditResponse", () => {
           authorizedTarget: null,
           awaitingUrl: false,
           awaitingAuthorization: false,
+          awaitingScopeApproval: false,
           notSafelyTestableCount: 0,
         },
       }),
@@ -122,6 +128,40 @@ describe("formatFullProductAuditResponse", () => {
     );
     expect(formatted.summary).toContain("DYNAMIC TESTING");
     expect(formatted.summary.toLowerCase()).toContain("dynamic tests were not authorized");
+  });
+
+  it("shows user-friendly scope approval copy without internal authorization details", () => {
+    const formatted = formatFullProductAuditResponse(
+      baseResult({
+        engines: {
+          codeReview: { scanId: "scan-1", findingsCount: 2, rulesRun: 22 },
+          securityTesting: {
+            campaignId: null,
+            executionsRun: 0,
+            executionsCompleted: 0,
+            adaptersExecuted: [],
+            adaptersSelectedFromFindings: [],
+            runtimeMode: "authorized_staging",
+            dynamicTargetSource: "authorization",
+            skippedReason: "awaiting_scope_approval",
+            notSafelyTestableCount: 0,
+          },
+        },
+        dynamicVerification: {
+          offered: false,
+          decision: null,
+          authorizedTarget: "https://sequrai-app.vercel.app",
+          awaitingUrl: false,
+          awaitingAuthorization: false,
+          awaitingScopeApproval: true,
+          notSafelyTestableCount: 0,
+        },
+      }),
+      t
+    );
+    expect(formatted.summary).toContain("Security authorization update");
+    expect(formatted.summary).toContain("[ Authorize verification ]");
+    expect(JSON.stringify(formatted)).not.toMatch(/allowedPaths|Gate 3|authorizationId/);
   });
 
   it("keeps internal execution and authorization terminology out of MCP data", () => {

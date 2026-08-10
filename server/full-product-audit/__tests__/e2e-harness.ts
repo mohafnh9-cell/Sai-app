@@ -17,6 +17,7 @@ export function buildReviewDeps(): TriggerReviewDependencies {
 
 export function createFullProductAuditE2EAdmin(options?: {
   attackAuthorizations?: FakeTables["attack_authorizations"];
+  dynamicTargetVerifications?: FakeTables["dynamic_target_verifications"];
   scanFindings?: FakeTables["scan_findings"];
 }): { admin: ReturnType<typeof createFakeAdmin>; tables: FakeTables } {
   const now = new Date().toISOString();
@@ -98,6 +99,7 @@ export function createFullProductAuditE2EAdmin(options?: {
       },
     ],
     attack_authorizations: options?.attackAuthorizations ?? [],
+    dynamic_target_verifications: options?.dynamicTargetVerifications ?? [],
     attack_simulation_campaigns: [],
     attack_simulation_scenarios: [],
     attack_simulation_executions: [],

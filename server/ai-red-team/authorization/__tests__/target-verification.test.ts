@@ -3,6 +3,7 @@ import {
   buildHttpVerificationInstructions,
   generateVerificationToken,
   isBlockedVerificationHostname,
+  mergeMinimalAllowedPaths,
   normalizeAllowedPaths,
 } from "../target-verification";
 
@@ -44,5 +45,13 @@ describe("target verification helpers", () => {
       "https://staging.example.com/.well-known/sequrai-verification.txt"
     );
     expect(instructions.expectedContent).toBe("sequrai-verify-abc");
+  });
+
+  it("merges explicit paths without injecting global fallbacks", () => {
+    expect(mergeMinimalAllowedPaths(["/api", "/login"], ["/forgot-password"])).toEqual([
+      "/api",
+      "/login",
+      "/forgot-password",
+    ]);
   });
 });

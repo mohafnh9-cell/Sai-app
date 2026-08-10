@@ -202,6 +202,7 @@ export async function runFullProductAudit(
         authorizedTarget: null,
         awaitingUrl: false,
         awaitingAuthorization: false,
+        awaitingScopeApproval: false,
         notSafelyTestableCount: 0,
       },
       safeFixAvailable: false,
@@ -250,6 +251,7 @@ export async function runFullProductAudit(
     waitForScanBootstrapMs: input.waitForSecurityTestsMs ?? 120_000,
     staticFindings,
     dynamicVerificationDecision: input.dynamicVerificationDecision,
+    dynamicScopeExpansionApproved: input.dynamicVerificationDecision === "authorize",
   });
 
   const attackFindingsByExecution = await listAttackFindingsForExecutions(
@@ -319,6 +321,9 @@ export async function runFullProductAudit(
   if (securityTests.dynamicVerification.offered) {
     nextAction =
       'Say you want to "Autorizar y comprobar" or choose "Solo analizar el código" to continue.';
+  } else if (securityTests.dynamicVerification.awaitingScopeApproval) {
+    nextAction =
+      'Authorize the security check update, then run Full Product Audit again with "Autorizar y comprobar".';
   } else if (securityTests.dynamicVerification.awaitingUrl) {
     nextAction = "Provide your deployed application URL, then authorize dynamic verification.";
   } else if (securityTests.skippedReason === "user_declined_dynamic") {

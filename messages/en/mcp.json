@@ -134,12 +134,18 @@
     "dynamicVerificationOfferActions": "Choose: Authorize and verify | Code analysis only",
     "dynamicVerificationUrlPrompt": "Where is your application deployed? Send the application URL you want us to verify.",
     "dynamicVerificationUrlExamples": "Examples: https://myapp.com | https://myapp.vercel.app | https://myapp.netlify.app",
+    "dynamicScopeApprovalHeader": "Security authorization update",
+    "dynamicScopeApprovalBody": "We need to update your security authorization to check some application endpoints for these vulnerabilities.",
+    "dynamicScopeApprovalRoutesIntro": "We will check the routes needed to verify these vulnerabilities.",
+    "dynamicScopeApprovalAction": "[ Authorize verification ]",
     "skippedReasons": {
       "user_declined_dynamic": "Reason: dynamic tests were not authorized.",
       "dynamic_not_authorized": "Reason: dynamic tests were not authorized.",
       "awaiting_authorization": "Reason: waiting for application authorization.",
+      "awaiting_scope_approval": "We need your authorization to check the application routes required for these vulnerabilities.",
       "no_findings": "Reason: no vulnerabilities requiring dynamic verification were found.",
-      "no_safely_testable_routes": "SequrAI could not safely identify the affected endpoint, so this check was not performed."
+      "no_safely_testable_routes": "SequrAI could not safely identify the affected endpoint, so this check was not performed.",
+      "DYNAMIC_VERIFICATION_SKIPPED_UNSAFE_ROUTE": "SequrAI could not safely identify the affected endpoint, so this check was not performed."
     },
     "productionReadiness": "Production Readiness",
     "securityScore": "Security Score: {score}/100",
@@ -209,6 +215,11 @@
     "declinedBody": "Dynamic verification was cancelled. Static analysis remains available.",
     "declinedNext": "Run Full Product Audit with code analysis only anytime.",
     "nextActionAudit": "Run Full Product Audit with dynamic verification enabled.",
+    "scopeExpansionHeader": "Security authorization update",
+    "scopeExpansionBody": "We will check the routes needed to verify these vulnerabilities.",
+    "scopeExpansionSuccessHeader": "Authorization updated",
+    "scopeExpansionSuccessBody": "SequrAI can now run the required security checks on {target}.",
+    "scopeExpansionNext": "Run Full Product Audit with dynamic verification enabled.",
     "errors": {
       "targetRequired": "A staging or preview target URL is required.",
       "approveBlocked": "Domain ownership must be verified before authorization can be approved.",

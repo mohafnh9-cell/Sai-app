@@ -43,7 +43,11 @@ export function generateVerificationToken(input: {
 export function normalizeAllowedPaths(paths: string[] | undefined): string[] {
   const defaults = ["/api", "/login", "/health", "/auth"];
   const source = paths && paths.length > 0 ? paths : defaults;
-  const normalized = source
+  return normalizeExplicitAllowedPaths(source);
+}
+
+export function normalizeExplicitAllowedPaths(paths: string[]): string[] {
+  const normalized = paths
     .map((entry) => entry.trim())
     .filter(Boolean)
     .map((entry) => {
@@ -51,6 +55,11 @@ export function normalizeAllowedPaths(paths: string[] | undefined): string[] {
       return withoutWildcard.startsWith("/") ? withoutWildcard : `/${withoutWildcard}`;
     });
   return [...new Set(normalized)];
+}
+
+/** Union of existing approved scope and audit-required paths — never injects global fallbacks. */
+export function mergeMinimalAllowedPaths(existingPaths: string[], requiredPaths: string[]): string[] {
+  return normalizeExplicitAllowedPaths([...existingPaths, ...requiredPaths]);
 }
 
 export function isBlockedVerificationHostname(hostname: string): boolean {

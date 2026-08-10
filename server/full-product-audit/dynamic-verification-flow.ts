@@ -10,6 +10,7 @@ export type DynamicVerificationState = {
   authorizedTarget: string | null;
   awaitingUrl: boolean;
   awaitingAuthorization: boolean;
+  awaitingScopeApproval: boolean;
   notSafelyTestableCount: number;
 };
 
@@ -42,6 +43,7 @@ export function resolveDynamicVerificationExecution(input: {
     authorizedTarget: input.authorizedTarget ?? null,
     awaitingUrl: false,
     awaitingAuthorization: false,
+    awaitingScopeApproval: false,
     notSafelyTestableCount: 0,
   };
 
@@ -111,6 +113,18 @@ export function buildStaticOnlySummary(t: McpTranslator): string {
     t("fullProductAudit.dynamicTestingHeader"),
     t("fullProductAudit.dynamicTestingNotExecuted"),
     t("fullProductAudit.dynamicTestingStaticOnlyReason"),
+  ].join("\n");
+}
+
+export function buildAwaitingScopeApprovalSummary(t: McpTranslator): string {
+  return [
+    t("fullProductAudit.dynamicScopeApprovalHeader"),
+    "",
+    t("fullProductAudit.dynamicScopeApprovalBody"),
+    "",
+    t("fullProductAudit.dynamicScopeApprovalRoutesIntro"),
+    "",
+    t("fullProductAudit.dynamicScopeApprovalAction"),
   ].join("\n");
 }
 
