@@ -7,7 +7,7 @@ const TEST_OR_EXAMPLE = /(?:^|\/)(?:test|tests|__tests__|fixtures?|examples?)(?:
 const ROUTE_PATH = /(?:^|\/)(?:api|routes?|controllers?|handlers?)(?:\/|$)|route\.[jt]s$/i;
 const CODE_PATH = /\.(?:[cm]?[jt]sx?|py|rb|go|java|php)$/i;
 
-function patternRule(id: string, title: string, specs: PatternSpec[]): ScanRule {
+export function patternRule(id: string, title: string, specs: PatternSpec[]): ScanRule {
   return { id, title, run: ({ files }) => patternFindings(id, files, specs) };
 }
 
@@ -150,7 +150,7 @@ const serviceRoleInClient: ScanRule = {
 
 const injectionRules = [
   patternRule("injection.sql", "SQL injection", [{
-    pattern: /(?:query|execute|raw)\s*\(\s*(?:`[^`]*\$\{|["'][^"']*["']\s*\+|f["'][^"']*\{)/i,
+    pattern: /\b(?:query|execute|raw)\s*\(\s*(?:`[^`]*\$\{|["'][^"']*["']\s*\+|f["'][^"']*\{)/i,
     title: "Dynamic SQL query construction", description: "Untrusted data may be interpolated into SQL.",
     severity: "high", confidence: "medium", category: "injection",
     remediation: "Use parameterized queries or the ORM query builder.", path: CODE_PATH,
@@ -280,7 +280,7 @@ const missingNextSecurityHeaders: ScanRule = {
   },
 };
 
-function contextualRouteRule(
+export function contextualRouteRule(
   id: string,
   title: string,
   missing: RegExp,

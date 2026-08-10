@@ -1,6 +1,8 @@
 import { BUILTIN_RULES } from "./builtin";
+import { EXTENDED_RULES } from "./extended-rules";
 import { dependencyRule } from "./dependencies";
 import { readinessAreasRule } from "./readiness-areas";
+import { securityAreaBaselineRule } from "./security-area-baseline";
 import type { ScanRule } from "./types";
 
 export class RuleRegistry {
@@ -22,5 +24,11 @@ export class RuleRegistry {
 }
 
 export function createDefaultRegistry(): RuleRegistry {
-  return new RuleRegistry([...BUILTIN_RULES, dependencyRule, readinessAreasRule]);
+  return new RuleRegistry([
+    ...BUILTIN_RULES,
+    ...EXTENDED_RULES,
+    dependencyRule,
+    readinessAreasRule,
+    securityAreaBaselineRule,
+  ]);
 }

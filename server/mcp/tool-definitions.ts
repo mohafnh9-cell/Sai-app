@@ -1,6 +1,7 @@
 import {
   CANCEL_REVIEW_DESCRIPTION,
   CAN_I_DEPLOY_DESCRIPTION,
+  FULL_PRODUCT_AUDIT_DESCRIPTION,
   PRODUCTION_HISTORY_DESCRIPTION,
   REVIEW_NOW_DESCRIPTION,
   SAFE_FIX_DESCRIPTION,
@@ -46,10 +47,29 @@ const PROJECT_SELECTOR_PROPERTIES: McpToolDefinition["inputSchema"]["properties"
 };
 
 /**
- * ADR-001 / MCP V1 + RT2: six public tools (five production engine tools + discover_application).
+ * ADR-001 / MCP V1 + RT2: eight public tools (production engine + discover + full audit).
  * Enforced by server/mcp/__tests__/tool-surface.test.ts.
  */
 export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
+  {
+    name: "full_product_audit",
+    description: FULL_PRODUCT_AUDIT_DESCRIPTION,
+    inputSchema: {
+      type: "object",
+      properties: {
+        ...PROJECT_SELECTOR_PROPERTIES,
+        commitSha: {
+          type: "string",
+          description: "Explicit commit SHA to audit. Defaults to the latest commit on the branch.",
+        },
+        branch: {
+          type: "string",
+          description: "Branch to audit. Defaults to the repository's default branch.",
+        },
+      },
+      required: [],
+    },
+  },
   {
     name: "review_now",
     description: REVIEW_NOW_DESCRIPTION,
@@ -159,7 +179,7 @@ export const MCP_PUBLIC_TOOL_NAMES = MCP_TOOL_DEFINITIONS.map((tool) => tool.nam
 
 export const MCP_SERVER_INFO = {
   name: "sequrai",
-  version: "2.2.0",
+  version: "2.3.0",
   description:
-    "SequrAI Production Engine — independent Production Engineer for AI-built software. Speak naturally; select tools by intent (review, cancel review, deploy readiness, safe fix, changes, history, architecture discovery). Seven public tools; canonical verdict truth is never computed in the client.",
+    "SequrAI Production Engine — independent Production Engineer for AI-built software. Speak naturally; select tools by intent (full audit, review, cancel review, deploy readiness, safe fix, changes, history, architecture discovery). Eight public tools; canonical verdict truth is never computed in the client.",
 };

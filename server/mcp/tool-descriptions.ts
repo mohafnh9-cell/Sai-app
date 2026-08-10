@@ -1,7 +1,17 @@
 /**
  * Rich MCP tool descriptions for client-side natural-language tool selection.
- * ADR-001: exactly five public tools — descriptions only, no new tools.
  */
+
+export const FULL_PRODUCT_AUDIT_DESCRIPTION = `Run a complete SequrAI Full Product Audit — code review AND security testing in one orchestrated flow.
+
+Purpose: When the user wants a full audit, security audit, vulnerability search, SaaS review, or "is my product ready for production?" with both static analysis and security tests.
+Use when: "Audit my product." | "Full audit." | "Complete security audit." | "Review my application." | "Analyze my SaaS." | "Find vulnerabilities." | "Busca vulnerabilidades." | "Audita mi producto." | "Auditoría completa." | "Revisa mi aplicación." | "¿Está listo para producción?" (when they want analysis, not just the cached deploy answer)
+Do NOT use when the user only wants the current deploy answer without new analysis — use can_i_deploy.
+Do NOT use for a quick re-scan only — use review_now.
+Do NOT use for fix prompts — use safe_fix.
+Compute: YES (async — runs Production Review then Security Testing, correlates results, updates Production Verdict).
+Never claim vulnerabilities are confirmed unless the security test engine confirmed them dynamically.
+Result: unified audit with static/dynamic/confirmed findings, top risks, fix order, Safe Fix availability, and SequrAI recommendation.`;
 
 export const CANCEL_REVIEW_DESCRIPTION = `Cancel the active protection review (scan) for a repository.
 

@@ -33,6 +33,7 @@ function containsAny(haystack: string, needles: readonly string[]): number {
 }
 
 const INTENT_TO_TOOL: Record<McpCanonicalIntent, string> = {
+  FULL_PRODUCT_AUDIT: "full_product_audit",
   REVIEW_NOW: "review_now",
   CAN_I_DEPLOY: "can_i_deploy",
   SAFE_FIX: "safe_fix",
@@ -113,6 +114,11 @@ const COMPOUND_PATTERNS: Array<{ pattern: RegExp; tools: string[] }> = [
 ];
 
 const STRONG_SINGLE_RULES: Array<{ pattern: RegExp; tool: string }> = [
+  {
+    pattern:
+      /\b(audit my product|full audit|complete audit|security audit|find vulnerabilities|busca vulnerabilidades|audita mi producto|auditor[ií]a completa|revisa mi saas|analiza mi saas|analiza mi aplicaci[oó]n|revisa mi aplicaci[oó]n|haz una auditor[ií]a|run a full product audit|attack my application|ataca mi aplicaci[oó]n|prueba de seguridad|security test my app)\b/i,
+    tool: "full_product_audit",
+  },
   {
     pattern: /\b(verify the fix|review the fix|verifica el fix|revisa el fix)\b/i,
     tool: "review_now",
@@ -273,7 +279,20 @@ function intentScores(phrase: string): Record<McpCanonicalIntent, number> {
       ? 3
       : 0;
 
+  const fullAuditQ =
+    /\b(audit|auditor[ií]a|vulnerabilit|full audit|complete audit|security audit|pentest|pen test|audita|auditar)\b/.test(
+      text
+    )
+      ? 3
+      : 0;
+
   return {
+    FULL_PRODUCT_AUDIT:
+      fullAuditQ +
+      containsAny(text, INTENT_SIGNAL_DICTIONARY.fullAudit) +
+      (/\b(find vulnerabilities|busca vulnerabilidades|analiza mi saas|revisa mi aplicaci[oó]n)\b/.test(text)
+        ? 3
+        : 0),
     REVIEW_NOW:
       reviewCompute +
       containsAny(text, INTENT_SIGNAL_DICTIONARY.review) +

@@ -4,6 +4,7 @@
  */
 
 export const MCP_CANONICAL_INTENTS = [
+  "FULL_PRODUCT_AUDIT",
   "REVIEW_NOW",
   "CAN_I_DEPLOY",
   "SAFE_FIX",
@@ -14,6 +15,7 @@ export const MCP_CANONICAL_INTENTS = [
 export type McpCanonicalIntent = (typeof MCP_CANONICAL_INTENTS)[number];
 
 export const INTENT_TO_TOOL: Record<McpCanonicalIntent, string> = {
+  FULL_PRODUCT_AUDIT: "full_product_audit",
   REVIEW_NOW: "review_now",
   CAN_I_DEPLOY: "can_i_deploy",
   SAFE_FIX: "safe_fix",
@@ -56,6 +58,28 @@ export const INTENT_SIGNAL_DICTIONARY = {
     "último commit",
     "ultimo commit",
     "cambios recientes",
+  ],
+  fullAudit: [
+    "audit",
+    "full audit",
+    "complete audit",
+    "security audit",
+    "vulnerability",
+    "vulnerabilities",
+    "pen test",
+    "pentest",
+    "auditoria",
+    "auditoría",
+    "audita",
+    "auditar",
+    "vulnerabilidad",
+    "vulnerabilidades",
+    "busca vulnerabilidades",
+    "analiza mi saas",
+    "revisa mi aplicacion",
+    "revisa mi aplicación",
+    "esta listo para produccion",
+    "está listo para producción",
   ],
   fix: [
     "fix",

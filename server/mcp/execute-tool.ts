@@ -13,6 +13,7 @@ import { reviewNow } from "./tools/review-now";
 import { safeFix } from "./tools/safe-fix";
 import { whatChanged } from "./tools/what-changed";
 import { discoverApplication } from "./tools/discover-application";
+import { fullProductAudit } from "./tools/full-product-audit";
 import type { VerdictStatus } from "@/brain/production-verdict/schema";
 import { deployAnswerFromVerdictStatus } from "@/server/production-memory/types";
 import {
@@ -49,8 +50,8 @@ function projectSelector(input: Record<string, unknown>) {
 }
 
 /**
- * ADR-001 / MCP V1: this switch may only dispatch to the exactly-five
- * canonical public tools registered in ./tool-definitions.ts.
+ * ADR-001 / MCP V1: this switch dispatches to the canonical public tools
+ * registered in ./tool-definitions.ts.
  */
 export async function executeMcpTool(
   ctx: McpAuthContext,
@@ -217,6 +218,28 @@ async function dispatch(
         },
         t
       );
+
+    case "full_product_audit": {
+      const result = await fullProductAudit(
+        ctx,
+        {
+          ...projectSelector(input),
+          commitSha: str(input.commitSha),
+          branch: str(input.branch),
+        },
+        t
+      );
+      if (result.reviewId) {
+        void recordReviewStartedMemory(ctx.admin, {
+          organizationId: ctx.organizationId,
+          projectId: result.project.id,
+          scanId: result.reviewId,
+          trigger: "mcp",
+          reason: "manual_check",
+        });
+      }
+      return result;
+    }
 
     default:
       throw new McpError(404, "unknown_tool", `Unknown tool: ${toolName}`);

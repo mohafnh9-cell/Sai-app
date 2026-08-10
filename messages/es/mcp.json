@@ -6,7 +6,8 @@
     "safe_fix": "CORRECCIÓN PARA CURSOR",
     "continuous_review": "QUÉ CAMBIÓ",
     "production_history": "TU PROGRESO",
-    "application_discovery": "DESCUBRIMIENTO DE LA APLICACIÓN"
+    "application_discovery": "DESCUBRIMIENTO DE LA APLICACIÓN",
+    "full_product_audit": "AUDITORÍA COMPLETA DEL PRODUCTO"
   },
   "blocks": {
     "worriesHeader": "Lo que más me preocupa:",
@@ -113,6 +114,31 @@
     "nextActionLabel": "Next action:",
     "noChange": "No change since your last valid review.",
     "noPreviousReview": "This is your first valid review — there's nothing to compare yet."
+  },
+  "fullProductAudit": {
+    "intro": "SequrAI ha completado una Auditoría Completa del Producto — revisión de código y pruebas de seguridad.",
+    "productionReadiness": "Preparación para producción",
+    "securityScore": "Puntuación de seguridad: {score}/100",
+    "scoreUnavailable": "no disponible",
+    "severityCounts": "Críticos: {critical} | Altos: {high} | Medios: {medium} | Bajos: {low}",
+    "verificationCounts": "Confirmados: {confirmed} | Probables: {likely} | Potenciales: {potential} | No reproducidos: {notReproduced}",
+    "topRisksHeader": "RIESGOS PRINCIPALES",
+    "whatToFixFirstHeader": "QUÉ ARREGLAR PRIMERO",
+    "recommendationHeader": "RECOMENDACIÓN DE SEQURAI",
+    "safeFixAvailable": "SAFE FIX DISPONIBLE — di \"Arregla este problema\" o usa safe_fix.",
+    "securityTestsSkipped": "Las pruebas de seguridad no se ejecutaron por completo: {reason}.",
+    "securityTestsRun": "SequrAI ejecutó {count} prueba(s) de seguridad en modo {mode}.",
+    "timedOut": "La auditoría expiró antes de que terminaran todos los motores. Los resultados pueden ser parciales — ejecuta la auditoría completa de nuevo.",
+    "verifyFix": "VERIFICAR FIX: Después de aplicar correcciones, ejecuta la Auditoría Completa de nuevo.",
+    "component": "Componente",
+    "verification": {
+      "confirmed": "Confirmado por revisión de código y prueba de seguridad.",
+      "likely": "Evidencia estática fuerte con prueba dinámica inconclusa.",
+      "potential": "Detectado por revisión de código — aún no confirmado dinámicamente.",
+      "notReproduced": "Sospecha estática — la prueba de seguridad no la reprodujo.",
+      "falsePositive": "Sospecha estática refutada por prueba de seguridad.",
+      "notApplicable": "Informativo o no aplicable a esta aplicación."
+    }
   },
   "discoverApplication": {
     "technologiesHeader": "Tecnologías detectadas:",

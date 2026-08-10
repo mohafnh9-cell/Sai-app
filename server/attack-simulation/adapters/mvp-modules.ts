@@ -230,6 +230,153 @@ const MVP_ATTACK_ADAPTER_CONFIGS: readonly MvpAttackAdapterConfig[] = [
         ),
     },
   },
+  {
+    id: "rate-limit-brute-force",
+    handlers: {
+      execute_request: (input, outcome) =>
+        requestStep(
+          input,
+          outcome,
+          {
+            observed: "100 rapid requests to authentication endpoint — all 100 accepted (no rate limiting)",
+            statusCode: 200,
+            sideEffects: { requestsSent: 100, requestsAccepted: 100, requestsBlocked: 0 },
+          },
+          {
+            observed: "Rate limit enforced after threshold — requests blocked with 429",
+            statusCode: 429,
+            sideEffects: { requestsSent: 100, requestsAccepted: 10, requestsBlocked: 90, retryAfter: true },
+          }
+        ),
+      observe_response: (input, outcome) =>
+        observeFromExecute(
+          input,
+          outcome,
+          "No Retry-After header; brute-force requests not throttled",
+          "Retry-After returned; throttling active"
+        ),
+    },
+  },
+  {
+    id: "mass-assignment-probe",
+    handlers: {
+      execute_request: (input, outcome) =>
+        requestStep(
+          input,
+          outcome,
+          {
+            observed: "POST accepted privileged field role=admin in request body (mass assignment)",
+            statusCode: 200,
+            sideEffects: { privilegedFieldAccepted: true, field: "role" },
+          },
+          {
+            observed: "Privileged fields stripped or rejected by server validation",
+            statusCode: 400,
+            sideEffects: { privilegedFieldAccepted: false },
+          }
+        ),
+    },
+  },
+  {
+    id: "privilege-escalation",
+    handlers: {
+      execute_request: (input, outcome) =>
+        requestStep(
+          input,
+          outcome,
+          {
+            observed: "Standard user accessed admin-only resource (privilege escalation)",
+            statusCode: 200,
+            sideEffects: { adminAccess: true, role: "user" },
+          },
+          {
+            observed: "Admin resource denied for non-admin user",
+            statusCode: 403,
+            sideEffects: { adminAccess: false },
+          }
+        ),
+    },
+  },
+  {
+    id: "security-headers-probe",
+    handlers: {
+      execute_request: (input, outcome) =>
+        requestStep(
+          input,
+          outcome,
+          {
+            observed: "Response missing Content-Security-Policy and Strict-Transport-Security headers",
+            statusCode: 200,
+            sideEffects: { missingCsp: true, missingHsts: true },
+          },
+          {
+            observed: "Security headers present on response",
+            statusCode: 200,
+            sideEffects: { securityHeadersPresent: true },
+          }
+        ),
+    },
+  },
+  {
+    id: "injection-probe-safe",
+    handlers: {
+      execute_request: (input, outcome) =>
+        requestStep(
+          input,
+          outcome,
+          {
+            observed: "Safe SQL/XSS probe payload reflected or executed in response (injection)",
+            statusCode: 200,
+            sideEffects: { payloadReflected: true, probe: "' OR '1'='1" },
+          },
+          {
+            observed: "Probe payload sanitized or rejected",
+            statusCode: 400,
+            sideEffects: { payloadReflected: false },
+          }
+        ),
+    },
+  },
+  {
+    id: "ssrf-probe-safe",
+    handlers: {
+      execute_request: (input, outcome) =>
+        requestStep(
+          input,
+          outcome,
+          {
+            observed: "Server fetched internal/metadata URL from user-supplied parameter (SSRF)",
+            statusCode: 200,
+            sideEffects: { internalFetch: true, target: "169.254.169.254" },
+          },
+          {
+            observed: "Internal/metadata URLs blocked by outbound allowlist",
+            statusCode: 400,
+            sideEffects: { internalFetch: false },
+          }
+        ),
+    },
+  },
+  {
+    id: "cors-misconfiguration",
+    handlers: {
+      execute_request: (input, outcome) =>
+        requestStep(
+          input,
+          outcome,
+          {
+            observed: "CORS preflight returned Access-Control-Allow-Origin: * with credentials",
+            statusCode: 204,
+            sideEffects: { corsWildcardWithCredentials: true },
+          },
+          {
+            observed: "CORS restricted to explicit allowlist without credential wildcard",
+            statusCode: 204,
+            sideEffects: { corsRestricted: true },
+          }
+        ),
+    },
+  },
 ];
 
 export const MVP_ATTACK_ADAPTER_MODULES = MVP_ATTACK_ADAPTER_CONFIGS.map(createMvpAttackAdapter);

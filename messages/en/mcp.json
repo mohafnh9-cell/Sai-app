@@ -6,7 +6,8 @@
     "safe_fix": "FIX FOR CURSOR",
     "continuous_review": "WHAT CHANGED",
     "production_history": "YOUR PROGRESS",
-    "application_discovery": "APPLICATION DISCOVERY"
+    "application_discovery": "APPLICATION DISCOVERY",
+    "full_product_audit": "FULL PRODUCT AUDIT"
   },
   "blocks": {
     "worriesHeader": "What worries me most:",
@@ -113,6 +114,31 @@
     "nextActionLabel": "Next action:",
     "noChange": "No change since your last valid review.",
     "noPreviousReview": "This is your first valid review — there's nothing to compare yet."
+  },
+  "fullProductAudit": {
+    "intro": "SequrAI has completed a Full Product Audit — static code review plus security testing.",
+    "productionReadiness": "Production Readiness",
+    "securityScore": "Security Score: {score}/100",
+    "scoreUnavailable": "unavailable",
+    "severityCounts": "Critical: {critical} | High: {high} | Medium: {medium} | Low: {low}",
+    "verificationCounts": "Confirmed: {confirmed} | Likely: {likely} | Potential: {potential} | Not reproduced: {notReproduced}",
+    "topRisksHeader": "TOP RISKS",
+    "whatToFixFirstHeader": "WHAT TO FIX FIRST",
+    "recommendationHeader": "SEQURAI RECOMMENDATION",
+    "safeFixAvailable": "SAFE FIX AVAILABLE — say \"Fix this problem\" or call safe_fix.",
+    "securityTestsSkipped": "Security tests were not fully run: {reason}.",
+    "securityTestsRun": "SequrAI executed {count} security test(s) in {mode} mode.",
+    "timedOut": "This audit timed out before every engine finished. Results may be partial — run Full Product Audit again.",
+    "verifyFix": "VERIFY FIX: After applying fixes, run Full Product Audit again.",
+    "component": "Component",
+    "verification": {
+      "confirmed": "Confirmed by code review and security test.",
+      "likely": "Strong static evidence with inconclusive dynamic test.",
+      "potential": "Detected by code review — not yet confirmed dynamically.",
+      "notReproduced": "Static suspicion — security test did not reproduce.",
+      "falsePositive": "Static suspicion disproved by security test.",
+      "notApplicable": "Informational or not applicable to this application."
+    }
   },
   "discoverApplication": {
     "technologiesHeader": "Detected technologies:",

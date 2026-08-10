@@ -131,17 +131,17 @@ describe("Production Verdict Engine", () => {
     expect(resolved.resolvedBlockers).toBe(3);
   });
 
-  it("marks performance and testing as partial on full scans without baseline findings", () => {
+  it("marks performance and testing as evaluated on full scans without baseline findings", () => {
     const { verdict } = generateProductionVerdict({
       ...BASE,
       securityScore: 75,
       filesAnalyzed: 120,
       findings: [],
     });
-    const performance = verdict.partiallyEvaluatedAreas.find((a) => a.key === "performance");
-    const testing = verdict.partiallyEvaluatedAreas.find((a) => a.key === "testing");
-    expect(performance?.status).toBe("partial");
-    expect(testing?.status).toBe("partial");
+    const performance = verdict.evaluatedAreas.find((a) => a.key === "performance");
+    const testing = verdict.evaluatedAreas.find((a) => a.key === "testing");
+    expect(performance?.status).toBe("evaluated");
+    expect(testing?.status).toBe("evaluated");
     expect(performance?.score).not.toBeNull();
   });
 
