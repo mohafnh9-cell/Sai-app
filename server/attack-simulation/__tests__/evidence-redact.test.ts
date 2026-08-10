@@ -31,4 +31,15 @@ describe("attack evidence redaction", () => {
     expect(out.password).toBe("[REDACTED]");
     expect((out.nested as Record<string, unknown>).token).toBe("[REDACTED]");
   });
+
+  it("redacts Authorization Cookie API-Key and password literals", () => {
+    const input =
+      "Authorization: Bearer secret-token Cookie: session-secret API-Key: secret-key password: secret-password";
+    const out = redactAttackSecrets(input);
+    expect(out).not.toContain("secret-token");
+    expect(out).not.toContain("session-secret");
+    expect(out).not.toContain("secret-key");
+    expect(out).not.toContain("secret-password");
+    expect(out).toContain("[REDACTED]");
+  });
 });

@@ -103,6 +103,41 @@ describe("attack preconditions", () => {
     if (!result.ok) expect(result.failureCode).toBe("sandbox_target_allowlisted");
   });
 
+  it("blocks production_safe dynamic testing without explicit flag", () => {
+    const now = Date.now();
+    const production = {
+      id: "88888888-8888-4888-8888-888888888888",
+      organizationId: baseCampaign.organizationId,
+      projectId: baseCampaign.projectId,
+      targetOrigin: "https://app.example.com",
+      environmentType: "production_safe" as const,
+      status: "approved" as const,
+      authorizationMethod: "manual",
+      approvedScope: { allowedPaths: ["/api"] },
+      createdBy: null,
+      approvedAt: new Date(now - 60_000).toISOString(),
+      expiresAt: new Date(now + 3_600_000).toISOString(),
+      testCredentialsRef: null,
+      pathExclusions: [],
+      redirectAllowlist: [],
+      maxRequestBudget: 20,
+      maxDurationSeconds: 300,
+      commitSha: baseCampaign.commitSha,
+    };
+
+    const blocked = validateAttackPreconditions({
+      campaign: {
+        ...baseCampaign,
+        runtimeMode: "authorized_staging",
+        authorizationId: production.id,
+      },
+      authorization: production,
+      targetUrl: "https://app.example.com/api",
+    });
+    expect(blocked.ok).toBe(false);
+    if (!blocked.ok) expect(blocked.failureCode).toBe("production_dynamic_gate");
+  });
+
   it("rejects commit sha mismatch against authorization", () => {
     const now = Date.now();
     const result = validateAttackPreconditions({

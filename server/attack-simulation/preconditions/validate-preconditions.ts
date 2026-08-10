@@ -1,5 +1,7 @@
 import type { AttackAuthorizationRecord } from "@/server/ai-red-team/authorization/types";
 import { validateAttackAuthorization } from "@/server/ai-red-team/authorization/types";
+import { validateProductionDynamicGate } from "../dynamic/production-gate";
+import { resolveAttackRuntimeModeForScan } from "../integration/resolve-runtime-mode";
 import type { AttackCampaign } from "../contracts/attack-campaign";
 import type { AttackRuntimeMode } from "../contracts/enums";
 import { DEFAULT_SANDBOX_HOST_ALLOWLIST } from "../runtime/guards";
@@ -132,6 +134,32 @@ export function validateAttackPreconditions(
           )
         );
       }
+
+      const productionGate = validateProductionDynamicGate(input.authorization, {
+        targetUrl: input.targetUrl,
+        nowMs: input.nowMs,
+      });
+      checks.push(
+        check(
+          "production_dynamic_gate",
+          productionGate.ok,
+          "Production dynamic testing gate passed",
+          productionGate.ok ? "Production gate passed" : productionGate.message
+        )
+      );
+
+      const expectedMode = resolveAttackRuntimeModeForScan({
+        authorization: input.authorization,
+        targetUrl: input.targetUrl ?? input.authorization.targetOrigin,
+      });
+      checks.push(
+        check(
+          "runtime_mode_matches_authorization",
+          runtimeMode === expectedMode,
+          "Campaign runtime mode matches authorization environment",
+          `Runtime mode ${runtimeMode} does not match expected ${expectedMode} for authorization`
+        )
+      );
     }
   } else if (SAFE_INTERNAL_RUNTIME_MODES.includes(runtimeMode)) {
     checks.push(

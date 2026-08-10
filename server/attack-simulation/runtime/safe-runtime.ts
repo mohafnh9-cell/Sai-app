@@ -1,5 +1,8 @@
 import type { AttackAuthorizationRecord } from "@/server/ai-red-team/authorization/types";
 import type { AttackRuntimeMode } from "../contracts/enums";
+import { createDynamicHttpConcurrencyLimiter } from "../dynamic/concurrency-limiter";
+import { adapterSupportsDynamicExecution } from "../dynamic/probes";
+import { isDynamicRuntimeMode } from "../dynamic/authorized-target";
 import { resolveSafeRuntimeAdapter, runSafeRuntimeCleanup } from "./adapters";
 import {
   authorizationBudgetLimits,
@@ -29,17 +32,21 @@ export type CreateSafeRuntimeSessionInput = {
 
 export function createSafeRuntimeSession(input: CreateSafeRuntimeSessionInput): SafeRuntimeSession {
   const adapter = resolveSafeRuntimeAdapter(input.mode);
+  const limits = authorizationBudgetLimits(input.authorization);
   const guard: SafeRuntimeGuardContext = {
     mode: input.mode,
     tenant: input.tenant,
     commitSha: input.commitSha,
     authorization: input.authorization ?? null,
-    limits: authorizationBudgetLimits(input.authorization),
+    limits,
     network: networkIntentFromTarget(input.mode, input.targetUrl ?? null),
     requestsConsumed: 0,
     startedAtMs: input.startedAtMs ?? Date.now(),
     cancelled: false,
     emergencyStop: false,
+    httpConcurrencyLimiter: createDynamicHttpConcurrencyLimiter(
+      limits.maxConcurrentRequests ?? 3
+    ),
   };
 
   return { guard, adapter };
@@ -89,7 +96,13 @@ export async function executeSafeRuntimeStep(
     };
   }
 
-  const withBudget = consumeSafeRuntimeRequestBudget(session);
+  const isDynamicHttpStep =
+    input.stepKind === "execute_request" &&
+    Boolean(input.adapterId) &&
+    adapterSupportsDynamicExecution(input.adapterId!) &&
+    isDynamicRuntimeMode(session.guard.mode);
+
+  const withBudget = isDynamicHttpStep ? session : consumeSafeRuntimeRequestBudget(session);
   const result = await withBudget.adapter.executeStep({
     ...input,
     guard: withBudget.guard,

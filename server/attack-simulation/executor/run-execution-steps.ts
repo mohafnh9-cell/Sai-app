@@ -69,7 +69,9 @@ export async function runAttackExecutionSteps(input: {
   const sortedSteps = [...input.context.steps].sort((a, b) => a.sortOrder - b.sortOrder);
 
   for (const step of sortedSteps) {
-    if (cancelled) {
+    session = applySignal(session, input.signal);
+    if (cancelled || session.guard.cancelled || session.guard.emergencyStop) {
+      cancelled = true;
       skippedSteps += 1;
       continue;
     }

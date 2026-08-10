@@ -13,6 +13,7 @@ import {
   getAttackCampaignByScanId,
 } from "./persistence/campaign-repository";
 import { listAttackExecutionsForCampaign } from "./persistence/execution-repository";
+import { validateProductionDynamicGate } from "./dynamic/production-gate";
 import { planAndPersistCampaignFromHypotheses } from "./planner/plan-and-persist-campaign";
 import { enqueueAttackExecutionRun } from "./executor/enqueue-attack-execution";
 
@@ -142,6 +143,18 @@ export async function startAttackCampaign(
           authorizationId: parsed.data.authorizationId,
         })
       : null;
+
+  if (authorization) {
+    const productionGate = validateProductionDynamicGate(authorization, {
+      targetUrl: parsed.data.targetUrl ?? authorization.targetOrigin,
+    });
+    if (!productionGate.ok) {
+      throw new StartAttackCampaignError(
+        productionGate.message,
+        productionGate.code.toUpperCase()
+      );
+    }
+  }
 
   const planned = await planAndPersistCampaignFromHypotheses(admin, {
     campaign,

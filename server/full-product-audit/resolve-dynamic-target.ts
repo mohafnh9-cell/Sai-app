@@ -5,7 +5,10 @@ import { getActiveAttackAuthorization } from "@/server/ai-red-team/authorization
 import type { AttackAuthorizationRecord } from "@/server/ai-red-team/authorization/types";
 import { resolveAttackRuntimeModeForScan } from "@/server/attack-simulation/integration/resolve-runtime-mode";
 import type { AttackRuntimeMode } from "@/server/attack-simulation/contracts/enums";
-import { resolveSandboxLabOriginFromEnv } from "@/server/attack-simulation/dynamic/authorized-target";
+import {
+  resolveSandboxLabOriginFromEnv,
+} from "@/server/attack-simulation/dynamic/authorized-target";
+import { validateProductionDynamicGate } from "@/server/attack-simulation/dynamic/production-gate";
 
 export type ResolvedDynamicAuditTarget = {
   targetUrl: string | null;
@@ -49,7 +52,8 @@ export async function resolveDynamicTargetForAudit(
       targetOrigin: origin,
     });
     if (!authorization) continue;
-    if (authorization.environmentType === "production_safe") continue;
+    const productionGate = validateProductionDynamicGate(authorization, { targetUrl: origin });
+    if (!productionGate.ok) continue;
     return {
       targetUrl: origin,
       runtimeMode: resolveAttackRuntimeModeForScan({ authorization, targetUrl: origin }),

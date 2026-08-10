@@ -1,4 +1,5 @@
 import type { AttackAuthorizationRecord } from "@/server/ai-red-team/authorization/types";
+import type { DynamicHttpConcurrencyLimiter } from "../dynamic/concurrency-limiter";
 import type { AttackRuntimeMode } from "../contracts/enums";
 
 export type SafeRuntimeTenantContext = {
@@ -33,6 +34,7 @@ export type SafeRuntimeGuardContext = {
   nowMs?: number;
   cancelled?: boolean;
   emergencyStop?: boolean;
+  httpConcurrencyLimiter?: DynamicHttpConcurrencyLimiter;
 };
 
 export type SafeRuntimeGuardViolation = {

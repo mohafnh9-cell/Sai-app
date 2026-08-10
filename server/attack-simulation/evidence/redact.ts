@@ -1,7 +1,11 @@
 const SECRET_PATTERNS: RegExp[] = [
   /Bearer\s+[A-Za-z0-9\-._~+/]+=*/gi,
+  /Authorization:\s*[^\s\n]+/gi,
+  /Cookie:\s*[^\s\n]+/gi,
+  /API-Key:\s*[^\s\n]+/gi,
   /api[_-]?key["']?\s*[:=]\s*["']?[A-Za-z0-9\-._]{8,}/gi,
   /password["']?\s*[:=]\s*["'][^"']+["']/gi,
+  /password:\s*[^\s\n]+/gi,
   /"password"\s*:\s*"[^"]+"/gi,
   /"token"\s*:\s*"[^"]+"/gi,
   /"secret"\s*:\s*"[^"]+"/gi,
