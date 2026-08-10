@@ -63,6 +63,7 @@ export type TriggerReviewInput = {
   githubRepositoryId: number | null;
   requestedCommitSha?: string;
   requestedBranch?: string;
+  forceNewRun?: boolean;
 };
 
 /**
@@ -258,7 +259,7 @@ export async function triggerProductionReview(
     return { outcome: "processing", reviewId: decision.reviewId };
   }
 
-  if (decision.action === "reuse_completed" && currentVerdict) {
+  if (decision.action === "reuse_completed" && currentVerdict && !input.forceNewRun) {
     log("review_now_duplicate_completed", {
       projectId: input.projectId,
       commitSha: resolvedCommitSha,

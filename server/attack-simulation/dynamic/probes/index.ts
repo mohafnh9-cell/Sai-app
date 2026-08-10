@@ -1,6 +1,6 @@
 import type { SafeRuntimeStepResult } from "../../runtime/types";
 import type { AuthorizedDynamicTarget, DynamicTargetFixtures } from "../authorized-target";
-import { resolveProbePath } from "../authorized-target";
+import { adapterRequiresAuthenticatedIdentity, resolveProbePath } from "../authorized-target";
 import type { DynamicHttpClient, DynamicHttpResponseEvidence } from "../http-client";
 
 export const DYNAMIC_CAPABLE_ADAPTER_IDS = new Set([
@@ -24,6 +24,77 @@ export type DynamicProbeInput = {
   fixtures?: DynamicTargetFixtures;
   correlationId: string;
 };
+
+const REQUIRED_PATH_KEYS: Partial<
+  Record<string, Array<keyof NonNullable<DynamicTargetFixtures["paths"]>>>
+> = {
+  "unauthenticated-endpoint": ["unauthenticated"],
+  "idor-cross-tenant": ["idorResourceB"],
+  "rate-limit-brute-force": ["rateLimitVulnerable"],
+  "webhook-signature-bypass": ["webhook"],
+  "idempotency-replay": ["idempotent"],
+  "mass-assignment-probe": ["massAssignment"],
+  "privilege-escalation": ["privilegeEscalation"],
+  "security-headers-probe": ["securityHeaders"],
+  "injection-probe-safe": ["injectionEcho"],
+  "ssrf-probe-safe": ["ssrf"],
+  "cors-misconfiguration": ["cors"],
+};
+
+function skippedProbe(
+  input: DynamicProbeInput,
+  reason: string,
+  failureCode: string
+): SafeRuntimeStepResult {
+  return {
+    outcome: "skipped",
+    classification: input.target.attackMode === "sandbox" ? "sandbox" : "authorized_staging",
+    expectedBehavior: "Authorized dynamic security probe completes safely",
+    observedBehavior: reason,
+    statusCode: null,
+    sideEffects: { dynamic: true, notSafelyTestable: true, failureCode },
+    auditTrail: [`dynamic:${input.adapterId}`, `correlation:${input.correlationId}`],
+    durationMs: 0,
+    failureCode,
+    safeFailureMessage: reason,
+  };
+}
+
+function requireMappedPaths(input: DynamicProbeInput): SafeRuntimeStepResult | null {
+  if (input.target.attackMode === "sandbox") return null;
+  const keys = REQUIRED_PATH_KEYS[input.adapterId] ?? [];
+  for (const key of keys) {
+    if (!resolveProbePath(input.target, input.fixtures, key)) {
+      return skippedProbe(
+        input,
+        "SequrAI could not determine a safe application endpoint for this finding.",
+        "ENDPOINT_NOT_MAPPED"
+      );
+    }
+  }
+  if (
+    adapterRequiresAuthenticatedIdentity(input.adapterId) &&
+    !input.target.authorization?.testCredentialsRef
+  ) {
+    return skippedProbe(
+      input,
+      "Some checks require a test account and were not executed.",
+      "AUTH_CREDENTIALS_UNAVAILABLE"
+    );
+  }
+  return null;
+}
+
+function requirePath(
+  input: DynamicProbeInput,
+  key: keyof NonNullable<DynamicTargetFixtures["paths"]>
+): string {
+  const path = resolveProbePath(input.target, input.fixtures, key);
+  if (!path) {
+    throw new Error("ENDPOINT_NOT_MAPPED");
+  }
+  return path;
+}
 
 function completed(
   input: DynamicProbeInput,
@@ -59,25 +130,29 @@ function evidenceSummary(response: DynamicHttpResponseEvidence): Record<string, 
 }
 
 async function probeUnauthenticatedEndpoint(input: DynamicProbeInput): Promise<SafeRuntimeStepResult> {
-  const path = resolveProbePath(input.target, input.fixtures, "unauthenticated");
+  const path = requirePath(input, "unauthenticated");
   const unauth = await input.client.request({ method: "GET", path, label: "anonymous" });
-  const auth = await input.client.request({
-    method: "GET",
-    path: resolveProbePath(input.target, input.fixtures, "authenticated"),
-    headers: { authorization: `Bearer ${input.target.testIdentities.userA?.token ?? "test-token-user-a"}` },
-    label: "authenticated",
-  });
+  const authPath = resolveProbePath(input.target, input.fixtures, "authenticated");
+  const authToken = input.target.testIdentities.userA?.token;
+  const auth = authPath && authToken
+    ? await input.client.request({
+        method: "GET",
+        path: authPath,
+        headers: { authorization: `Bearer ${authToken}` },
+        label: "authenticated",
+      })
+    : null;
 
   const vulnerable = unauth.status >= 200 && unauth.status < 300 && unauth.bodyLength > 0;
   return completed(
     input,
     vulnerable
-      ? `Unauthenticated GET ${path} returned ${unauth.status} with response body (authenticated comparison: ${auth.status})`
+      ? `Unauthenticated GET ${path} returned ${unauth.status} with response body${auth ? ` (authenticated comparison: ${auth.status})` : ""}`
       : `Unauthenticated GET ${path} rejected with ${unauth.status}; authentication enforced`,
     unauth.status,
     {
       unauthenticated: evidenceSummary(unauth),
-      authenticatedComparison: evidenceSummary(auth),
+      ...(auth ? { authenticatedComparison: evidenceSummary(auth) } : {}),
       unauthenticatedAccess: vulnerable,
     },
     input.target.attackMode === "sandbox" ? "sandbox" : "authorized_staging"
@@ -85,11 +160,19 @@ async function probeUnauthenticatedEndpoint(input: DynamicProbeInput): Promise<S
 }
 
 async function probeIdorCrossTenant(input: DynamicProbeInput): Promise<SafeRuntimeStepResult> {
-  const foreignPath = resolveProbePath(input.target, input.fixtures, "idorResourceB");
+  const foreignPath = requirePath(input, "idorResourceB");
+  const authToken = input.target.testIdentities.userA?.token;
+  if (!authToken) {
+    return skippedProbe(
+      input,
+      "Some checks require a test account and were not executed.",
+      "AUTH_CREDENTIALS_UNAVAILABLE"
+    );
+  }
   const response = await input.client.request({
     method: "GET",
     path: foreignPath,
-    headers: { authorization: `Bearer ${input.target.testIdentities.userA?.token ?? "test-token-user-a"}` },
+    headers: { authorization: `Bearer ${authToken}` },
     label: "user_a",
   });
   const vulnerable = response.status >= 200 && response.status < 300 && /user-b|foreign|cross-tenant|tenant-b/i.test(response.bodyPreview);
@@ -105,7 +188,7 @@ async function probeIdorCrossTenant(input: DynamicProbeInput): Promise<SafeRunti
 }
 
 async function probeRateLimitBruteForce(input: DynamicProbeInput): Promise<SafeRuntimeStepResult> {
-  const path = resolveProbePath(input.target, input.fixtures, "rateLimitVulnerable");
+  const path = requirePath(input, "rateLimitVulnerable");
   const maxProbe = Math.min(12, input.target.maxRequestBudget);
   let accepted = 0;
   let blocked = 0;
@@ -147,7 +230,7 @@ async function probeRateLimitBruteForce(input: DynamicProbeInput): Promise<SafeR
 }
 
 async function probeWebhookSignatureBypass(input: DynamicProbeInput): Promise<SafeRuntimeStepResult> {
-  const path = resolveProbePath(input.target, input.fixtures, "webhook");
+  const path = requirePath(input, "webhook");
   const invalid = await input.client.request({
     method: "POST",
     path,
@@ -178,7 +261,7 @@ async function probeWebhookSignatureBypass(input: DynamicProbeInput): Promise<Sa
 }
 
 async function probeIdempotencyReplay(input: DynamicProbeInput): Promise<SafeRuntimeStepResult> {
-  const path = resolveProbePath(input.target, input.fixtures, "idempotent");
+  const path = requirePath(input, "idempotent");
   const key = `sequrai-probe-${input.correlationId.slice(0, 8)}`;
   const first = await input.client.request({
     method: "POST",
@@ -221,7 +304,7 @@ async function probeIdempotencyReplay(input: DynamicProbeInput): Promise<SafeRun
 }
 
 async function probeMassAssignment(input: DynamicProbeInput): Promise<SafeRuntimeStepResult> {
-  const path = resolveProbePath(input.target, input.fixtures, "massAssignment");
+  const path = requirePath(input, "massAssignment");
   const response = await input.client.request({
     method: "POST",
     path,
@@ -242,11 +325,19 @@ async function probeMassAssignment(input: DynamicProbeInput): Promise<SafeRuntim
 }
 
 async function probePrivilegeEscalation(input: DynamicProbeInput): Promise<SafeRuntimeStepResult> {
-  const path = resolveProbePath(input.target, input.fixtures, "privilegeEscalation");
+  const path = requirePath(input, "privilegeEscalation");
+  const authToken = input.target.testIdentities.userA?.token ?? input.target.testIdentities.admin?.token;
+  if (!authToken) {
+    return skippedProbe(
+      input,
+      "Some checks require a test account and were not executed.",
+      "AUTH_CREDENTIALS_UNAVAILABLE"
+    );
+  }
   const response = await input.client.request({
     method: "GET",
     path,
-    headers: { authorization: `Bearer ${input.target.testIdentities.userA?.token ?? "test-token-user-a"}` },
+    headers: { authorization: `Bearer ${authToken}` },
     label: "standard_user",
   });
   const vulnerable = response.status >= 200 && response.status < 300 && /admin|privileged/i.test(response.bodyPreview);
@@ -262,8 +353,9 @@ async function probePrivilegeEscalation(input: DynamicProbeInput): Promise<SafeR
 }
 
 async function probeSecurityHeaders(input: DynamicProbeInput): Promise<SafeRuntimeStepResult> {
-  const insecurePath = resolveProbePath(input.target, input.fixtures, "securityHeaders");
-  const securePath = resolveProbePath(input.target, input.fixtures, "securityHeadersSecure");
+  const insecurePath = requirePath(input, "securityHeaders");
+  const securePath =
+    resolveProbePath(input.target, input.fixtures, "securityHeadersSecure") ?? insecurePath;
   const insecure = await input.client.request({ method: "GET", path: insecurePath, label: "headers_insecure" });
   const secure = await input.client.request({ method: "GET", path: securePath, label: "headers_secure" });
   const missingCsp = !insecure.headers["content-security-policy"];
@@ -287,7 +379,7 @@ async function probeSecurityHeaders(input: DynamicProbeInput): Promise<SafeRunti
 }
 
 async function probeInjectionSafe(input: DynamicProbeInput): Promise<SafeRuntimeStepResult> {
-  const path = `${resolveProbePath(input.target, input.fixtures, "injectionEcho")}?q=${encodeURIComponent("' OR '1'='1")}`;
+  const path = `${requirePath(input, "injectionEcho")}?q=${encodeURIComponent("' OR '1'='1")}`;
   const response = await input.client.request({ method: "GET", path, label: "injection_probe" });
   const reflected = response.bodyPreview.includes("' OR '1'='1") || /sql|syntax|error/i.test(response.bodyPreview);
   return completed(
@@ -302,7 +394,7 @@ async function probeInjectionSafe(input: DynamicProbeInput): Promise<SafeRuntime
 }
 
 async function probeSsrfSafe(input: DynamicProbeInput): Promise<SafeRuntimeStepResult> {
-  const path = `${resolveProbePath(input.target, input.fixtures, "ssrf")}?url=${encodeURIComponent("http://127.0.0.1:9/probe")}`;
+  const path = `${requirePath(input, "ssrf")}?url=${encodeURIComponent("http://127.0.0.1:9/probe")}`;
   const response = await input.client.request({ method: "GET", path, label: "probe" });
   const internalFetch = /"fetched"\s*:\s*"http|"internalFetch"\s*:\s*true/i.test(response.bodyPreview);
   return completed(
@@ -317,7 +409,7 @@ async function probeSsrfSafe(input: DynamicProbeInput): Promise<SafeRuntimeStepR
 }
 
 async function probeCorsMisconfiguration(input: DynamicProbeInput): Promise<SafeRuntimeStepResult> {
-  const path = resolveProbePath(input.target, input.fixtures, "cors");
+  const path = requirePath(input, "cors");
   const response = await input.client.request({
     method: "OPTIONS",
     path,
@@ -370,7 +462,22 @@ export async function executeDynamicAdapterProbe(
   if (!DYNAMIC_CAPABLE_ADAPTER_IDS.has(input.adapterId)) return null;
   const probe = PROBE_BY_ADAPTER[input.adapterId];
   if (!probe) return null;
-  return probe(input);
+
+  const preflight = requireMappedPaths(input);
+  if (preflight) return preflight;
+
+  try {
+    return await probe(input);
+  } catch (error) {
+    if (error instanceof Error && error.message === "ENDPOINT_NOT_MAPPED") {
+      return skippedProbe(
+        input,
+        "SequrAI could not determine a safe application endpoint for this finding.",
+        "ENDPOINT_NOT_MAPPED"
+      );
+    }
+    throw error;
+  }
 }
 
 export function adapterSupportsDynamicExecution(adapterId: string): boolean {

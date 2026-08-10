@@ -347,7 +347,9 @@ export default function IntegrationsPage() {
             connection.connection.status !== "connected" && (
               <Button onClick={() => void connectGitHub()} className="gap-2">
                 <GitBranch className="h-4 w-4" />
-                {t("connectGitHubToWorkspace")}
+                {connection.connection.status === "migration_reconnection_required"
+                  ? t("reconnectGitHub")
+                  : t("connectGitHubToWorkspace")}
               </Button>
             )}
 

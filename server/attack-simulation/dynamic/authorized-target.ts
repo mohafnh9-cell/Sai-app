@@ -93,11 +93,14 @@ export function resolveAuthorizedDynamicTarget(input: {
         : input.guard.mode === "authorized_staging"
           ? "authorized_staging"
           : "sandbox",
-    testIdentities: {
-      userA: { token: "test-token-user-a", label: "user_a" },
-      userB: { token: "test-token-user-b", label: "user_b" },
-      admin: { token: "test-token-admin", label: "admin" },
-    },
+    testIdentities:
+      input.guard.mode === "sandbox"
+        ? {
+            userA: { token: "test-token-user-a", label: "user_a" },
+            userB: { token: "test-token-user-b", label: "user_b" },
+            admin: { token: "test-token-admin", label: "admin" },
+          }
+        : {},
   };
 }
 
@@ -105,8 +108,17 @@ export function resolveProbePath(
   target: AuthorizedDynamicTarget,
   fixtures: DynamicTargetFixtures | undefined,
   key: keyof NonNullable<DynamicTargetFixtures["paths"]>
-): string {
-  return fixtures?.paths?.[key] ?? DEFAULT_LAB_PATHS?.[key] ?? "/";
+): string | null {
+  const fromFixtures = fixtures?.paths?.[key];
+  if (fromFixtures) return fromFixtures;
+  if (target.attackMode === "sandbox") {
+    return DEFAULT_LAB_PATHS?.[key] ?? null;
+  }
+  return null;
+}
+
+export function adapterRequiresAuthenticatedIdentity(adapterId: string): boolean {
+  return adapterId === "idor-cross-tenant" || adapterId === "privilege-escalation";
 }
 
 export function assertPathAllowed(target: AuthorizedDynamicTarget, path: string): void {

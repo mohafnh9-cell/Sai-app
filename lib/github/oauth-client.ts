@@ -24,7 +24,6 @@ export async function startGitHubOAuth(nextPath: string) {
     options: {
       scopes: "repo admin:repo_hook read:user user:email",
       redirectTo: `${window.location.origin}/auth/callback`,
-      queryParams: { prompt: "consent" },
     },
   });
 

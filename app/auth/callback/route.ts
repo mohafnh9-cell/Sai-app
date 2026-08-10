@@ -89,10 +89,10 @@ export async function GET(request: NextRequest) {
             redirectPath = resolveGitHubOAuthSuccessRedirect(next);
           } catch (connectionError) {
             console.error("auth_callback_workspace_connection_failed", {
-              message:
+              name:
                 connectionError instanceof Error
-                  ? connectionError.message
-                  : "unknown",
+                  ? connectionError.name
+                  : "UnknownError",
             });
             redirectPath = resolveGitHubOAuthErrorRedirect(next, "github_connection_failed");
           }

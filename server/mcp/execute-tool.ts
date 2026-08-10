@@ -14,6 +14,7 @@ import { safeFix } from "./tools/safe-fix";
 import { whatChanged } from "./tools/what-changed";
 import { discoverApplication } from "./tools/discover-application";
 import { fullProductAudit } from "./tools/full-product-audit";
+import { authorizeDynamicTarget } from "./tools/authorize-dynamic-target";
 import type { VerdictStatus } from "@/brain/production-verdict/schema";
 import { deployAnswerFromVerdictStatus } from "@/server/production-memory/types";
 import {
@@ -35,6 +36,50 @@ function num(value: unknown): number | undefined {
 
 function range(value: unknown): "7d" | "30d" | "all" | undefined {
   return value === "7d" || value === "30d" || value === "all" ? value : undefined;
+}
+
+function strArray(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const items = value.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0);
+  return items.length > 0 ? items : undefined;
+}
+
+function authorizeAction(
+  value: unknown
+):
+  | "status"
+  | "prepare"
+  | "check"
+  | "initiate"
+  | "verify"
+  | "approve"
+  | "authorize_and_check"
+  | "manual_help"
+  | "decline"
+  | undefined {
+  return value === "status" ||
+    value === "prepare" ||
+    value === "check" ||
+    value === "initiate" ||
+    value === "verify" ||
+    value === "approve" ||
+    value === "authorize_and_check" ||
+    value === "manual_help" ||
+    value === "decline"
+    ? value
+    : undefined;
+}
+
+function dynamicVerificationDecision(value: unknown): "authorize" | "static_only" | undefined {
+  return value === "authorize" || value === "static_only" ? value : undefined;
+}
+
+function verificationMethod(value: unknown): "http" | "dns" | undefined {
+  return value === "http" || value === "dns" ? value : undefined;
+}
+
+function environmentType(value: unknown): "preview" | "staging" | undefined {
+  return value === "preview" || value === "staging" ? value : undefined;
 }
 
 function reason(value: unknown): "before_deploy" | "after_fix" | "manual_check" | undefined {
@@ -220,26 +265,33 @@ async function dispatch(
       );
 
     case "full_product_audit": {
-      const result = await fullProductAudit(
+      return fullProductAudit(
         ctx,
         {
           ...projectSelector(input),
           commitSha: str(input.commitSha),
           branch: str(input.branch),
+          dynamicVerificationDecision: dynamicVerificationDecision(input.dynamicVerificationDecision),
         },
         t
       );
-      if (result.reviewId) {
-        void recordReviewStartedMemory(ctx.admin, {
-          organizationId: ctx.organizationId,
-          projectId: result.project.id,
-          scanId: result.reviewId,
-          trigger: "mcp",
-          reason: "manual_check",
-        });
-      }
-      return result;
     }
+
+    case "authorize_dynamic_target":
+      return authorizeDynamicTarget(
+        ctx,
+        {
+          ...projectSelector(input),
+          action: authorizeAction(input.action),
+          targetOrigin: str(input.targetOrigin),
+          targetHint: str(input.targetHint),
+          environmentType: environmentType(input.environmentType),
+          verificationMethod: verificationMethod(input.verificationMethod),
+          allowedPaths: strArray(input.allowedPaths),
+          expiresInHours: num(input.expiresInHours),
+        },
+        t
+      );
 
     default:
       throw new McpError(404, "unknown_tool", `Unknown tool: ${toolName}`);

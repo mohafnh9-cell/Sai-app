@@ -5,11 +5,11 @@ import { MCP_TOOL_DEFINITIONS } from "../tool-definitions";
 import { COPILOT_BRAIN_TOOLS } from "@/brain/copilot-contract";
 
 /**
- * ADR-001 / MCP V1 + RT2: eight public tools including discover_application and full_product_audit.
+ * ADR-001 / MCP V1 + RT2: nine public tools including discover_application, full_product_audit, and authorize_dynamic_target.
  */
 describe("MCP public tool surface", () => {
-  it("registers exactly eight public tools", () => {
-    expect(MCP_TOOL_DEFINITIONS).toHaveLength(8);
+  it("registers exactly nine public tools", () => {
+    expect(MCP_TOOL_DEFINITIONS).toHaveLength(9);
   });
 
   it("registers the canonical MCP tools", () => {
@@ -23,6 +23,7 @@ describe("MCP public tool surface", () => {
       "what_changed",
       "production_history",
       "discover_application",
+      "authorize_dynamic_target",
     ]);
   });
 

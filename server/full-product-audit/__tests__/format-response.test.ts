@@ -15,7 +15,13 @@ const t = ((key: string, params?: Record<string, string>) => {
     "fullProductAudit.staticAnalysisSummary": `Code review findings: ${params?.count}`,
     "fullProductAudit.dynamicTestingHeader": "DYNAMIC TESTING",
     "fullProductAudit.dynamicTestingSummary": `Security tests executed: ${params?.count} in ${params?.mode} mode.`,
-    "fullProductAudit.dynamicTestingSkippedNoTarget": "SequrAI did not run dynamic attacks because no authorized target environment is configured.",
+    "fullProductAudit.dynamicTestingSkippedNoTarget": "SequrAI did not run dynamic checks because no application has been authorized yet.",
+    "fullProductAudit.staticAnalysisComplete": "Code analysis completed.",
+    "fullProductAudit.dynamicTestingNotExecuted": "Dynamic testing: not executed.",
+    "fullProductAudit.dynamicVerificationOfferHeader": "Security verification",
+    "fullProductAudit.dynamicVerificationOfferBody": `SequrAI found possible vulnerabilities (${params?.count ?? "0"}).`,
+    "fullProductAudit.dynamicVerificationOfferActions": "Choose: Authorize and verify | Code analysis only",
+    "fullProductAudit.skippedReasons.dynamic_not_authorized": "Reason: dynamic tests were not authorized.",
     "fullProductAudit.verifyFix": "VERIFY FIX",
   };
   return map[key] ?? key;
@@ -57,7 +63,16 @@ function baseResult(overrides: Partial<FullProductAuditResult>): FullProductAudi
         runtimeMode: "sandbox",
         dynamicTargetSource: "sandbox_lab",
         skippedReason: null,
+        notSafelyTestableCount: 0,
       },
+    },
+    dynamicVerification: {
+      offered: false,
+      decision: null,
+      authorizedTarget: null,
+      awaitingUrl: false,
+      awaitingAuthorization: false,
+      notSafelyTestableCount: 0,
     },
     safeFixAvailable: false,
     safeFixBlockerId: null,
@@ -74,7 +89,7 @@ describe("formatFullProductAuditResponse", () => {
     const formatted = formatFullProductAuditResponse(baseResult({}), t);
     expect(formatted.summary).toContain("STATIC ANALYSIS");
     expect(formatted.summary).toContain("DYNAMIC TESTING");
-    expect(formatted.summary).toContain("sandbox");
+    expect(formatted.summary.toLowerCase()).toContain("controlled");
   });
 
   it("explains when dynamic tests were skipped due to missing authorized target", () => {
@@ -90,13 +105,35 @@ describe("formatFullProductAuditResponse", () => {
             adaptersSelectedFromFindings: [],
             runtimeMode: "mock",
             dynamicTargetSource: "none",
-            skippedReason: null,
+            skippedReason: "dynamic_not_authorized",
+            notSafelyTestableCount: 0,
           },
+        },
+        dynamicVerification: {
+          offered: true,
+          decision: null,
+          authorizedTarget: null,
+          awaitingUrl: false,
+          awaitingAuthorization: false,
+          notSafelyTestableCount: 0,
         },
       }),
       t
     );
     expect(formatted.summary).toContain("DYNAMIC TESTING");
-    expect(formatted.summary).toContain("no authorized target");
+    expect(formatted.summary.toLowerCase()).toContain("dynamic tests were not authorized");
+  });
+
+  it("keeps internal execution and authorization terminology out of MCP data", () => {
+    const formatted = formatFullProductAuditResponse(baseResult({}), t);
+    const serialized = JSON.stringify(formatted);
+
+    expect(serialized).not.toMatch(
+      /campaignId|scanId|adapterId|adaptersExecuted|runtimeMode|dynamicTargetSource|authorized_staging|attack_authorizations|Gate 3|maxRequestBudget|allowedPaths/
+    );
+    expect(formatted.securityVerification).toMatchObject({
+      checksRun: 1,
+      checksCompleted: 1,
+    });
   });
 });

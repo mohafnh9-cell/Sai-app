@@ -24,6 +24,16 @@ function isPlaceholder(value: string): boolean {
   return PLACEHOLDER_PATTERNS.some((pattern) => pattern.test(value));
 }
 
+function validateGitHubTokenEncryptionKey(value: string): string | null {
+  if (!/^[A-Za-z0-9+/]{43}=$/.test(value)) {
+    return "GITHUB_TOKEN_ENCRYPTION_KEY must be 32 bytes encoded as standard base64";
+  }
+  const decoded = Buffer.from(value, "base64");
+  return decoded.length === 32 && decoded.toString("base64") === value
+    ? null
+    : "GITHUB_TOKEN_ENCRYPTION_KEY must be 32 bytes encoded as standard base64";
+}
+
 const RULES: EnvRule[] = [
   { key: "NEXT_PUBLIC_APP_URL", required: false, productionRequired: true },
   { key: "NEXT_PUBLIC_SUPABASE_URL", required: true, productionRequired: true },
@@ -31,7 +41,13 @@ const RULES: EnvRule[] = [
   { key: "SUPABASE_SERVICE_ROLE_KEY", required: false, productionRequired: true, secret: true },
   { key: "GITHUB_WEBHOOK_SECRET", required: false, productionRequired: true, secret: true },
   { key: "ANTHROPIC_API_KEY", required: false, productionRequired: false, secret: true },
-  { key: "GITHUB_TOKEN_ENCRYPTION_KEY", required: false, productionRequired: false, secret: true },
+  {
+    key: "GITHUB_TOKEN_ENCRYPTION_KEY",
+    required: false,
+    productionRequired: true,
+    secret: true,
+    validate: validateGitHubTokenEncryptionKey,
+  },
   { key: "SCAN_SCHEDULER", required: false },
   { key: "INNGEST_EVENT_KEY", required: false, secret: true },
   { key: "INNGEST_SIGNING_KEY", required: false, secret: true },
@@ -76,8 +92,8 @@ export function validateEnvironment(options?: {
   }
 
   if (production && !process.env.GITHUB_TOKEN_ENCRYPTION_KEY) {
-    warnings.push(
-      "GITHUB_TOKEN_ENCRYPTION_KEY is not set — GitHub tokens are stored encrypted-at-rest only when this key is configured"
+    errors.push(
+      "GITHUB_TOKEN_ENCRYPTION_KEY is required in production so GitHub tokens are always encrypted at rest"
     );
   }
 

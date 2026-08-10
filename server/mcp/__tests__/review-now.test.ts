@@ -97,7 +97,7 @@ describe("review_now", () => {
           repository_id: PROJECT_1,
           organization_id: ORG_A,
           status: "scanning",
-          created_at: "2026-01-01T00:00:00.000Z",
+          created_at: new Date().toISOString(),
         },
       ],
     });
@@ -188,6 +188,12 @@ describe("review_now", () => {
   });
 
   it("rate-limits after the per-organization hourly review cap is reached", async () => {
+    const previousNodeEnv = process.env.NODE_ENV;
+    const previousEnabled = process.env.SCAN_RATE_LIMIT_ENABLED;
+    const previousDisabled = process.env.SCAN_RATE_LIMIT_DISABLED;
+    process.env.NODE_ENV = "production";
+    process.env.SCAN_RATE_LIMIT_ENABLED = "1";
+    delete process.env.SCAN_RATE_LIMIT_DISABLED;
     const recentScans = Array.from({ length: MCP_REVIEWS_PER_ORGANIZATION_PER_HOUR }, (_, i) => ({
       id: `scan-${i}`,
       organization_id: ORG_A,
@@ -197,9 +203,17 @@ describe("review_now", () => {
       created_at: new Date().toISOString(),
     }));
     const tables = baseTables({ scans: recentScans });
-    await expect(reviewNow(ctxFor(createFakeAdmin(tables)), {}, t, okDeps)).rejects.toMatchObject({
-      code: "rate_limited",
-    });
+    try {
+      await expect(reviewNow(ctxFor(createFakeAdmin(tables)), {}, t, okDeps)).rejects.toMatchObject({
+        code: "rate_limited",
+      });
+    } finally {
+      process.env.NODE_ENV = previousNodeEnv;
+      if (previousEnabled == null) delete process.env.SCAN_RATE_LIMIT_ENABLED;
+      else process.env.SCAN_RATE_LIMIT_ENABLED = previousEnabled;
+      if (previousDisabled == null) delete process.env.SCAN_RATE_LIMIT_DISABLED;
+      else process.env.SCAN_RATE_LIMIT_DISABLED = previousDisabled;
+    }
   });
 
   it("responds in Spanish when locale=es is requested", async () => {

@@ -13,10 +13,23 @@ describe("token encryption", () => {
     delete process.env.GITHUB_TOKEN_ENCRYPTION_KEY;
   });
 
-  it("stores plaintext when encryption key is absent", () => {
+  it("refuses to store a new plaintext token when the encryption key is absent", () => {
     delete process.env.GITHUB_TOKEN_ENCRYPTION_KEY;
-    expect(encryptToken("plain-token")).toBe("plain-token");
+    expect(() => encryptToken("plain-token")).toThrow("GITHUB_TOKEN_ENCRYPTION_KEY is required");
+    // Existing legacy plaintext can still be read so OAuth reconnection can
+    // replace it with encrypted storage without a destructive migration.
     expect(decryptToken("plain-token")).toBe("plain-token");
+  });
+
+  it("rejects non-standard base64 keys even when they decode to 32 bytes", () => {
+    process.env.GITHUB_TOKEN_ENCRYPTION_KEY = Buffer.alloc(32, 255)
+      .toString("base64")
+      .replaceAll("/", "_");
+
+    expect(() => encryptToken("plain-token")).toThrow(
+      "GITHUB_TOKEN_ENCRYPTION_KEY must be 32 bytes encoded as standard base64"
+    );
+    delete process.env.GITHUB_TOKEN_ENCRYPTION_KEY;
   });
 });
 

@@ -8,6 +8,7 @@ import { isMcpReviewRateLimited } from "@/server/review-now/rate-limit";
 import { listAttackFindingsForExecutions } from "@/server/attack-simulation/persistence/finding-repository";
 import { mapAttackFindingRow } from "@/server/attack-simulation/persistence/mappers";
 import { attackFindingSchema } from "@/server/attack-simulation/contracts/attack-finding";
+import { getAttackCampaignByScanId } from "@/server/attack-simulation/persistence/campaign-repository";
 import {
   correlateAuditFindings,
   countAuditFindings,
@@ -17,7 +18,9 @@ import {
 import { enrichAuditFindingSolutions } from "./enrich-solutions";
 import { pollUntilReviewTerminal } from "./poll";
 import { ensureSecurityTestsForAudit } from "./run-security-tests";
+import { resolveDynamicTargetForAudit } from "./resolve-dynamic-target";
 import type { FullProductAuditResult } from "./types";
+import type { DynamicVerificationDecision } from "./dynamic-verification-flow";
 
 export class FullProductAuditError extends Error {
   constructor(
@@ -41,6 +44,7 @@ export type RunFullProductAuditInput = {
   branch?: string;
   waitForReviewMs?: number;
   waitForSecurityTestsMs?: number;
+  dynamicVerificationDecision?: DynamicVerificationDecision;
   reviewDeps?: import("@/server/review-now/trigger-review").TriggerReviewDependencies;
 };
 
@@ -79,6 +83,27 @@ export async function runFullProductAudit(
     throw new FullProductAuditError("Rate limited", "rate_limited", 429);
   }
 
+  let forceNewRun = false;
+  if (input.dynamicVerificationDecision === "authorize") {
+    const dynamicTarget = await resolveDynamicTargetForAudit(admin, {
+      organizationId: input.organizationId,
+      projectId: input.projectId,
+    });
+    const currentVerdict = await getCurrentProductionVerdict(admin, input.projectId);
+    if (currentVerdict?.scanId) {
+      const currentCampaign = await getAttackCampaignByScanId(
+        admin,
+        currentVerdict.scanId,
+        input.organizationId
+      );
+      forceNewRun =
+        currentCampaign != null &&
+        (currentCampaign.runtimeMode !== "authorized_staging" ||
+          !dynamicTarget.authorization ||
+          currentCampaign.authorizationId !== dynamicTarget.authorization.id);
+    }
+  }
+
   let reviewOutcome;
   try {
     reviewOutcome = await triggerProductionReview(admin, {
@@ -88,6 +113,9 @@ export async function runFullProductAudit(
       githubRepositoryId: input.githubRepositoryId,
       requestedCommitSha: input.commitSha,
       requestedBranch: input.branch,
+      // Replace only an incompatible completed campaign. A fresh completed
+      // review without a campaign should be reused for its authorized run.
+      forceNewRun,
     }, input.reviewDeps);
   } catch (error) {
     if (error instanceof ReviewNowError) {
@@ -165,7 +193,16 @@ export async function runFullProductAudit(
           runtimeMode: null,
           dynamicTargetSource: null,
           skippedReason: "review_incomplete",
+          notSafelyTestableCount: 0,
         },
+      },
+      dynamicVerification: {
+        offered: false,
+        decision: null,
+        authorizedTarget: null,
+        awaitingUrl: false,
+        awaitingAuthorization: false,
+        notSafelyTestableCount: 0,
       },
       safeFixAvailable: false,
       safeFixBlockerId: null,
@@ -212,6 +249,7 @@ export async function runFullProductAudit(
     commitSha: (scanRow.commit_sha as string) ?? "unknown",
     waitForScanBootstrapMs: input.waitForSecurityTestsMs ?? 120_000,
     staticFindings,
+    dynamicVerificationDecision: input.dynamicVerificationDecision,
   });
 
   const attackFindingsByExecution = await listAttackFindingsForExecutions(
@@ -274,6 +312,19 @@ export async function runFullProductAudit(
   const phase = timedOut ? "partial" : "complete";
   const recommendation = buildRecommendation({ verdictStatus, topRisks, counts });
 
+  let nextAction = safeFixBlockerId
+    ? "Run safe_fix for the top blocker, apply the prompt, then run Full Product Audit again."
+    : "Run Full Product Audit again after your next significant change.";
+
+  if (securityTests.dynamicVerification.offered) {
+    nextAction =
+      'Say you want to "Autorizar y comprobar" or choose "Solo analizar el código" to continue.';
+  } else if (securityTests.dynamicVerification.awaitingUrl) {
+    nextAction = "Provide your deployed application URL, then authorize dynamic verification.";
+  } else if (securityTests.skippedReason === "user_declined_dynamic") {
+    nextAction = "Static analysis completed. Dynamic testing was not authorized.";
+  }
+
   return {
     mode: "full_product_audit",
     phase,
@@ -305,16 +356,16 @@ export async function runFullProductAudit(
         runtimeMode: securityTests.runtimeMode,
         dynamicTargetSource: securityTests.dynamicTargetSource,
         skippedReason: securityTests.skippedReason,
+        notSafelyTestableCount: securityTests.dynamicVerification.notSafelyTestableCount,
       },
     },
+    dynamicVerification: securityTests.dynamicVerification,
     safeFixAvailable: Boolean(safeFixBlockerId),
     safeFixBlockerId,
     recommendation,
     summary: "",
     timedOut,
-    nextAction: safeFixBlockerId
-      ? "Run safe_fix for the top blocker, apply the prompt, then run Full Product Audit again."
-      : "Run Full Product Audit again after your next significant change.",
+    nextAction,
   };
 }
 

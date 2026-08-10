@@ -74,3 +74,13 @@ Do NOT use for deploy decisions — use can_i_deploy.
 Do NOT use for fix prompts — use safe_fix.
 Compute: YES (reads repository via GitHub; cached per commit).
 Result: structured discovery report, technology graph, and attack surface summary (no attacks performed).`;
+
+export const AUTHORIZE_DYNAMIC_TARGET_DESCRIPTION = `Confirm the user's deployed application before controlled security verification.
+
+Purpose: Automatically check whether the application is linked to the connected project, then allow controlled checks only when ownership evidence is sufficient.
+Use when: "Authorize and verify." | "I want to audit https://staging.myapp.com" | "Autorizar y comprobar." | "Quiero auditar https://staging.miempresa.com"
+Use action check when the user first supplies a URL. It tries authenticated deployment evidence without approving or testing the target.
+Use action authorize_and_check only after the user explicitly confirms controlled checks.
+Use initiate only when the user explicitly requests manual verification details.
+After success, continue automatically with full_product_audit.
+Never use as a URL scanner and never run checks against an unverified external application.`;

@@ -74,7 +74,18 @@ function validate() {
   }
 
   if (production && !process.env.GITHUB_TOKEN_ENCRYPTION_KEY) {
-    warnings.push("GITHUB_TOKEN_ENCRYPTION_KEY not set — GitHub tokens stored without encryption at rest");
+    errors.push("GITHUB_TOKEN_ENCRYPTION_KEY is required in production");
+  }
+  const encryptionKey = process.env.GITHUB_TOKEN_ENCRYPTION_KEY;
+  if (
+    encryptionKey &&
+    (!/^[A-Za-z0-9+/]{43}=$/.test(encryptionKey) ||
+      Buffer.from(encryptionKey, "base64").length !== 32 ||
+      Buffer.from(encryptionKey, "base64").toString("base64") !== encryptionKey)
+  ) {
+    errors.push(
+      "GITHUB_TOKEN_ENCRYPTION_KEY must be 32 bytes encoded as standard base64"
+    );
   }
 
   // Never print secret values — only report presence
@@ -83,6 +94,7 @@ function validate() {
     "INNGEST_SIGNING_KEY",
     "INTERNAL_OPS_TOKEN",
     "GITHUB_WEBHOOK_SECRET",
+    "GITHUB_TOKEN_ENCRYPTION_KEY",
     "SUPABASE_SERVICE_ROLE_KEY",
   ];
   for (const key of secretKeys) {

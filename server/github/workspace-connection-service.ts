@@ -2,7 +2,11 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getGitHubTokenScopes, getGitHubUser } from "@/lib/github";
-import { decryptToken, encryptToken } from "@/lib/crypto/token-encryption";
+import {
+  decryptToken,
+  encryptToken,
+  TokenEncryptionError,
+} from "@/lib/crypto/token-encryption";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export type WorkspaceGitHubConnectionStatus =
@@ -36,6 +40,88 @@ type ConnectionRow = {
   connected_at: string;
   last_error: string | null;
 };
+
+const GITHUB_TOKEN_DECRYPTION_ERROR =
+  "GitHub connection requires reauthorization.";
+
+async function markGitHubReconnectRequired(
+  admin: SupabaseClient,
+  input: { connectionId: string; organizationId: string }
+): Promise<void> {
+  const now = new Date().toISOString();
+  const { error } = await admin
+    .from("workspace_github_connections")
+    .update({
+      status: "migration_reconnection_required",
+      last_error: GITHUB_TOKEN_DECRYPTION_ERROR,
+      updated_at: now,
+    })
+    .eq("id", input.connectionId)
+    .eq("organization_id", input.organizationId);
+
+  if (error) {
+    console.error({
+      component: "workspace-github-connection",
+      event: "reconnect_required_update_failed",
+      connectionId: input.connectionId,
+      organizationId: input.organizationId,
+      code: error.code,
+    });
+  }
+}
+
+async function markGitHubConnectionActive(
+  admin: SupabaseClient,
+  input: { connectionId: string; organizationId: string }
+): Promise<boolean> {
+  const now = new Date().toISOString();
+  const { error } = await admin
+    .from("workspace_github_connections")
+    .update({
+      status: "active",
+      last_error: null,
+      last_validated_at: now,
+      updated_at: now,
+    })
+    .eq("id", input.connectionId)
+    .eq("organization_id", input.organizationId);
+
+  if (error) {
+    console.error({
+      component: "workspace-github-connection",
+      event: "connection_reactivation_failed",
+      connectionId: input.connectionId,
+      organizationId: input.organizationId,
+      code: error.code,
+    });
+    return false;
+  }
+  return true;
+}
+
+async function decryptWorkspaceGitHubToken(
+  admin: SupabaseClient,
+  input: {
+    connectionId: string;
+    organizationId: string;
+    encryptedToken: string;
+  }
+): Promise<string | null> {
+  try {
+    return decryptToken(input.encryptedToken);
+  } catch (error) {
+    console.warn({
+      component: "workspace-github-connection",
+      event: "token_decryption_failed",
+      connectionId: input.connectionId,
+      organizationId: input.organizationId,
+      errorName: error instanceof Error ? error.name : "UnknownError",
+      reason: error instanceof TokenEncryptionError ? error.code : "unknown",
+    });
+    await markGitHubReconnectRequired(admin, input);
+    return null;
+  }
+}
 
 function mapPublicStatus(row: ConnectionRow | null): WorkspaceGitHubConnectionView {
   if (!row) {
@@ -109,6 +195,32 @@ export async function getWorkspaceGitHubConnectionView(
   }
 
   const row = admin ? await loadWorkspaceGitHubConnection(admin, organizationId) : null;
+  if (
+    admin &&
+    row?.access_token &&
+    (row.status === "active" ||
+      (row.status === "migration_reconnection_required" &&
+        row.access_token.startsWith("enc:v1:")))
+  ) {
+    const token = await decryptWorkspaceGitHubToken(admin, {
+      connectionId: row.id,
+      organizationId,
+      encryptedToken: row.access_token,
+    });
+    if (token && row.status === "migration_reconnection_required") {
+      const reactivated = await markGitHubConnectionActive(admin, {
+        connectionId: row.id,
+        organizationId,
+      });
+      if (reactivated) {
+        row.status = "active";
+        row.last_error = null;
+      }
+    } else if (!token) {
+      row.status = "migration_reconnection_required";
+      row.last_error = GITHUB_TOKEN_DECRYPTION_ERROR;
+    }
+  }
   const view = mapPublicStatus(row);
 
   const { count } = await supabase
@@ -226,9 +338,29 @@ export async function resolveWorkspaceGitHubToken(
         .eq("id", project.github_connection_id)
         .eq("organization_id", organizationId)
         .maybeSingle();
-      if (linked?.access_token && linked.status === "active") {
+      if (
+        linked?.access_token &&
+        (linked.status === "active" ||
+          (linked.status === "migration_reconnection_required" &&
+            (linked.access_token as string).startsWith("enc:v1:")))
+      ) {
+        const token = await decryptWorkspaceGitHubToken(admin, {
+          connectionId: linked.id as string,
+          organizationId,
+          encryptedToken: linked.access_token as string,
+        });
+        if (!token) return null;
+        if (
+          linked.status === "migration_reconnection_required" &&
+          !(await markGitHubConnectionActive(admin, {
+            connectionId: linked.id as string,
+            organizationId,
+          }))
+        ) {
+          return null;
+        }
         return {
-          token: decryptToken(linked.access_token as string),
+          token,
           userId: linked.connected_by_user_id as string,
           connectionId: linked.id as string,
         };
@@ -237,12 +369,36 @@ export async function resolveWorkspaceGitHubToken(
   }
 
   const connection = await loadWorkspaceGitHubConnection(admin, organizationId);
-  if (!connection || connection.status !== "active" || !connection.access_token) {
+  if (
+    !connection ||
+    !connection.access_token ||
+    (connection.status !== "active" &&
+      !(
+        connection.status === "migration_reconnection_required" &&
+        connection.access_token.startsWith("enc:v1:")
+      ))
+  ) {
+    return null;
+  }
+
+  const token = await decryptWorkspaceGitHubToken(admin, {
+    connectionId: connection.id,
+    organizationId,
+    encryptedToken: connection.access_token,
+  });
+  if (!token) return null;
+  if (
+    connection.status === "migration_reconnection_required" &&
+    !(await markGitHubConnectionActive(admin, {
+      connectionId: connection.id,
+      organizationId,
+    }))
+  ) {
     return null;
   }
 
   return {
-    token: decryptToken(connection.access_token),
+    token,
     userId: connection.connected_by_user_id,
     connectionId: connection.id,
   };

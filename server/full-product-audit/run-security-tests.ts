@@ -3,8 +3,6 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { DEFAULT_SECURITY_TEST_IDS } from "@/features/security-testing/user-test-catalog";
 import { isFeatureEnabled } from "@/server/feature-flags";
-import { getSecurityTestContext } from "@/server/attack-simulation/get-security-test-context";
-import { mapSelectedTestsToHypotheses } from "@/server/attack-simulation/security-test-options";
 import { startAttackCampaign, StartAttackCampaignError } from "@/server/attack-simulation/start-attack-campaign";
 import { getAttackCampaignByScanId, getAttackCampaignById, listAttackScenariosForCampaign } from "@/server/attack-simulation/persistence/campaign-repository";
 import { listAttackExecutionsForCampaign } from "@/server/attack-simulation/persistence/execution-repository";
@@ -12,6 +10,12 @@ import { getTranslator } from "@/lib/i18n/server";
 import { pollUntilAttackCampaignTerminal, waitForScanCampaign } from "./poll";
 import { selectAttacksFromFindings } from "./select-attacks-from-findings";
 import { resolveDynamicTargetForAudit } from "./resolve-dynamic-target";
+import { buildHypothesesFromStaticFindings } from "./build-hypotheses-from-findings";
+import {
+  resolveDynamicVerificationExecution,
+  type DynamicVerificationDecision,
+  type DynamicVerificationState,
+} from "./dynamic-verification-flow";
 import type { StaticFindingInput } from "./correlate-findings";
 
 export type SecurityTestRunResult = {
@@ -23,7 +27,21 @@ export type SecurityTestRunResult = {
   dynamicTargetSource: string | null;
   skippedReason: string | null;
   timedOut: boolean;
+  dynamicVerification: DynamicVerificationState;
 };
+
+function emptyDynamicVerification(
+  decision?: DynamicVerificationDecision
+): DynamicVerificationState {
+  return {
+    offered: false,
+    decision: decision ?? null,
+    authorizedTarget: null,
+    awaitingUrl: false,
+    awaitingAuthorization: false,
+    notSafelyTestableCount: 0,
+  };
+}
 
 export async function ensureSecurityTestsForAudit(
   admin: SupabaseClient,
@@ -35,6 +53,7 @@ export async function ensureSecurityTestsForAudit(
     commitSha: string;
     waitForScanBootstrapMs?: number;
     staticFindings?: StaticFindingInput[];
+    dynamicVerificationDecision?: DynamicVerificationDecision;
   }
 ): Promise<SecurityTestRunResult> {
   if (!isFeatureEnabled("attack_simulation", { organizationId: input.organizationId })) {
@@ -47,16 +66,44 @@ export async function ensureSecurityTestsForAudit(
       dynamicTargetSource: null,
       skippedReason: "feature_disabled",
       timedOut: false,
+      dynamicVerification: emptyDynamicVerification(input.dynamicVerificationDecision),
     };
   }
 
+  const staticFindings = input.staticFindings ?? [];
   const selectedAdapterIds = selectAttacksFromFindings({
-    staticFindings: input.staticFindings ?? [],
+    staticFindings,
     fallbackAdapterIds: DEFAULT_SECURITY_TEST_IDS,
   });
 
-  const campaignPollMs = input.waitForScanBootstrapMs ?? 120_000;
+  const dynamicTarget = await resolveDynamicTargetForAudit(admin, {
+    organizationId: input.organizationId,
+    projectId: input.projectId,
+  });
 
+  const verificationPlan = resolveDynamicVerificationExecution({
+    decision: input.dynamicVerificationDecision,
+    hasAuthorizedTarget: dynamicTarget.source === "authorization" || dynamicTarget.source === "sandbox_lab",
+    staticFindingsCount: staticFindings.length,
+    selectedAdapterCount: selectedAdapterIds.length,
+    authorizedTarget: dynamicTarget.targetUrl,
+  });
+
+  if (!verificationPlan.runDynamic) {
+    return {
+      campaignId: null,
+      executionIds: [],
+      adaptersExecuted: [],
+      adaptersSelectedFromFindings: selectedAdapterIds,
+      runtimeMode: dynamicTarget.runtimeMode,
+      dynamicTargetSource: dynamicTarget.source,
+      skippedReason: verificationPlan.skippedReason,
+      timedOut: false,
+      dynamicVerification: verificationPlan.state,
+    };
+  }
+
+  const campaignPollMs = input.waitForScanBootstrapMs ?? 120_000;
   const bootstrapWait = await waitForScanCampaign(
     admin,
     { scanId: input.scanId, organizationId: input.organizationId },
@@ -68,13 +115,14 @@ export async function ensureSecurityTestsForAudit(
 
   if (!campaignId) {
     const { t } = await getTranslator("securityTest");
-    const context = await getSecurityTestContext(admin, {
-      projectId: input.projectId,
-      organizationId: input.organizationId,
+    const requireMappedRoutes = dynamicTarget.source === "authorization";
+    const built = buildHypothesesFromStaticFindings({
+      staticFindings,
+      selectedAdapterIds,
+      requireMappedRoutes,
+      t,
     });
-
-    const testIds = selectedAdapterIds;
-    const hypotheses = mapSelectedTestsToHypotheses(testIds, context.hypotheses, t);
+    const hypotheses = built.hypotheses;
 
     if (hypotheses.length === 0) {
       return {
@@ -82,17 +130,16 @@ export async function ensureSecurityTestsForAudit(
         executionIds: [],
         adaptersExecuted: [],
         adaptersSelectedFromFindings: selectedAdapterIds,
-        runtimeMode: null,
-        dynamicTargetSource: null,
-        skippedReason: "no_plannable_tests",
+        runtimeMode: dynamicTarget.runtimeMode,
+        dynamicTargetSource: dynamicTarget.source,
+        skippedReason: requireMappedRoutes ? "no_safely_testable_routes" : "no_plannable_tests",
         timedOut: false,
+        dynamicVerification: {
+          ...verificationPlan.state,
+          notSafelyTestableCount: built.notSafelyTestableCount,
+        },
       };
     }
-
-    const dynamicTarget = await resolveDynamicTargetForAudit(admin, {
-      organizationId: input.organizationId,
-      projectId: input.projectId,
-    });
 
     let started;
     try {
@@ -120,6 +167,10 @@ export async function ensureSecurityTestsForAudit(
           dynamicTargetSource: dynamicTarget.source,
           skippedReason: error.code,
           timedOut: false,
+          dynamicVerification: {
+            ...verificationPlan.state,
+            notSafelyTestableCount: built.notSafelyTestableCount,
+          },
         };
       }
       throw error;
@@ -144,6 +195,10 @@ export async function ensureSecurityTestsForAudit(
       dynamicTargetSource: dynamicTarget.source,
       skippedReason: null,
       timedOut,
+      dynamicVerification: {
+        ...verificationPlan.state,
+        notSafelyTestableCount: built.notSafelyTestableCount,
+      },
     });
   }
 
@@ -168,9 +223,10 @@ export async function ensureSecurityTestsForAudit(
       organizationId: input.organizationId,
       executionIds: executions.map((execution) => execution.id),
       adaptersSelectedFromFindings: selectedAdapterIds,
-      dynamicTargetSource: existing.runtimeMode === "mock" ? null : "authorization",
+      dynamicTargetSource: existing.runtimeMode === "mock" ? null : dynamicTarget.source,
       skippedReason: null,
       timedOut,
+      dynamicVerification: verificationPlan.state,
     });
   }
 
@@ -183,6 +239,7 @@ export async function ensureSecurityTestsForAudit(
     dynamicTargetSource: null,
     skippedReason: "campaign_unavailable",
     timedOut,
+    dynamicVerification: verificationPlan.state,
   };
 }
 
@@ -196,6 +253,7 @@ async function buildSecurityTestSummary(
     dynamicTargetSource?: string | null;
     skippedReason: string | null;
     timedOut: boolean;
+    dynamicVerification: DynamicVerificationState;
   }
 ): Promise<SecurityTestRunResult> {
   const campaign = await getAttackCampaignById(admin, input.campaignId, input.organizationId);
@@ -222,5 +280,6 @@ async function buildSecurityTestSummary(
     dynamicTargetSource: input.dynamicTargetSource ?? null,
     skippedReason: input.skippedReason,
     timedOut: input.timedOut,
+    dynamicVerification: input.dynamicVerification,
   };
 }

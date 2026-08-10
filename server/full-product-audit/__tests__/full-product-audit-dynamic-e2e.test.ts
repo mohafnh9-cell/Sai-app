@@ -172,7 +172,7 @@ describe("full_product_audit → real dynamic testing E2E", () => {
     expect(result.engines.securityTesting.dynamicTargetSource).toBe("none");
     expect(formatted.summary).toContain("STATIC ANALYSIS");
     expect(formatted.summary).toContain("DYNAMIC TESTING");
-    expect(formatted.summary.toLowerCase()).toContain("no authorized target");
+    expect(formatted.summary.toLowerCase()).toContain("dynamic tests were not authorized");
     expect(result.findings.some((f) => f.verificationStatus === "CONFIRMED")).toBe(false);
   }, 60_000);
 

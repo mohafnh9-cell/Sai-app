@@ -10,11 +10,14 @@ import {
   FullProductAuditError,
   runFullProductAudit,
 } from "@/server/full-product-audit";
+import type { FullProductAuditMcpResponse } from "@/server/full-product-audit/format-response";
 import type { FullProductAuditResult } from "@/server/full-product-audit/types";
+import { recordReviewStartedMemory } from "@/server/production-memory/record-writes";
 
 export type FullProductAuditInput = ProjectSelector & {
   commitSha?: string;
   branch?: string;
+  dynamicVerificationDecision?: "authorize" | "static_only";
 };
 
 const ERROR_STATUS: Record<string, number> = {
@@ -35,7 +38,7 @@ export async function fullProductAudit(
   ctx: McpAuthContext,
   input: FullProductAuditInput,
   t: McpTranslator
-): Promise<FullProductAuditResult> {
+): Promise<FullProductAuditMcpResponse> {
   const project = await resolveMcpProject(ctx, input, t);
 
   const { data: projectRow } = await ctx.admin
@@ -57,6 +60,7 @@ export async function fullProductAudit(
       branch: input.branch,
       waitForReviewMs: MCP_FULL_PRODUCT_AUDIT_REVIEW_WAIT_MS,
       waitForSecurityTestsMs: MCP_FULL_PRODUCT_AUDIT_SECURITY_WAIT_MS,
+      dynamicVerificationDecision: input.dynamicVerificationDecision,
     });
   } catch (error) {
     if (error instanceof FullProductAuditError) {
@@ -65,6 +69,16 @@ export async function fullProductAudit(
       throw new McpError(status, error.code, message);
     }
     throw error;
+  }
+
+  if (result.reviewId) {
+    void recordReviewStartedMemory(ctx.admin, {
+      organizationId: ctx.organizationId,
+      projectId: result.project.id,
+      scanId: result.reviewId,
+      trigger: "mcp",
+      reason: "manual_check",
+    });
   }
 
   return formatFullProductAuditResponse(result, t);

@@ -4,27 +4,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowRight, Check, ClipboardCopy, Sparkles, Terminal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n/client";
+import { buildMcpClientConfig } from "@/lib/mcp/client-config";
 
 const EXAMPLE_QUESTION = "Can I deploy?";
-
-function buildMcpJson(apiKey: string, apiUrl: string) {
-  return JSON.stringify(
-    {
-      mcpServers: {
-        sequrai: {
-          command: "node",
-          args: ["${workspaceFolder}/mcp/stdio-bridge.mjs"],
-          env: {
-            SEQURAI_API_KEY: apiKey,
-            SEQURAI_API_URL: apiUrl,
-          },
-        },
-      },
-    },
-    null,
-    2
-  );
-}
 
 export function OnboardingCursorStep({
   onFinish,
@@ -42,6 +24,7 @@ export function OnboardingCursorStep({
   const [copiedKey, setCopiedKey] = useState(false);
   const [copiedQuestion, setCopiedQuestion] = useState(false);
   const [microStep, setMicroStep] = useState<1 | 2 | 3>(1);
+  const [hasExistingConnection, setHasExistingConnection] = useState(false);
 
   const apiUrl = useMemo(() => {
     if (typeof window !== "undefined") return window.location.origin;
@@ -49,7 +32,7 @@ export function OnboardingCursorStep({
   }, []);
 
   const mcpJson = useMemo(
-    () => (apiKey ? buildMcpJson(apiKey, apiUrl) : null),
+    () => (apiKey ? buildMcpClientConfig("cursor", apiKey, apiUrl) : null),
     [apiKey, apiUrl]
   );
 
@@ -75,8 +58,27 @@ export function OnboardingCursorStep({
   }, [ts]);
 
   useEffect(() => {
-    queueMicrotask(() => void createKey());
-  }, [createKey]);
+    queueMicrotask(() => {
+      void (async () => {
+        setLoading(true);
+        try {
+          const response = await fetch("/api/mcp/keys");
+          const data = (await response.json()) as { keys?: unknown[]; error?: string };
+          if (!response.ok) {
+            setError(data.error ?? ts("mcpLoadKeysFailed"));
+            return;
+          }
+          if ((data.keys?.length ?? 0) > 0) {
+            setHasExistingConnection(true);
+            return;
+          }
+          await createKey();
+        } finally {
+          setLoading(false);
+        }
+      })();
+    });
+  }, [createKey, ts]);
 
   async function copyConfig() {
     if (!mcpJson) return;
@@ -126,6 +128,21 @@ export function OnboardingCursorStep({
             </Button>
           </div>
         )}
+
+        {hasExistingConnection && !apiKey && !error ? (
+          <div className="space-y-3">
+            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4">
+              <p className="text-sm font-medium">✓ Conexión MCP existente</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                La clave anterior permanece oculta. Genera una nueva solo si necesitas configurar
+                otro cliente.
+              </p>
+            </div>
+            <Button variant="outline" onClick={() => void createKey()} disabled={loading}>
+              Generar nueva clave MCP
+            </Button>
+          </div>
+        ) : null}
 
         {apiKey && (
           <>
@@ -197,7 +214,12 @@ export function OnboardingCursorStep({
       </div>
 
       <div className="flex flex-col gap-3">
-        <Button className="w-full h-12 text-base" size="lg" onClick={onFinish} disabled={!apiKey}>
+        <Button
+          className="w-full h-12 text-base"
+          size="lg"
+          onClick={onFinish}
+          disabled={!apiKey && !hasExistingConnection}
+        >
           <Sparkles className="mr-2 h-4 w-4" aria-hidden />
           {t("cursorFinish")}
           <ArrowRight className="ml-2 h-4 w-4" aria-hidden />

@@ -5,12 +5,7 @@ import { createAdminClient } from "@/server/security-scanner/admin-client";
 import { requireProjectApiAccess } from "@/server/projects/project-access";
 import { isFeatureEnabled } from "@/server/feature-flags";
 import { enforceRateLimit } from "@/server/http/rate-limit";
-import {
-  createAttackAuthorization,
-  listAttackAuthorizationsForProject,
-} from "@/server/ai-red-team/authorization/store";
-import { normalizeOrigin } from "@/server/ai-red-team/authorization/types";
-import { isAttackAuthorizationAllowedForStagingApi } from "@/server/attack-simulation/integration/resolve-runtime-mode";
+import { listAttackAuthorizationsForProject } from "@/server/ai-red-team/authorization/store";
 
 const paramsSchema = z.object({
   id: z.string().uuid(),
@@ -90,13 +85,6 @@ export async function POST(
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  if (!isAttackAuthorizationAllowedForStagingApi(body.data.environmentType)) {
-    return NextResponse.json(
-      { error: "Only staging, preview, or local authorizations can be created via this API" },
-      { status: 400 }
-    );
-  }
-
   const { id: projectId } = parsed.data;
   const supabase = await createClient();
   const {
@@ -109,47 +97,12 @@ export async function POST(
     return NextResponse.json({ error: "Attack Simulation is not enabled" }, { status: 404 });
   }
 
-  const now = Date.now();
-  const approvedAt = new Date(now).toISOString();
-  const expiresAt = new Date(now + body.data.expiresInHours * 60 * 60 * 1000).toISOString();
-
-  let targetOrigin: string;
-  try {
-    targetOrigin = normalizeOrigin(body.data.targetOrigin);
-  } catch {
-    return NextResponse.json({ error: "Invalid target origin" }, { status: 400 });
-  }
-
-  const admin = createAdminClient();
-  const authorization = await createAttackAuthorization(admin, {
-    organizationId: access.project.organization_id,
-    projectId,
-    targetOrigin,
-    environmentType: body.data.environmentType,
-    status: "approved",
-    authorizationMethod: body.data.authorizationMethod,
-    approvedScope: body.data.approvedScope ?? { scope: "attack_simulation_staging" },
-    createdBy: access.userId,
-    approvedAt,
-    expiresAt,
-    testCredentialsRef: null,
-    pathExclusions: body.data.pathExclusions ?? [],
-    redirectAllowlist: body.data.redirectAllowlist ?? [],
-    maxRequestBudget: body.data.maxRequestBudget,
-    maxDurationSeconds: body.data.maxDurationSeconds,
-    commitSha: body.data.commitSha ?? null,
-  });
-
   return NextResponse.json(
     {
-      authorization: {
-        id: authorization.id,
-        targetOrigin: authorization.targetOrigin,
-        environmentType: authorization.environmentType,
-        status: authorization.status,
-        expiresAt: authorization.expiresAt,
-      },
+      error: "direct_authorization_disabled",
+      message:
+        "Direct authorization creation is disabled. Verify domain ownership and approve via /api/projects/[id]/dynamic-target-authorization.",
     },
-    { status: 201 }
+    { status: 403 }
   );
 }

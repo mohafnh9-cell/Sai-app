@@ -6,6 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useI18n } from "@/lib/i18n/client";
+import {
+  buildMcpClientConfig,
+  type McpClient,
+} from "@/lib/mcp/client-config";
 
 type McpKeyRow = {
   id: string;
@@ -23,6 +27,7 @@ export function McpApiKeysPanel() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [copiedClient, setCopiedClient] = useState<McpClient | null>(null);
 
   const apiUrl = useMemo(() => {
     if (typeof window !== "undefined") {
@@ -30,6 +35,17 @@ export function McpApiKeysPanel() {
     }
     return process.env.NEXT_PUBLIC_APP_URL ?? "https://sequrai-app.vercel.app";
   }, []);
+  const configs = useMemo(
+    () =>
+      newKey
+        ? {
+            cursor: buildMcpClientConfig("cursor", newKey, apiUrl),
+            claude: buildMcpClientConfig("claude", newKey, apiUrl),
+            vscode: buildMcpClientConfig("vscode", newKey, apiUrl),
+          }
+        : null,
+    [apiUrl, newKey]
+  );
 
   const loadKeys = useCallback(async () => {
     const response = await fetch("/api/mcp/keys");
@@ -90,6 +106,13 @@ export function McpApiKeysPanel() {
     setCopied(true);
   }
 
+  async function copyConfig(client: McpClient) {
+    if (!configs) return;
+    await navigator.clipboard.writeText(configs[client]);
+    setCopiedClient(client);
+    window.setTimeout(() => setCopiedClient(null), 2_000);
+  }
+
   return (
     <div className="space-y-4">
       <div className="space-y-1.5">
@@ -116,6 +139,31 @@ export function McpApiKeysPanel() {
           <Button size="sm" variant="outline" onClick={copyKey}>
             {copied ? t("mcpCopied") : t("mcpCopyKey")}
           </Button>
+          <div className="rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3 space-y-3">
+            <p className="text-sm font-medium">✓ {t("mcpConnectionCreated")}</p>
+            <p className="text-xs text-muted-foreground">{t("mcpCursorSetupBody")}</p>
+            <pre className="max-h-56 overflow-auto whitespace-pre-wrap rounded bg-muted p-2 text-[11px]">
+              {configs?.cursor}
+            </pre>
+            <div className="flex flex-wrap gap-2">
+              {(
+                [
+                  ["cursor", "mcpCopyCursorConfig"],
+                  ["claude", "mcpCopyClaudeConfig"],
+                  ["vscode", "mcpCopyVsCodeConfig"],
+                ] as const
+              ).map(([client, label]) => (
+                <Button
+                  key={client}
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void copyConfig(client)}
+                >
+                  {copiedClient === client ? t("mcpCopied") : t(label)}
+                </Button>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 
@@ -155,20 +203,12 @@ export function McpApiKeysPanel() {
         </div>
       )}
 
-      <div className="rounded-md bg-muted/50 p-3 text-xs text-muted-foreground space-y-1">
-        <p className="font-medium text-foreground">{t("mcpCursorSetupTitle")}</p>
-        <p>{t("mcpCursorSetupBody")}</p>
-        <pre className="overflow-x-auto whitespace-pre-wrap">{`{
-  "sequrai": {
-    "command": "node",
-    "args": ["/path/to/sequrai-app/mcp/stdio-bridge.mjs"],
-    "env": {
-      "SEQURAI_API_KEY": "your-key-here",
-      "SEQURAI_API_URL": "${apiUrl}"
-    }
-  }
-}`}</pre>
-      </div>
+      {!newKey ? (
+        <div className="rounded-md bg-muted/50 p-3 text-xs text-muted-foreground">
+          <p className="font-medium text-foreground">{t("mcpCursorSetupTitle")}</p>
+          <p>{t("mcpCursorSetupBody")}</p>
+        </div>
+      ) : null}
     </div>
   );
 }

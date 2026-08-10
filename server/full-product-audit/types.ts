@@ -83,7 +83,17 @@ export type FullProductAuditEngineSummary = {
     runtimeMode: string | null;
     dynamicTargetSource: string | null;
     skippedReason: string | null;
+    notSafelyTestableCount: number;
   };
+};
+
+export type DynamicVerificationSummary = {
+  offered: boolean;
+  decision: "authorize" | "static_only" | null;
+  authorizedTarget: string | null;
+  awaitingUrl: boolean;
+  awaitingAuthorization: boolean;
+  notSafelyTestableCount: number;
 };
 
 export type FullProductAuditResult = {
@@ -99,6 +109,7 @@ export type FullProductAuditResult = {
   whatToFixFirst: string[];
   findings: ConsolidatedAuditFinding[];
   engines: FullProductAuditEngineSummary;
+  dynamicVerification: DynamicVerificationSummary;
   safeFixAvailable: boolean;
   safeFixBlockerId: string | null;
   recommendation: string;

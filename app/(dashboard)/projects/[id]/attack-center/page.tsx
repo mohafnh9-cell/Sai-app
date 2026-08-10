@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AttackCenterExperience } from "@/features/attack-simulation/AttackCenterExperience";
+import { DynamicTargetAuthorizationPanel } from "@/features/attack-simulation/components/DynamicTargetAuthorizationPanel";
 import {
   ProjectWorkflowNav,
 } from "@/features/mission-control/components/ProjectWorkflowNav";
@@ -14,6 +15,7 @@ import { buildAttackCenterCapability } from "@/server/attack-simulation/api/atta
 import { attackCenterErrorFromUnknown } from "@/server/attack-simulation/api/errors";
 import { getSecurityTestContext } from "@/server/attack-simulation/get-security-test-context";
 import { getAttackCampaignByScanId } from "@/server/attack-simulation/persistence/campaign-repository";
+import { getDynamicTargetAuthorizationStatus } from "@/server/ai-red-team/authorization/dynamic-target-authorization-service";
 import { isAnalysisRunOwnedByProject } from "@/server/analysis-runs/get-analysis-run-snapshot";
 import { resolveAnalysisRunForMissionControl } from "@/server/analysis-runs/resolve-analysis-run";
 import { appendAnalysisRunSearchParams } from "@/features/analysis-runs/lib/build-run-query";
@@ -166,6 +168,14 @@ export default async function AttackCenterPage({ params, searchParams }: PagePro
   }
 
   const { t: ta } = await getTranslator("attackCenter");
+  const dynamicTargetAuthorizationStatus = isFeatureEnabled("attack_simulation", {
+    organizationId: auth.organizationId,
+  })
+    ? await getDynamicTargetAuthorizationStatus(admin, {
+        organizationId: auth.organizationId,
+        projectId,
+      })
+    : null;
   const missionControlHref = hrefWithAnalysisRun(
     `/projects/${projectId}/mission-control`,
     isolationEnabled ? analysisRunId : undefined
@@ -185,6 +195,12 @@ export default async function AttackCenterPage({ params, searchParams }: PagePro
           analysisRunId={isolationEnabled ? analysisRunId : undefined}
           showSecurityTest
         />
+        <div className="mb-8">
+          <DynamicTargetAuthorizationPanel
+            projectId={projectId}
+            initialStatus={dynamicTargetAuthorizationStatus}
+          />
+        </div>
         <AttackCenterExperience
           projectId={projectId}
           initialSnapshot={initialSnapshot}

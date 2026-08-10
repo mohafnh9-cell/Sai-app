@@ -17,7 +17,7 @@
   "connectedAs": "Conectado como {login}",
   "connectedRepositories": "{count} repositorios conectados",
   "githubNotConnectedBody": "GitHub no está conectado a este Workspace.",
-  "migrationReconnectBody": "Esta conexión de GitHub debe vincularse de nuevo para este Workspace.",
+  "migrationReconnectBody": "Tu conexión con GitHub necesita volver a autorizarse.",
   "githubNotConnected": "GitHub no está conectado a este Workspace.",
   "connectionLoadFailed": "No se pudo cargar el estado de la conexión de GitHub.",
   "connectFailed": "No se pudo iniciar la autorización de GitHub.",

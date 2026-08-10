@@ -10,6 +10,13 @@ import {
 } from "@/server/attack-simulation/dynamic/authorized-target";
 import { validateProductionDynamicGate } from "@/server/attack-simulation/dynamic/production-gate";
 
+function resolveInternalSandboxLabOrigin(): string | null {
+  if (process.env.NODE_ENV === "test") {
+    return resolveSandboxLabOriginFromEnv();
+  }
+  return null;
+}
+
 export type ResolvedDynamicAuditTarget = {
   targetUrl: string | null;
   runtimeMode: AttackRuntimeMode;
@@ -21,7 +28,7 @@ export async function resolveDynamicTargetForAudit(
   admin: SupabaseClient,
   input: { organizationId: string; projectId: string }
 ): Promise<ResolvedDynamicAuditTarget> {
-  const labOrigin = resolveSandboxLabOriginFromEnv();
+  const labOrigin = resolveInternalSandboxLabOrigin();
   if (labOrigin) {
     return {
       targetUrl: labOrigin,
@@ -36,10 +43,11 @@ export async function resolveDynamicTargetForAudit(
 
   const { data: authorizations } = await admin
     .from("attack_authorizations")
-    .select("target_origin")
+    .select("target_origin, environment_type")
     .eq("organization_id", input.organizationId)
     .eq("project_id", input.projectId)
     .eq("status", "approved")
+    .in("environment_type", ["preview", "staging"])
     .gt("expires_at", new Date().toISOString())
     .order("approved_at", { ascending: false })
     .limit(5);

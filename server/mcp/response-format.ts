@@ -7,7 +7,8 @@ export type McpMode =
   | "continuous_review"
   | "production_history"
   | "application_discovery"
-  | "full_product_audit";
+  | "full_product_audit"
+  | "authorize_dynamic_target";
 
 /**
  * Every SequrAI MCP response begins with the same two lines:
