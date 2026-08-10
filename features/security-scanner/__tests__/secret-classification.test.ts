@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   classifySecretDetection,
+  inferSecretClassificationFromPersistedFinding,
   isNonBlockingSecretClassification,
   SECRET_CLASSIFICATION_METADATA_KEY,
 } from "../rules/secret-classification";
@@ -141,6 +142,24 @@ describe("classifySecretDetection", () => {
       fileLines: testLines(content),
     });
     expect(result.classification).toBe("TEST_FIXTURE");
+  });
+
+  it("infers TEST_FIXTURE for stale persisted OAuth test assignment rows", () => {
+    const result = inferSecretClassificationFromPersistedFinding({
+      ruleId: "secrets.exposed",
+      filePath: "app/auth/callback/__tests__/route.test.ts",
+      evidence: "providerToken=[REDACTED]",
+    });
+    expect(result).toBe("TEST_FIXTURE");
+  });
+
+  it("does not infer TEST_FIXTURE for pattern-detected credentials in tests", () => {
+    const result = inferSecretClassificationFromPersistedFinding({
+      ruleId: "secrets.exposed",
+      filePath: "app/auth/callback/__tests__/route.test.ts",
+      evidence: "credential=[REDACTED]",
+    });
+    expect(result).toBeUndefined();
   });
 
   it("exports non-blocking classifications", () => {

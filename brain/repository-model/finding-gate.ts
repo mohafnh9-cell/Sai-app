@@ -3,8 +3,7 @@ import type { EvidenceReport } from "@/brain/evidence-finding/schema";
 import { notEnoughEvidenceReason } from "@/brain/prompts/analysis-engine-v2";
 import {
   isNonBlockingSecretClassification,
-  SECRET_CLASSIFICATION_METADATA_KEY,
-  type SecretEvidenceClassification,
+  resolveSecretClassification,
 } from "@/features/security-scanner/rules/secret-classification";
 import { CONFIDENCE_FINDING_THRESHOLD, type FindingClassification, type RepositoryModel } from "./schema";
 
@@ -109,9 +108,12 @@ export function validateFindingAgainstRepository(
     };
   }
 
-  const secretClassification = finding.metadata?.[SECRET_CLASSIFICATION_METADATA_KEY] as
-    | SecretEvidenceClassification
-    | undefined;
+  const secretClassification = resolveSecretClassification({
+    ruleId: finding.ruleId,
+    filePath: finding.location?.path ?? null,
+    evidence: finding.evidence ?? null,
+    metadata: finding.metadata ?? null,
+  });
   if (secretClassification && isNonBlockingSecretClassification(secretClassification)) {
     return {
       allowed: true,
@@ -170,13 +172,27 @@ export function gateScanFindings(
       ...(result.evidenceReport ? { evidenceReport: result.evidenceReport } : {}),
     };
 
+    const secretClassification = resolveSecretClassification({
+      ruleId: finding.ruleId,
+      filePath: finding.location?.path ?? null,
+      evidence: finding.evidence ?? null,
+      metadata: finding.metadata ?? null,
+    });
+    const isFixture = isNonBlockingSecretClassification(secretClassification);
+
     if (result.classification === "potential_observation") {
       accepted.push({
         ...finding,
-        title: finding.title.startsWith("Potential:")
-          ? finding.title
-          : `Potential: ${finding.title}`,
-        severity: finding.severity === "critical" ? "high" : finding.severity,
+        title:
+          isFixture || finding.title.startsWith("Potential:")
+            ? finding.title
+            : `Potential: ${finding.title}`,
+        severity: isFixture
+          ? "info"
+          : finding.severity === "critical"
+            ? "high"
+            : finding.severity,
+        confidence: isFixture ? "low" : finding.confidence,
         metadata,
       });
     } else {

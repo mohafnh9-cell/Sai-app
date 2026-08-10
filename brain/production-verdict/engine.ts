@@ -7,6 +7,7 @@ import {
   calculateHonestScore,
   projectScoreAfterPriorities,
 } from "./projection";
+import { isNonBlockingSecretClassification } from "@/features/security-scanner/rules/secret-classification";
 import {
   PRODUCTION_VERDICT_VERSION,
   ProductionVerdictSchema,
@@ -41,8 +42,11 @@ export type VerdictEngineInput = {
     rule_id?: string | null;
     rule?: string | null;
     file_path?: string | null;
+    start_line?: number | null;
     recommendation?: string | null;
     confidence?: string | number | null;
+    evidence?: string | null;
+    metadata?: Record<string, unknown> | null;
   }>;
   previousScore?: number | null;
   previousBlockersCount?: number;
@@ -57,8 +61,13 @@ export type VerdictGenerationMeta = {
 };
 
 function countBlockers(findings: NormalizedFinding[]) {
-  const critical = findings.filter((f) => f.severity === "critical").length;
-  const high = findings.filter((f) => f.severity === "high").length;
+  const blockers = findings.filter(
+    (finding) =>
+      (finding.severity === "critical" || finding.severity === "high") &&
+      !isNonBlockingSecretClassification(finding.secretClassification)
+  );
+  const critical = blockers.filter((f) => f.severity === "critical").length;
+  const high = blockers.filter((f) => f.severity === "high").length;
   return {
     blockersCount: critical + high,
     criticalBlockersCount: critical,

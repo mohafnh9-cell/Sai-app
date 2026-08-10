@@ -2,10 +2,11 @@ import type { EvidenceReport } from "@/brain/evidence-finding/schema";
 import { evidenceReportFromMetadata, parseEvidenceReport } from "@/brain/evidence-finding/schema";
 import {
   isNonBlockingSecretFinding,
-  secretClassificationFromMetadata,
+  resolveSecretClassification,
 } from "./secret-classification";
 import {
   isNonBlockingSecretClassification,
+  severityForSecretClassification,
   type SecretEvidenceClassification,
 } from "@/features/security-scanner/rules/secret-classification";
 
@@ -55,21 +56,36 @@ export function normalizeFinding(input: {
   metadata?: Record<string, unknown> | null;
 }): NormalizedFinding {
   const severityRaw = (input.severity ?? "medium").toLowerCase();
-  const severity = (
+
+  const ruleId = input.rule_id ?? input.rule ?? undefined;
+  const category = (input.category ?? "general").toLowerCase();
+  const secretClassification = resolveSecretClassification({
+    ruleId,
+    filePath: input.file_path ?? null,
+    evidence: input.evidence ?? null,
+    metadata: input.metadata ?? null,
+  });
+  const embeddedReport =
+    evidenceReportFromMetadata(input.metadata ?? null) ??
+    parseEvidenceReport(input.metadata?.evidenceReport);
+
+  let severity = (
     ["critical", "high", "medium", "low", "info"].includes(severityRaw)
       ? severityRaw
       : "medium"
   ) as NormalizedFinding["severity"];
 
-  const ruleId = input.rule_id ?? input.rule ?? undefined;
-  const category = (input.category ?? "general").toLowerCase();
-  const secretClassification = secretClassificationFromMetadata(input.metadata ?? null);
-  const embeddedReport =
-    evidenceReportFromMetadata(input.metadata ?? null) ??
-    parseEvidenceReport(input.metadata?.evidenceReport);
+  if (secretClassification && isNonBlockingSecretClassification(secretClassification)) {
+    severity = severityForSecretClassification(secretClassification);
+  }
 
   let confidence: NormalizedFinding["confidence"] = "medium";
-  if (isNonBlockingSecretFinding({ ruleId, metadata: input.metadata ?? null })) {
+  if (isNonBlockingSecretFinding({
+    ruleId,
+    file_path: input.file_path,
+    evidence: input.evidence,
+    metadata: input.metadata ?? null,
+  })) {
     confidence = "low";
   } else if (embeddedReport) {
     confidence =

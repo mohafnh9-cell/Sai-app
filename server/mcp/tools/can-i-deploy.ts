@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getCurrentProductionVerdict } from "@/server/production-verdict/service";
+import { getLiveProductionVerdict } from "@/server/production-verdict/service";
 import type { McpAuthContext } from "../auth";
 import { McpError } from "../auth";
 import { mapVerdictStatusToDecision } from "../decision-mapping";
@@ -66,7 +66,7 @@ export async function canIDeploy(
 ): Promise<CanIDeployResult> {
   const project = await resolveMcpProject(ctx, input, t);
 
-  let verdict = await getCurrentProductionVerdict(ctx.admin, project.id);
+  let verdict = await getLiveProductionVerdict(ctx.admin, project.id);
   if (!verdict) {
     throw new McpError(404, "no_verdict_available", t("errors.no_verdict_available"));
   }

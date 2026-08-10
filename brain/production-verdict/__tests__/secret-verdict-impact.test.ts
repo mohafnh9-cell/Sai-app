@@ -46,6 +46,44 @@ function auditFinding(
 }
 
 describe("secret classification production verdict impact", () => {
+  it("stale high-severity test fixture rows no longer block the verdict", () => {
+    const normalized = normalizeFinding({
+      id: "stale-secret",
+      title: "Hard-coded secret",
+      severity: "high",
+      category: "secrets",
+      rule_id: "secrets.exposed",
+      file_path: "app/auth/callback/__tests__/route.test.ts",
+      evidence: "providerToken=[REDACTED]",
+      confidence: "high",
+    });
+    expect(normalized.secretClassification).toBe("TEST_FIXTURE");
+    expect(normalized.severity).toBe("info");
+    expect(isCriticalSignal(normalized)).toBe(false);
+    const verdict = generateProductionVerdict({
+      projectId: "11111111-1111-4111-8111-111111111111",
+      repositoryId: "11111111-1111-4111-8111-111111111111",
+      scanId: "22222222-2222-4222-8222-222222222222",
+      scanStatus: "completed",
+      securityScore: 95,
+      filesAnalyzed: 50,
+      findings: [
+        {
+          id: "stale-secret",
+          title: "Hard-coded secret",
+          severity: "high",
+          category: "secrets",
+          rule_id: "secrets.exposed",
+          file_path: "app/auth/callback/__tests__/route.test.ts",
+          evidence: "providerToken=[REDACTED]",
+          confidence: "high",
+        },
+      ],
+    }).verdict;
+    expect(verdict.status).toBe("ready_to_ship");
+    expect(verdict.blockersCount).toBe(0);
+  });
+
   it("TEST_FIXTURE does not create production blocker", () => {
     const normalized = normalizeFinding(secretFinding("TEST_FIXTURE", "info"));
     expect(isCriticalSignal(normalized)).toBe(false);

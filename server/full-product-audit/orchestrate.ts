@@ -2,7 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { VerdictStatus } from "@/brain/production-verdict/schema";
-import { getCurrentProductionVerdict } from "@/server/production-verdict/service";
+import { getCurrentProductionVerdict, computeLiveProductionVerdict } from "@/server/production-verdict/service";
 import { ReviewNowError, triggerProductionReview } from "@/server/review-now/trigger-review";
 import { isMcpReviewRateLimited } from "@/server/review-now/rate-limit";
 import { listAttackFindingsForExecutions } from "@/server/attack-simulation/persistence/finding-repository";
@@ -284,7 +284,24 @@ export async function runFullProductAudit(
           )
         : [];
 
-  const verdict = await getCurrentProductionVerdict(admin, input.projectId);
+  const persistedVerdict = await getCurrentProductionVerdict(admin, input.projectId);
+  const liveVerdict = await computeLiveProductionVerdict(admin, {
+    projectId: input.projectId,
+    scan: scanRow as {
+      id: string;
+      commit_sha?: string | null;
+      branch?: string | null;
+      status?: string | null;
+      security_score?: number | null;
+      files_analyzed?: number | null;
+      files_scanned?: number | null;
+      files_discovered?: number | null;
+      total_files?: number | null;
+      repository_id?: string | null;
+    },
+    persisted: persistedVerdict,
+  });
+  const verdict = liveVerdict ?? persistedVerdict;
   const priorityFindingIds = verdict?.topPriorities.flatMap((priority) => priority.findingIds) ?? [];
 
   const consolidated = enrichAuditFindingUserFacing(
@@ -307,6 +324,7 @@ export async function runFullProductAudit(
   const topRisks = (productionRisks.length > 0 ? productionRisks : consolidated).slice(0, 6);
   const whatToFixFirst = buildWhatToFixFirst(topRisks);
   const verdictStatus = (verdict?.status as VerdictStatus | null) ?? null;
+  const score = verdict?.score ?? null;
   const safeFixBlockerId = verdict?.topPriorities[0]?.id ?? null;
 
   const metrics = (scanRow.metrics as Record<string, unknown> | null) ?? null;

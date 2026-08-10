@@ -1,6 +1,8 @@
 import {
   isNonBlockingSecretClassification,
+  resolveSecretClassification,
   SECRET_CLASSIFICATION_METADATA_KEY,
+  severityForSecretClassification,
   type SecretEvidenceClassification,
 } from "@/features/security-scanner/rules/secret-classification";
 import {
@@ -105,8 +107,20 @@ function mapCorrelatedVerification(
 function secretClassificationFromStatic(
   finding: StaticFindingInput
 ): SecretEvidenceClassification | undefined {
-  const value = finding.metadata?.[SECRET_CLASSIFICATION_METADATA_KEY];
-  return typeof value === "string" ? (value as SecretEvidenceClassification) : undefined;
+  return resolveSecretClassification({
+    ruleId: finding.ruleId,
+    filePath: finding.filePath,
+    evidence: finding.evidence,
+    metadata: finding.metadata ?? null,
+  });
+}
+
+function presentStaticSeverity(finding: StaticFindingInput): string {
+  const classification = secretClassificationFromStatic(finding);
+  if (classification && isNonBlockingSecretClassification(classification)) {
+    return severityForSecretClassification(classification);
+  }
+  return finding.severity;
 }
 
 function isInformationalPass(finding: StaticFindingInput): boolean {
@@ -178,7 +192,7 @@ export function correlateAuditFindings(input: {
     if (isInformationalPass(staticFinding)) {
       consolidated.push({
         id: `static:${staticFinding.id}`,
-        severity: staticFinding.severity,
+        severity: presentStaticSeverity(staticFinding),
         category: staticFinding.category ?? "security",
         title: staticFinding.title,
         description: staticFinding.description ?? staticFinding.title,
@@ -204,7 +218,7 @@ export function correlateAuditFindings(input: {
     const runnable = staticHasRunnableTest(staticFinding, executedAdapterSet);
     consolidated.push({
       id: `static:${staticFinding.id}`,
-      severity: staticFinding.severity,
+      severity: presentStaticSeverity(staticFinding),
       category: staticFinding.category ?? "security",
       title: staticFinding.title,
       description: staticFinding.description ?? staticFinding.title,

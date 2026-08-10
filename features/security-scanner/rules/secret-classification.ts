@@ -229,3 +229,36 @@ export function confidenceForSecretClassification(
   if (isNonBlockingSecretClassification(classification)) return "low";
   return modelConfidence;
 }
+
+export function resolveSecretClassification(input: {
+  ruleId?: string | null;
+  filePath?: string | null;
+  evidence?: string | null;
+  metadata?: Record<string, unknown> | null;
+}): SecretEvidenceClassification | undefined {
+  const fromMetadata = input.metadata?.[SECRET_CLASSIFICATION_METADATA_KEY];
+  if (typeof fromMetadata === "string") {
+    return fromMetadata as SecretEvidenceClassification;
+  }
+  return inferSecretClassificationFromPersistedFinding(input);
+}
+
+/** Backfill classification for scan rows persisted before secretClassification metadata existed. */
+export function inferSecretClassificationFromPersistedFinding(input: {
+  ruleId?: string | null;
+  filePath?: string | null;
+  evidence?: string | null;
+}): SecretEvidenceClassification | undefined {
+  if ((input.ruleId ?? "").toLowerCase() !== "secrets.exposed") return undefined;
+  const path = input.filePath ?? "";
+  if (!path || !isTestOrExampleFile(path)) return undefined;
+
+  const evidence = (input.evidence ?? "").trim();
+  if (/^credential=\[REDACTED\]$/i.test(evidence)) {
+    return undefined;
+  }
+  if (/^[A-Za-z0-9_]+=\[REDACTED\]$/.test(evidence)) {
+    return "TEST_FIXTURE";
+  }
+  return "TEST_FIXTURE";
+}

@@ -7,3 +7,4 @@ export {
   getLatestVerdictsByOrganization,
   getProductionVerdictByScan,
 } from "./core";
+export { computeLiveProductionVerdict, getLiveProductionVerdict } from "./live-verdict";
