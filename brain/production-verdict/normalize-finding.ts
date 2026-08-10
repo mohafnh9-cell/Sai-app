@@ -1,5 +1,13 @@
 import type { EvidenceReport } from "@/brain/evidence-finding/schema";
 import { evidenceReportFromMetadata, parseEvidenceReport } from "@/brain/evidence-finding/schema";
+import {
+  isNonBlockingSecretFinding,
+  secretClassificationFromMetadata,
+} from "./secret-classification";
+import {
+  isNonBlockingSecretClassification,
+  type SecretEvidenceClassification,
+} from "@/features/security-scanner/rules/secret-classification";
 
 export type NormalizedFinding = {
   id: string;
@@ -18,6 +26,7 @@ export type NormalizedFinding = {
   statusLabel?: string;
   evidence?: string;
   evidenceReport?: EvidenceReport | null;
+  secretClassification?: SecretEvidenceClassification;
 };
 
 const HIGH_CONFIDENCE_RULES = new Set([
@@ -54,12 +63,15 @@ export function normalizeFinding(input: {
 
   const ruleId = input.rule_id ?? input.rule ?? undefined;
   const category = (input.category ?? "general").toLowerCase();
+  const secretClassification = secretClassificationFromMetadata(input.metadata ?? null);
   const embeddedReport =
     evidenceReportFromMetadata(input.metadata ?? null) ??
     parseEvidenceReport(input.metadata?.evidenceReport);
 
   let confidence: NormalizedFinding["confidence"] = "medium";
-  if (embeddedReport) {
+  if (isNonBlockingSecretFinding({ ruleId, metadata: input.metadata ?? null })) {
+    confidence = "low";
+  } else if (embeddedReport) {
     confidence =
       embeddedReport.confidence >= 0.8 ? "high" : embeddedReport.confidence >= 0.55 ? "medium" : "low";
   } else if (ruleId && HIGH_CONFIDENCE_RULES.has(ruleId.toLowerCase())) {
@@ -90,10 +102,14 @@ export function normalizeFinding(input: {
     statusLabel: embeddedReport?.statusLabel,
     evidence: input.evidence ?? undefined,
     evidenceReport: embeddedReport,
+    secretClassification,
   };
 }
 
 export function isCriticalSignal(finding: NormalizedFinding): boolean {
+  if (isNonBlockingSecretClassification(finding.secretClassification)) {
+    return false;
+  }
   const haystack = `${finding.title} ${finding.category} ${finding.ruleId ?? ""}`.toLowerCase();
   return (
     finding.severity === "critical" ||

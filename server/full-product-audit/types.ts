@@ -1,4 +1,5 @@
 import type { VerdictStatus } from "@/brain/production-verdict/schema";
+import type { SecretEvidenceClassification } from "@/features/security-scanner/rules/secret-classification";
 
 export type FindingVerificationStatus =
   | "CONFIRMED"
@@ -24,6 +25,21 @@ export type AuditFindingSolution = {
   attackPerformed: string | null;
 };
 
+export type AuditFindingUserFacing = {
+  simpleExplanation: string;
+  whyItMatters: string;
+  confidenceLabel: string;
+  dynamicVerificationStatus: string;
+  dynamicVerificationReason: string;
+  whatToDo: string;
+  safeToIgnore: boolean;
+};
+
+export type AuditFindingTechnicalEvidence = {
+  collapsedByDefault: true;
+  items: string[];
+};
+
 export type ConsolidatedAuditFinding = {
   id: string;
   severity: string;
@@ -35,12 +51,16 @@ export type ConsolidatedAuditFinding = {
   evidence: string[];
   confidence: "high" | "medium" | "low";
   affectedComponent: string | null;
+  line?: number;
   recommendation: string | null;
   safeFixAvailable: boolean;
   staticFindingId?: string;
   attackFindingId?: string;
   adapterId?: string;
   ruleId?: string;
+  secretClassification?: SecretEvidenceClassification;
+  userFacing?: AuditFindingUserFacing;
+  technicalEvidence?: AuditFindingTechnicalEvidence;
   solution?: AuditFindingSolution;
   postFixStatus?: PostFixStatus;
 };

@@ -15,6 +15,11 @@ import {
 } from "./secret-evidence";
 import { EVIDENCE_REPORT_METADATA_KEY } from "./schema";
 import {
+  isNonBlockingSecretClassification,
+  SECRET_CLASSIFICATION_METADATA_KEY,
+  type SecretEvidenceClassification,
+} from "@/features/security-scanner/rules/secret-classification";
+import {
   buildRepositoryModel,
   gateScanFindings,
   type RepositoryModel,
@@ -127,6 +132,9 @@ function buildScanEvidenceReport(finding: Finding, context: ProjectContext): Evi
   const rule = lookupRuleInfo(finding.ruleId, finding.title, finding.category);
   const evidenceItems = buildStaticEvidenceItems(finding);
   const counterEvidence = buildStaticCounterEvidence(finding, context);
+  const secretClassification = finding.metadata?.[SECRET_CLASSIFICATION_METADATA_KEY] as
+    | SecretEvidenceClassification
+    | undefined;
   const isSecret = finding.category === "secrets";
   const secret = isSecret
     ? identifySecretProvider({
@@ -139,7 +147,17 @@ function buildScanEvidenceReport(finding: Finding, context: ProjectContext): Evi
       })
     : null;
 
-  if (secret) {
+  if (secretClassification && isNonBlockingSecretClassification(secretClassification)) {
+    counterEvidence.push({
+      id: "secret-classification",
+      kind: "secret_classification",
+      label: "Secret classification",
+      detail: secretClassification,
+      confidence: 0.9,
+    });
+  }
+
+  if (secret && !isNonBlockingSecretClassification(secretClassification)) {
     evidenceItems.push(...buildSecretEvidenceItems({
       provider: secret.provider,
       ruleId: secret.ruleId,
@@ -170,19 +188,32 @@ function buildScanEvidenceReport(finding: Finding, context: ProjectContext): Evi
     hasRuntimeUsage: false,
   });
 
-  const reasoning = buildScanReasoning(finding, evidenceItems, secret);
+  const reasoning = buildScanReasoning(finding, evidenceItems, secret, secretClassification);
+  const nonBlockingSecret = isNonBlockingSecretClassification(secretClassification);
 
   return {
     version: 1,
     detectionMethod: "STATIC_ANALYSIS",
-    confidence,
-    confidencePercent: confidencePercent(confidence),
-    confidenceExplanation: explanation,
-    falsePositiveProbability: probability,
-    falsePositivePercent: falsePositivePercent(probability),
-    falsePositiveExplanation: `${falsePositiveLabel(probability)} — ${fpExplanation}`,
-    confirmationStatus: confidence >= 0.75 ? "confirmed" : "potential_vulnerability",
-    statusLabel: confidence >= 0.75 ? "Confirmed by static analysis" : "Potential issue — review evidence",
+    confidence: nonBlockingSecret ? Math.min(confidence, 0.35) : confidence,
+    confidencePercent: confidencePercent(nonBlockingSecret ? Math.min(confidence, 0.35) : confidence),
+    confidenceExplanation: nonBlockingSecret
+      ? "SequrAI classified this value as a test fixture or placeholder rather than a production credential."
+      : explanation,
+    falsePositiveProbability: nonBlockingSecret ? Math.max(probability, 0.8) : probability,
+    falsePositivePercent: falsePositivePercent(nonBlockingSecret ? Math.max(probability, 0.8) : probability),
+    falsePositiveExplanation: nonBlockingSecret
+      ? "Likely test fixture — does not block production readiness."
+      : `${falsePositiveLabel(probability)} — ${fpExplanation}`,
+    confirmationStatus: nonBlockingSecret
+      ? "not_exploitable"
+      : confidence >= 0.75
+        ? "confirmed"
+        : "potential_vulnerability",
+    statusLabel: nonBlockingSecret
+      ? "Test fixture — no production action required"
+      : confidence >= 0.75
+        ? "Confirmed by static analysis"
+        : "Potential issue — review evidence",
     evidence: evidenceItems,
     counterEvidence,
     reasoning,
@@ -196,11 +227,13 @@ function buildScanEvidenceReport(finding: Finding, context: ProjectContext): Evi
     ],
     matchedRules: [rule],
     verificationStatus: "Not runtime verified",
-    recommendedFix: projectAwareRecommendation({
-      genericRecommendation: finding.remediation,
-      context,
-      adapterId: finding.ruleId,
-    }),
+    recommendedFix: isSecret
+      ? buildSecretRemediation(finding)
+      : projectAwareRecommendation({
+          genericRecommendation: finding.remediation,
+          context,
+          adapterId: finding.ruleId,
+        }),
     safeFixConfidence: Math.min(0.92, confidence + 0.05),
     projectType: context.projectType,
   };
@@ -260,8 +293,18 @@ function buildStaticCounterEvidence(finding: Finding, context: ProjectContext): 
 function buildScanReasoning(
   finding: Finding,
   evidence: EvidenceItem[],
-  secret: ReturnType<typeof identifySecretProvider>
+  secret: ReturnType<typeof identifySecretProvider>,
+  secretClassification?: SecretEvidenceClassification
 ): string {
+  if (secretClassification === "TEST_FIXTURE") {
+    return `SequrAI matched a credential-like assignment in ${finding.location.path}:${finding.location.line}, but the value appears to be a test fixture based on file context, naming, and nearby test code. It should not block production readiness.`;
+  }
+  if (secretClassification === "PLACEHOLDER") {
+    return `SequrAI matched a credential-like assignment in ${finding.location.path}:${finding.location.line}, but the value reads like a placeholder rather than a live credential. Confirm it is not used in production.`;
+  }
+  if (secretClassification === "FALSE_POSITIVE") {
+    return `SequrAI matched a credential-like pattern in ${finding.location.path}:${finding.location.line}, but the assigned value is not a literal secret.`;
+  }
   if (secret) {
     return `SequrAI matched rule ${secret.ruleId} for ${secret.provider} at ${finding.location.path}:${finding.location.line}. The pattern, provider format, and file location align with a committed credential (${secret.partialFingerprint}).`;
   }

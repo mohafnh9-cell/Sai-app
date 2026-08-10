@@ -80,6 +80,77 @@ describe("critical deterministic rules", () => {
     expect(exposed[0]?.location.path).toBe("config.ts");
   });
 
+  it("classifies obvious OAuth test fixtures in test and fixture paths without blocking severity", async () => {
+    const result = await scanRepository([
+      {
+        path: "app/auth/callback/__tests__/route.test.ts",
+        content:
+          'vi.mock("@/server/oauth/client");\nconst providerToken = "oauth-provider-test-token";\nconst refreshToken = "oauth-refresh-test-token";',
+      },
+      {
+        path: "server/oauth/client.test.ts",
+        content: 'const accessToken = "oauth-access-test-token";',
+      },
+      {
+        path: "server/oauth/client.spec.ts",
+        content: 'const accessToken = "oauth-access-test-token";',
+      },
+      {
+        path: "fixtures/oauth/session-fixture.ts",
+        content: 'export const refreshToken = "oauth-refresh-test-token";',
+      },
+    ]);
+    const exposed = result.findings.filter((finding) => finding.ruleId === "secrets.exposed");
+    expect(exposed.length).toBeGreaterThan(0);
+    expect(
+      exposed.every(
+        (finding) =>
+          finding.metadata?.secretClassification === "TEST_FIXTURE" && finding.severity === "info"
+      )
+    ).toBe(true);
+  });
+
+  it("still detects real credential formats committed inside tests", async () => {
+    const githubToken = "gho_abcdefghijklmnopqrstuvwxyz123456";
+    const jwt =
+      "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8";
+    const privateKey = "-----BEGIN RSA PRIVATE KEY-----";
+    const stripeKey = "sk_live_abcdefghijklmnopqrstuvwxyz";
+    const result = await scanRepository([
+      {
+        path: "app/auth/callback/__tests__/route.test.ts",
+        content: `const providerToken = "${githubToken}";`,
+      },
+      {
+        path: "server/auth/session.test.ts",
+        content: `const sessionToken = "${jwt}";`,
+      },
+      {
+        path: "server/crypto/keys.spec.ts",
+        content: `const material = "${privateKey}";`,
+      },
+      {
+        path: "fixtures/payments/stripe.test.ts",
+        content: `const apiKey = "${stripeKey}";`,
+      },
+    ]);
+    const exposed = result.findings.filter((finding) => finding.ruleId === "secrets.exposed");
+    expect(exposed.length).toBeGreaterThanOrEqual(4);
+    expect(exposed.some((finding) => finding.location.path.includes("__tests__"))).toBe(true);
+  });
+
+  it("still detects hard-coded secrets outside tests", async () => {
+    const result = await scanRepository([
+      {
+        path: "server/config/production.ts",
+        content: "const SERVICE_API_KEY = 'hardcoded-production-key';",
+      },
+    ]);
+    const exposed = result.findings.filter((finding) => finding.ruleId === "secrets.exposed");
+    expect(exposed).toHaveLength(1);
+    expect(exposed[0]?.location.path).toBe("server/config/production.ts");
+  });
+
   it("does not flag routes that use project auth helpers as missing authentication", async () => {
     const result = await scanRepository([
       {

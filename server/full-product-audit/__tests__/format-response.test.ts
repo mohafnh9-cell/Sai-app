@@ -26,6 +26,8 @@ const t = ((key: string, params?: Record<string, string>) => {
     "fullProductAudit.dynamicScopeApprovalRoutesIntro": "We will check the routes needed to verify these vulnerabilities.",
     "fullProductAudit.dynamicScopeApprovalAction": "[ Authorize verification ]",
     "fullProductAudit.skippedReasons.dynamic_not_authorized": "Reason: dynamic tests were not authorized.",
+    "fullProductAudit.report.executiveSummaryHeader": "SECURITY STATUS",
+    "fullProductAudit.report.staticVsDynamicHeader": "STATIC VS DYNAMIC",
     "fullProductAudit.verifyFix": "VERIFY FIX",
   };
   return map[key] ?? key;
@@ -90,11 +92,11 @@ function baseResult(overrides: Partial<FullProductAuditResult>): FullProductAudi
 }
 
 describe("formatFullProductAuditResponse", () => {
-  it("separates STATIC ANALYSIS and DYNAMIC TESTING in MCP summary", () => {
+  it("separates user-facing sections and dynamic testing in MCP summary", () => {
     const formatted = formatFullProductAuditResponse(baseResult({}), t);
-    expect(formatted.summary).toContain("STATIC ANALYSIS");
+    expect(formatted.summary).toContain("SECURITY STATUS");
     expect(formatted.summary).toContain("DYNAMIC TESTING");
-    expect(formatted.summary.toLowerCase()).toContain("controlled");
+    expect(formatted.summary).toContain("STATIC VS DYNAMIC");
   });
 
   it("explains when dynamic tests were skipped due to missing authorized target", () => {

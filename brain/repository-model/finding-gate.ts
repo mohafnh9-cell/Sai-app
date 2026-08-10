@@ -1,6 +1,11 @@
 import type { Finding } from "@/features/security-scanner/types";
 import type { EvidenceReport } from "@/brain/evidence-finding/schema";
 import { notEnoughEvidenceReason } from "@/brain/prompts/analysis-engine-v2";
+import {
+  isNonBlockingSecretClassification,
+  SECRET_CLASSIFICATION_METADATA_KEY,
+  type SecretEvidenceClassification,
+} from "@/features/security-scanner/rules/secret-classification";
 import { CONFIDENCE_FINDING_THRESHOLD, type FindingClassification, type RepositoryModel } from "./schema";
 
 export type FindingGateResult =
@@ -31,6 +36,7 @@ export function validateFindingAgainstRepository(
     | "confidence"
     | "severity"
     | "description"
+    | "metadata"
   >,
   model: RepositoryModel,
   evidenceReport?: EvidenceReport | null
@@ -100,6 +106,17 @@ export function validateFindingAgainstRepository(
     return {
       allowed: false,
       reason: notEnoughEvidenceReason("File, line, and proof are required."),
+    };
+  }
+
+  const secretClassification = finding.metadata?.[SECRET_CLASSIFICATION_METADATA_KEY] as
+    | SecretEvidenceClassification
+    | undefined;
+  if (secretClassification && isNonBlockingSecretClassification(secretClassification)) {
+    return {
+      allowed: true,
+      classification: "potential_observation",
+      evidenceReport: evidenceReport ?? undefined,
     };
   }
 

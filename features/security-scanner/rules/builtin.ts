@@ -1,5 +1,12 @@
 import { CLIENT_ENV_PREFIX_PATTERN, SECRET_NAME_PATTERN } from "../constants";
 import { patternFindings, type PatternSpec } from "./helpers";
+import {
+  classifySecretDetection,
+  confidenceForSecretClassification,
+  REAL_CREDENTIAL_PATTERNS,
+  SECRET_CLASSIFICATION_METADATA_KEY,
+  severityForSecretClassification,
+} from "./secret-classification";
 import type { ScanRule } from "./types";
 import type { FindingDraft, NormalizedFile } from "../types";
 
@@ -14,42 +21,88 @@ export function patternRule(id: string, title: string, specs: PatternSpec[]): Sc
 const EXAMPLE_ENV_FILE = /(?:^|\/)\.env\.(?:example|sample)(?:\.|$)/i;
 const README_FILE = /(?:^|\/)README(?:\.md)?$/i;
 
+const PLACEHOLDER_VALUE =
+  /(?:example|sample|placeholder|your[_-]|change[_-]?me|xxx|test[_-]?key|process\.env|\$\{|generate-a|long-random|seq_live_\.\.\.|\.\.\.|not-a-real|replace-me|insert[-_]|fake[-_]|dummy)/i;
+
+function buildSecretFinding(input: {
+  file: NormalizedFile;
+  lineIndex: number;
+  value: string;
+  variableName?: string;
+  evidence: string;
+  fingerprintMaterial: string;
+  patternSeverity?: "critical" | "high";
+}): FindingDraft {
+  const classification = classifySecretDetection({
+    path: input.file.path,
+    value: input.value,
+    variableName: input.variableName,
+    line: input.file.lines[input.lineIndex],
+    lineIndex: input.lineIndex,
+    fileLines: input.file.lines,
+  });
+
+  const severity =
+    input.patternSeverity ??
+    (classification.classification === "REAL_SECRET" && /PRIVATE KEY/.test(input.value)
+      ? "critical"
+      : severityForSecretClassification(classification.classification));
+
+  const confidence = confidenceForSecretClassification(
+    classification.classification,
+    classification.confidence
+  );
+
+  return {
+    ruleId: "secrets.exposed",
+    title: "Hard-coded secret",
+    description:
+      classification.classification === "TEST_FIXTURE"
+        ? "A test-like credential value appears in source code."
+        : classification.classification === "PLACEHOLDER"
+          ? "A placeholder credential-like value appears in source code."
+          : "A credential-like value is committed in source.",
+    severity,
+    confidence,
+    category: "secrets",
+    location: { path: input.file.path, line: input.lineIndex + 1 },
+    evidence: input.evidence,
+    remediation:
+      classification.classification === "TEST_FIXTURE" || classification.classification === "PLACEHOLDER"
+        ? "Confirm this is only a test fixture or placeholder and not a real credential."
+        : "Revoke the credential, remove it from history, and load it from a secret manager.",
+    fingerprintMaterial: input.fingerprintMaterial,
+    metadata: {
+      [SECRET_CLASSIFICATION_METADATA_KEY]: classification.classification,
+      secretClassificationSignals: classification.signals,
+    },
+  };
+}
+
 const exposedSecrets: ScanRule = {
   id: "secrets.exposed",
   title: "Exposed secrets",
   run: ({ files }) => {
     const findings: FindingDraft[] = [];
-    const knownTokens = [
-      /\bsk_live_[A-Za-z0-9]{12,}\b/,
-      /\bgh[oprsu]_[A-Za-z0-9_]{20,}\b/,
-      /\bAKIA[A-Z0-9]{16}\b/,
-      /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/,
-      /\beyJ[A-Za-z0-9_-]{12,}\.[A-Za-z0-9_-]{12,}\.[A-Za-z0-9_-]{8,}\b/,
-    ];
-    const placeholder =
-      /(?:example|sample|placeholder|your[_-]|change[_-]?me|xxx|test[_-]?key|process\.env|\$\{|generate-a|long-random|seq_live_\.\.\.|\.\.\.|not-a-real|replace-me|insert[-_]|fake[-_]|dummy)/i;
     for (const file of files) {
       if (EXAMPLE_ENV_FILE.test(file.path) || README_FILE.test(file.path)) continue;
 
       for (let i = 0; i < file.lines.length; i += 1) {
         const line = file.lines[i];
-        const token = knownTokens.map((pattern) => line.match(pattern)).find(Boolean);
+        const token = REAL_CREDENTIAL_PATTERNS.map((pattern) => line.match(pattern)).find(Boolean);
         if (token) {
-          if (placeholder.test(token[0])) continue;
-          findings.push({
-            ruleId: "secrets.exposed",
-            title: "Hard-coded secret",
-            description: "A credential-like value is committed in source.",
-            severity:
-              token[0].startsWith("sk_live_") || /PRIVATE KEY/.test(token[0]) ? "critical" : "high",
-            confidence: "high",
-            category: "secrets",
-            location: { path: file.path, line: i + 1 },
-            evidence: "credential=[REDACTED]",
-            remediation:
-              "Revoke the credential, remove it from history, and load it from a secret manager.",
-            fingerprintMaterial: token[0].slice(0, 8),
-          });
+          if (PLACEHOLDER_VALUE.test(token[0])) continue;
+          findings.push(
+            buildSecretFinding({
+              file,
+              lineIndex: i,
+              value: token[0],
+              evidence: "credential=[REDACTED]",
+              fingerprintMaterial: token[0].slice(0, 8),
+              patternSeverity:
+                token[0].startsWith("sk_live_") || /PRIVATE KEY/.test(token[0]) ? "critical" : "high",
+            })
+          );
           continue;
         }
 
@@ -69,22 +122,26 @@ const exposedSecrets: ScanRule = {
         }
 
         const value = assignment[2];
-        if (!value || placeholder.test(value)) continue;
-        if (/^[a-zA-Z_$][\w$]*(?:\(\))?$/.test(value)) continue;
-
-        findings.push({
-          ruleId: "secrets.exposed",
-          title: "Hard-coded secret",
-          description: "A credential-like value is committed in source.",
-          severity: "high",
-          confidence: "medium",
-          category: "secrets",
-          location: { path: file.path, line: i + 1 },
-          evidence: `${assignment[1]}=[REDACTED]`,
-          remediation:
-            "Revoke the credential, remove it from history, and load it from a secret manager.",
-          fingerprintMaterial: assignment[1],
+        const classification = classifySecretDetection({
+          path: file.path,
+          value,
+          variableName: assignment[1],
+          line,
+          lineIndex: i,
+          fileLines: file.lines,
         });
+        if (classification.classification === "FALSE_POSITIVE") continue;
+
+        findings.push(
+          buildSecretFinding({
+            file,
+            lineIndex: i,
+            value,
+            variableName: assignment[1],
+            evidence: `${assignment[1]}=[REDACTED]`,
+            fingerprintMaterial: assignment[1],
+          })
+        );
       }
     }
     return findings;

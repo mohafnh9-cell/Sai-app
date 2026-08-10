@@ -1,4 +1,9 @@
 import {
+  isNonBlockingSecretClassification,
+  SECRET_CLASSIFICATION_METADATA_KEY,
+  type SecretEvidenceClassification,
+} from "@/features/security-scanner/rules/secret-classification";
+import {
   AUDIT_CORRELATION_RULES,
   attackFindingMatchesRule,
   staticFindingMatchesRule,
@@ -13,9 +18,11 @@ export type StaticFindingInput = {
   severity: string;
   category?: string | null;
   filePath?: string | null;
+  startLine?: number | null;
   recommendation?: string | null;
   confidence?: string | null;
   evidence?: string | null;
+  metadata?: Record<string, unknown> | null;
 };
 
 export type AttackFindingInput = {
@@ -95,9 +102,23 @@ function mapCorrelatedVerification(
   return "NOT_REPRODUCED";
 }
 
+function secretClassificationFromStatic(
+  finding: StaticFindingInput
+): SecretEvidenceClassification | undefined {
+  const value = finding.metadata?.[SECRET_CLASSIFICATION_METADATA_KEY];
+  return typeof value === "string" ? (value as SecretEvidenceClassification) : undefined;
+}
+
 function isInformationalPass(finding: StaticFindingInput): boolean {
   const evidence = (finding.evidence ?? "").toUpperCase();
+  const secretClassification = secretClassificationFromStatic(finding);
+  if (isNonBlockingSecretClassification(secretClassification)) return true;
   return evidence.includes("RLS=PASS") || finding.severity.toLowerCase() === "info";
+}
+
+export function isProductionBlockingAuditFinding(finding: ConsolidatedAuditFinding): boolean {
+  if (isNonBlockingSecretClassification(finding.secretClassification)) return false;
+  return finding.severity.toLowerCase() === "critical" || finding.severity.toLowerCase() === "high";
 }
 
 export function correlateAuditFindings(input: {
@@ -136,6 +157,7 @@ export function correlateAuditFindings(input: {
         ],
         confidence: confirmed ? "high" : normalizeConfidence(staticFinding.confidence),
         affectedComponent: staticFinding.filePath ?? attackFinding.adapterId ?? null,
+        line: staticFinding.startLine ?? undefined,
         recommendation: staticFinding.recommendation ?? attackFinding.impact ?? null,
         safeFixAvailable:
           (input.priorityFindingIds?.includes(staticFinding.id) ?? false) ||
@@ -145,6 +167,7 @@ export function correlateAuditFindings(input: {
         attackFindingId: attackFinding.id,
         adapterId: attackFinding.adapterId ?? undefined,
         ruleId: staticFinding.ruleId ?? undefined,
+        secretClassification: secretClassificationFromStatic(staticFinding),
       });
     }
   }
@@ -168,10 +191,12 @@ export function correlateAuditFindings(input: {
         ],
         confidence: normalizeConfidence(staticFinding.confidence),
         affectedComponent: staticFinding.filePath ?? null,
+        line: staticFinding.startLine ?? undefined,
         recommendation: staticFinding.recommendation ?? null,
         safeFixAvailable: false,
         staticFindingId: staticFinding.id,
         ruleId: staticFinding.ruleId ?? undefined,
+        secretClassification: secretClassificationFromStatic(staticFinding),
       });
       continue;
     }
@@ -195,11 +220,13 @@ export function correlateAuditFindings(input: {
       ],
       confidence: normalizeConfidence(staticFinding.confidence),
       affectedComponent: staticFinding.filePath ?? null,
+      line: staticFinding.startLine ?? undefined,
       recommendation: staticFinding.recommendation ?? null,
       safeFixAvailable:
         input.priorityFindingIds?.includes(staticFinding.id) ?? severityRank(staticFinding.severity) >= 4,
       staticFindingId: staticFinding.id,
       ruleId: staticFinding.ruleId ?? undefined,
+      secretClassification: secretClassificationFromStatic(staticFinding),
     });
   }
 

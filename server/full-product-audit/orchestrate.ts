@@ -16,6 +16,10 @@ import {
   type StaticFindingInput,
 } from "./correlate-findings";
 import { enrichAuditFindingSolutions } from "./enrich-solutions";
+import {
+  buildWhatToFixFirstEntries,
+  enrichAuditFindingUserFacing,
+} from "./finding-user-copy";
 import { pollUntilReviewTerminal } from "./poll";
 import { ensureSecurityTestsForAudit } from "./run-security-tests";
 import { resolveDynamicTargetForAudit } from "./resolve-dynamic-target";
@@ -66,13 +70,7 @@ function buildRecommendation(input: {
 }
 
 function buildWhatToFixFirst(topRisks: FullProductAuditResult["topRisks"]): string[] {
-  return topRisks.slice(0, 4).map((risk, index) => {
-    const prefix =
-      risk.verificationStatus === "CONFIRMED" || risk.verificationStatus === "LIKELY"
-        ? "Confirmed: "
-        : "";
-    return `${index + 1}. ${prefix}${risk.title}`;
-  });
+  return buildWhatToFixFirstEntries(topRisks);
 }
 
 export async function runFullProductAudit(
@@ -225,7 +223,7 @@ export async function runFullProductAudit(
   const { data: staticRows } = await admin
     .from("scan_findings")
     .select(
-      "id, rule_id, title, description, severity, category, file_path, recommendation, confidence, evidence"
+      "id, rule_id, title, description, severity, category, file_path, start_line, recommendation, confidence, evidence, metadata"
     )
     .eq("scan_id", scanId);
 
@@ -237,9 +235,11 @@ export async function runFullProductAudit(
     severity: row.severity as string,
     category: row.category as string | null,
     filePath: row.file_path as string | null,
+    startLine: row.start_line as number | null,
     recommendation: row.recommendation as string | null,
     confidence: row.confidence as string | null,
     evidence: row.evidence as string | null,
+    metadata: (row.metadata as Record<string, unknown> | null) ?? null,
   }));
 
   const securityTests = await ensureSecurityTestsForAudit(admin, {
@@ -287,17 +287,24 @@ export async function runFullProductAudit(
   const verdict = await getCurrentProductionVerdict(admin, input.projectId);
   const priorityFindingIds = verdict?.topPriorities.flatMap((priority) => priority.findingIds) ?? [];
 
-  const consolidated = enrichAuditFindingSolutions(
-    correlateAuditFindings({
-      staticFindings,
-      attackFindings,
-      executedAdapters: securityTests.adaptersExecuted,
-      priorityFindingIds,
-    })
+  const consolidated = enrichAuditFindingUserFacing(
+    enrichAuditFindingSolutions(
+      correlateAuditFindings({
+        staticFindings,
+        attackFindings,
+        executedAdapters: securityTests.adaptersExecuted,
+        priorityFindingIds,
+      })
+    )
   );
 
   const counts = countAuditFindings(consolidated);
-  const topRisks = consolidated.slice(0, 6);
+  const productionRisks = consolidated.filter(
+    (finding) =>
+      (finding.severity.toLowerCase() === "critical" || finding.severity.toLowerCase() === "high") &&
+      !finding.userFacing?.safeToIgnore
+  );
+  const topRisks = (productionRisks.length > 0 ? productionRisks : consolidated).slice(0, 6);
   const whatToFixFirst = buildWhatToFixFirst(topRisks);
   const verdictStatus = (verdict?.status as VerdictStatus | null) ?? null;
   const safeFixBlockerId = verdict?.topPriorities[0]?.id ?? null;

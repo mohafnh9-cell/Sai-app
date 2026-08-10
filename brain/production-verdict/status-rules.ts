@@ -1,6 +1,7 @@
 import { VERDICT_THRESHOLDS } from "./config";
 import type { NormalizedFinding } from "./normalize-finding";
 import { isCriticalSignal as checkCriticalSignal } from "./normalize-finding";
+import { isNonBlockingSecretClassification } from "@/features/security-scanner/rules/secret-classification";
 import type { VerdictStatus } from "./schema";
 
 export type StatusRuleInput = {
@@ -32,6 +33,7 @@ export function determineVerdictStatus(input: StatusRuleInput): VerdictStatus {
 
   const criticalSignals = input.findings.filter(checkCriticalSignal);
   const exposedSecret = input.findings.some((f) => {
+    if (isNonBlockingSecretClassification(f.secretClassification)) return false;
     const hay = `${f.title} ${f.category} ${f.ruleId ?? ""}`.toLowerCase();
     return (
       f.severity === "critical" &&

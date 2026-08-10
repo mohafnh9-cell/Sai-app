@@ -249,7 +249,7 @@ describe("Gate 2 — full_product_audit adapter E2E (real HTTP)", () => {
     });
 
     const formatted = formatFullProductAuditResponse(result, t);
-    expect(formatted.summary).toContain("STATIC ANALYSIS");
+    expect(formatted.summary).toContain("SECURITY STATUS");
     expect(formatted.summary).toContain("DYNAMIC TESTING");
     expect(formatted.summary).not.toContain("mass-assignment-probe");
   }, 60_000);

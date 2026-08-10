@@ -131,8 +131,9 @@ describe("full_product_audit → real dynamic testing E2E", () => {
     );
     expect(idorFinding, "expected CONFIRMED correlated IDOR finding").toBeTruthy();
 
-    expect(formatted.summary).toContain("STATIC ANALYSIS");
+    expect(formatted.summary).toContain("SECURITY STATUS");
     expect(formatted.summary).toContain("DYNAMIC TESTING");
+    expect(formatted.summary).toContain("STATIC VS DYNAMIC");
     expect(formatted.summary).toContain("SequrAI");
 
     const evidenceRows = tables.attack_simulation_evidence ?? [];
@@ -170,8 +171,9 @@ describe("full_product_audit → real dynamic testing E2E", () => {
     expect(result.engines.codeReview.findingsCount).toBeGreaterThan(0);
     expect(result.engines.securityTesting.runtimeMode).toBe("mock");
     expect(result.engines.securityTesting.dynamicTargetSource).toBe("none");
-    expect(formatted.summary).toContain("STATIC ANALYSIS");
+    expect(formatted.summary).toContain("SECURITY STATUS");
     expect(formatted.summary).toContain("DYNAMIC TESTING");
+    expect(formatted.summary).toContain("STATIC VS DYNAMIC");
     expect(formatted.summary.toLowerCase()).toContain("dynamic tests were not authorized");
     expect(result.findings.some((f) => f.verificationStatus === "CONFIRMED")).toBe(false);
   }, 60_000);

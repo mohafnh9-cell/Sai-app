@@ -1,5 +1,6 @@
 import type { NormalizedFinding } from "./normalize-finding";
 import type { ProductionPriority } from "./schema";
+import { isNonBlockingSecretClassification } from "@/features/security-scanner/rules/secret-classification";
 
 const GROUP_PATTERNS: Array<{
   pattern: RegExp;
@@ -79,7 +80,11 @@ function confidenceWeight(confidence: NormalizedFinding["confidence"]): number {
 }
 
 export function selectTopPriorities(findings: NormalizedFinding[]): ProductionPriority[] {
-  const blockers = findings.filter((f) => f.severity === "critical" || f.severity === "high");
+  const blockers = findings.filter(
+    (f) =>
+      (f.severity === "critical" || f.severity === "high") &&
+      !isNonBlockingSecretClassification(f.secretClassification)
+  );
   const candidates = blockers.length > 0 ? blockers : findings.filter((f) => f.severity === "medium");
 
   const groups = new Map<
