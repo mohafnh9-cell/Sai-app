@@ -8,6 +8,7 @@ import {
   Settings,
   LogOut,
   Puzzle,
+  Terminal,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -29,6 +30,7 @@ const PRIMARY_NAV = [
   { href: "/dashboard", labelKey: "dashboard", icon: LayoutDashboard },
   { href: "/projects", labelKey: "projects", icon: FolderGit2 },
   { href: "/integrations", labelKey: "integrations", icon: Puzzle },
+  { href: "/onboarding?step=cursor", labelKey: "cursorMcp", icon: Terminal },
   { href: "/settings", labelKey: "settings", icon: Settings },
 ] as const;
 
@@ -87,6 +89,9 @@ export function DashboardSidebar({
   const isActive = (path: string) => {
     const target = isDemo ? href(path) : path;
     const targetPath = target.split("?")[0];
+    if (path.startsWith("/onboarding")) {
+      return pathname.startsWith("/onboarding") && target.includes("step=cursor");
+    }
     return path === "/dashboard"
       ? pathname === targetPath
       : pathname.startsWith(targetPath);
@@ -95,7 +100,7 @@ export function DashboardSidebar({
   return (
     <aside
       className={cn(
-        "flex h-full w-[260px] shrink-0 flex-col border-r border-border/50 bg-card/40 backdrop-blur-xl",
+        "flex h-full w-[260px] shrink-0 flex-col border-r border-border/50 bg-card/90 glass-surface",
         className
       )}
     >

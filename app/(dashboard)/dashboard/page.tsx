@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { PortfolioVerdictCard } from "@/features/production-verdict/components/PortfolioVerdictCard";
 import { ProductionControlCenter } from "@/features/dashboard/components/ProductionControlCenter";
+import { McpPromoBanner } from "@/features/mcp/components/McpPromoBanner";
 import { buildOrgBrain } from "@/server/brain/build-org-brain";
 import { organizationHasProductionVerdict } from "@/server/onboarding/has-production-verdict";
 import { getLatestVerdictsByOrganization } from "@/server/production-verdict/service";
@@ -25,7 +26,7 @@ export const metadata: Metadata = { title: "Mission Control" };
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ firstVerdict?: string }>;
+  searchParams: Promise<{ firstVerdict?: string; onboarded?: string }>;
 }) {
   const params = await searchParams;
   const auth = await getCachedServerAuthContext();
@@ -106,6 +107,8 @@ export default async function DashboardPage({
   return (
     <div className="app-cinematic-bg min-h-full">
       <div className="mx-auto max-w-5xl px-4 sm:px-8 py-10 sm:py-14 pb-20 space-y-10">
+        <McpPromoBanner />
+
         {focus && (
           <ProductionControlCenter
             greeting={greeting}

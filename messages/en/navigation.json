@@ -13,5 +13,6 @@
   "workflow": "Workflow",
   "pricing": "Pricing",
   "signIn": "Sign in",
-  "connectRepository": "Connect my repository"
+  "connectRepository": "Connect my repository",
+  "cursorMcp": "Code agent / MCP"
 }

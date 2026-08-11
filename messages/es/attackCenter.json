@@ -45,9 +45,9 @@
     "whatWeSaw": "Lo que observamos",
     "expected": "Esperado:",
     "observed": "Observado:",
-    "protectionForCursor": "Prompt de corrección para Cursor",
+    "protectionForCursor": "Prompt de corrección para tu agente de código",
     "copied": "Copiado",
-    "copyProtection": "Copiar corrección para Cursor",
+    "copyProtection": "Copiar corrección para tu agente",
     "reference": "Referencia:",
     "back": "← Volver"
   },

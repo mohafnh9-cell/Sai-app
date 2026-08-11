@@ -48,19 +48,31 @@
 
   html {
     @apply scroll-smooth;
+    height: 100%;
     font-size: 16px;
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
+    overflow-x: clip;
   }
 
   body {
     @apply bg-background-deep text-foreground font-sans antialiased;
+    min-height: 100%;
+    overflow-x: clip;
     font-feature-settings: "rlig" 1, "calt" 1;
     letter-spacing: -0.011em;
     line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
-  button,
+  button {
+    font: inherit;
+    letter-spacing: inherit;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
   input,
   select,
   textarea {
@@ -77,18 +89,126 @@
   ::selection {
     background-color: rgb(123 92 255 / 0.28);
   }
+
+  a,
+  button {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  img,
+  svg,
+  video {
+    max-width: 100%;
+    height: auto;
+  }
 }
 
 @layer utilities {
   .text-gradient {
     background: linear-gradient(135deg, #5b6cff 0%, #7b5cff 50%, #9b5cff 100%);
     -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
     background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
+
+  @supports not ((-webkit-background-clip: text) or (background-clip: text)) {
+    .text-gradient {
+      background: none;
+      -webkit-text-fill-color: currentColor;
+      color: #9b5cff;
+    }
   }
 
   .bg-brand-gradient {
     background: linear-gradient(135deg, #5b6cff 0%, #7b5cff 50%, #9b5cff 100%);
+    background-color: #7b5cff;
+  }
+
+  /* Viewport height — vh fallback, then dvh/svh; iOS Safari fill-available */
+  .min-h-app {
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+
+  .h-app {
+    height: 100vh;
+    height: 100dvh;
+  }
+
+  .max-h-app {
+    max-height: 100vh;
+    max-height: 100dvh;
+  }
+
+  .min-h-hero-screen {
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+
+  @supports (height: 100svh) {
+    .min-h-hero-screen {
+      min-height: 100svh;
+    }
+  }
+
+  .min-h-hero-content {
+    min-height: calc(100vh - 4rem);
+    min-height: calc(100dvh - 4rem);
+  }
+
+  @supports (height: 100svh) {
+    .min-h-hero-content {
+      min-height: calc(100svh - 4rem);
+    }
+  }
+
+  @supports (-webkit-touch-callout: none) {
+    .min-h-app,
+    .min-h-hero-screen {
+      min-height: -webkit-fill-available;
+    }
+
+    .h-app {
+      height: -webkit-fill-available;
+    }
+
+    .max-h-app {
+      max-height: -webkit-fill-available;
+    }
+  }
+
+  .safe-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .pt-mobile-header {
+    padding-top: calc(3.5rem + env(safe-area-inset-top, 0px));
+  }
+
+  .glass-surface {
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+  }
+
+  @supports not (
+    (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))
+  ) {
+    .glass-surface {
+      background-color: rgb(7 7 10 / 0.94);
+    }
+  }
+
+  .landing-glow-orb {
+    pointer-events: none;
+    transform: translate3d(-50%, 0, 0);
+    -webkit-transform: translate3d(-50%, 0, 0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
   }
 
   .landing-ambient {
@@ -141,7 +261,16 @@
     );
     border: 1px solid rgb(255 255 255 / 0.08);
     box-shadow: var(--shadow-premium);
+    -webkit-backdrop-filter: blur(12px);
     backdrop-filter: blur(12px);
+  }
+
+  @supports not (
+    (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))
+  ) {
+    .surface-premium {
+      background: rgb(16 16 22 / 0.96);
+    }
   }
 
   .shadow-premium {
@@ -164,13 +293,11 @@
 @keyframes landing-reveal {
   from {
     opacity: 0;
-    transform: translateY(20px);
-    filter: blur(8px);
+    transform: translate3d(0, 16px, 0);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
-    filter: blur(0);
+    transform: translate3d(0, 0, 0);
   }
 }
 

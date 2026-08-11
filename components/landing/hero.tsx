@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { ProductDashboardPreview } from "@/components/landing/product-dashboard-preview";
+import { HeroDashboardPreview } from "@/components/landing/hero-dashboard-preview";
 import { FEATURE_KEYS } from "@/content/landing";
 import { useI18n } from "@/lib/i18n/client";
 
@@ -10,11 +10,11 @@ export function Hero() {
   const { t } = useI18n("landing");
 
   return (
-    <section className="relative min-h-[100svh] overflow-hidden pt-16 md:pt-20">
+    <section className="relative min-h-hero-screen overflow-x-clip pt-16 md:pt-20 safe-top">
       <div className="absolute inset-0 landing-ambient" />
-      <div className="absolute left-1/2 top-[38%] h-[420px] w-[720px] -translate-x-1/2 rounded-full bg-brand-violet/10 blur-[120px]" />
+      <div className="landing-glow-orb absolute left-1/2 top-[38%] h-[420px] w-[min(720px,100vw)] rounded-full bg-brand-violet/10 blur-[120px]" />
 
-      <div className="relative mx-auto flex min-h-[calc(100svh-4rem)] max-w-[1200px] flex-col px-6 pb-8 pt-16 md:pt-24 lg:pt-28">
+      <div className="relative mx-auto flex min-h-hero-content max-w-[1200px] flex-col px-6 pb-8 pt-16 md:pt-24 lg:pt-28">
         <div className="mx-auto max-w-[760px] text-center lg:text-left lg:mx-0">
           <p className="landing-reveal text-[11px] font-medium uppercase tracking-[0.28em] text-text-muted">
             {t("hero.eyebrow")}
@@ -60,7 +60,7 @@ export function Hero() {
         </div>
 
         <div className="landing-reveal landing-reveal-delay-3 relative mt-12 md:mt-16 lg:mt-20">
-          <ProductDashboardPreview variant="hero" className="mx-auto max-w-[980px]" />
+          <HeroDashboardPreview className="mx-auto max-w-[980px]" />
         </div>
       </div>
     </section>

@@ -13,5 +13,6 @@
   "workflow": "Flujo",
   "pricing": "Precios",
   "signIn": "Iniciar sesión",
-  "connectRepository": "Conectar mi repositorio"
+  "connectRepository": "Conectar mi repositorio",
+  "cursorMcp": "Agente / MCP"
 }

@@ -10,6 +10,9 @@ if (deployedProduction && bypassEnabled) {
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  experimental: {
+    optimizePackageImports: ["lucide-react"],
+  },
   turbopack: {
     root: import.meta.dirname,
   },

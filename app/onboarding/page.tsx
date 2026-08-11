@@ -32,8 +32,8 @@ export default async function OnboardingPage({
 
   return (
     <I18nShell userId={user.id}>
-      <div className="min-h-dvh bg-background bg-[radial-gradient(ellipse_at_top,rgba(var(--primary-rgb,99,102,241),0.08),transparent_50%)]">
-        <div className="mx-auto flex min-h-dvh w-full max-w-6xl flex-col gap-10 px-4 py-8 md:flex-row md:items-start md:justify-center md:py-14">
+      <div className="min-h-app bg-background bg-[radial-gradient(ellipse_at_top,rgba(var(--primary-rgb,99,102,241),0.08),transparent_50%)] safe-top safe-bottom">
+        <div className="mx-auto flex min-h-app w-full max-w-6xl flex-col gap-10 px-4 py-8 md:flex-row md:items-start md:justify-center md:py-14">
           <OnboardingPageHeader />
           <Suspense fallback={null}>
             <OnboardingFlow initialContext={context} />

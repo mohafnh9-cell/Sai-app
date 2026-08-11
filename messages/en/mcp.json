@@ -87,7 +87,7 @@
     "chooseNext": "Or pick one:",
     "chooseBlocker": "Choose a blocker to generate its Safe Fix Prompt.",
     "noBlockers": "Nothing is blocking deploy right now — there's nothing I need you to fix.",
-    "copyIntoCursor": "Copy this into Cursor:",
+    "copyIntoCursor": "Copy this into your code agent:",
     "afterFixSayReviewAgain": "After you apply the fix, say: \"Review again.\"",
     "timeHint": "About {time} to fix.",
     "blockerLabel": "Blocker:",
@@ -95,7 +95,7 @@
     "timeLabel": "Estimated time:",
     "projectedVerdictLabel": "Projected verdict:",
     "projectedEstimateNote": "Projected verdict is an estimate, not a guarantee.",
-    "copyPrompt": "Copy the Safe Fix Prompt below into Cursor or Claude Code.",
+    "copyPrompt": "Copy the Safe Fix Prompt below into your code agent.",
     "unavailable": "A Safe Fix Prompt could not be generated for this blocker."
   },
   "whatChanged": {

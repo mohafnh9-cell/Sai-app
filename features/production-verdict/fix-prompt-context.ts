@@ -34,8 +34,8 @@ export function fixPromptContextFromScan(options: {
   return {
     projectName: options.projectName,
     stack,
-    findings: options.findings,
-    currentVerdictStatus: options.currentVerdictStatus,
-    currentScore: options.currentScore,
+    ...(options.findings ? { findings: options.findings } : {}),
+    ...(options.currentVerdictStatus ? { currentVerdictStatus: options.currentVerdictStatus } : {}),
+    ...(options.currentScore != null ? { currentScore: options.currentScore } : {}),
   };
 }

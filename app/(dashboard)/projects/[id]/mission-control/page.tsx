@@ -168,26 +168,25 @@ export default async function MissionControlPage({ params, searchParams }: PageP
 
   if (!missionControlState) notFound();
 
-  const rscIssues = findNonSerializablePaths(missionControlState, {
-    rootLabel: "missionControlState",
-  });
-  if (rscIssues.length > 0) {
-    console.error({
-      component: "mission-control-rsc-audit",
-      event: "non_serializable_props_detected",
-      projectId,
-      runId: missionControlState.analysisRunId,
-      issues: rscIssues,
-    });
-  }
-
   const safeMissionControlState = toRscSafe(missionControlState) as MissionControlState;
+
+  if (process.env.NODE_ENV === "development") {
+    const rscIssues = findNonSerializablePaths(safeMissionControlState, {
+      rootLabel: "missionControlState",
+    });
+    if (rscIssues.length > 0) {
+      console.warn("[mission-control] non-serializable props after sanitization", {
+        projectId,
+        runId: safeMissionControlState.analysisRunId,
+        issues: rscIssues,
+      });
+    }
+  }
 
   missionControlTrace("MissionControlPage", "END", {
     ...traceCtx,
     analysisRunId: missionControlState.analysisRunId,
     hasVerdict: Boolean(missionControlState.productionVerdict),
-    rscIssueCount: rscIssues.length,
   });
 
   const { t } = await getTranslator("missionControl");

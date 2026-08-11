@@ -218,7 +218,7 @@ export function buildMissionControlView(
     engineeringPlanStatus: top ? ("ready" as const) : ("none" as const),
     replayStatus: input.verdict?.status === "ready_to_ship" ? ("passed" as const) : ("pending" as const),
     primaryAction: top ? ("generate_fix" as const) : input.verdict ? ("view_details" as const) : ("analyze" as const),
-    priorityId: top?.id,
+    ...(top?.id ? { priorityId: top.id } : {}),
   };
 
   const feed =
@@ -266,14 +266,16 @@ export function buildMissionControlView(
       verdictStatus: input.verdict?.status ?? "insufficient_data",
       score: input.verdict?.score ?? null,
     },
-    detailsHref: input.verdict ? `/projects/${input.projectId}` : undefined,
-    fixPromptContext: input.verdict
+    ...(input.verdict
       ? {
-          projectName: input.projectName,
-          currentVerdictStatus: input.verdict.status,
-          currentScore: input.verdict.score ?? 0,
+          detailsHref: `/projects/${input.projectId}`,
+          fixPromptContext: {
+            projectName: input.projectName,
+            currentVerdictStatus: input.verdict.status,
+            currentScore: input.verdict.score ?? 0,
+          },
         }
-      : undefined,
+      : {}),
     cancelledReview: input.cancelledReview ?? null,
     hideProductionVerdict,
   };

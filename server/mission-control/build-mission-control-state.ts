@@ -156,15 +156,17 @@ export function buildMissionControlState(input: BuildMissionControlStateInput): 
       showRecoveryBanner,
       showProtectionStatus,
       isVerdictStale: reviewSignals.isVerdictStale && !viewingHistoricalRun,
-      reportHref: input.reportHref,
-      fixPromptContext: input.fixPromptContext,
-      attackCenterHref: input.securityTestContext?.attackCenterHref,
       openTechnicalDetails: input.ui.openTechnicalDetails,
       showAnalysisRunSelector:
         input.flags.analysisRunIsolationEnabled && analysisRuns.length > 1,
       showOnboardedBanner: Boolean(input.ui.onboarded && missionLoad.verdict),
       showConnectedBanner: Boolean(input.ui.connected),
       showReviewCompleteBanner: Boolean(input.ui.reviewComplete && missionLoad.verdict),
+      ...(input.reportHref ? { reportHref: input.reportHref } : {}),
+      ...(input.fixPromptContext ? { fixPromptContext: input.fixPromptContext } : {}),
+      ...(input.securityTestContext?.attackCenterHref
+        ? { attackCenterHref: input.securityTestContext.attackCenterHref }
+        : {}),
     },
   };
 }

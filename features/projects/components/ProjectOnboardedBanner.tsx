@@ -34,11 +34,9 @@ export function ProjectOnboardedBanner({
         {readyToShip ? t("onboardedBannerReady") : t("onboardedBannerFix")}
       </p>
       <div className="flex flex-wrap items-center gap-2 shrink-0">
-        {readyToShip && (
-          <Button size="sm" asChild>
-            <Link href="/onboarding?step=cursor">{t("onboardedConnectCursor")}</Link>
-          </Button>
-        )}
+        <Button size="sm" asChild>
+          <Link href="/onboarding?step=cursor">{t("onboardedConnectCursor")}</Link>
+        </Button>
         <Button size="sm" variant="ghost" onClick={dismiss}>
           {t("onboardedDismiss")}
         </Button>

@@ -64,7 +64,7 @@ export default async function SettingsPage() {
       )}
 
       {org && (
-        <Card className="border-border/50">
+        <Card className="border-border/50" id="mcp-setup">
           <CardHeader className="pb-4">
             <CardTitle className="text-base">{t("mcpTitle")}</CardTitle>
             <CardDescription>{t("mcpSubtitle")}</CardDescription>

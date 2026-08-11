@@ -11,6 +11,7 @@ import { startGitHubOAuth } from "@/lib/github/oauth-client";
 import { projectVerdictHref } from "@/lib/navigation/project-hrefs";
 import type { GitHubRepo } from "@/lib/github";
 import { useI18n } from "@/lib/i18n/client";
+import { McpPromoBanner } from "@/features/mcp/components/McpPromoBanner";
 
 type Step = "idle" | "loading" | "selecting" | "saving" | "done" | "error";
 
@@ -279,6 +280,10 @@ export default function IntegrationsPage() {
         <h1 className="text-2xl font-semibold tracking-tight">{t("title")}</h1>
         <p className="text-muted-foreground text-sm mt-1">{t("subtitle")}</p>
       </div>
+
+      {connectionState === "ready" && connection?.connection.status === "connected" ? (
+        <McpPromoBanner />
+      ) : null}
 
       {/* GitHub Card */}
       <Card className="border-border/50">

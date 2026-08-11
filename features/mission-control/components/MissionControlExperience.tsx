@@ -15,6 +15,7 @@ import { MissionControlTechnicalDetails } from "./MissionControlTechnicalDetails
 import { MissionControlProtectionStatus } from "./MissionControlProtectionStatus";
 import { AnalysisRunSelector } from "@/features/analysis-runs/components/AnalysisRunSelector";
 import { ProjectOnboardedBanner } from "@/features/projects/components/ProjectOnboardedBanner";
+import { McpPromoBanner } from "@/features/mcp/components/McpPromoBanner";
 
 export function MissionControlExperience({
   initialState,
@@ -91,7 +92,9 @@ export function MissionControlExperience({
 
       {state.ui.showOnboardedBanner && verdict ? (
         <ProjectOnboardedBanner readyToShip={verdict.status === "ready_to_ship"} />
-      ) : null}
+      ) : (
+        <McpPromoBanner />
+      )}
 
       {state.ui.showConnectedBanner ? (
         <div className="surface-premium rounded-2xl p-5" role="status">
@@ -141,14 +144,17 @@ export function MissionControlExperience({
           {showBlockers ? <DeploymentBlockersList blockers={blockers} /> : null}
 
           {showSafeFixCard ? (
-            <SafeFixHeroCard
-              topPriority={topPriority}
-              fixPromptInput={safeFixPromptInput}
-              labels={{
-                eyebrow: t("projectHome.aiFix.title"),
-                copyLabel: t("projectHome.aiFix.openInCursor"),
-              }}
-            />
+            <>
+              <SafeFixHeroCard
+                topPriority={topPriority}
+                fixPromptInput={safeFixPromptInput}
+                labels={{
+                  eyebrow: t("projectHome.aiFix.title"),
+                  copyLabel: t("projectHome.aiFix.openInCursor"),
+                }}
+              />
+              <p className="text-xs text-muted-foreground -mt-4">{tp("safeFixMcpHint")}</p>
+            </>
           ) : null}
 
           <MissionControlPrimaryAction

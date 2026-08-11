@@ -1,25 +1,27 @@
+import dynamic from "next/dynamic";
 import { I18nShell } from "@/components/shared/I18nShell";
-import { FinalCTA } from "@/components/landing/final-cta";
-import { Footer } from "@/components/landing/footer";
 import { Hero } from "@/components/landing/hero";
 import { LandingNavbar } from "@/components/landing/nav";
-import { Pricing } from "@/components/landing/pricing";
-import { ProductFlow } from "@/components/landing/product-flow";
-import { ProductProof } from "@/components/landing/product-proof";
+
+const LandingBelowFold = dynamic(
+  () =>
+    import("@/components/landing/landing-below-fold").then((module) => ({
+      default: module.LandingBelowFold,
+    })),
+  {
+    loading: () => <div aria-hidden className="min-h-[40vh]" />,
+  }
+);
 
 export default function LandingPage() {
   return (
-    <I18nShell>
-      <div className="min-h-dvh bg-background-deep">
+    <I18nShell namespaces={["common", "navigation", "landing"]}>
+      <div className="min-h-app overflow-x-clip bg-background-deep">
         <LandingNavbar />
         <main>
           <Hero />
-          <ProductProof />
-          <ProductFlow />
-          <Pricing />
-          <FinalCTA />
+          <LandingBelowFold />
         </main>
-        <Footer />
       </div>
     </I18nShell>
   );

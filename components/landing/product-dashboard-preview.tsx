@@ -19,7 +19,7 @@ export function ProductDashboardPreview({
   return (
     <div
       className={cn(
-        "relative w-full overflow-hidden rounded-[20px] landing-surface shadow-[0_40px_120px_rgb(0_0_0_/_0.55)]",
+        "relative w-full overflow-x-clip rounded-[20px] landing-surface shadow-[0_40px_120px_rgb(0_0_0_/_0.55)]",
         isHero && "pointer-events-none select-none",
         className
       )}

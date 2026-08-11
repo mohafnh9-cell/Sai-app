@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { MissionControlHero } from "@/features/mission-control/components/MissionControlHero";
 import { SafeFixHeroCard } from "@/features/production-verdict/components/SafeFixHeroCard";
+import { McpPromoBanner } from "@/features/mcp/components/McpPromoBanner";
 import { scanIsCompleted } from "../onboarding-flow";
 import { projectVerdictHref } from "@/lib/navigation/project-hrefs";
 import { useI18n } from "@/lib/i18n/client";
@@ -161,14 +162,16 @@ export function OnboardingFinaleStep({
         </p>
       )}
 
+      <McpPromoBanner variant="compact" persistDismiss={false} />
+
       <div className="flex flex-col gap-3">
         {ready ? (
           <>
-            <Button className="w-full h-12 text-base" size="lg" onClick={onGoToDashboard}>
-              {t("goToDashboard")}
-            </Button>
-            <Button variant="outline" className="w-full" onClick={onConnectCursor}>
+            <Button className="w-full h-12 text-base" size="lg" onClick={onConnectCursor}>
               {t("connectCursor")}
+            </Button>
+            <Button variant="outline" className="w-full" onClick={onGoToDashboard}>
+              {t("goToDashboard")}
             </Button>
           </>
         ) : (
@@ -180,6 +183,9 @@ export function OnboardingFinaleStep({
               disabled={rechecking}
             >
               {rechecking ? t("finaleRechecking") : t("checkAgain")}
+            </Button>
+            <Button variant="outline" className="w-full" onClick={onConnectCursor}>
+              {t("connectCursor")}
             </Button>
             <Button variant="ghost" className="w-full" asChild>
               <Link href={projectVerdictHref(projectId)}>{t("openProjectSecondary")}</Link>

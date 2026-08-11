@@ -34,8 +34,8 @@ export function DashboardShell({
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <div className="flex h-dvh max-h-dvh overflow-hidden app-cinematic-bg">
-      <div className="flex md:hidden fixed top-0 left-0 right-0 z-40 h-14 items-center gap-2 border-b border-border/60 bg-card/80 backdrop-blur-xl px-3">
+    <div className="flex h-app max-h-app overflow-hidden app-cinematic-bg">
+      <div className="flex md:hidden fixed top-0 left-0 right-0 z-40 min-h-14 items-center gap-2 border-b border-border/60 bg-card/90 glass-surface px-3 safe-top">
         <Button
           variant="ghost"
           size="icon"
@@ -91,7 +91,7 @@ export function DashboardShell({
         </>
       )}
 
-      <main className={cn("flex-1 overflow-y-auto pt-14 md:pt-0")}>
+      <main className={cn("flex-1 min-h-0 overflow-y-auto overscroll-y-contain pt-mobile-header md:pt-0")}>
         {bypass && (
           <div className="border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-center text-xs text-amber-700 dark:text-amber-300">
             Auth bypass active (SEQURAI_BYPASS_AUTH) — remove before production

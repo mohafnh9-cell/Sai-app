@@ -57,7 +57,7 @@ export default async function RootLayout({
 
   return (
     <html lang={locale} className={inter.variable} suppressHydrationWarning>
-      <body className={`${inter.className} min-h-dvh antialiased`}>
+      <body className={`${inter.className} min-h-app antialiased`}>
         {children}
       </body>
     </html>

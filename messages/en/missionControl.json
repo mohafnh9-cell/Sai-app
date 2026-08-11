@@ -36,7 +36,7 @@
       "title": "Fix with AI",
       "description": "Generate AI fixes for detected problems.",
       "cta": "Fix with AI",
-      "openInCursor": "Open in Cursor"
+      "openInCursor": "Open in your agent"
     },
     "verdictSummary": {
       "title": "Production Verdict",

@@ -150,3 +150,15 @@ export function loadAllMessages(locale: AppLocale): Messages {
     { readiness: PACKAGES[locale].readiness }
   );
 }
+
+export function loadMessagesForNamespaces(
+  locale: AppLocale,
+  namespaces: MessageNamespace[]
+): Messages {
+  const uniqueNamespaces = [...new Set(namespaces)];
+  return mergeMessages(
+    ...uniqueNamespaces.map((namespace) => ({
+      [namespace]: PACKAGES[locale][namespace] ?? {},
+    }))
+  );
+}

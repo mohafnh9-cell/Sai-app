@@ -43,7 +43,7 @@ export function OnboardingCursorStep({
       const response = await fetch("/api/mcp/keys", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: "Cursor Connection" }),
+        body: JSON.stringify({ name: ts("mcpKeyNamePlaceholder") }),
       });
       const data = await response.json();
       if (!response.ok) {
@@ -132,14 +132,11 @@ export function OnboardingCursorStep({
         {hasExistingConnection && !apiKey && !error ? (
           <div className="space-y-3">
             <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4">
-              <p className="text-sm font-medium">✓ Conexión MCP existente</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                La clave anterior permanece oculta. Genera una nueva solo si necesitas configurar
-                otro cliente.
-              </p>
+              <p className="text-sm font-medium">✓ {t("cursorExistingTitle")}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{t("cursorExistingBody")}</p>
             </div>
             <Button variant="outline" onClick={() => void createKey()} disabled={loading}>
-              Generar nueva clave MCP
+              {t("cursorExistingRegenerate")}
             </Button>
           </div>
         ) : null}
