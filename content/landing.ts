@@ -19,8 +19,8 @@ export const PRICING_FEATURE_KEYS = [...FEATURE_KEYS, "githubConnection"] as con
 export const PREVIEW_SCORE = 64;
 
 export const PRICING_PLANS = [
-  { id: "privateBeta" as const, price: "29", highlighted: true },
-  { id: "publicBeta" as const, price: "49", highlighted: false },
+  { id: "privateBeta" as const, price: "5", highlighted: true },
+  { id: "publicBeta" as const, price: "5", highlighted: false },
 ] as const;
 
 export const PREVIEW_RECOMMENDATION_KEYS = ["recommendation1", "recommendation2", "recommendation3"] as const;

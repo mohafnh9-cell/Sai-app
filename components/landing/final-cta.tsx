@@ -24,7 +24,7 @@ export function FinalCTA() {
           className="mt-10 h-12 rounded-full bg-brand-gradient px-8 text-sm font-medium hover:opacity-90"
           asChild
         >
-          <Link href="/signup">{t("finalCta.button")}</Link>
+          <Link href="/connect">{t("finalCta.button")}</Link>
         </Button>
 
         <div className="mt-20 flex flex-col items-center gap-2">

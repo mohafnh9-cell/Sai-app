@@ -55,7 +55,7 @@ export function LandingNavbarClient() {
             className="h-9 rounded-full bg-brand-gradient px-4 text-[13px] font-medium hover:opacity-90"
             asChild
           >
-            <Link href="/signup">{t("connectRepository")}</Link>
+            <Link href="/connect">{t("connectRepository")}</Link>
           </Button>
         </div>
       </div>

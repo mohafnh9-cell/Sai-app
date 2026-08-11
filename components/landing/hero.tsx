@@ -24,6 +24,10 @@ export function Hero() {
             {t("hero.headline")}
           </h1>
 
+          <p className="landing-reveal landing-reveal-delay-2 mt-5 text-sm font-medium tracking-[-0.01em] text-foreground/90 lg:mx-0 mx-auto">
+            {t("hero.tagline")}
+          </p>
+
           <p className="landing-reveal landing-reveal-delay-2 mt-6 max-w-[34rem] text-[15px] leading-relaxed text-muted-foreground lg:mx-0 mx-auto">
             {t("hero.subline")}
           </p>
@@ -38,7 +42,7 @@ export function Hero() {
               className="h-12 rounded-full bg-brand-gradient px-7 text-sm font-medium hover:opacity-90"
               asChild
             >
-              <Link href="/signup">{t("hero.ctaPrimary")}</Link>
+              <Link href="/connect">{t("hero.ctaPrimary")}</Link>
             </Button>
             <Button
               variant="ghost"

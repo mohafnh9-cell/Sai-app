@@ -11,17 +11,17 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   title: {
-    default: "SequrAI — Production Verdict for AI-built apps",
+    default: "SequrAI — The security layer for AI-built software",
     template: "%s | SequrAI",
   },
   description:
-    "Know if your AI-built application is ready for production before you deploy. Connect GitHub, get a Production Verdict on every push.",
+    "Your AI builds the software. SequrAI adds the security layer. Analyze your app before production, detect priority risks, and get a Production Verdict on what to fix before you deploy.",
   keywords: [
+    "security layer",
+    "AI-built software",
     "production verdict",
-    "AI-built apps",
-    "Cursor",
-    "Claude Code",
-    "continuous reviews",
+    "security reviews",
+    "AI builders",
     "deploy with confidence",
   ],
   authors: [{ name: "SequrAI" }],
@@ -30,16 +30,16 @@ export const metadata: Metadata = {
     type: "website",
     locale: "en_US",
     url: "https://sequrai.com",
-    title: "SequrAI — Production Verdict for AI-built apps",
+    title: "SequrAI — The security layer for AI-built software",
     description:
-      "Know if your AI-built application is ready for production before you deploy.",
+      "Your AI builds the software. SequrAI adds the security layer. Get a Production Verdict before you deploy.",
     siteName: "SequrAI",
   },
   twitter: {
     card: "summary_large_image",
-    title: "SequrAI — Production Verdict for AI-built apps",
+    title: "SequrAI — The security layer for AI-built software",
     description:
-      "Connect GitHub. Every push reviewed. Get your Production Verdict before you deploy.",
+      "Analyze risks before production. Get your Production Verdict and Recommendations before you deploy.",
     creator: "@sequrai",
   },
   robots: {

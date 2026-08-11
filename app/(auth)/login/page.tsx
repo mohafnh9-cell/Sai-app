@@ -166,7 +166,7 @@ function LoginForm() {
 
       <p className="mt-6 text-center text-sm text-muted-foreground">
         {t("noAccount")}{" "}
-        <Link href="/signup" className="text-foreground underline underline-offset-4 hover:no-underline">
+        <Link href="/connect" className="text-foreground underline underline-offset-4 hover:no-underline">
           {t("startTrial")}
         </Link>
       </p>

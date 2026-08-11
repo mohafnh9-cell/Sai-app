@@ -1,27 +1,28 @@
 {
   "hero": {
-    "eyebrow": "For Cursor, Claude Code, and AI builders",
-    "headline": "Know if your AI-built app is ready for production before you deploy.",
-    "subline": "Connect GitHub. Every push is reviewed automatically. You get a Production Verdict and clear Recommendations.",
-    "ctaPrimary": "Connect your repository",
+    "eyebrow": "The security layer for AI builders",
+    "headline": "Your AI builds the software. SequrAI adds the security layer.",
+    "tagline": "Build with AI. Deploy with confidence.",
+    "subline": "Analyze your application before production, detect priority risks and issues, and get a clear verdict on what to fix before you deploy.",
+    "ctaPrimary": "Connect my repository",
     "ctaSecondary": "See how it works",
     "footnote": "Private beta · First verdict in minutes"
   },
   "features": {
     "productionVerdict": "Production Verdict",
-    "continuousReviews": "Production Review",
+    "continuousReviews": "Security Reviews",
     "recommendations": "Recommendations",
     "history": "History",
     "githubConnection": "GitHub repository connection"
   },
   "productProof": {
-    "eyebrow": "Product",
-    "title": "Your Production Verdict, updated on every push.",
-    "subtitle": "SequrAI watches your repository. When your code changes, you see whether you can deploy — and what to fix first."
+    "eyebrow": "Security layer",
+    "title": "Analyze risks. Get your Production Verdict.",
+    "subtitle": "SequrAI reviews your AI-built software on every push, identifies priority issues, and tells you what to fix before you deploy."
   },
   "flow": {
     "eyebrow": "How it works",
-    "title": "Connect. Push. Get your verdict.",
+    "title": "Connect. Push. Get your security layer.",
     "steps": {
       "connect": {
         "word": "Connect",
@@ -29,24 +30,24 @@
       },
       "push": {
         "word": "Push",
-        "line": "SequrAI runs a Production Review on every code change."
+        "line": "SequrAI runs Security Reviews on every code change."
       },
       "verdict": {
         "word": "Verdict",
-        "line": "See your Production Verdict — ready or not."
+        "line": "See your Production Verdict — which risks to fix before you deploy."
       },
       "deploy": {
         "word": "Deploy",
-        "line": "Follow Recommendations, then ship with confidence."
+        "line": "Follow Recommendations and prepare for production with confidence."
       }
     }
   },
   "preview": {
     "verdictLabel": "Production Verdict",
     "verdictStatus": "Almost Ready",
-    "verdictSummary": "Fix 3 issues before you deploy to production.",
+    "verdictSummary": "See what to fix before you deploy to production.",
     "score": "Score",
-    "continuousReviews": "Production Review",
+    "continuousReviews": "Security Reviews",
     "reviewsState": "Up to date",
     "lastReview": "Last review: {time}",
     "lastReviewTime": "2m ago",
@@ -59,7 +60,7 @@
   "pricing": {
     "eyebrow": "Pricing",
     "title": "Builder Edition",
-    "subtitle": "One plan. Everything in V1. No teams, no enterprise tiers.",
+    "subtitle": "The security layer for AI builders. One plan. Everything in V1.",
     "perMonth": "/month",
     "privateBeta": {
       "phase": "Private Beta",
@@ -74,12 +75,12 @@
     "planName": "Builder Edition"
   },
   "finalCta": {
-    "headline": "Get your Production Verdict",
-    "subline": "Connect your repository. SequrAI reviews every push automatically.",
-    "button": "Connect your repository"
+    "headline": "Add the security layer to your AI-built software",
+    "subline": "Connect your repository. SequrAI analyzes risks and gives you a Production Verdict before you deploy.",
+    "button": "Connect my repository"
   },
   "footer": {
-    "tagline": "Know if your AI-built application is ready for production before you deploy.",
+    "tagline": "The security layer for AI-built software — from development to before production.",
     "product": "Product",
     "company": "Company",
     "legal": "Legal",

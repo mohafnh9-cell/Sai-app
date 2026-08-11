@@ -62,7 +62,7 @@ export function Pricing() {
                 variant={plan.highlighted ? "default" : "outline"}
                 asChild
               >
-                <Link href="/signup">{t(`pricing.${plan.id}.cta`)}</Link>
+                <Link href="/connect">{t(`pricing.${plan.id}.cta`)}</Link>
               </Button>
             </div>
           ))}

@@ -1,27 +1,28 @@
 {
   "hero": {
-    "eyebrow": "Para Cursor, Claude Code y builders con IA",
-    "headline": "Descubre si tu aplicación creada con IA está lista para producción antes de desplegarla.",
-    "subline": "Conecta GitHub. Cada push se revisa automáticamente. Obtén un veredicto de producción y recomendaciones claras para mejorar tu código.",
-    "ctaPrimary": "Conectar tu repositorio",
+    "eyebrow": "La capa de seguridad para builders con IA",
+    "headline": "Tu IA construye el software. SequrAI añade la capa de seguridad.",
+    "tagline": "Construye con IA. Despliega con confianza.",
+    "subline": "Analiza tu aplicación antes de producción, detecta riesgos y problemas prioritarios y obtén un veredicto claro sobre qué debes corregir antes de desplegar.",
+    "ctaPrimary": "Conectar mi repositorio",
     "ctaSecondary": "Ver cómo funciona",
     "footnote": "Beta privada · Primer veredicto en minutos"
   },
   "features": {
-    "productionVerdict": "Veredicto de producción",
-    "continuousReviews": "Production Review",
+    "productionVerdict": "Production Verdict",
+    "continuousReviews": "Security Reviews",
     "recommendations": "Recomendaciones",
-    "history": "History",
+    "history": "Historial",
     "githubConnection": "Conexión con repositorio de GitHub"
   },
   "productProof": {
-    "eyebrow": "Producto",
-    "title": "Tu veredicto de producción, actualizado en cada push.",
-    "subtitle": "SequrAI vigila tu repositorio. Cuando tu código cambia, ves si puedes desplegar — y qué corregir primero."
+    "eyebrow": "Capa de seguridad",
+    "title": "Analiza riesgos. Obtén tu Production Verdict.",
+    "subtitle": "SequrAI revisa tu software creado con IA en cada push, identifica problemas prioritarios y te dice qué corregir antes de desplegar."
   },
   "flow": {
     "eyebrow": "Cómo funciona",
-    "title": "Conecta. Haz push. Obtén tu veredicto.",
+    "title": "Conecta. Haz push. Obtén tu capa de seguridad.",
     "steps": {
       "connect": {
         "word": "Conecta",
@@ -29,24 +30,24 @@
       },
       "push": {
         "word": "Push",
-        "line": "SequrAI ejecuta un Production Review en cada cambio de código."
+        "line": "SequrAI ejecuta Security Reviews en cada cambio de código."
       },
       "verdict": {
         "word": "Veredicto",
-        "line": "Consulta tu veredicto de producción — listo o no."
+        "line": "Consulta tu Production Verdict — qué riesgos corregir antes de desplegar."
       },
       "deploy": {
         "word": "Despliega",
-        "line": "Sigue las recomendaciones y lanza con confianza."
+        "line": "Sigue las recomendaciones y prepárate para producción con confianza."
       }
     }
   },
   "preview": {
     "verdictLabel": "Veredicto de producción",
     "verdictStatus": "Casi listo",
-    "verdictSummary": "Corrige 3 problemas antes de desplegar a producción.",
+    "verdictSummary": "Revisa qué debes corregir antes de desplegar a producción.",
     "score": "Puntuación",
-    "continuousReviews": "Production Review",
+    "continuousReviews": "Security Reviews",
     "reviewsState": "Al día",
     "lastReview": "Última revisión: {time}",
     "lastReviewTime": "hace 2 min",
@@ -59,7 +60,7 @@
   "pricing": {
     "eyebrow": "Precios",
     "title": "Builder Edition",
-    "subtitle": "Un plan. Todo lo incluido en V1. Sin equipos ni tiers enterprise.",
+    "subtitle": "La capa de seguridad para builders con IA. Un plan. Todo lo incluido en V1.",
     "perMonth": "/mes",
     "privateBeta": {
       "phase": "Beta privada",
@@ -74,12 +75,12 @@
     "planName": "Builder Edition"
   },
   "finalCta": {
-    "headline": "Obtén tu veredicto de producción",
-    "subline": "Conecta tu repositorio. SequrAI revisa cada push automáticamente.",
-    "button": "Conectar tu repositorio"
+    "headline": "Añade la capa de seguridad a tu software con IA",
+    "subline": "Conecta tu repositorio. SequrAI analiza riesgos y te da un Production Verdict antes de desplegar.",
+    "button": "Conectar mi repositorio"
   },
   "footer": {
-    "tagline": "Descubre si tu aplicación creada con IA está lista para producción antes de desplegarla.",
+    "tagline": "La capa de seguridad para software creado con IA — del desarrollo hasta antes de producción.",
     "product": "Producto",
     "company": "Empresa",
     "legal": "Legal",
