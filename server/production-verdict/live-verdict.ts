@@ -12,15 +12,50 @@ export type LiveVerdictScanRow = {
   status?: string | null;
   security_score?: number | null;
   files_analyzed?: number | null;
-  files_scanned?: number | null;
   files_discovered?: number | null;
-  total_files?: number | null;
   repository_id?: string | null;
 };
 
-/** Keep in sync with computeLiveProductionVerdict scan reads. */
+/** Keep in sync with all live-verdict scan reads. */
 export const LIVE_VERDICT_SCAN_SELECT =
-  "id, commit_sha, branch, status, security_score, files_analyzed, files_scanned, files_discovered, total_files, repository_id";
+  "id, commit_sha, branch, status, security_score, files_analyzed, files_discovered, repository_id";
+
+export async function loadLiveVerdictScanRow(
+  admin: SupabaseClient,
+  scanId: string
+): Promise<LiveVerdictScanRow | null> {
+  const { data } = await admin
+    .from("scans")
+    .select(LIVE_VERDICT_SCAN_SELECT)
+    .eq("id", scanId)
+    .maybeSingle();
+
+  return (data as LiveVerdictScanRow | null) ?? null;
+}
+
+async function resolveCanonicalLiveVerdictScan(
+  admin: SupabaseClient,
+  input: { projectId: string; persisted?: ProductionVerdictV1 | null }
+): Promise<LiveVerdictScanRow | null> {
+  const canonicalScanId = input.persisted?.scanId ?? null;
+  if (canonicalScanId) {
+    const canonical = await loadLiveVerdictScanRow(admin, canonicalScanId);
+    if (canonical) {
+      return canonical;
+    }
+  }
+
+  const { data } = await admin
+    .from("scans")
+    .select(LIVE_VERDICT_SCAN_SELECT)
+    .eq("project_id", input.projectId)
+    .eq("status", "completed")
+    .order("completed_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  return (data as LiveVerdictScanRow | null) ?? null;
+}
 
 /**
  * Recompute the production verdict from persisted scan findings so classification
@@ -31,15 +66,7 @@ export async function computeLiveProductionVerdict(
   input: { projectId: string; scan?: LiveVerdictScanRow | null; persisted?: ProductionVerdictV1 | null }
 ): Promise<ProductionVerdictV1 | null> {
   const scan =
-    input.scan ??
-    (await admin
-      .from("scans")
-      .select(LIVE_VERDICT_SCAN_SELECT)
-      .eq("project_id", input.projectId)
-      .eq("status", "completed")
-      .order("completed_at", { ascending: false })
-      .limit(1)
-      .maybeSingle()).data;
+    input.scan ?? (await resolveCanonicalLiveVerdictScan(admin, { projectId: input.projectId, persisted: input.persisted }));
 
   if (!scan?.id) {
     return input.persisted ?? null;
@@ -60,8 +87,8 @@ export async function computeLiveProductionVerdict(
     branch: scan.branch ?? null,
     scanStatus: scan.status ?? "completed",
     securityScore: scan.security_score ?? input.persisted?.score ?? null,
-    filesAnalyzed: scan.files_analyzed ?? scan.files_scanned ?? 0,
-    filesDiscovered: scan.files_discovered ?? scan.total_files ?? 0,
+    filesAnalyzed: scan.files_analyzed ?? 0,
+    filesDiscovered: scan.files_discovered ?? 0,
     findings: findings ?? [],
     previousScore: input.persisted?.previousScore ?? null,
     previousBlockersCount: input.persisted?.blockersCount,

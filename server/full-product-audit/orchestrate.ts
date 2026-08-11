@@ -286,9 +286,15 @@ export async function runFullProductAudit(
         : [];
 
   const persistedVerdict = await getCurrentProductionVerdict(admin, input.projectId);
+  const { data: freshScanRow } = await admin
+    .from("scans")
+    .select(`${LIVE_VERDICT_SCAN_SELECT}, metrics`)
+    .eq("id", scanId)
+    .maybeSingle();
+  const verdictScanRow = freshScanRow ?? scanRow;
   const liveVerdict = await computeLiveProductionVerdict(admin, {
     projectId: input.projectId,
-    scan: scanRow,
+    scan: verdictScanRow,
     persisted: persistedVerdict,
   });
   const verdict = liveVerdict ?? persistedVerdict;
@@ -317,7 +323,7 @@ export async function runFullProductAudit(
   const score = verdict?.score ?? null;
   const safeFixBlockerId = verdict?.topPriorities[0]?.id ?? null;
 
-  const metrics = (scanRow.metrics as Record<string, unknown> | null) ?? null;
+  const metrics = (verdictScanRow.metrics as Record<string, unknown> | null) ?? null;
   const rulesRun =
     typeof metrics?.rulesRun === "number"
       ? metrics.rulesRun
@@ -354,7 +360,7 @@ export async function runFullProductAudit(
       repositoryFullName: input.repositoryFullName,
     },
     reviewId: scanId,
-    commitSha: (scanRow.commit_sha as string | null) ?? null,
+    commitSha: (verdictScanRow.commit_sha as string | null) ?? null,
     verdictStatus,
     score: verdict?.score ?? null,
     counts,

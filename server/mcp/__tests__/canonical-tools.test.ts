@@ -75,14 +75,27 @@ describe("can_i_deploy", () => {
       scanId: "44444444-4444-4444-8444-444444444441",
       commitSha: "ready111",
     });
+    const verdictDbRow = verdictRow(PROJECT_1, verdict);
     const tables = baseTables({
-      production_verdicts: [verdictRow(PROJECT_1, verdict)],
+      production_verdicts: [verdictDbRow],
+      repository_scan_state: [
+        {
+          repository_id: PROJECT_1,
+          current_verdict_id: verdictDbRow.id,
+        },
+      ],
       scans: [
         {
           id: "44444444-4444-4444-8444-444444444441",
+          project_id: PROJECT_1,
           repository_id: PROJECT_1,
           status: "completed",
           commit_sha: "ready111",
+          branch: "main",
+          security_score: 96,
+          files_analyzed: 50,
+          files_discovered: 60,
+          completed_at: "2026-03-01T00:00:00.000Z",
           created_at: "2026-03-01",
         },
       ],
@@ -90,8 +103,8 @@ describe("can_i_deploy", () => {
     const result = await canIDeploy(ctxFor(createFakeAdmin(tables)), {}, t);
 
     expect(result.deploymentRecommendation).toBe("SHIP_IT");
-    // Reuses the verdict engine's own confidence field rather than inventing one.
-    expect(result.confidenceBand).toBe("low");
+    // Live recompute derives confidence from materialized scan coverage.
+    expect(result.confidenceBand).toBe("high");
     expect(result.latestReviewId).toBe("44444444-4444-4444-8444-444444444441");
     expect(result.latestReviewStatus).toBe("completed");
   });
