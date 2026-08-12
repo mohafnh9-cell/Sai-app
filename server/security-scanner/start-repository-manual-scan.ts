@@ -4,7 +4,6 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { randomUUID } from "crypto";
 import { parseGitHubRepository } from "@/lib/github/repository-service";
 import { commitsMatch } from "@/lib/repository-sync/commits-match";
-import { getScanSchedulerMode } from "@/lib/env/scan-scheduler";
 import { webScansPerRepositoryPerHourLimit } from "@/lib/env/scan-rate-limit";
 import { SCAN_JOB_INFRASTRUCTURE_MISSING } from "@/server/jobs/scan-job-infrastructure";
 import { ScanEnqueueError } from "@/server/jobs/scan-execution/enqueue-scan-run";
@@ -267,7 +266,8 @@ export async function startRepositoryManualScan(
         correlationId,
       },
       {
-        awaitInlineExecution: getScanSchedulerMode() === "inline",
+        // Match MCP review_now: queue inline work via after() instead of blocking the HTTP response.
+        awaitInlineExecution: false,
       }
     );
 

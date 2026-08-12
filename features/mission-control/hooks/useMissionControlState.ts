@@ -75,7 +75,7 @@ export function useMissionControlState(
     setActionError(null);
 
     if (state.actions.scan.label === "cta" && !state.status.repositoryConnected) {
-      await startGitHubOAuth(`/projects/${projectId}`);
+      await startGitHubOAuth(`/projects/${projectId}/mission-control`);
       return;
     }
 
@@ -84,13 +84,18 @@ export function useMissionControlState(
       const endpoint = state.flags.analysisRunIsolationEnabled
         ? `/api/projects/${projectId}/analysis-runs`
         : `/api/repositories/${projectId}/scans`;
+      const forceNew =
+        state.actions.scan.label === "rescan" ||
+        state.actions.scan.label === "retry" ||
+        state.ui.isVerdictStale;
       const payload = state.flags.analysisRunIsolationEnabled
-        ? { forceNew: true }
-        : { scanType: "full", forceNew: true };
+        ? { forceNew }
+        : { scanType: "full", forceNew };
 
       const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
         body: JSON.stringify(payload),
       });
       const body = (await response.json().catch(() => null)) as {
@@ -99,12 +104,16 @@ export function useMissionControlState(
         scanId?: string;
         scan?: { id: string };
         error?: string;
+        message?: string;
         needsReauth?: boolean;
         code?: string;
+        reused?: boolean;
+        resumed?: boolean;
       } | null;
 
       if (body?.needsReauth || body?.code === "GITHUB_REAUTH_REQUIRED") {
-        await startGitHubOAuth(`/projects/${projectId}`);
+        setActionError(body.error ?? "Reconnect GitHub to run a new review.");
+        await startGitHubOAuth(`/projects/${projectId}/mission-control`);
         return;
       }
 
@@ -118,6 +127,10 @@ export function useMissionControlState(
 
       if (!response.ok || !resolvedScanId) {
         throw new Error(body?.error ?? "Failed to start scan");
+      }
+
+      if (body?.reused || body?.resumed) {
+        setActionError(null);
       }
 
       if (navigateMissionControlToRun(projectId, resolvedScanId)) return;
