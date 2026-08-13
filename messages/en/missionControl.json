@@ -6,7 +6,7 @@
   },
   "subNav": {
     "productionVerdict": "Production Verdict",
-    "securityTest": "Test security",
+    "securityTest": "Live test",
     "verdict": "Production Verdict",
     "validate": "Test security",
     "history": "History",
@@ -27,10 +27,10 @@
       "retry": "Retry scan"
     },
     "testSecurity": {
-      "title": "Test security",
-      "description": "Simulate real attacks against your application.",
-      "cta": "Test security",
-      "running": "Testing security..."
+      "title": "Live test",
+      "description": "Connect your application URL and check whether verdict risks are exploitable in production.",
+      "cta": "Continue with live test",
+      "running": "Running live test..."
     },
     "aiFix": {
       "title": "Fix with AI",
@@ -55,7 +55,15 @@
       "label": "Analysis run",
       "hint": "Production Verdict, security test, and AI fixes reflect this run.",
       "noScore": "—",
-      "runOption": "{sha} · {score} · {status}"
+      "runOption": "{sha} · {score} · {status}",
+      "runStatus": {
+        "completed": "Completed",
+        "running": "Running",
+        "failed": "Failed",
+        "queued": "Queued",
+        "cancelled": "Cancelled",
+        "unknown": "No verdict"
+      }
     }
   },
   "header": {

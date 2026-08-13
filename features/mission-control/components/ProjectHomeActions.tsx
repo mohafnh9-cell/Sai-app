@@ -7,6 +7,7 @@ import { VerdictStatusBadge } from "@/features/production-verdict/components/Ver
 import type { MissionControlState } from "@/features/mission-control/types/mission-control-state";
 import { useI18n } from "@/lib/i18n/client";
 import { formatRelativeLocalized } from "@/lib/i18n/format";
+import { formatPriorityTitleForLocale } from "@/lib/i18n/priority-display";
 import { Button } from "@/components/ui/button";
 import { shouldShowScore } from "@/brain/production-verdict/status-ui";
 
@@ -203,7 +204,9 @@ export function ProjectHomeActions({
               {t("projectHome.verdictSummary.mainBlocker")}
             </p>
             <p className="text-base font-medium leading-snug">
-              {topBlocker?.title ?? t("projectHome.verdictSummary.noBlocker")}
+              {topBlocker
+                ? formatPriorityTitleForLocale(topBlocker, locale)
+                : t("projectHome.verdictSummary.noBlocker")}
             </p>
           </div>
 

@@ -1,8 +1,8 @@
 {
-  "title": "History",
-  "subtitle": "Cómo ha cambiado tu Production Verdict con el tiempo.",
+  "title": "Historial",
+  "subtitle": "Cómo ha cambiado tu veredicto de producción con el tiempo.",
   "viewJourney": "Ver historial completo",
-  "summaryTitle": "Production Verdict History",
+  "summaryTitle": "Historial del veredicto",
   "currentScore": "Score actual",
   "previousScore": "Anterior",
   "bestScore": "Mejor score",
@@ -18,7 +18,7 @@
   "blockersIntroduced": "Bloqueadores introducidos",
   "netImprovement": "Mejora neta",
   "currentBlockers": "Bloqueadores actuales",
-  "reviewHistory": "Production Verdict History",
+  "reviewHistory": "Historial del veredicto",
   "areasProgress": "Progreso por área",
   "previewTitle": "Historial reciente",
   "scoreIncreased": "El score aumentó {points} puntos.",
@@ -28,7 +28,7 @@
   "resolvedLabel": "Resueltos",
   "introducedLabel": "Introducidos",
   "noNewBlockers": "Sin nuevos bloqueadores.",
-  "emptyTitle": "Tu Production Verdict History comienza con tu primera revisión.",
+  "emptyTitle": "Tu historial comienza con tu primera revisión.",
   "emptyCta": "Ejecutar primera revisión",
   "oneVerdictTitle": "Completa otra revisión para empezar a ver tu evolución.",
   "partialData": "No se pudieron cargar algunos datos históricos.",
@@ -66,7 +66,7 @@
     "technicalReview": "Se requiere revisión técnica"
   },
   "milestones": {
-    "firstVerdict": "Primer Production Verdict",
+    "firstVerdict": "Primer veredicto de producción",
     "firstBlockerResolved": "Primer bloqueador de producción resuelto",
     "score50": "Score alcanzó 50",
     "score70": "Score alcanzó 70",

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { DynamicTargetAuthorizationStatus } from "@/server/ai-red-team/authorization/dynamic-target-authorization-types";
 import { normalizeHttpUrlInput } from "@/lib/url/normalize-http-url";
+import { useI18n } from "@/lib/i18n/client";
 
 export function DynamicTargetAuthorizationPanel({
   projectId,
@@ -18,6 +19,7 @@ export function DynamicTargetAuthorizationPanel({
   skipTargetVerification?: boolean;
 }) {
   const router = useRouter();
+  const { t } = useI18n("attackCenter");
   const [status, setStatus] = useState(initialStatus);
   const [targetOrigin, setTargetOrigin] = useState(initialStatus?.targetOrigin ?? "");
   const [instructions, setInstructions] = useState<string | null>(
@@ -37,10 +39,19 @@ export function DynamicTargetAuthorizationPanel({
     "idle" | "checking" | "verified" | "preparing" | "testing" | "analyzing"
   >("idle");
 
+  const runChecksLabel =
+    phase === "preparing"
+      ? t("dynamicTarget.preparing")
+      : phase === "testing"
+        ? t("dynamicTarget.testing")
+        : phase === "analyzing"
+          ? t("dynamicTarget.analyzing")
+          : t("dynamicTarget.runChecks");
+
   async function refreshStatus() {
     const response = await fetch(`/api/projects/${projectId}/dynamic-target-authorization`);
     if (!response.ok) {
-      setError("No se pudo cargar el estado de autorización.");
+      setError(t("dynamicTarget.errors.loadStatus"));
       return;
     }
     const body = (await response.json()) as { status: DynamicTargetAuthorizationStatus };
@@ -68,14 +79,12 @@ export function DynamicTargetAuthorizationPanel({
       awaitingScopeApproval?: boolean;
     };
     if (!response.ok) {
-      throw new Error(body.message ?? body.error ?? "No se pudo completar la auditoría.");
+      throw new Error(body.message ?? body.error ?? t("dynamicTarget.errors.auditFailed"));
     }
     if (body.awaitingScopeApproval) {
       setAwaitingScopeApproval(true);
       setPhase("verified");
-      setMessage(
-        "Necesitamos actualizar la autorización de seguridad para comprobar algunos endpoints de tu aplicación."
-      );
+      setMessage(t("dynamicTarget.messages.scopeUpdateNeeded"));
       router.refresh();
       return;
     }
@@ -83,10 +92,10 @@ export function DynamicTargetAuthorizationPanel({
     setPhase(body.dynamicTestsExecuted ? "analyzing" : "verified");
     setMessage(
       dynamicVerificationDecision === "static_only"
-        ? "Análisis de código completado. No se realizaron pruebas dinámicas por tu elección."
+        ? t("dynamicTarget.messages.staticOnlyComplete")
         : body.timedOut
-          ? "La auditoría continúa procesándose. Puedes consultar el progreso en esta pantalla."
-          : "Auditoría completada. Los resultados ya incluyen las comprobaciones autorizadas."
+          ? t("dynamicTarget.messages.auditContinuing")
+          : t("dynamicTarget.messages.auditComplete")
     );
     router.refresh();
   }
@@ -94,7 +103,7 @@ export function DynamicTargetAuthorizationPanel({
   async function checkApplication() {
     const normalizedOrigin = normalizeHttpUrlInput(targetOrigin);
     if (!normalizedOrigin.trim()) {
-      setError("Introduce la URL de tu aplicación.");
+      setError(t("dynamicTarget.errors.missingUrl"));
       return;
     }
     if (normalizedOrigin !== targetOrigin) {
@@ -117,7 +126,7 @@ export function DynamicTargetAuthorizationPanel({
         manualVerificationRequired?: boolean;
       };
       if (!response.ok) {
-        setError(body.error ?? "No se pudo comprobar la aplicación.");
+        setError(body.error ?? t("dynamicTarget.errors.checkFailed"));
         return;
       }
       if (body.verified) {
@@ -126,16 +135,16 @@ export function DynamicTargetAuthorizationPanel({
         setPhase("verified");
         setMessage(
           body.authorized
-            ? "Aplicación verificada y autorizada."
-            : "Aplicación verificada."
+            ? t("dynamicTarget.messages.verifiedAndAuthorized")
+            : t("dynamicTarget.messages.verifiedOnly")
         );
       } else {
         setManualFallback(true);
-        setMessage("Necesitamos confirmar que tienes acceso a esta aplicación.");
+        setMessage(t("dynamicTarget.messages.confirmAccess"));
       }
     } catch (checkError) {
       setError(
-        checkError instanceof Error ? checkError.message : "No se pudo comprobar la aplicación."
+        checkError instanceof Error ? checkError.message : t("dynamicTarget.errors.checkFailed")
       );
     } finally {
       setLoading(false);
@@ -161,14 +170,16 @@ export function DynamicTargetAuthorizationPanel({
         instructions?: { instructions?: string };
       };
       if (!response.ok) {
-        setError(body.error ?? "No se pudo preparar la verificación.");
+        setError(body.error ?? t("dynamicTarget.errors.prepareVerification"));
         return;
       }
       setInstructions(body.instructions?.instructions ?? null);
-      setMessage("Sigue esta última comprobación y después pulsa Verificar aplicación.");
+      setMessage(t("dynamicTarget.messages.followManualSteps"));
     } catch (manualError) {
       setError(
-        manualError instanceof Error ? manualError.message : "No se pudo preparar la verificación."
+        manualError instanceof Error
+          ? manualError.message
+          : t("dynamicTarget.errors.prepareVerification")
       );
     } finally {
       setLoading(false);
@@ -178,7 +189,7 @@ export function DynamicTargetAuthorizationPanel({
   async function runSecurityCheckOnUrl() {
     const normalizedOrigin = normalizeHttpUrlInput(targetOrigin);
     if (!normalizedOrigin.trim()) {
-      setError("Introduce la URL de tu aplicación.");
+      setError(t("dynamicTarget.errors.missingUrl"));
       return;
     }
     if (normalizedOrigin !== targetOrigin) {
@@ -206,7 +217,7 @@ export function DynamicTargetAuthorizationPanel({
         reason?: string | null;
       };
       if (!response.ok) {
-        setError(body.error ?? "No se pudo comprobar la aplicación.");
+        setError(body.error ?? t("dynamicTarget.errors.checkFailed"));
         return;
       }
 
@@ -217,28 +228,24 @@ export function DynamicTargetAuthorizationPanel({
         setInstructions(null);
         setMessage(
           body.verificationSkipped
-            ? "Comprobando seguridad de la URL..."
-            : "Aplicación verificada. Preparando comprobaciones de seguridad..."
+            ? t("dynamicTarget.messages.checkingSecurity")
+            : t("dynamicTarget.messages.verifiedPreparing")
         );
         await runFullAudit("authorize");
       } else if (body.manualVerificationRequired) {
         setManualFallback(true);
-        setMessage(
-          "Para proteger a otros usuarios de pruebas no autorizadas necesitamos una última comprobación."
-        );
+        setMessage(t("dynamicTarget.messages.manualVerificationNeeded"));
       } else if (body.reason === "production_target_not_supported") {
-        setError(
-          "Las pruebas dinámicas en producción requieren configuración adicional. Usa un despliegue Preview o Staging."
-        );
+        setError(t("dynamicTarget.errors.productionNotSupported"));
       } else {
-        setError("No se pudo autorizar esta aplicación de forma segura.");
+        setError(t("dynamicTarget.errors.unsafeAuthorization"));
       }
       await refreshStatus();
     } catch (authorizationError) {
       setError(
         authorizationError instanceof Error
           ? authorizationError.message
-          : "No se pudo completar la comprobación."
+          : t("dynamicTarget.errors.authorizationFailed")
       );
     } finally {
       setLoading(false);
@@ -248,7 +255,7 @@ export function DynamicTargetAuthorizationPanel({
 
   async function runAuthorizationFlow() {
     if (!targetOrigin.trim()) {
-      setError("Introduce la URL de tu aplicación.");
+      setError(t("dynamicTarget.errors.missingUrl"));
       return;
     }
     setLoading(true);
@@ -272,32 +279,28 @@ export function DynamicTargetAuthorizationPanel({
         reason?: string | null;
       };
       if (!response.ok) {
-        setError(body.error ?? "No se pudo comprobar la aplicación.");
+        setError(body.error ?? t("dynamicTarget.errors.checkFailed"));
         return;
       }
 
       if (body.authorized) {
         setPhase("verified");
-        setMessage("Aplicación verificada. Preparando comprobaciones de seguridad...");
+        setMessage(t("dynamicTarget.messages.verifiedPreparing"));
         setInstructions(null);
         await runFullAudit("authorize");
       } else if (body.manualVerificationRequired) {
-        setMessage(
-          "Para proteger a otros usuarios de pruebas no autorizadas necesitamos una última comprobación."
-        );
+        setMessage(t("dynamicTarget.messages.manualVerificationNeeded"));
       } else if (body.reason === "production_target_not_supported") {
-        setError(
-          "La aplicación está vinculada, pero las pruebas dinámicas están desactivadas en producción. Usa un despliegue Preview o Staging."
-        );
+        setError(t("dynamicTarget.errors.productionLinkedDisabled"));
       } else {
-        setError("No se pudo autorizar esta aplicación de forma segura.");
+        setError(t("dynamicTarget.errors.unsafeAuthorization"));
       }
       await refreshStatus();
     } catch (authorizationError) {
       setError(
         authorizationError instanceof Error
           ? authorizationError.message
-          : "No se pudo completar la autorización."
+          : t("dynamicTarget.errors.authorizeFailed")
       );
     } finally {
       setLoading(false);
@@ -307,7 +310,7 @@ export function DynamicTargetAuthorizationPanel({
 
   async function approveScopeExpansion() {
     if (!targetOrigin.trim() && !status?.targetOrigin) {
-      setError("Introduce la URL de tu aplicación.");
+      setError(t("dynamicTarget.errors.missingUrl"));
       return;
     }
     setLoading(true);
@@ -323,20 +326,15 @@ export function DynamicTargetAuthorizationPanel({
       });
       const body = (await response.json()) as { error?: string; message?: string };
       if (!response.ok) {
-        setError(body.error ?? "No se pudo actualizar la autorización.");
+        setError(body.error ?? t("dynamicTarget.errors.scopeFailed"));
         return;
       }
       setAwaitingScopeApproval(false);
-      setMessage(
-        body.message ??
-          "Vamos a comprobar las rutas necesarias para verificar estas vulnerabilidades."
-      );
+      setMessage(body.message ?? t("dynamicTarget.messages.scopeRoutesHint"));
       await runFullAudit("authorize");
     } catch (scopeError) {
       setError(
-        scopeError instanceof Error
-          ? scopeError.message
-          : "No se pudo actualizar la autorización."
+        scopeError instanceof Error ? scopeError.message : t("dynamicTarget.errors.scopeFailed")
       );
     } finally {
       setLoading(false);
@@ -345,7 +343,7 @@ export function DynamicTargetAuthorizationPanel({
 
   async function verifyApplication() {
     if (!targetOrigin.trim()) {
-      setError("Introduce la URL de tu aplicación.");
+      setError(t("dynamicTarget.errors.missingUrl"));
       return;
     }
     setLoading(true);
@@ -359,7 +357,7 @@ export function DynamicTargetAuthorizationPanel({
       });
       const verifyBody = (await verify.json()) as { verified?: boolean; error?: string };
       if (!verify.ok || !verifyBody.verified) {
-        setMessage("La verificación falló. Revisa el código e inténtalo de nuevo.");
+        setMessage(t("dynamicTarget.messages.verificationFailed"));
         return;
       }
 
@@ -369,19 +367,19 @@ export function DynamicTargetAuthorizationPanel({
         body: JSON.stringify({ action: "approve", targetOrigin, environmentType: "staging" }),
       });
       if (approve.ok) {
-        setMessage("Aplicación verificada. Preparando comprobaciones de seguridad...");
+        setMessage(t("dynamicTarget.messages.verifiedPreparing"));
         setInstructions(null);
         setOwnershipConfirmed(true);
         await runFullAudit("authorize");
       } else {
-        setMessage("Verificación completada. Autoriza las comprobaciones para continuar.");
+        setMessage(t("dynamicTarget.messages.verifyThenAuthorize"));
       }
       await refreshStatus();
     } catch (verificationError) {
       setError(
         verificationError instanceof Error
           ? verificationError.message
-          : "No se pudo verificar la aplicación."
+          : t("dynamicTarget.errors.verifyFailed")
       );
     } finally {
       setLoading(false);
@@ -395,30 +393,28 @@ export function DynamicTargetAuthorizationPanel({
   return (
     <section className="rounded-xl border bg-card p-6 space-y-4">
       <div>
-        <h2 className="text-lg font-semibold">Comprobación de seguridad en vivo</h2>
+        <h2 className="text-lg font-semibold">{t("dynamicTarget.title")}</h2>
         <p className="text-sm text-muted-foreground">
           {skipTargetVerification
-            ? "Introduce la URL de tu aplicación y SequrAI comprobará si las vulnerabilidades detectadas son explotables."
-            : "SequrAI ha encontrado posibles vulnerabilidades en tu código. Podemos comprobar automáticamente si realmente pueden explotarse en tu aplicación."}
+            ? t("dynamicTarget.descriptionSkipVerification")
+            : t("dynamicTarget.descriptionDefault")}
         </p>
       </div>
 
       {status.authorized ? (
         <div className="space-y-3 text-sm">
-          <p className="font-medium text-emerald-600">Aplicación verificada</p>
-          <p>Aplicación: {status.targetOrigin}</p>
+          <p className="font-medium text-emerald-600">{t("dynamicTarget.verified")}</p>
+          <p>{t("dynamicTarget.applicationLabel", { url: status.targetOrigin ?? "" })}</p>
           {awaitingScopeApproval ? (
             <>
-              <p>
-                Vamos a comprobar las rutas necesarias para verificar estas vulnerabilidades.
-              </p>
+              <p>{t("dynamicTarget.scopeExpansionHint")}</p>
               <Button disabled={loading} onClick={() => void approveScopeExpansion()}>
-                Autorizar comprobación
+                {t("dynamicTarget.authorizeScope")}
               </Button>
             </>
           ) : (
             <>
-              <p>SequrAI ya puede realizar las comprobaciones de seguridad autorizadas.</p>
+              <p>{t("dynamicTarget.readyToRun")}</p>
               <Button
                 disabled={loading}
                 onClick={() => {
@@ -428,19 +424,13 @@ export function DynamicTargetAuthorizationPanel({
                       setError(
                         auditError instanceof Error
                           ? auditError.message
-                          : "No se pudo completar la auditoría."
+                          : t("dynamicTarget.errors.auditFailed")
                       )
                     )
                     .finally(() => setLoading(false));
                 }}
               >
-                {phase === "preparing"
-                  ? "Preparando comprobaciones..."
-                  : phase === "testing"
-                    ? "Ejecutando pruebas controladas..."
-                    : phase === "analyzing"
-                      ? "Analizando resultados..."
-                      : "Ejecutar comprobaciones"}
+                {runChecksLabel}
               </Button>
             </>
           )}
@@ -448,15 +438,13 @@ export function DynamicTargetAuthorizationPanel({
       ) : ownershipConfirmed ? (
         <div className="space-y-4">
           <div className="rounded-lg border bg-muted/20 p-4 text-sm space-y-2">
-            <p className="font-medium text-emerald-600">Aplicación verificada</p>
-            <p>Aplicación: {targetOrigin}</p>
-            <p className="text-muted-foreground">
-              Podemos realizar pruebas de seguridad controladas sobre esta aplicación.
-            </p>
+            <p className="font-medium text-emerald-600">{t("dynamicTarget.verified")}</p>
+            <p>{t("dynamicTarget.applicationLabel", { url: targetOrigin })}</p>
+            <p className="text-muted-foreground">{t("dynamicTarget.canRunControlledTests")}</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Button disabled={loading} onClick={() => runAuthorizationFlow()}>
-              {phase === "preparing" ? "Preparando comprobaciones..." : "Autorizar y comprobar"}
+              {phase === "preparing" ? t("dynamicTarget.preparing") : t("dynamicTarget.authorizeAndCheck")}
             </Button>
             <Button
               variant="outline"
@@ -468,44 +456,40 @@ export function DynamicTargetAuthorizationPanel({
                     setError(
                       auditError instanceof Error
                         ? auditError.message
-                        : "No se pudo completar el análisis de código."
+                        : t("dynamicTarget.errors.staticAnalysisFailed")
                     )
                   )
                   .finally(() => setLoading(false));
               }}
             >
-              Solo analizar el código
+              {t("dynamicTarget.staticOnly")}
             </Button>
           </div>
         </div>
       ) : (
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="target-origin">URL de la aplicación</Label>
+            <Label htmlFor="target-origin">{t("dynamicTarget.urlLabel")}</Label>
             <Input
               id="target-origin"
-              placeholder="https://miapp.vercel.app"
+              placeholder={t("dynamicTarget.urlPlaceholder")}
               value={targetOrigin}
               onChange={(event) => setTargetOrigin(event.target.value)}
             />
-            <p className="text-xs text-muted-foreground">
-              Ejemplos: https://miapp.com, https://miapp.vercel.app, https://miapp.netlify.app
-            </p>
+            <p className="text-xs text-muted-foreground">{t("dynamicTarget.urlHint")}</p>
           </div>
 
           {manualFallback && !skipTargetVerification ? (
             <div className="rounded-lg border bg-muted/20 p-4 text-sm space-y-3">
-              <p className="font-medium">Necesitamos confirmar que tienes acceso a esta aplicación.</p>
-              <p className="text-muted-foreground">
-                Puedes verificarla de forma segura para que SequrAI pueda realizar las pruebas.
-              </p>
+              <p className="font-medium">{t("dynamicTarget.manualVerificationTitle")}</p>
+              <p className="text-muted-foreground">{t("dynamicTarget.manualVerificationBody")}</p>
               {!instructions ? (
                 <Button
                   variant="outline"
                   disabled={loading}
                   onClick={() => void startManualVerification()}
                 >
-                  Verificar aplicación
+                  {t("dynamicTarget.verifyApplication")}
                 </Button>
               ) : null}
             </div>
@@ -514,12 +498,9 @@ export function DynamicTargetAuthorizationPanel({
           {instructions && !skipTargetVerification ? (
             <details className="rounded-lg border bg-muted/20 p-4 text-sm">
               <summary className="cursor-pointer font-medium">
-                Necesito ayuda para verificar la aplicación
+                {t("dynamicTarget.manualHelpSummary")}
               </summary>
-              <p className="mt-3 text-muted-foreground">
-                Esta comprobación manual solo es necesaria porque no encontramos una conexión
-                autenticada con el proveedor del despliegue.
-              </p>
+              <p className="mt-3 text-muted-foreground">{t("dynamicTarget.manualHelpBody")}</p>
               <pre className="mt-3 whitespace-pre-wrap text-xs">{instructions}</pre>
             </details>
           ) : null}
@@ -530,14 +511,14 @@ export function DynamicTargetAuthorizationPanel({
               onClick={() => void (skipTargetVerification ? runSecurityCheckOnUrl() : checkApplication())}
             >
               {phase === "checking"
-                ? "Comprobando..."
+                ? t("dynamicTarget.checking")
                 : skipTargetVerification
-                  ? "Comprobar seguridad de esta URL"
-                  : "Continuar"}
+                  ? t("dynamicTarget.checkSecurityOnUrl")
+                  : t("dynamicTarget.continue")}
             </Button>
             {!skipTargetVerification && instructions ? (
               <Button variant="outline" disabled={loading} onClick={() => verifyApplication()}>
-                Verificar aplicación
+                {t("dynamicTarget.verifyApplication")}
               </Button>
             ) : (
               <Button
@@ -550,13 +531,13 @@ export function DynamicTargetAuthorizationPanel({
                       setError(
                         auditError instanceof Error
                           ? auditError.message
-                          : "No se pudo completar el análisis de código."
+                          : t("dynamicTarget.errors.staticAnalysisFailed")
                       )
                     )
                     .finally(() => setLoading(false));
                 }}
               >
-                Solo analizar el código
+                {t("dynamicTarget.staticOnly")}
               </Button>
             )}
           </div>

@@ -1,11 +1,11 @@
 {
-  "title": "Probar seguridad",
+  "title": "Prueba en vivo",
   "estimatedTime": "Tiempo estimado:",
   "progressSteps": {
     "choose": "Escanear código",
-    "run": "Production Verdict",
-    "fix": "Probar seguridad",
-    "verify": "Probar seguridad"
+    "run": "Veredicto de producción",
+    "fix": "Conectar aplicación",
+    "verify": "Ejecutar pruebas"
   },
   "estimatedDuration": "Unos 2 minutos",
   "safetyNote": "Nada en producción se modificará. SequrAI solo ejecuta simulaciones seguras.",
@@ -13,7 +13,7 @@
   "emptyState": {
     "headline": "Valida tus bloqueadores de despliegue",
     "description": "SequrAI reproduce cada problema de forma segura para que puedas confirmarlo antes de corregirlo.",
-    "primaryAction": "Volver a Production Verdict"
+    "primaryAction": "Volver al veredicto"
   },
   "phases": {
     "needs_review": {
@@ -31,7 +31,7 @@
     "ready": {
       "headline": "Tu veredicto de producción está listo",
       "description": "Revisa tus bloqueadores de despliegue y valida los más importantes.",
-      "primaryAction": "Probar seguridad",
+      "primaryAction": "Continuar con prueba en vivo",
       "waitMessage": ""
     },
     "running": {
@@ -55,13 +55,13 @@
     "protected": {
       "headline": "Listo para producción",
       "description": "Protección verificada. El problema ya no se reproduce.",
-      "primaryAction": "Volver a Production Verdict",
+      "primaryAction": "Volver al veredicto",
       "waitMessage": ""
     },
     "completed_clean": {
       "headline": "Listo para producción",
       "description": "No se reprodujeron problemas durante la validación. Tu aplicación parece segura para desplegar.",
-      "primaryAction": "Volver a Production Verdict",
+      "primaryAction": "Volver al veredicto",
       "waitMessage": ""
     }
   },

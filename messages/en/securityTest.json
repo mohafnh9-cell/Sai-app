@@ -3,9 +3,9 @@
   "estimatedTime": "Estimated time:",
   "progressSteps": {
     "choose": "Scan code",
-    "run": "Production Verdict",
-    "fix": "Test security",
-    "verify": "Test security"
+    "run": "Production verdict",
+    "fix": "Connect your app",
+    "verify": "Run live tests"
   },
   "estimatedDuration": "About 2 minutes",
   "safetyNote": "Nothing in production will be modified. SequrAI only runs safe simulations.",

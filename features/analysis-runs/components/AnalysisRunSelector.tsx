@@ -3,6 +3,7 @@
 import { useCallback } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useI18n } from "@/lib/i18n/client";
+import { formatAnalysisRunStatusLabel } from "@/lib/i18n/analysis-run-status";
 import type { AnalysisRunListItem } from "@/server/analysis-runs/list-analysis-runs";
 
 function shortSha(sha: string | null): string {
@@ -12,15 +13,17 @@ function shortSha(sha: string | null): string {
 
 function formatRunLabel(
   run: AnalysisRunListItem,
-  t: (key: string, vars?: Record<string, string | number>) => string
+  t: (key: string, vars?: Record<string, string | number>) => string,
+  tVerdict: (key: string, vars?: Record<string, string | number>) => string
 ): string {
   const score =
     run.securityScore != null ? `${run.securityScore}/100` : t("analysisRun.selector.noScore");
   const statusKey = run.verdictStatus ?? run.status;
+  const status = formatAnalysisRunStatusLabel(statusKey, t, tVerdict);
   return t("analysisRun.selector.runOption", {
     sha: shortSha(run.commitSha),
     score,
-    status: statusKey,
+    status,
   });
 }
 
@@ -35,6 +38,7 @@ export function AnalysisRunSelector({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { t } = useI18n("missionControl");
+  const { t: tVerdict } = useI18n("verdict");
 
   const onChange = useCallback(
     (runId: string) => {
@@ -65,7 +69,7 @@ export function AnalysisRunSelector({
       >
         {runs.map((run) => (
           <option key={run.runId} value={run.runId}>
-            {formatRunLabel(run, t)}
+            {formatRunLabel(run, t, tVerdict)}
           </option>
         ))}
       </select>

@@ -1,7 +1,7 @@
 {
   "loading": "Cargando…",
   "disabled": {
-    "headline": "Las pruebas de seguridad no están disponibles",
+    "headline": "Las pruebas en vivo no están disponibles",
     "description": "Pide a tu administrador que active esta función para tu proyecto.",
     "action": "No disponible"
   },
@@ -12,9 +12,9 @@
     "showDetails": "Detalles técnicos"
   },
   "back": "← Volver",
-  "deployWithConfidence": "Volver a Production Verdict",
+  "deployWithConfidence": "Volver al veredicto",
   "campaign": {
-    "title": "Probar seguridad",
+    "title": "Prueba en vivo",
     "checksDone": "{done} de {total} comprobaciones completadas",
     "testDetails": "Detalles de la prueba",
     "show": "Mostrar",
@@ -22,7 +22,7 @@
     "technicalDetails": "Detalles técnicos"
   },
   "execution": {
-    "title": "Prueba de seguridad",
+    "title": "Prueba en vivo",
     "inProgress": "Prueba en curso",
     "waitMessage": "Espera mientras termina esta comprobación.",
     "technicalDetails": "Detalles técnicos"
@@ -52,15 +52,74 @@
     "back": "← Volver"
   },
   "apiErrors": {
-    "storageUnavailable": "El almacenamiento de Security Test no está disponible. Aplica las migraciones ASE en Supabase.",
-    "refreshFailed": "Security Test no pudo actualizarse.",
+    "storageUnavailable": "El almacenamiento de pruebas no está disponible. Aplica las migraciones ASE en Supabase.",
+    "refreshFailed": "No se pudo actualizar la prueba en vivo.",
     "simulationUnavailable": "El almacenamiento de simulación no está disponible en este entorno.",
-    "loadFailed": "Security Test no pudo cargar los datos de la campaña.",
-    "invalidData": "Security Test recibió datos persistidos inválidos.",
-    "requestFailed": "La solicitud de Security Test falló."
+    "loadFailed": "No se pudieron cargar los datos de la campaña.",
+    "invalidData": "Se recibieron datos inválidos.",
+    "requestFailed": "La solicitud de prueba falló."
   },
   "page": {
-    "title": "Prueba de seguridad",
-    "backToMissionControl": "Production Verdict"
+    "title": "Prueba en vivo",
+    "backToMissionControl": "Veredicto"
+  },
+  "dynamicTarget": {
+    "title": "Comprobación de seguridad en vivo",
+    "descriptionDefault": "SequrAI ha encontrado posibles vulnerabilidades en tu código. Podemos comprobar automáticamente si realmente pueden explotarse en tu aplicación.",
+    "descriptionSkipVerification": "Introduce la URL de tu aplicación y SequrAI comprobará si las vulnerabilidades detectadas son explotables.",
+    "verified": "Aplicación verificada",
+    "applicationLabel": "Aplicación: {url}",
+    "readyToRun": "SequrAI ya puede realizar las comprobaciones de seguridad autorizadas.",
+    "scopeExpansionHint": "Vamos a comprobar las rutas necesarias para verificar estas vulnerabilidades.",
+    "authorizeScope": "Autorizar comprobación",
+    "runChecks": "Ejecutar comprobaciones",
+    "preparing": "Preparando comprobaciones...",
+    "testing": "Ejecutando pruebas controladas...",
+    "analyzing": "Analizando resultados...",
+    "canRunControlledTests": "Podemos realizar pruebas de seguridad controladas sobre esta aplicación.",
+    "authorizeAndCheck": "Autorizar y comprobar",
+    "staticOnly": "Solo analizar el código",
+    "urlLabel": "URL de la aplicación",
+    "urlPlaceholder": "https://miapp.vercel.app",
+    "urlHint": "Ejemplos: https://miapp.com, https://miapp.vercel.app, https://miapp.netlify.app",
+    "manualVerificationTitle": "Necesitamos confirmar que tienes acceso a esta aplicación.",
+    "manualVerificationBody": "Puedes verificarla de forma segura para que SequrAI pueda realizar las pruebas.",
+    "verifyApplication": "Verificar aplicación",
+    "manualHelpSummary": "Necesito ayuda para verificar la aplicación",
+    "manualHelpBody": "Esta comprobación manual solo es necesaria porque no encontramos una conexión autenticada con el proveedor del despliegue.",
+    "checking": "Comprobando...",
+    "checkSecurityOnUrl": "Comprobar seguridad de esta URL",
+    "continue": "Continuar",
+    "errors": {
+      "loadStatus": "No se pudo cargar el estado de autorización.",
+      "auditFailed": "No se pudo completar la auditoría.",
+      "checkFailed": "No se pudo comprobar la aplicación.",
+      "authorizationFailed": "No se pudo completar la comprobación.",
+      "authorizeFailed": "No se pudo completar la autorización.",
+      "scopeFailed": "No se pudo actualizar la autorización.",
+      "verifyFailed": "No se pudo verificar la aplicación.",
+      "prepareVerification": "No se pudo preparar la verificación.",
+      "missingUrl": "Introduce la URL de tu aplicación.",
+      "productionNotSupported": "Las pruebas dinámicas en producción requieren configuración adicional. Usa un despliegue Preview o Staging.",
+      "productionLinkedDisabled": "La aplicación está vinculada, pero las pruebas dinámicas están desactivadas en producción. Usa un despliegue Preview o Staging.",
+      "unsafeAuthorization": "No se pudo autorizar esta aplicación de forma segura.",
+      "staticAnalysisFailed": "No se pudo completar el análisis de código."
+    },
+    "messages": {
+      "checkingSecurity": "Comprobando seguridad de la URL...",
+      "verifiedPreparing": "Aplicación verificada. Preparando comprobaciones de seguridad...",
+      "manualVerificationNeeded": "Para proteger a otros usuarios de pruebas no autorizadas necesitamos una última comprobación.",
+      "scopeUpdateNeeded": "Necesitamos actualizar la autorización de seguridad para comprobar algunos endpoints de tu aplicación.",
+      "scopeRoutesHint": "Vamos a comprobar las rutas necesarias para verificar estas vulnerabilidades.",
+      "verificationFailed": "La verificación falló. Revisa el código e inténtalo de nuevo.",
+      "verifyThenAuthorize": "Verificación completada. Autoriza las comprobaciones para continuar.",
+      "verifiedAndAuthorized": "Aplicación verificada y autorizada.",
+      "verifiedOnly": "Aplicación verificada.",
+      "confirmAccess": "Necesitamos confirmar que tienes acceso a esta aplicación.",
+      "followManualSteps": "Sigue esta última comprobación y después pulsa Verificar aplicación.",
+      "staticOnlyComplete": "Análisis de código completado. No se realizaron pruebas dinámicas por tu elección.",
+      "auditContinuing": "La auditoría continúa procesándose. Puedes consultar el progreso en esta pantalla.",
+      "auditComplete": "Auditoría completada. Los resultados ya incluyen las comprobaciones autorizadas."
+    }
   }
 }

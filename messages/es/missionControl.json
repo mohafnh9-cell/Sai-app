@@ -1,14 +1,14 @@
 {
   "page": {
-    "title": "Production Verdict",
+    "title": "Veredicto de producción",
     "backToMissionControl": "Proyectos",
     "backToProjects": "Proyectos"
   },
   "subNav": {
-    "productionVerdict": "Production Verdict",
-    "securityTest": "Probar seguridad",
-    "verdict": "Production Verdict",
-    "validate": "Probar seguridad",
+    "productionVerdict": "Veredicto",
+    "securityTest": "Prueba en vivo",
+    "verdict": "Veredicto",
+    "validate": "Prueba en vivo",
     "history": "Historial",
     "technical": "Técnico",
     "ariaLabel": "Secciones del proyecto"
@@ -20,17 +20,17 @@
     "lastAnalysisNever": "Aún no analizado",
     "scanCode": {
       "title": "Escanear código",
-      "description": "Analiza el repositorio y genera un nuevo Production Verdict.",
+      "description": "Analiza el repositorio y genera un nuevo veredicto de producción.",
       "cta": "Escanear código",
       "running": "Analizando...",
       "rescan": "Volver a escanear",
       "retry": "Reintentar análisis"
     },
     "testSecurity": {
-      "title": "Probar seguridad",
-      "description": "Simula ataques reales contra tu aplicación.",
-      "cta": "Probar seguridad",
-      "running": "Probando seguridad..."
+      "title": "Prueba en vivo",
+      "description": "Conecta la URL de tu aplicación y comprueba si los riesgos del veredicto son explotables en producción.",
+      "cta": "Continuar con prueba en vivo",
+      "running": "Ejecutando prueba en vivo..."
     },
     "aiFix": {
       "title": "Corregir con IA",
@@ -39,23 +39,31 @@
       "openInCursor": "Abrir en tu agente"
     },
     "verdictSummary": {
-      "title": "Production Verdict",
-      "score": "Production Score",
+      "title": "Veredicto de producción",
+      "score": "Puntuación de producción",
       "mainBlocker": "Bloqueador principal",
       "noBlocker": "Sin bloqueadores",
-      "viewVerdict": "Ver Production Verdict",
+      "viewVerdict": "Ver detalle del veredicto",
       "scanAgain": "Escanear código de nuevo"
     }
   },
   "analysisRun": {
     "historicalBanner": "Estás viendo un análisis anterior. Inicia una nueva revisión para actualizar el análisis activo.",
     "recoveryBanner": "Mostrando la vista de producción actual sin filtrar por análisis. Elige un run en el selector cuando quieras.",
-    "autoRecoveryBanner": "Este run de análisis aún no tiene Production Verdict. Mostramos tu vista de producción actual.",
+    "autoRecoveryBanner": "Este run de análisis aún no tiene veredicto. Mostramos tu vista de producción actual.",
     "selector": {
       "label": "Análisis",
-      "hint": "Production Verdict, prueba de seguridad y correcciones con IA corresponden a este análisis.",
+      "hint": "El veredicto, la prueba en vivo y las correcciones con IA corresponden a este análisis.",
       "noScore": "—",
-      "runOption": "{sha} · {score} · {status}"
+      "runOption": "{sha} · {score} · {status}",
+      "runStatus": {
+        "completed": "Completado",
+        "running": "En curso",
+        "failed": "Fallido",
+        "queued": "En cola",
+        "cancelled": "Cancelado",
+        "unknown": "Sin veredicto"
+      }
     }
   },
   "header": {
@@ -82,7 +90,7 @@
   },
   "phases": {
     "discovery": "Descubrimiento",
-    "productionVerdict": "Production Verdict",
+    "productionVerdict": "Veredicto de producción",
     "awaitingAnalysis": "Esperando análisis"
   },
   "teams": {
@@ -114,9 +122,9 @@
   },
   "feed": {
     "title": "Actividad de la misión",
-    "initialized": "Mission Control iniciado.",
+    "initialized": "Centro de control iniciado.",
     "discoveryInProgress": "Descubrimiento en curso.",
-    "verdictUpdated": "Production Verdict actualizado.",
+    "verdictUpdated": "Veredicto de producción actualizado.",
     "reviewStopped": "Revisión detenida"
   },
   "objective": {
@@ -129,13 +137,13 @@
     "generateFix": "Generar protección",
     "startAnalysis": "Iniciar análisis",
     "viewDetails": "Ver detalles",
-    "reviewVerdict": "Revisar Production Verdict",
+    "reviewVerdict": "Revisar veredicto",
     "runAnalysis": "Ejecutar análisis de producción"
   },
   "verdict": {
-    "title": "Production Verdict",
+    "title": "Veredicto de producción",
     "confidence": "Confianza",
-    "criticalCampaigns": "Campañas críticas",
+    "criticalCampaigns": "Pruebas críticas",
     "replay": "Repetir prueba",
     "engineeringPlan": "Plan de ingeniería",
     "score": "Puntuación",
@@ -164,16 +172,16 @@
     "reason": "Por qué",
     "primaryAction": "Siguiente paso",
     "history": "Historial",
-    "historyDescription": "Ver historial y tendencias del Production Verdict",
+    "historyDescription": "Ver historial y tendencias del veredicto",
     "reviewInProgress": "Escaneando código…",
-    "securityTestRunning": "Prueba de seguridad en curso. Los resultados actualizarán tu Production Verdict al terminar."
+    "securityTestRunning": "Prueba en vivo en curso. Los resultados actualizarán tu veredicto al terminar."
   },
   "technical": {
     "repository": "Repositorio",
     "framework": "Framework",
     "evidence": "Evidencia",
     "architecture": "Arquitectura",
-    "attackDetails": "Detalles de ataques",
+    "attackDetails": "Detalles de pruebas",
     "logs": "Registros"
   },
   "actions": {
@@ -182,29 +190,29 @@
     "deploy": "Desplegar"
   },
   "protection": {
-    "eyebrow": "Protection Status",
-    "productionConfidence": "Production confidence",
-    "securityConfidence": "Security confidence",
+    "eyebrow": "Estado de protección",
+    "productionConfidence": "Confianza de producción",
+    "securityConfidence": "Confianza de seguridad",
     "lastChecked": "Última revisión",
     "lastCheckedNever": "Aún no",
     "worriesTitle": "Lo que me preocupa",
     "nothingUrgent": "Nada urgente.",
     "recommendation": "Recomendación",
-    "unavailable": "El estado de protección no está disponible temporalmente. Tu Production Verdict de arriba sigue siendo válido.",
+    "unavailable": "El estado de protección no está disponible temporalmente. Tu veredicto de arriba sigue siendo válido.",
     "status": {
-      "PROTECTED": "Protected",
-      "SAFE_WITH_CAUTION": "Safe with caution",
-      "REQUIRES_ATTENTION": "Requires attention",
-      "NOT_PROTECTED": "Not protected"
+      "PROTECTED": "Protegida",
+      "SAFE_WITH_CAUTION": "Segura con precaución",
+      "REQUIRES_ATTENTION": "Requiere atención",
+      "NOT_PROTECTED": "Sin proteger"
     }
   },
   "history": {
-    "lastReview": "Último Production Review: {time}",
+    "lastReview": "Última revisión de producción: {time}",
     "staleVerdict": "Tus últimos cambios de código aún no se han revisado.",
-    "openLinkAriaLabel": "Ver historial de Production Review"
+    "openLinkAriaLabel": "Ver historial de revisiones"
   },
   "empty": {
-    "noVerdictTitle": "Aún no hay Production Verdict",
-    "noVerdictBody": "Ejecuta un Production Review para saber si esta aplicación está lista para desplegar."
+    "noVerdictTitle": "Aún no hay veredicto",
+    "noVerdictBody": "Ejecuta un análisis de producción para saber si esta aplicación está lista para desplegar."
   }
 }

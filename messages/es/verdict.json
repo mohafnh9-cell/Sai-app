@@ -1,13 +1,13 @@
 {
-  "productionVerdict": "Production Verdict",
-  "badgeAriaLabel": "Production Verdict: {status}",
+  "productionVerdict": "Veredicto de producción",
+  "badgeAriaLabel": "Veredicto de producción: {status}",
   "canIDeploy": {
     "question": "¿Puedo desplegar?",
     "yes": "SÍ.",
     "almost": "CASI.",
     "no": "NO."
   },
-  "productionReadyScore": "Production Ready Score",
+  "productionReadyScore": "Puntuación de preparación",
   "productionBlocker_one": "{count} bloqueador de producción",
   "productionBlocker_other": "{count} bloqueadores de producción",
   "blockersRequireAttention_one": "Hay {count} bloqueador de producción que requiere tu atención.",
@@ -52,7 +52,7 @@
   "commitReviewed": "Revisé el commit {sha}.",
   "latestChanges": "Revisé tus últimos cambios.",
   "estimatedImplementation": "Tiempo estimado de implementación: {minutes} minutos.",
-  "aiUnavailableDeterministic": "Resumen de IA no disponible. El Production Verdict determinista sigue siendo la referencia.",
+  "aiUnavailableDeterministic": "Resumen de IA no disponible. El veredicto determinista sigue siendo la referencia.",
   "moreAffected": "+{count} más",
   "points": "+{count} puntos",
   "status": {
