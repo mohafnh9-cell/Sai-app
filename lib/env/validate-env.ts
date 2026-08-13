@@ -24,6 +24,11 @@ function isPlaceholder(value: string): boolean {
   return PLACEHOLDER_PATTERNS.some((pattern) => pattern.test(value));
 }
 
+function isTruthyEnv(value: string | undefined): boolean {
+  const normalized = value?.trim().toLowerCase();
+  return normalized === "true" || normalized === "1" || normalized === "yes" || normalized === "on";
+}
+
 function validateGitHubTokenEncryptionKey(value: string): string | null {
   if (!/^[A-Za-z0-9+/]{43}=$/.test(value)) {
     return "GITHUB_TOKEN_ENCRYPTION_KEY must be 32 bytes encoded as standard base64";
@@ -85,6 +90,31 @@ export function validateEnvironment(options?: {
   const bypass = process.env.SEQURAI_BYPASS_AUTH?.trim().toLowerCase();
   if (production && bypass && ["true", "1", "yes"].includes(bypass)) {
     errors.push("SEQURAI_BYPASS_AUTH must not be enabled in production");
+  }
+
+  const skipVerification = process.env.SEQURAI_SKIP_TARGET_VERIFICATION?.trim().toLowerCase();
+  if (production && skipVerification && ["true", "1", "yes"].includes(skipVerification)) {
+    errors.push("SEQURAI_SKIP_TARGET_VERIFICATION must not be enabled in production");
+  }
+
+  if (production && isTruthyEnv(process.env.SCAN_RATE_LIMIT_DISABLED)) {
+    warnings.push(
+      "SCAN_RATE_LIMIT_DISABLED is set — manual scans and MCP reviews are unlimited in production"
+    );
+  }
+
+  if (
+    production &&
+    !process.env.SENTRY_DSN?.trim() &&
+    !process.env.NEXT_PUBLIC_SENTRY_DSN?.trim()
+  ) {
+    warnings.push("SENTRY_DSN not set — production errors will not be reported to Sentry");
+  }
+
+  if (production && !process.env.SEQURAI_ADMIN_EMAILS?.trim()) {
+    warnings.push(
+      "SEQURAI_ADMIN_EMAILS not set — internal team will not get admin bypass for scans or URL verification"
+    );
   }
 
   if (production && !process.env.GITHUB_WEBHOOK_SECRET) {

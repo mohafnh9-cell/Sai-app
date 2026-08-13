@@ -244,7 +244,7 @@ describe("Block 7.0.3 automatic verdict update i18n", () => {
 
     expect((en.errors as Record<string, string>).verdict_generation_failed).toContain("Verdict");
     expect((es.errors as Record<string, string>).verdict_generation_failed).toContain(
-      "Production Verdict"
+      "veredicto de producción"
     );
   });
 
@@ -253,6 +253,6 @@ describe("Block 7.0.3 automatic verdict update i18n", () => {
     const es = loadNamespace("es", "automaticReview");
 
     expect(en.verdictUpdated).toBe("Production Verdict updated.");
-    expect(es.verdictUpdated).toBe("Production Verdict actualizado.");
+    expect(es.verdictUpdated).toBe("Veredicto de producción actualizado.");
   });
 });

@@ -1,8 +1,8 @@
 {
   "errors": {
     "automatic_review_failed": "La review automática falló.",
-    "verdict_generation_failed": "No se pudo actualizar el Production Verdict.",
-    "journey_update_failed": "No se pudo actualizar el Production Journey.",
+    "verdict_generation_failed": "No se pudo actualizar el veredicto de producción.",
+    "journey_update_failed": "No se pudo actualizar el historial de producción.",
     "missing_repository": "Repositorio no encontrado.",
     "missing_review": "Review no encontrada.",
     "invalid_commit": "Commit no válido."

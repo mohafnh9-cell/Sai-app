@@ -1,13 +1,13 @@
 {
-  "title": "Production Review",
+  "title": "Revisión de producción",
   "enabled": "Activado.",
   "disabled": "No disponible hasta que el repositorio esté conectado.",
-  "latestAutomaticReview": "Último Production Review:",
+  "latestAutomaticReview": "Última revisión de producción:",
   "statusLabel": "Estado:",
   "reviewTypeLabel": "Tipo de revisión:",
   "reviewTypeAutomatic": "Automático",
   "reviewTypeManual": "Manual",
-  "noReviewsYet": "Aún no hay Production Reviews.",
+  "noReviewsYet": "Aún no hay revisiones de producción.",
   "relative": {
     "never": "Nunca",
     "justNow": "Ahora mismo",
@@ -25,9 +25,9 @@
     "invalid_repository": "Repositorio no válido.",
     "missing_commit": "Falta información del commit.",
     "duplicate_review": "Este commit ya fue revisado.",
-    "review_failed": "Production Review falló.",
+    "review_failed": "Revisión de producción falló.",
     "repository_disconnected": "Repositorio desconectado.",
-    "review_in_progress": "Ya hay un Production Review en curso."
+    "review_in_progress": "Ya hay una revisión de producción en curso."
   },
-  "verdictUpdated": "Production Verdict actualizado."
+  "verdictUpdated": "Veredicto de producción actualizado."
 }

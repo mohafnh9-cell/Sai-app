@@ -1,5 +1,5 @@
 {
-  "panelTitle": "Recommendations",
+  "panelTitle": "Recomendaciones",
   "panelSubtitle": "En qué enfocarte a continuación.",
   "currentStatus": "Estado de producción actual",
   "latestImprovements": "Últimas mejoras",
@@ -7,7 +7,7 @@
   "recommendedNextAction": "Recomendación principal",
   "currentFocus": "Foco actual",
   "estimatedTime": "Tiempo estimado de mejora",
-  "journeySummary": "Resumen del Production Journey",
+  "journeySummary": "Resumen del historial de producción",
   "scoreEvolutionSummary": "Evolución del score",
   "whatChangedTitle": "¿Qué ha cambiado desde tu última revisión?",
   "noSignificantChanges": "No se detectaron cambios significativos.",
@@ -19,10 +19,10 @@
   "blockersIntroduced": "bloqueadores introducidos",
   "estimatedPath": "Camino estimado hacia producción",
   "minutes": "{count} minutos",
-  "productionMomentum": "Production Momentum",
+  "productionMomentum": "Impulso de producción",
   "projectHealth": "Resumen de salud del proyecto",
-  "productionInsights": "Production Insights",
-  "viewJourney": "Ver Production Journey",
+  "productionInsights": "Información de producción",
+  "viewJourney": "Ver historial de producción",
   "viewReport": "Ver informe",
   "runReview": "Ejecutar revisión de producción",
   "scorePoints": "{points} puntos",
@@ -36,8 +36,8 @@
     "declining": "Las revisiones recientes muestran regresión. Enfócate en la acción recomendada."
   },
   "whatChanged": {
-    "scoreIncreased": "El Production Ready Score ha aumentado {points} puntos.",
-    "scoreDecreased": "El Production Ready Score ha bajado {points} puntos.",
+    "scoreIncreased": "El puntuación de preparación ha aumentado {points} puntos.",
+    "scoreDecreased": "El puntuación de preparación ha bajado {points} puntos.",
     "blockersResolved_one": "Se ha resuelto {count} bloqueador",
     "blockersResolved_other": "Se han resuelto {count} bloqueadores",
     "blockersIntroduced_one": "Se ha introducido {count} bloqueador nuevo",
@@ -58,14 +58,14 @@
     "maintainReadiness": "Mantén la preparación para producción",
     "maintainReadinessDescription": "Tu aplicación está lista para producción. Programa revisiones periódicas para detectar regresiones.",
     "fixPriority": "Aborda tu prioridad de producción principal",
-    "fixPriorityDescription": "Resolver este punto tiene el mayor impacto en tu Production Ready Score.",
+    "fixPriorityDescription": "Resolver este punto tiene el mayor impacto en tu puntuación de preparación.",
     "improveFocus": "Mejora tu área de foco actual",
     "improveFocusDescription": "Concéntrate en el foco indicado para el camino más rápido hacia producción.",
     "custom": "Sigue la acción de producción recomendada",
     "customDescription": "La última revisión identificó un siguiente paso claro para tu aplicación.",
     "runReviewCta": "Ejecutar revisión de producción",
     "viewReportCta": "Ver último informe",
-    "viewJourneyCta": "Ver Production Journey"
+    "viewJourneyCta": "Ver historial de producción"
   },
   "momentum": {
     "improving": "Mejorando",
@@ -75,7 +75,7 @@
     "explanationImproving": "Tu proyecto está mejorando de forma consistente en las revisiones recientes.",
     "explanationStable": "Tu preparación para producción se ha mantenido estable en las revisiones recientes.",
     "explanationDeclining": "Las revisiones recientes muestran una tendencia a la baja en preparación para producción.",
-    "explanationInsufficient": "Completa más revisiones para establecer Production Momentum."
+    "explanationInsufficient": "Completa más revisiones para establecer el impulso de producción."
   },
   "insights": {
     "improvingLastThree": "Tu proyecto ha mejorado durante las tres últimas revisiones.",
@@ -86,15 +86,15 @@
     "atBestScore": "Alcanzaste tu mejor score de {score}."
   },
   "focusExplanation": {
-    "authentication": "Mejorar la cobertura de autenticación tendrá el mayor impacto en tu Production Ready Score.",
-    "authorization": "Mejorar la cobertura de autorización tendrá el mayor impacto en tu Production Ready Score.",
-    "secretManagement": "Mejorar la gestión de secretos tendrá el mayor impacto en tu Production Ready Score.",
-    "dataProtection": "Mejorar la protección de datos tendrá el mayor impacto en tu Production Ready Score.",
-    "dependencies": "Mejorar las dependencias tendrá el mayor impacto en tu Production Ready Score.",
-    "deploymentConfiguration": "Mejorar la configuración de despliegue tendrá el mayor impacto en tu Production Ready Score.",
-    "databaseAccess": "Mejorar el acceso a base de datos tendrá el mayor impacto en tu Production Ready Score.",
-    "performance": "Mejorar el rendimiento tendrá el mayor impacto en tu Production Ready Score.",
-    "reliability": "Mejorar la fiabilidad tendrá el mayor impacto en tu Production Ready Score.",
+    "authentication": "Mejorar la cobertura de autenticación tendrá el mayor impacto en tu puntuación de preparación.",
+    "authorization": "Mejorar la cobertura de autorización tendrá el mayor impacto en tu puntuación de preparación.",
+    "secretManagement": "Mejorar la gestión de secretos tendrá el mayor impacto en tu puntuación de preparación.",
+    "dataProtection": "Mejorar la protección de datos tendrá el mayor impacto en tu puntuación de preparación.",
+    "dependencies": "Mejorar las dependencias tendrá el mayor impacto en tu puntuación de preparación.",
+    "deploymentConfiguration": "Mejorar la configuración de despliegue tendrá el mayor impacto en tu puntuación de preparación.",
+    "databaseAccess": "Mejorar el acceso a base de datos tendrá el mayor impacto en tu puntuación de preparación.",
+    "performance": "Mejorar el rendimiento tendrá el mayor impacto en tu puntuación de preparación.",
+    "reliability": "Mejorar la fiabilidad tendrá el mayor impacto en tu puntuación de preparación.",
     "technicalReview": "Una revisión técnica enfocada aclarará el camino más rápido hacia producción."
   },
   "dashboard": {

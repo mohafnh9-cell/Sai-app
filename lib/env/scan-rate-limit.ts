@@ -1,11 +1,10 @@
 /**
  * Scan / review rate limits (web manual scans + MCP review_now).
  *
- * Private beta default: unlimited (no hourly cap). Enable caps before public launch:
- *   SCAN_RATE_LIMIT_ENABLED=1
+ * Production default: limits ON (5 web scans / repo / hour, 10 MCP reviews / org / hour).
+ * Opt out temporarily with SCAN_RATE_LIMIT_DISABLED=1.
  *
- * Or force unlimited explicitly:
- *   SCAN_RATE_LIMIT_DISABLED=1
+ * Development default: unlimited unless SCAN_RATE_LIMIT_ENABLED=1.
  */
 
 const TRUTHY = new Set(["1", "true", "yes", "on"]);
@@ -19,10 +18,16 @@ export function isScanRateLimitEnabled(): boolean {
   return isExplicitlyTruthy(process.env.SCAN_RATE_LIMIT_ENABLED);
 }
 
+function isProductionRuntime(): boolean {
+  if (process.env.VERCEL_ENV === "production") return true;
+  return process.env.NODE_ENV === "production" && process.env.VERCEL_ENV !== "preview";
+}
+
 export function isScanRateLimitDisabled(): boolean {
   if (isExplicitlyTruthy(process.env.SCAN_RATE_LIMIT_DISABLED)) return true;
-  if (process.env.NODE_ENV !== "production") return true;
-  if (!isScanRateLimitEnabled()) return true;
+  if (!isProductionRuntime()) {
+    return !isScanRateLimitEnabled();
+  }
   return false;
 }
 

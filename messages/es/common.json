@@ -20,7 +20,7 @@
   "billing": "Facturación",
   "states": {
     "loadingReview": "SequrAI está revisando tus últimos cambios.",
-    "buildingVerdict": "Preparando tu Production Verdict.",
+    "buildingVerdict": "Preparando tu veredicto de producción.",
     "runFirstReview": "Ejecuta tu primera revisión de producción.",
     "insufficientData": "SequrAI necesita más información antes de emitir un veredicto responsable.",
     "analysisFailed": "No hemos podido completar esta revisión de producción.",

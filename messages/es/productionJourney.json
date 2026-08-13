@@ -32,11 +32,11 @@
   "emptyCta": "Ejecutar primera revisión",
   "oneVerdictTitle": "Completa otra revisión para empezar a ver tu evolución.",
   "partialData": "No se pudieron cargar algunos datos históricos.",
-  "loadFailed": "No hemos podido cargar tu Production Journey.",
+  "loadFailed": "No hemos podido cargar tu historial de producción.",
   "range7d": "7 días",
   "range30d": "30 días",
   "rangeAll": "Todo el historial",
-  "chartAlt": "Production Ready Score a lo largo del tiempo",
+  "chartAlt": "Puntuación de preparación a lo largo del tiempo",
   "openReport": "Abrir informe",
   "viewRun": "Ver análisis",
   "trendValues": {

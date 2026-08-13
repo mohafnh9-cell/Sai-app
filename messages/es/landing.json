@@ -6,18 +6,18 @@
     "subline": "Analiza tu aplicación antes de producción, detecta riesgos y problemas prioritarios y obtén un veredicto claro sobre qué debes corregir antes de desplegar.",
     "ctaPrimary": "Conectar mi repositorio",
     "ctaSecondary": "Ver cómo funciona",
-    "footnote": "Acceso anticipado gratis · Production Reviews incluidas"
+    "footnote": "Acceso anticipado gratis · Revisiones de producción incluidas"
   },
   "features": {
-    "productionVerdict": "Production Verdict",
-    "continuousReviews": "Security Reviews",
+    "productionVerdict": "Veredicto de producción",
+    "continuousReviews": "Revisiones de seguridad",
     "recommendations": "Recomendaciones",
     "history": "Historial",
     "githubConnection": "Conexión con repositorio de GitHub"
   },
   "productProof": {
     "eyebrow": "Capa de seguridad",
-    "title": "Analiza riesgos. Obtén tu Production Verdict.",
+    "title": "Analiza riesgos. Obtén tu veredicto de producción.",
     "subtitle": "SequrAI revisa tu software creado con IA en cada push, identifica problemas prioritarios y te dice qué corregir antes de desplegar."
   },
   "flow": {
@@ -30,11 +30,11 @@
       },
       "push": {
         "word": "Push",
-        "line": "SequrAI ejecuta Security Reviews en cada cambio de código."
+        "line": "SequrAI ejecuta revisiones de seguridad en cada cambio de código."
       },
       "verdict": {
         "word": "Veredicto",
-        "line": "Consulta tu Production Verdict — qué riesgos corregir antes de desplegar."
+        "line": "Consulta tu veredicto de producción — qué riesgos corregir antes de desplegar."
       },
       "deploy": {
         "word": "Despliega",
@@ -47,7 +47,7 @@
     "verdictStatus": "Casi listo",
     "verdictSummary": "Revisa qué debes corregir antes de desplegar a producción.",
     "score": "Puntuación",
-    "continuousReviews": "Security Reviews",
+    "continuousReviews": "Revisiones de seguridad",
     "reviewsState": "Al día",
     "lastReview": "Última revisión: {time}",
     "lastReviewTime": "hace 2 min",
@@ -59,15 +59,15 @@
   },
   "pricing": {
     "eyebrow": "Precios",
-    "title": "Builder Edition",
-    "subtitle": "Explora Mission Control gratis. Paga €5/mes solo cuando ejecutes Production Reviews.",
+    "title": "Edición Builder",
+    "subtitle": "Explora el centro de control gratis. Las revisiones de producción estarán disponibles próximamente.",
     "perMonth": "/mes",
-    "cta": "Empezar gratis — escanea desde €5/mes",
-    "planName": "Builder Edition"
+    "cta": "Empezar gratis",
+    "planName": "Edición Builder"
   },
   "finalCta": {
     "headline": "Añade la capa de seguridad a tu software con IA",
-    "subline": "Conecta tu repositorio. SequrAI analiza riesgos y te da un Production Verdict antes de desplegar.",
+    "subline": "Conecta tu repositorio. SequrAI analiza riesgos y te da un veredicto de producción antes de desplegar.",
     "button": "Conectar mi repositorio"
   },
   "footer": {

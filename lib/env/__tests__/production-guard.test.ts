@@ -28,6 +28,13 @@ describe("production guard", () => {
     expect(() => isAuthBypassAllowed()).toThrow(/SEQURAI_BYPASS_AUTH/);
   });
 
+  it("throws when skip target verification is enabled in production", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("VERCEL_ENV", "production");
+    vi.stubEnv("SEQURAI_SKIP_TARGET_VERIFICATION", "true");
+    expect(() => assertProductionSafe()).toThrow(/SEQURAI_SKIP_TARGET_VERIFICATION/);
+  });
+
   it("allows bypass only in non-production", () => {
     vi.stubEnv("NODE_ENV", "development");
     vi.stubEnv("SEQURAI_BYPASS_AUTH", "true");

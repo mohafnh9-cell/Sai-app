@@ -28,10 +28,12 @@ node scripts/migration-preflight.mjs
 | `STRIPE_SECRET_KEY` | **Yes** | Live or test depending on launch phase |
 | `STRIPE_WEBHOOK_SECRET` | **Yes** | From Stripe webhook endpoint |
 | `STRIPE_BUILDER_PRICE_ID` | **Yes** | Builder Edition €5/month price |
-| `SCAN_RATE_LIMIT_ENABLED` | **Yes** | Set to `1` before public launch |
+| `SCAN_RATE_LIMIT_ENABLED` | Optional | Production enables limits by default; set `SCAN_RATE_LIMIT_DISABLED=1` to opt out |
 | `SENTRY_DSN` | Recommended | Production error monitoring |
+| `SEQURAI_ADMIN_EMAILS` | Recommended | Internal team emails — admin bypass without subscription |
 | `ANTHROPIC_API_KEY` | Optional | AI summaries |
 | `SEQURAI_BYPASS_AUTH` | **Must be unset** | Build fails if set in production |
+| `SEQURAI_SKIP_TARGET_VERIFICATION` | **Must be unset** | Build fails if set in Vercel production |
 
 Optional grace period for existing beta orgs:
 
@@ -86,7 +88,7 @@ Expected:
 ## 8. Launch day
 
 - [ ] Stripe live keys in Vercel production
-- [ ] `SCAN_RATE_LIMIT_ENABLED=1`
 - [ ] Sentry receiving events
+- [ ] `SEQURAI_ADMIN_EMAILS` set for internal team
 - [ ] `npm run test:release` green on `main`
 - [ ] Remove or expire `SUBSCRIPTION_GRACE_UNTIL` when beta grace ends

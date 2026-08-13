@@ -73,6 +73,28 @@ function validate() {
     errors.push("SEQURAI_BYPASS_AUTH must not be enabled in production");
   }
 
+  const skipVerification = process.env.SEQURAI_SKIP_TARGET_VERIFICATION?.trim().toLowerCase();
+  if ((production || process.env.NODE_ENV === "production") && ["true", "1", "yes"].includes(skipVerification ?? "")) {
+    errors.push("SEQURAI_SKIP_TARGET_VERIFICATION must not be enabled in production");
+  }
+
+  if (production && isExplicitlyDisabled(process.env.SCAN_RATE_LIMIT_DISABLED)) {
+    warnings.push("SCAN_RATE_LIMIT_DISABLED is set — manual scans and MCP reviews are unlimited in production");
+  }
+
+  if (production && !process.env.SENTRY_DSN?.trim() && !process.env.NEXT_PUBLIC_SENTRY_DSN?.trim()) {
+    warnings.push("SENTRY_DSN not set — production errors will not be reported to Sentry");
+  }
+
+  if (production && !process.env.SEQURAI_ADMIN_EMAILS?.trim()) {
+    warnings.push("SEQURAI_ADMIN_EMAILS not set — internal team will not get admin bypass for scans or URL verification");
+  }
+
+  function isExplicitlyDisabled(value) {
+    const normalized = value?.trim().toLowerCase();
+    return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on";
+  }
+
   if (production && !process.env.GITHUB_TOKEN_ENCRYPTION_KEY) {
     errors.push("GITHUB_TOKEN_ENCRYPTION_KEY is required in production");
   }

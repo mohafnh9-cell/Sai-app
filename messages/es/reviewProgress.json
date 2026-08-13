@@ -7,7 +7,7 @@
   "calculatingScore": "Calculando puntuación de seguridad",
   "completed": "Escaneo completado",
   "incrementalCompleted": "Escaneo incremental completado",
-  "verdictSaveFailed": "No se pudo guardar el Production Verdict",
+  "verdictSaveFailed": "No se pudo guardar el veredicto de producción",
   "failed": "El escaneo falló",
   "noChanges": "No se detectaron cambios escaneables",
   "reviewCouldNotExecute": "No se pudo ejecutar la revisión",
@@ -19,8 +19,8 @@
   "automaticQueued": "Revisión automática de producción en cola",
   "githubQueued": "Escaneo en cola por automatización de GitHub",
   "infrastructureUnavailable": "La infraestructura de escaneo no está disponible",
-  "enqueueFailed": "No se pudo encolar el worker de Production Review",
+  "enqueueFailed": "No se pudo encolar el worker de revisión de producción",
   "reuseCompleted": "La revisión ya se completó para este commit — reutilizando resultados.",
   "resumeActive": "La revisión ya está en curso para este commit — reanudando ejecución.",
-  "mcpReviewRequested": "Production Review solicitada desde MCP"
+  "mcpReviewRequested": "Revisión de producción solicitada desde MCP"
 }

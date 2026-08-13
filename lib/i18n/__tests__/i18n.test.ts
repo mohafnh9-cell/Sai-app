@@ -64,7 +64,7 @@ describe("Block 6.4.1 i18n foundation", () => {
     const es = loadNamespace("es", "productionJourney");
 
     expect(en.title).toBe("History");
-    expect(es.title).toBe("History");
+    expect(es.title).toBe("Historial");
     expect((en.trendValues as Record<string, string>).improving).toBe("Improving");
     expect((es.trendValues as Record<string, string>).improving).toBe("Mejorando");
     expect((es.maturityValues as Record<string, string>).production_ready).toBe("Lista para producción");

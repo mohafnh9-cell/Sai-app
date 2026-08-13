@@ -7,7 +7,7 @@
     "preparingCta": "Espera un momento…"
   },
   "verdict": {
-    "eyebrow": "Production Verdict"
+    "eyebrow": "Veredicto de producción"
   },
   "blockers": {
     "title_one": "Tu aplicación casi está lista. {count} bloqueador impide desplegar.",

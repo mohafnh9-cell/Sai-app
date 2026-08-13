@@ -13,7 +13,7 @@
   "languageTitle": "Idioma",
   "languageSubtitle": "Elige cómo te habla SequrAI. Los nombres de producto se mantienen en inglés.",
   "mcpTitle": "Conexión con agentes de IA",
-  "mcpSubtitle": "Conecta tu agente de código a tu Production Verdict y herramientas de blockers vía MCP.",
+  "mcpSubtitle": "Conecta tu agente de código a tu veredicto de producción y herramientas de bloqueadores vía MCP.",
   "mcpPromoTitle": "Usa SequrAI en tu agente de código con MCP",
   "mcpPromoBody": "Pregunta «¿Puedo desplegar?», audita tu app y obtén Safe Fix sin salir del editor.",
   "mcpPromoCta": "Conectar MCP en tu agente",

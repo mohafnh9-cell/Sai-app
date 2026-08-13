@@ -1,10 +1,21 @@
-const bypass = process.env.SEQURAI_BYPASS_AUTH?.trim().toLowerCase();
-const bypassEnabled = bypass === "true" || bypass === "1" || bypass === "yes";
+const truthyEnv = (value) => {
+  const normalized = value?.trim().toLowerCase();
+  return normalized === "true" || normalized === "1" || normalized === "yes";
+};
+
+const bypassEnabled = truthyEnv(process.env.SEQURAI_BYPASS_AUTH);
+const skipTargetVerificationEnabled = truthyEnv(process.env.SEQURAI_SKIP_TARGET_VERIFICATION);
 const deployedProduction = process.env.VERCEL_ENV === "production";
 
 if (deployedProduction && bypassEnabled) {
   throw new Error(
     "SEQURAI_BYPASS_AUTH cannot be enabled on Vercel production. Remove it from your deployment environment."
+  );
+}
+
+if (deployedProduction && skipTargetVerificationEnabled) {
+  throw new Error(
+    "SEQURAI_SKIP_TARGET_VERIFICATION cannot be enabled on Vercel production. Remove it from your deployment environment."
   );
 }
 
