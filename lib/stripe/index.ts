@@ -1,4 +1,5 @@
 import Stripe from "stripe";
+import { isBillingEnabled } from "@/lib/billing/billing-enabled";
 import { BUILDER_PLAN as BUILDER_PLAN_PUBLIC } from "@/lib/billing/builder-plan";
 
 let _stripe: Stripe | null = null;
@@ -18,6 +19,7 @@ export function getStripe(): Stripe {
 }
 
 export function isStripeConfigured(): boolean {
+  if (!isBillingEnabled()) return false;
   return Boolean(
     process.env.STRIPE_SECRET_KEY &&
       process.env.STRIPE_BUILDER_PRICE_ID &&

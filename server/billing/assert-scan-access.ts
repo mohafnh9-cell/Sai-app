@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { isBillingEnabled } from "@/lib/billing/billing-enabled";
 import { isSubscriptionAdminEmail } from "@/lib/billing/admin-access";
 import { organizationHasActiveSubscription } from "@/server/billing/subscription-status";
 import { ScanRequestError } from "@/server/security-scanner/request-context";
@@ -10,6 +11,8 @@ export async function assertOrganizationCanRunScan(
   organizationId: string,
   user: { id: string; email?: string | null }
 ): Promise<void> {
+  if (!isBillingEnabled()) return;
+
   let email = user.email?.trim() ?? null;
 
   if (!email) {

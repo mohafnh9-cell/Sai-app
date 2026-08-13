@@ -5,6 +5,7 @@ import { CreditCard, Check } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { isBillingEnabled } from "@/lib/billing/billing-enabled";
 import { BUILDER_PLAN } from "@/lib/billing/builder-plan";
 import { getOrganizationSubscription, hasActiveSubscription } from "@/server/billing/subscription-status";
 import { resolveActiveWorkspaceIdForUser } from "@/server/workspaces/service";
@@ -24,6 +25,7 @@ export default async function BillingPage({
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+  if (!isBillingEnabled()) redirect("/dashboard");
 
   const { t } = await getTranslator("billing");
   const params = await searchParams;

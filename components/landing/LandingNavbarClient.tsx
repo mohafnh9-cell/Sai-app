@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { BrandLogoLink } from "@/components/landing/brand-logo";
 import { NAV_LINKS } from "@/content/landing";
+import { isBillingEnabled } from "@/lib/billing/billing-enabled";
 import { useI18n } from "@/lib/i18n/client";
 
 const LanguageSelector = dynamic(
@@ -39,7 +40,8 @@ export function LandingNavbarClient() {
         <BrandLogoLink />
 
         <nav className="hidden items-center gap-10 md:flex" aria-label="Primary">
-          {NAV_LINKS.map((link) => (
+          {(isBillingEnabled() ? NAV_LINKS : NAV_LINKS.filter((link) => link.href !== "#pricing")).map(
+            (link) => (
             <Link
               key={link.href}
               href={link.href}
