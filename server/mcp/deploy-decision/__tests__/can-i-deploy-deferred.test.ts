@@ -68,21 +68,59 @@ describe("can_i_deploy deferred deploy decision", () => {
   });
 
   it("issues DO NOT DEPLOY when the newest review completed and matches the verdict", async () => {
+    const scanId = "22222222-2222-4222-8222-222222222221";
     const verdict = buildVerdictFixture({
       commitSha: "done111",
       status: "not_ready",
       score: 64,
-      scanId: "22222222-2222-4222-8222-222222222221",
+      scanId,
     });
+    const verdictDbRow = verdictRow(PROJECT_1, verdict);
     const tables = baseTables({
-      production_verdicts: [verdictRow(PROJECT_1, verdict)],
+      production_verdicts: [verdictDbRow],
+      repository_scan_state: [
+        {
+          repository_id: PROJECT_1,
+          current_verdict_id: verdictDbRow.id,
+        },
+      ],
       scans: [
         {
-          id: "22222222-2222-4222-8222-222222222221",
+          id: scanId,
+          project_id: PROJECT_1,
           repository_id: PROJECT_1,
           status: "completed",
           commit_sha: "done111",
+          branch: "main",
+          security_score: 64,
+          files_analyzed: 40,
+          files_discovered: 40,
+          completed_at: "2026-07-25T16:00:00.000Z",
           created_at: "2026-07-25T16:00:00.000Z",
+        },
+      ],
+      scan_findings: [
+        {
+          id: "finding-1",
+          scan_id: scanId,
+          rule_id: "auth.missing-guard",
+          title: "Protect the administrative endpoint",
+          severity: "critical",
+          category: "authorization",
+          file_path: "app/api/admin/route.ts",
+          recommendation: "Add an authorization check.",
+          confidence: "high",
+        },
+        {
+          id: "finding-2",
+          scan_id: scanId,
+          rule_id: "api.missing-rate-limit",
+          title: "Add rate limiting to the public API",
+          severity: "high",
+          category: "availability",
+          file_path: "app/api/public/route.ts",
+          recommendation: "Add rate limiting middleware.",
+          confidence: "medium",
         },
       ],
     });

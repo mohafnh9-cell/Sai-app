@@ -1,6 +1,9 @@
 /**
  * End-to-end verification for Mission Control primary actions.
- * Run with Node 22+: PATH="$HOME/.nvm/versions/node/v22.23.1/bin:$PATH" npm test -- server/mission-control/__tests__/e2e-primary-actions.integration.test.ts
+ * Requires a live Supabase project with GitHub connected.
+ *
+ * Run manually:
+ *   RUN_E2E_INTEGRATION=1 E2E_PROJECT_ID=<uuid> npm test -- server/mission-control/__tests__/e2e-primary-actions.integration.test.ts
  */
 import { config } from "dotenv";
 import { resolve } from "node:path";
@@ -8,6 +11,8 @@ import { describe, expect, it } from "vitest";
 
 config({ path: resolve(process.cwd(), ".env.local"), override: true });
 config({ path: resolve(process.cwd(), ".env"), override: true });
+
+const E2E_ENABLED = process.env.RUN_E2E_INTEGRATION === "1";
 
 const PROJECT_ID = process.env.E2E_PROJECT_ID ?? "2bd1e005-56c8-4aef-9c72-ed1d444467ed";
 const POLL_MS = 3000;
@@ -48,7 +53,7 @@ async function loadProjectContext(admin: Awaited<
   };
 }
 
-describe("Mission Control primary actions E2E", () => {
+describe.skipIf(!E2E_ENABLED)("Mission Control primary actions E2E", () => {
   it(
     "scan flow: POST analysis → scan + job + worker + verdict",
     async () => {
