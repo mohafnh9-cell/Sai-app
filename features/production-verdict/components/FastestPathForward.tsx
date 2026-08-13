@@ -128,10 +128,14 @@ export function FastestPathForward({
   priorities,
   onReviewPriority,
   fixPromptContext,
+  titleKey = "criticalBlockersTitle",
+  subtitleKey = "criticalBlockersSubtitle",
 }: {
   priorities: ProductionPriority[];
   onReviewPriority?: (priority: ProductionPriority) => void;
   fixPromptContext?: FixPromptContext;
+  titleKey?: string;
+  subtitleKey?: string;
 }) {
   const { t } = useI18n("verdict");
 
@@ -141,9 +145,9 @@ export function FastestPathForward({
     <section aria-labelledby="fastest-path-heading" className="space-y-4">
       <div>
         <h2 id="fastest-path-heading" className="text-lg font-semibold tracking-tight">
-          {t("criticalBlockersTitle")}
+          {t(titleKey)}
         </h2>
-        <p className="text-sm text-muted-foreground mt-1">{t("criticalBlockersSubtitle")}</p>
+        <p className="text-sm text-muted-foreground mt-1">{t(subtitleKey)}</p>
       </div>
       <ol className="space-y-3 list-none">
         {priorities.slice(0, 3).map((priority) => (

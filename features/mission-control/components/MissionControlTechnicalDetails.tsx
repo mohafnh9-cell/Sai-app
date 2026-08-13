@@ -11,6 +11,7 @@ import { MissionFeed } from "./MissionFeed";
 import { ProductionVerdictCardSection } from "./ProductionVerdictCard";
 import { CoverageBreakdown } from "@/features/production-verdict/components/CoverageBreakdown";
 import { TechnicalFindingsSection } from "@/features/production-verdict/components/TechnicalFindingsSection";
+import { FastestPathForward } from "@/features/production-verdict/components/FastestPathForward";
 import { useI18n } from "@/lib/i18n/client";
 
 function DetailSubsection({
@@ -65,6 +66,21 @@ export function MissionControlTechnicalDetails({
         ) : null}
 
         {verdict ? <CoverageBreakdown verdict={verdict} /> : null}
+
+        {verdict && verdict.topPriorities.length > 0 ? (
+          <FastestPathForward
+            priorities={verdict.topPriorities}
+            fixPromptContext={fixPromptContext}
+            titleKey={
+              verdict.status === "ready_to_ship" ? "fastestPathTitle" : "criticalBlockersTitle"
+            }
+            subtitleKey={
+              verdict.status === "ready_to_ship"
+                ? "fastestPathSubtitle"
+                : "criticalBlockersSubtitle"
+            }
+          />
+        ) : null}
 
         {findings && findings.length > 0 ? (
           <TechnicalFindingsSection findings={findings} fixPromptContext={fixPromptContext} />

@@ -48,6 +48,11 @@ type WebhookHealthPayload = {
 };
 
 export default function IntegrationsPage() {
+  const webhookPayloadUrl = useMemo(() => {
+    const base = process.env.NEXT_PUBLIC_APP_URL ?? "https://sequrai-app.vercel.app";
+    return `${base.replace(/\/$/, "")}/api/webhooks/github`;
+  }, []);
+
   const router = useRouter();
   const searchParams = useSearchParams();
   const { t } = useI18n("integrations");
@@ -614,9 +619,7 @@ export default function IntegrationsPage() {
           <div>
             <p className="text-xs text-muted-foreground mb-1">Payload URL</p>
             <code className="block rounded-md bg-secondary/50 px-3 py-2 text-xs break-all">
-              {typeof window !== "undefined"
-                ? `${window.location.origin}/api/webhooks/github`
-                : "https://sequrai-app.vercel.app/api/webhooks/github"}
+              {webhookPayloadUrl}
             </code>
           </div>
           <p className="text-xs text-muted-foreground">

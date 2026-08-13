@@ -170,7 +170,7 @@
   "technicalDetails": "Detalles técnicos",
   "fullReport": {
     "title": "Informe completo",
-    "subtitle": "Todo lo que SequrAI analizó en esta revisión — áreas, hallazgos y evidencia.",
+    "subtitle": "Todo lo que SequrAI analizó en esta revisión — áreas, recomendaciones con Safe Fix, hallazgos y evidencia.",
     "summary": "Resumen",
     "findings": "Hallazgos del análisis",
     "noFindings": "No se detectaron hallazgos en el análisis estático de esta revisión."

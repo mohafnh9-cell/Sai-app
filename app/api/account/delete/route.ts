@@ -1,11 +1,18 @@
 import "server-only";
 
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { getServerAuthContext } from "@/lib/auth/dev-bypass";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStripe, isStripeConfigured } from "@/lib/stripe";
 import { getOrganizationSubscription } from "@/server/billing/subscription-status";
 import { enforceRateLimit } from "@/server/http/rate-limit";
+
+const bodySchema = z.object({
+  confirmation: z.string().refine((val) => val.trim().toUpperCase() === "DELETE", {
+    message: "Confirmation must be DELETE",
+  }),
+});
 
 export async function POST(request: Request) {
   const rateLimited = enforceRateLimit(request, {
@@ -15,20 +22,27 @@ export async function POST(request: Request) {
   });
   if (rateLimited) return rateLimited;
 
-  const auth = await getServerAuthContext();
-  if (!auth) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  let body: { confirmation?: string };
+  let json: unknown;
   try {
-    body = (await request.json()) as { confirmation?: string };
+    json = await request.json();
   } catch {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  if (body.confirmation?.trim().toUpperCase() !== "DELETE") {
-    return NextResponse.json({ error: "Confirmation must be DELETE" }, { status: 400 });
+  const parsedBody = bodySchema.safeParse(json);
+  if (!parsedBody.success) {
+    const hasConfirmationIssue = parsedBody.error.issues.some(
+      (issue) => issue.path[0] === "confirmation"
+    );
+    return NextResponse.json(
+      { error: hasConfirmationIssue ? "Confirmation must be DELETE" : "Invalid request body" },
+      { status: 400 }
+    );
+  }
+
+  const auth = await getServerAuthContext();
+  if (!auth) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const admin = createAdminClient();
