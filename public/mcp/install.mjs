@@ -3,7 +3,7 @@
  * Universal SequrAI MCP installer — run from any project folder.
  *
  * Cursor requires a local stdio bridge (HTTP URL alone does not work reliably).
- * This script installs the bridge once under ~/.sequrai/ and configures Cursor globally.
+ * Claude Code and VS Code use HTTP with Authorization: Bearer <seq_live_...>.
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -103,11 +103,16 @@ function cursorStdioServer(key, url, bridgePath) {
 
 function httpServer(key, url) {
   return {
+    type: "http",
     url: `${url}/api/mcp`,
     headers: {
       Authorization: `Bearer ${key}`,
     },
   };
+}
+
+function claudeHttpServer(key, url) {
+  return httpServer(key, url);
 }
 
 function installAt(root, relativePath, mutator) {
@@ -140,15 +145,7 @@ async function main() {
     mcpServers: mergeServer(existing.mcpServers, SERVER_NAME, cursorServer),
   }));
 
-  const claudeServer = {
-    type: "stdio",
-    command: "node",
-    args: [bridgePath],
-    env: {
-      SEQURAI_API_KEY: key,
-      SEQURAI_API_URL: url,
-    },
-  };
+  const claudeServer = claudeHttpServer(key, url);
 
   const claudeProjectPath = installAt(projectRoot, ".mcp.json", (existing) => ({
     ...existing,
@@ -162,10 +159,7 @@ async function main() {
 
   const vscodePath = installAt(projectRoot, ".vscode/mcp.json", (existing) => ({
     ...existing,
-    servers: mergeServer(existing.servers, SERVER_NAME, {
-      type: "http",
-      ...httpServer(key, url),
-    }),
+    servers: mergeServer(existing.servers, SERVER_NAME, claudeHttpServer(key, url)),
   }));
 
   console.log("");
@@ -173,7 +167,7 @@ async function main() {
   console.log("");
   console.log("Next steps:");
   console.log("  Cursor:      quit fully → reopen → Settings → Tools & MCP → “sequrai” green");
-  console.log("  Claude Code: restart → run /mcp → confirm “sequrai” is connected");
+  console.log("  Claude Code: restart → run /mcp → “sequrai” must show connected (uses your API key, not OAuth)");
   console.log("  Then ask:    Can I deploy?");
   console.log("");
   console.log("Installed:");

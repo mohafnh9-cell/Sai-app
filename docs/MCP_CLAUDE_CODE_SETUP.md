@@ -12,14 +12,44 @@ Same as Cursor: SequrAI → **Settings** → **MCP Integration** panel → **Gen
 
 ## 2. Required transport
 
-Claude Code supports two MCP transports: local **stdio** (a subprocess Claude Code launches and talks to over stdin/stdout) and remote **HTTP**. SequrAI's server is a single HTTP endpoint (`POST /api/mcp`), so Claude Code can reach it two ways:
+Claude Code supports two MCP transports: local **stdio** (subprocess) and remote **HTTP**. SequrAI's server is a single HTTP endpoint (`POST /api/mcp`).
 
-- **Recommended: stdio via the bundled bridge** (`mcp/stdio-bridge.mjs`) — Claude Code launches the bridge as a subprocess; the bridge forwards every message to SequrAI over HTTPS with your API key as a Bearer token. Use this if you want to keep your API key out of Claude Code's `--header` flag and manage it purely via environment variables.
-- **Direct HTTP transport** — point Claude Code straight at `POST /api/mcp` with an `Authorization: Bearer` header. This avoids needing a local Node process at all. **This variant has not been manually smoke-tested end-to-end; verify it against your Claude Code version before depending on it.**
+- **Recommended: direct HTTP transport** — point Claude Code at `POST /api/mcp` with `Authorization: Bearer seq_live_...`. The universal install command writes this to `.mcp.json` and `~/.claude.json` automatically. No OAuth client id is required when the Bearer header is present.
+- **Optional: stdio via the bundled bridge** — same bridge Cursor uses; keeps the key in `SEQURAI_API_KEY` env instead of JSON headers.
 
 ---
 
-## 3. Option A — stdio via the bundled bridge (recommended)
+## 3. Option A — direct HTTP transport with API key (recommended)
+
+Run the install command from SequrAI Settings, or:
+
+```bash
+claude mcp add --transport http sequrai \
+  https://your-sequrai-deployment.example.com/api/mcp \
+  --header "Authorization: Bearer seq_live_your_key_here"
+```
+
+Equivalent JSON (must include `"type": "http"` and the Bearer header):
+
+```json
+{
+  "mcpServers": {
+    "sequrai": {
+      "type": "http",
+      "url": "https://your-sequrai-deployment.example.com/api/mcp",
+      "headers": {
+        "Authorization": "Bearer seq_live_your_key_here"
+      }
+    }
+  }
+}
+```
+
+If Claude Code asks for a **client id**, the server entry is missing the Authorization header or `"type": "http"`. Remove the broken entry (`claude mcp remove sequrai`) and re-run the install command.
+
+---
+
+## 4. Option B — stdio via the bundled bridge
 
 ### CLI
 
@@ -71,32 +101,6 @@ claude mcp add-json sequrai '{
 ```
 
 **Windows note:** on native Windows (not WSL), stdio servers launched via `node` sometimes need a `cmd /c` wrapper to avoid "Connection closed" errors: `-- cmd /c node C:\path\to\stdio-bridge.mjs`. Verify this against your setup if you're on Windows.
-
----
-
-## 4. Option B — direct HTTP transport (no local process)
-
-```bash
-claude mcp add --transport http sequrai \
-  https://your-sequrai-deployment.example.com/api/mcp \
-  --header "Authorization: Bearer seq_live_your_key_here"
-```
-
-Equivalent JSON:
-
-```json
-{
-  "mcpServers": {
-    "sequrai": {
-      "type": "http",
-      "url": "https://your-sequrai-deployment.example.com/api/mcp",
-      "headers": {
-        "Authorization": "Bearer seq_live_your_key_here"
-      }
-    }
-  }
-}
-```
 
 ---
 
