@@ -12,20 +12,17 @@ const URL = "https://sequrai.example.com";
 
 describe("MCP client configuration", () => {
   it.each(["cursor", "claude"] as const)(
-    "generates a complete %s HTTP configuration without local bridge paths",
+    "generates a complete %s stdio bridge configuration",
     (client) => {
       const config = JSON.parse(buildMcpClientConfig(client, KEY, URL));
       const server = config.mcpServers.sequrai;
-      expect(server.url).toBe("https://sequrai.example.com/api/mcp");
-      expect(server.headers.Authorization).toBe(`Bearer ${KEY}`);
-      expect(JSON.stringify(config)).not.toContain("stdio-bridge");
+      expect(server.type).toBe("stdio");
+      expect(server.command).toBe("node");
+      expect(server.args[0]).toContain("stdio-bridge.mjs");
+      expect(server.env.SEQURAI_API_KEY).toBe(KEY);
+      expect(server.env.SEQURAI_API_URL).toBe("https://sequrai.example.com");
       expect(JSON.stringify(config)).not.toContain("your-key-here");
       expect(JSON.stringify(config)).not.toContain("/path/to/");
-      if (client === "claude") {
-        expect(server.type).toBe("http");
-      } else {
-        expect(server.type).toBeUndefined();
-      }
     }
   );
 

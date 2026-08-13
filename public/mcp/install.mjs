@@ -140,12 +140,24 @@ async function main() {
     mcpServers: mergeServer(existing.mcpServers, SERVER_NAME, cursorServer),
   }));
 
-  const claudePath = installAt(projectRoot, ".mcp.json", (existing) => ({
+  const claudeServer = {
+    type: "stdio",
+    command: "node",
+    args: [bridgePath],
+    env: {
+      SEQURAI_API_KEY: key,
+      SEQURAI_API_URL: url,
+    },
+  };
+
+  const claudeProjectPath = installAt(projectRoot, ".mcp.json", (existing) => ({
     ...existing,
-    mcpServers: mergeServer(existing.mcpServers, SERVER_NAME, {
-      type: "http",
-      ...httpServer(key, url),
-    }),
+    mcpServers: mergeServer(existing.mcpServers, SERVER_NAME, claudeServer),
+  }));
+
+  const claudeGlobalPath = installAt(home, ".claude.json", (existing) => ({
+    ...existing,
+    mcpServers: mergeServer(existing.mcpServers, SERVER_NAME, claudeServer),
   }));
 
   const vscodePath = installAt(projectRoot, ".vscode/mcp.json", (existing) => ({
@@ -160,15 +172,16 @@ async function main() {
   console.log("SequrAI connected.");
   console.log("");
   console.log("Next steps:");
-  console.log("  1. Quit Cursor completely and reopen it");
-  console.log("  2. Settings → Tools & MCP → confirm “sequrai” is green");
-  console.log("  3. Ask your agent: Can I deploy?");
+  console.log("  Cursor:      quit fully → reopen → Settings → Tools & MCP → “sequrai” green");
+  console.log("  Claude Code: restart → run /mcp → confirm “sequrai” is connected");
+  console.log("  Then ask:    Can I deploy?");
   console.log("");
   console.log("Installed:");
   console.log(`  • Bridge:      ${bridgePath}`);
   console.log(`  • Cursor:      ${globalCursorPath}`);
   console.log(`  • Cursor proj: ${projectCursorPath}`);
-  console.log(`  • Claude Code: ${claudePath}`);
+  console.log(`  • Claude Code: ${claudeProjectPath}`);
+  console.log(`  • Claude user: ${claudeGlobalPath}`);
   console.log(`  • VS Code:     ${vscodePath}`);
 }
 
