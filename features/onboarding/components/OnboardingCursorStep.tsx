@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowRight, Check, ClipboardCopy, Sparkles, Terminal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n/client";
-import { buildMcpClientConfig } from "@/lib/mcp/client-config";
+import { McpUniversalConnect } from "@/features/mcp/components/McpUniversalConnect";
 
 const EXAMPLE_QUESTION = "Can I deploy?";
 
@@ -20,7 +20,6 @@ export function OnboardingCursorStep({
   const [apiKey, setApiKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [copiedConfig, setCopiedConfig] = useState(false);
   const [copiedKey, setCopiedKey] = useState(false);
   const [copiedQuestion, setCopiedQuestion] = useState(false);
   const [microStep, setMicroStep] = useState<1 | 2 | 3>(1);
@@ -30,11 +29,6 @@ export function OnboardingCursorStep({
     if (typeof window !== "undefined") return window.location.origin;
     return process.env.NEXT_PUBLIC_APP_URL ?? "https://sequrai-app.vercel.app";
   }, []);
-
-  const mcpJson = useMemo(
-    () => (apiKey ? buildMcpClientConfig("cursor", apiKey, apiUrl) : null),
-    [apiKey, apiUrl]
-  );
 
   const createKey = useCallback(async () => {
     setLoading(true);
@@ -79,14 +73,6 @@ export function OnboardingCursorStep({
       })();
     });
   }, [createKey, ts]);
-
-  async function copyConfig() {
-    if (!mcpJson) return;
-    await navigator.clipboard.writeText(mcpJson);
-    setCopiedConfig(true);
-    setMicroStep(3);
-    window.setTimeout(() => setCopiedConfig(false), 2000);
-  }
 
   async function copyKeyOnly() {
     if (!apiKey) return;
@@ -173,26 +159,7 @@ export function OnboardingCursorStep({
               </Button>
             </div>
 
-            <div className="space-y-3">
-              <p className="text-sm font-medium">{t("cursorStepTwoTitle")}</p>
-              <p className="text-xs text-muted-foreground">{t("cursorStepTwoBody")}</p>
-              <pre className="overflow-x-auto rounded-xl border border-border/60 bg-[#0a0a0c] p-4 text-[11px] leading-relaxed text-muted-foreground whitespace-pre-wrap">
-                {mcpJson}
-              </pre>
-              <Button className="w-full" size="lg" onClick={() => void copyConfig()}>
-                {copiedConfig ? (
-                  <>
-                    <Check className="mr-2 h-4 w-4" aria-hidden />
-                    {t("cursorConfigCopied")}
-                  </>
-                ) : (
-                  <>
-                    <ClipboardCopy className="mr-2 h-4 w-4" aria-hidden />
-                    {t("cursorCopySetup")}
-                  </>
-                )}
-              </Button>
-            </div>
+            <McpUniversalConnect apiKey={apiKey} apiUrl={apiUrl} />
 
             <div className="rounded-xl border border-border/50 bg-secondary/20 p-4 space-y-3">
               <p className="text-sm font-medium">{t("cursorStepThreeTitle")}</p>
