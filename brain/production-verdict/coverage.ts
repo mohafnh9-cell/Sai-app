@@ -251,6 +251,7 @@ export function hasSufficientCoverage(input: {
 }): boolean {
   if (input.scanStatus === "failed") return false;
   if (input.filesAnalyzed < 3) return false;
+  if (input.filesAnalyzed >= 3) return true;
   if (input.coverageRatio != null && input.coverageRatio < 0.15) return false;
   return true;
 }

@@ -7,6 +7,8 @@ import {
 import { isAnalysisRunImmutable } from "@/server/analysis-runs/is-analysis-run-immutable";
 import { generateProductionVerdict as runEngine } from "@/brain/production-verdict/engine";
 import { finalizeProductionVerdict } from "@/brain/production-verdict/finalize-verdict";
+import { resolveScanCoverageForVerdict } from "@/brain/production-verdict/resolve-scan-coverage";
+import { loadPriorScanCoverage } from "@/server/production-verdict/load-prior-scan-coverage";
 import {
   buildAttackSimulationVerdictOverlay,
 } from "@/server/attack-simulation/integration/build-verdict-overlay";
@@ -175,7 +177,7 @@ export async function generateAndPersistProductionVerdict(
       .eq("scan_id", input.scanId),
     admin
       .from("scans")
-      .select("id, security_score, critical_count, high_count")
+      .select("id, security_score, critical_count, high_count, files_analyzed, files_discovered")
       .eq("project_id", input.projectId)
       .eq("status", "completed")
       .neq("id", input.scanId)
@@ -214,6 +216,29 @@ export async function generateAndPersistProductionVerdict(
     projectId: input.projectId,
   });
 
+  const priorCoverage = await loadPriorScanCoverage(admin, {
+    projectId: input.projectId,
+    excludeScanId: input.scanId,
+  });
+  const coverage = resolveScanCoverageForVerdict({
+    filesAnalyzed: (scan.files_analyzed as number | null) ?? (scan.files_scanned as number | null) ?? 0,
+    filesDiscovered: (scan.files_discovered as number | null) ?? (scan.total_files as number | null) ?? 0,
+    priorScan: priorCoverage,
+  });
+
+  if (
+    coverage.inheritedFromPrior &&
+    ((scan.files_analyzed as number | null) ?? 0) < 3
+  ) {
+    await admin
+      .from("scans")
+      .update({
+        files_analyzed: coverage.filesAnalyzed,
+        files_discovered: coverage.filesDiscovered,
+      })
+      .eq("id", input.scanId);
+  }
+
   const baseVerdict = runEngine({
     projectId: input.projectId,
     repositoryId: scan.repository_id ?? input.projectId,
@@ -222,8 +247,8 @@ export async function generateAndPersistProductionVerdict(
     branch: scan.branch,
     scanStatus: scan.status,
     securityScore: scan.security_score,
-    filesAnalyzed: scan.files_analyzed ?? scan.files_scanned ?? 0,
-    filesDiscovered: scan.files_discovered ?? scan.total_files ?? 0,
+    filesAnalyzed: coverage.filesAnalyzed,
+    filesDiscovered: coverage.filesDiscovered,
     findings: findings ?? [],
     previousScore: previousVerdictParsed?.score ?? null,
     previousBlockersCount: previousBlockers,

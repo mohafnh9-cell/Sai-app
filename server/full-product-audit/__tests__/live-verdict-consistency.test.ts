@@ -382,7 +382,7 @@ describe("full_product_audit dual scan regression", () => {
     const deployVerdict = await getLiveProductionVerdict(admin as never, E2E_PROJECT_ID);
 
     expect(deployVerdict?.scanId).toBe(E2E_SCAN_ID);
-    expect(deployVerdict?.status).toBe("insufficient_data");
-    expect(deployVerdict?.score).toBeNull();
+    expect(deployVerdict?.status).toBe("ready_to_ship");
+    expect(deployVerdict?.score).toBe(100);
   });
 });

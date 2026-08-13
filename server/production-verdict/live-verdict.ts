@@ -3,6 +3,8 @@ import "server-only";
 import { generateProductionVerdict } from "@/brain/production-verdict/engine";
 import type { ProductionVerdictV1 } from "@/brain/production-verdict/schema";
 import { safeParseProductionVerdict } from "@/brain/production-verdict/schema";
+import { resolveScanCoverageForVerdict } from "@/brain/production-verdict/resolve-scan-coverage";
+import { loadPriorScanCoverage } from "@/server/production-verdict/load-prior-scan-coverage";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type LiveVerdictScanRow = {
@@ -65,12 +67,28 @@ export async function computeLiveProductionVerdict(
   admin: SupabaseClient,
   input: { projectId: string; scan?: LiveVerdictScanRow | null; persisted?: ProductionVerdictV1 | null }
 ): Promise<ProductionVerdictV1 | null> {
+  const scanId = input.scan?.id;
   const scan =
-    input.scan ?? (await resolveCanonicalLiveVerdictScan(admin, { projectId: input.projectId, persisted: input.persisted }));
+    scanId != null
+      ? (await loadLiveVerdictScanRow(admin, scanId)) ?? input.scan ?? null
+      : await resolveCanonicalLiveVerdictScan(admin, {
+          projectId: input.projectId,
+          persisted: input.persisted,
+        });
 
   if (!scan?.id) {
     return input.persisted ?? null;
   }
+
+  const priorCoverage = await loadPriorScanCoverage(admin, {
+    projectId: input.projectId,
+    excludeScanId: scan.id,
+  });
+  const coverage = resolveScanCoverageForVerdict({
+    filesAnalyzed: scan.files_analyzed ?? 0,
+    filesDiscovered: scan.files_discovered ?? 0,
+    priorScan: priorCoverage,
+  });
 
   const { data: findings } = await admin
     .from("scan_findings")
@@ -87,8 +105,8 @@ export async function computeLiveProductionVerdict(
     branch: scan.branch ?? null,
     scanStatus: scan.status ?? "completed",
     securityScore: scan.security_score ?? input.persisted?.score ?? null,
-    filesAnalyzed: scan.files_analyzed ?? 0,
-    filesDiscovered: scan.files_discovered ?? 0,
+    filesAnalyzed: coverage.filesAnalyzed,
+    filesDiscovered: coverage.filesDiscovered,
     findings: findings ?? [],
     previousScore: input.persisted?.previousScore ?? null,
     previousBlockersCount: input.persisted?.blockersCount,

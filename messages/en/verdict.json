@@ -5,7 +5,8 @@
     "question": "Can I deploy?",
     "yes": "YES.",
     "almost": "ALMOST.",
-    "no": "NO."
+    "no": "NO.",
+    "insufficient": "NOT ENOUGH EVIDENCE YET."
   },
   "productionReadyScore": "Production Ready Score",
   "productionBlocker_one": "{count} production blocker",

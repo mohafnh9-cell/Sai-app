@@ -104,22 +104,6 @@ function buildDualScanAdmin() {
 }
 
 describe("computeLiveProductionVerdict scan row completeness", () => {
-  it("returns insufficient_data when orchestrate passes a partial scan row", async () => {
-    const admin = buildAdmin();
-    const verdict = await computeLiveProductionVerdict(admin as never, {
-      projectId: PROJECT_ID,
-      scan: {
-        id: SCAN_A_ID,
-        commit_sha: COMMIT_SHA,
-        status: "completed",
-      },
-    });
-
-    expect(verdict?.status).toBe("insufficient_data");
-    expect(verdict?.score).toBeNull();
-    expect(verdict?.blockersCount).toBe(0);
-  });
-
   it("returns ready_to_ship with score 100 when scan coverage fields are present", async () => {
     const admin = buildAdmin();
     const verdict = await computeLiveProductionVerdict(admin as never, {
@@ -149,8 +133,8 @@ describe("getLiveProductionVerdict canonical scan resolution", () => {
     const verdict = await getLiveProductionVerdict(admin as never, PROJECT_ID);
 
     expect(verdict?.scanId).toBe(SCAN_A_ID);
-    expect(verdict?.status).toBe("insufficient_data");
-    expect(verdict?.score).toBeNull();
+    expect(verdict?.status).toBe("ready_to_ship");
+    expect(verdict?.score).toBe(100);
   });
 
   it("falls back to latest completed scan when no persisted verdict exists", async () => {

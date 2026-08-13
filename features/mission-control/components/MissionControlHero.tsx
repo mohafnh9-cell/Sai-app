@@ -6,12 +6,13 @@ import { shouldShowScore, verdictToneClass } from "@/brain/production-verdict/st
 import { VerdictStatusBadge } from "@/features/production-verdict/components/VerdictStatusBadge";
 import { useI18n } from "@/lib/i18n/client";
 import { verdictStatusMessage } from "@/lib/i18n/verdict-copy";
+import { formatPriorityTitleForLocale } from "@/lib/i18n/priority-display";
 
 /**
  * Production Verdict hero — answers "Can I deploy?" with score and main blocker.
  */
 export function MissionControlHero({ verdict }: { verdict: ProductionVerdictV1 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const { t: tm } = useI18n("missionControl");
   const translate = (key: string, params?: Record<string, string | number | null | undefined>) =>
     t(key, params);
@@ -25,7 +26,9 @@ export function MissionControlHero({ verdict }: { verdict: ProductionVerdictV1 }
       ? "verdict.canIDeploy.yes"
       : view.status === "almost_ready"
         ? "verdict.canIDeploy.almost"
-        : "verdict.canIDeploy.no";
+        : view.status === "insufficient_data" || view.status === "analysis_failed"
+          ? "verdict.canIDeploy.insufficient"
+          : "verdict.canIDeploy.no";
 
   const tone = verdictToneClass(view.status);
   const topBlocker = verdict.topPriorities?.[0] ?? null;
@@ -66,7 +69,9 @@ export function MissionControlHero({ verdict }: { verdict: ProductionVerdictV1 }
           <p className="text-sm font-medium text-muted-foreground">
             {tm("projectHome.verdictSummary.mainBlocker")}
           </p>
-          <p className="text-lg font-medium leading-snug">{topBlocker.title}</p>
+          <p className="text-lg font-medium leading-snug">
+            {formatPriorityTitleForLocale(topBlocker, locale)}
+          </p>
           {topBlocker.reason ? (
             <p className="text-sm text-muted-foreground leading-relaxed">{topBlocker.reason}</p>
           ) : null}

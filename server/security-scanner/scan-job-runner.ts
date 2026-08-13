@@ -317,6 +317,14 @@ export class InlineScanJobRunner implements ScanJobRunner {
       const completedAt = new Date().toISOString();
       const score = Math.max(0, Math.min(100, Math.round(scoreBreakdown.score)));
       const counts = scoreBreakdown.counts;
+      const priorCoverage = isIncremental ? await this.loadPreviousScanCoverage(context) : null;
+      const incrementalFilesAnalyzed = snapshot.files.length;
+      const filesAnalyzed = isIncremental
+        ? Math.max(priorCoverage?.filesAnalyzed ?? 0, incrementalFilesAnalyzed)
+        : result.metrics.scannedFiles;
+      const filesDiscovered = isIncremental
+        ? Math.max(priorCoverage?.filesDiscovered ?? 0, snapshot.discoveredFiles, filesAnalyzed)
+        : result.metrics.scannedFiles;
       const completed = await this.updateActiveScan(context.scanId, {
         status: "completed",
         progress: 100,
@@ -327,7 +335,8 @@ export class InlineScanJobRunner implements ScanJobRunner {
         detected_stack: stack,
         omissions: [...snapshot.omissions, ...(result.omissions ?? [])],
         summary: `${counts.critical + counts.high} blocker${counts.critical + counts.high === 1 ? "" : "s"} · ${counts.medium + counts.low} improvement${counts.medium + counts.low === 1 ? "" : "s"}.`,
-        files_analyzed: isIncremental ? snapshot.files.length : result.metrics.scannedFiles,
+        files_analyzed: filesAnalyzed,
+        files_discovered: filesDiscovered,
         findings_count: rows.length,
         critical_count: counts.critical,
         high_count: counts.high,
@@ -484,6 +493,31 @@ export class InlineScanJobRunner implements ScanJobRunner {
     }
   }
 
+  private async loadPreviousScanCoverage(
+    context: ScanContext
+  ): Promise<{ filesAnalyzed: number; filesDiscovered: number } | null> {
+    const { data: rows } = await this.supabase
+      .from("scans")
+      .select("files_analyzed, files_discovered")
+      .eq("repository_id", context.repositoryId)
+      .eq("status", "completed")
+      .neq("id", context.scanId)
+      .order("completed_at", { ascending: false })
+      .limit(8);
+
+    const data = (rows ?? []).find((row) => ((row.files_analyzed as number | null) ?? 0) >= 3) ?? null;
+    if (!data) return null;
+
+    const filesAnalyzed = (data.files_analyzed as number | null) ?? 0;
+    const filesDiscovered = (data.files_discovered as number | null) ?? 0;
+    if (filesAnalyzed < 3) return null;
+
+    return {
+      filesAnalyzed,
+      filesDiscovered: Math.max(filesDiscovered, filesAnalyzed),
+    };
+  }
+
   private async loadPreviousScore(context: ScanContext): Promise<number | null> {
     const { data } = await this.supabase
       .from("repository_scan_state")
@@ -567,6 +601,20 @@ export class InlineScanJobRunner implements ScanJobRunner {
   ) {
     const score = previousScore ?? 100;
     const completedAt = new Date().toISOString();
+    const priorCoverage = await this.loadPreviousScanCoverage(context);
+    const merged = await this.mergeIncrementalFindings(context, [], []);
+    if (merged.rows.length > 0) {
+      const { error } = await this.supabase.from("scan_findings").insert(merged.rows);
+      if (error) throw new Error(`Could not persist retained scan findings: ${error.message}`);
+    }
+    const filesAnalyzed = priorCoverage
+      ? Math.max(priorCoverage.filesAnalyzed, snapshot.discoveredFiles)
+      : snapshot.discoveredFiles;
+    const filesDiscovered = Math.max(
+      priorCoverage?.filesDiscovered ?? 0,
+      snapshot.discoveredFiles,
+      filesAnalyzed
+    );
     await this.updateScan(context.scanId, {
       status: "completed",
       progress: 100,
@@ -574,8 +622,9 @@ export class InlineScanJobRunner implements ScanJobRunner {
       security_score: score,
       metrics: { scanType: "incremental", changedPaths: snapshot.changedPaths ?? [] },
       summary: "Incremental scan completed with no scannable file changes.",
-      files_discovered: snapshot.discoveredFiles,
-      files_analyzed: 0,
+      files_discovered: filesDiscovered,
+      files_analyzed: filesAnalyzed,
+      findings_count: merged.rows.length,
       completed_at: completedAt,
       branch: context.branch ?? snapshot.defaultBranch,
       commit_sha: snapshot.commitSha,

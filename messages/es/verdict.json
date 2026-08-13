@@ -5,7 +5,8 @@
     "question": "¿Puedo desplegar?",
     "yes": "SÍ.",
     "almost": "CASI.",
-    "no": "NO."
+    "no": "NO.",
+    "insufficient": "AÚN NO LO SABEMOS."
   },
   "productionReadyScore": "Puntuación de preparación",
   "productionBlocker_one": "{count} bloqueador de producción",
