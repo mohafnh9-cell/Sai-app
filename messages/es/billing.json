@@ -13,6 +13,7 @@
   "manageSubscription": "Gestionar suscripción",
   "subscriptionRequiredNotice": "Suscríbete a Builder Edition cuando quieras ejecutar una Production Review.",
   "checkoutCanceledNotice": "El checkout se canceló. Suscríbete cuando estés listo para continuar.",
+  "checkoutSuccessNotice": "Suscripción activa. Ya puedes ejecutar Production Reviews.",
   "cancelAnytime": "Cancela cuando quieras desde el portal de facturación.",
   "scanPaywallTitle": "Suscríbete para escanear",
   "scanPaywallBody": "Explora SequrAI gratis. Las Production Reviews empiezan en €5/mes.",

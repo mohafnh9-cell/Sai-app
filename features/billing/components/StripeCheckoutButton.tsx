@@ -11,6 +11,7 @@ type StripeCheckoutButtonProps = {
   label: string;
   variant?: "default" | "outline";
   className?: string;
+  returnTo?: string;
   onAlreadySubscribed?: () => void;
 };
 
@@ -18,6 +19,7 @@ export function StripeCheckoutButton({
   label,
   variant = "default",
   className,
+  returnTo,
   onAlreadySubscribed,
 }: StripeCheckoutButtonProps) {
   const [loading, setLoading] = useState(false);
@@ -32,6 +34,8 @@ export function StripeCheckoutButton({
       const response = await fetch("/api/stripe/checkout", {
         method: "POST",
         credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ returnTo }),
       });
       const body = (await response.json().catch(() => ({}))) as {
         url?: string;
@@ -45,6 +49,9 @@ export function StripeCheckoutButton({
 
       if (body.alreadySubscribed) {
         onAlreadySubscribed?.();
+        if (body.url?.startsWith("/")) {
+          window.location.href = body.url;
+        }
         return;
       }
 

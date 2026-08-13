@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { CreditCard, Check } from "lucide-react";
@@ -16,7 +17,7 @@ export const metadata: Metadata = { title: "Billing" };
 export default async function BillingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ reason?: string; checkout?: string }>;
+  searchParams: Promise<{ reason?: string; checkout?: string; returnTo?: string }>;
 }) {
   const supabase = await createClient();
   const {
@@ -34,11 +35,13 @@ export default async function BillingPage({
   const isActive = hasActiveSubscription(subscription);
 
   const notice =
-    params.reason === "subscription_required"
-      ? t("subscriptionRequiredNotice")
-      : params.checkout === "canceled"
-        ? t("checkoutCanceledNotice")
-        : null;
+    params.checkout === "success"
+      ? t("checkoutSuccessNotice")
+      : params.reason === "subscription_required"
+        ? t("subscriptionRequiredNotice")
+        : params.checkout === "canceled"
+          ? t("checkoutCanceledNotice")
+          : null;
 
   return (
     <div className="p-6 space-y-8 max-w-2xl">
@@ -83,7 +86,9 @@ export default async function BillingPage({
               </li>
             ))}
           </ul>
-          <BillingActions isActive={isActive} />
+          <Suspense fallback={null}>
+            <BillingActions isActive={isActive} />
+          </Suspense>
         </CardContent>
       </Card>
     </div>

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { DynamicTargetAuthorizationStatus } from "@/server/ai-red-team/authorization/dynamic-target-authorization-types";
+import { normalizeHttpUrlInput } from "@/lib/url/normalize-http-url";
 
 export function DynamicTargetAuthorizationPanel({
   projectId,
@@ -89,9 +90,13 @@ export function DynamicTargetAuthorizationPanel({
   }
 
   async function checkApplication() {
-    if (!targetOrigin.trim()) {
+    const normalizedOrigin = normalizeHttpUrlInput(targetOrigin);
+    if (!normalizedOrigin.trim()) {
       setError("Introduce la URL de tu aplicación.");
       return;
+    }
+    if (normalizedOrigin !== targetOrigin) {
+      setTargetOrigin(normalizedOrigin);
     }
     setLoading(true);
     setPhase("checking");
@@ -101,7 +106,7 @@ export function DynamicTargetAuthorizationPanel({
       const response = await fetch(`/api/projects/${projectId}/dynamic-target-authorization`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "check", targetOrigin }),
+        body: JSON.stringify({ action: "check", targetOrigin: normalizedOrigin }),
       });
       const body = (await response.json()) as {
         error?: string;

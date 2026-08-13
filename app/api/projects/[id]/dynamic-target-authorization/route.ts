@@ -13,6 +13,7 @@ import {
   initiateDynamicTargetVerification,
   verifyDynamicTargetOwnership,
 } from "@/server/ai-red-team/authorization/dynamic-target-authorization-service";
+import { normalizeHttpUrlInput } from "@/lib/url/normalize-http-url";
 import { reapproveExpandedDynamicTargetScope } from "@/server/ai-red-team/authorization/dynamic-scope-expansion";
 import { loadRequiredDynamicPathsForLatestScan } from "@/server/full-product-audit/load-required-dynamic-paths-for-project";
 
@@ -28,7 +29,11 @@ const bodySchema = z.object({
     "approve",
     "approve_scope_expansion",
   ]),
-  targetOrigin: z.string().url().optional(),
+  targetOrigin: z
+    .string()
+    .optional()
+    .transform((value) => (value ? normalizeHttpUrlInput(value) : value))
+    .pipe(z.string().url().optional()),
   environmentType: z.enum(["preview", "staging"]).optional(),
   verificationMethod: z.enum(["http", "dns"]).optional(),
   allowedPaths: z.array(z.string()).optional(),
@@ -83,7 +88,11 @@ export async function POST(
 
   const body = bodySchema.safeParse(await request.json().catch(() => null));
   if (!body.success) {
-    return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    const invalidUrl = body.error.issues.some((issue) => issue.path.includes("targetOrigin"));
+    return NextResponse.json(
+      { error: invalidUrl ? "Introduce una URL válida (ej. https://miapp.vercel.app)" : "Invalid request body" },
+      { status: 400 }
+    );
   }
 
   const projectId = parsed.data.id;

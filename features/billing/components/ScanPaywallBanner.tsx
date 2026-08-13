@@ -25,7 +25,7 @@ export function ScanPaywallBanner({
         </div>
       </div>
       <div className="flex flex-col gap-2 sm:items-end">
-        <StripeCheckoutButton label={t("subscribeCta")} className="shrink-0" />
+        <StripeCheckoutButton label={t("subscribeCta")} className="shrink-0" returnTo={returnPath} />
         <Button variant="link" size="sm" className="h-auto px-0" asChild>
           <Link href={returnPath ? `/billing?returnTo=${encodeURIComponent(returnPath)}` : "/billing"}>
             {t("scanPaywallBillingLink")}
