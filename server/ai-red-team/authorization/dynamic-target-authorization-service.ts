@@ -22,6 +22,7 @@ import {
   verifyTargetFromAuthenticatedGitHubDeployments,
   type AuthenticatedDeploymentOwnershipEvidence,
 } from "./github-deployment-ownership";
+import { isDynamicTargetVerificationBypassEnabled } from "@/lib/security/dynamic-target-verification-bypass";
 
 export type AutomaticTargetVerificationResult =
   | {
@@ -203,6 +204,47 @@ export async function getDynamicTargetAuthorizationStatus(
   };
 }
 
+async function recordTrustedTargetVerification(
+  admin: SupabaseClient,
+  input: {
+    organizationId: string;
+    projectId: string;
+    targetOrigin: string;
+    createdBy: string | null;
+    trustedByEmail?: string | null;
+  }
+): Promise<void> {
+  const now = new Date().toISOString();
+  await admin
+    .from("dynamic_target_verifications")
+    .update({ status: "expired", updated_at: now })
+    .eq("organization_id", input.organizationId)
+    .eq("project_id", input.projectId)
+    .eq("target_origin", input.targetOrigin)
+    .in("status", ["pending", "verified"]);
+
+  const { error } = await admin.from("dynamic_target_verifications").insert({
+    organization_id: input.organizationId,
+    project_id: input.projectId,
+    target_origin: input.targetOrigin,
+    verification_token: generateVerificationToken(input),
+    verification_method: "http",
+    verification_evidence: {
+      trustedBypass: true,
+      deploymentEnvironment: "staging",
+      trustedByEmail: input.trustedByEmail ?? null,
+      observedAt: now,
+    },
+    status: "verified",
+    created_by: input.createdBy,
+    expires_at: verificationExpiryIso(),
+    verified_at: now,
+  });
+  if (error) {
+    throw new Error(`Could not record trusted target verification: ${error.message}`);
+  }
+}
+
 async function recordAutomaticVerification(
   admin: SupabaseClient,
   input: {
@@ -262,10 +304,23 @@ export async function attemptAutomaticVerification(
     targetOrigin: string;
     createdBy: string | null;
     environmentType?: "preview" | "staging";
+    userEmail?: string | null;
   },
   deps: AutomaticVerificationDependencies = {}
 ): Promise<AutomaticTargetVerificationResult> {
   const targetOrigin = normalizeOrigin(input.targetOrigin);
+
+  if (isDynamicTargetVerificationBypassEnabled(input.userEmail)) {
+    await recordTrustedTargetVerification(admin, {
+      organizationId: input.organizationId,
+      projectId: input.projectId,
+      targetOrigin,
+      createdBy: input.createdBy,
+      trustedByEmail: input.userEmail,
+    });
+    return { verified: true, method: "existing_verification", targetOrigin };
+  }
+
   const activeAuthorization = await getActiveAttackAuthorization(admin, {
     organizationId: input.organizationId,
     projectId: input.projectId,
@@ -380,6 +435,7 @@ export async function authorizeAndCheckDynamicTarget(
     targetOrigin: string;
     environmentType: Extract<AttackEnvironmentType, "preview" | "staging">;
     createdBy: string | null;
+    userEmail?: string | null;
   },
   deps: AutomaticVerificationDependencies = {}
 ) {
@@ -414,6 +470,7 @@ export async function authorizeAndCheckDynamicTarget(
       authorized: true as const,
       targetOrigin,
       verificationMethod: automatic.method,
+      verificationSkipped: isDynamicTargetVerificationBypassEnabled(input.userEmail),
     };
   }
 

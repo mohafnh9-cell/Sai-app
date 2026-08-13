@@ -11,9 +11,11 @@ import { normalizeHttpUrlInput } from "@/lib/url/normalize-http-url";
 export function DynamicTargetAuthorizationPanel({
   projectId,
   initialStatus,
+  skipTargetVerification = false,
 }: {
   projectId: string;
   initialStatus: DynamicTargetAuthorizationStatus | null;
+  skipTargetVerification?: boolean;
 }) {
   const router = useRouter();
   const [status, setStatus] = useState(initialStatus);
@@ -173,6 +175,77 @@ export function DynamicTargetAuthorizationPanel({
     }
   }
 
+  async function runSecurityCheckOnUrl() {
+    const normalizedOrigin = normalizeHttpUrlInput(targetOrigin);
+    if (!normalizedOrigin.trim()) {
+      setError("Introduce la URL de tu aplicación.");
+      return;
+    }
+    if (normalizedOrigin !== targetOrigin) {
+      setTargetOrigin(normalizedOrigin);
+    }
+    setLoading(true);
+    setPhase("checking");
+    setError(null);
+    setMessage(null);
+    try {
+      const response = await fetch(`/api/projects/${projectId}/dynamic-target-authorization`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          action: "authorize_and_check",
+          targetOrigin: normalizedOrigin,
+          environmentType: "staging",
+        }),
+      });
+      const body = (await response.json()) as {
+        error?: string;
+        authorized?: boolean;
+        manualVerificationRequired?: boolean;
+        verificationSkipped?: boolean;
+        reason?: string | null;
+      };
+      if (!response.ok) {
+        setError(body.error ?? "No se pudo comprobar la aplicación.");
+        return;
+      }
+
+      if (body.authorized) {
+        setPhase("verified");
+        setOwnershipConfirmed(true);
+        setManualFallback(false);
+        setInstructions(null);
+        setMessage(
+          body.verificationSkipped
+            ? "Comprobando seguridad de la URL..."
+            : "Aplicación verificada. Preparando comprobaciones de seguridad..."
+        );
+        await runFullAudit("authorize");
+      } else if (body.manualVerificationRequired) {
+        setManualFallback(true);
+        setMessage(
+          "Para proteger a otros usuarios de pruebas no autorizadas necesitamos una última comprobación."
+        );
+      } else if (body.reason === "production_target_not_supported") {
+        setError(
+          "Las pruebas dinámicas en producción requieren configuración adicional. Usa un despliegue Preview o Staging."
+        );
+      } else {
+        setError("No se pudo autorizar esta aplicación de forma segura.");
+      }
+      await refreshStatus();
+    } catch (authorizationError) {
+      setError(
+        authorizationError instanceof Error
+          ? authorizationError.message
+          : "No se pudo completar la comprobación."
+      );
+    } finally {
+      setLoading(false);
+      setPhase("idle");
+    }
+  }
+
   async function runAuthorizationFlow() {
     if (!targetOrigin.trim()) {
       setError("Introduce la URL de tu aplicación.");
@@ -322,10 +395,11 @@ export function DynamicTargetAuthorizationPanel({
   return (
     <section className="rounded-xl border bg-card p-6 space-y-4">
       <div>
-        <h2 className="text-lg font-semibold">Verificación de seguridad</h2>
+        <h2 className="text-lg font-semibold">Comprobación de seguridad en vivo</h2>
         <p className="text-sm text-muted-foreground">
-          SequrAI ha encontrado posibles vulnerabilidades en tu código. Podemos comprobar
-          automáticamente si realmente pueden explotarse en tu aplicación.
+          {skipTargetVerification
+            ? "Introduce la URL de tu aplicación y SequrAI comprobará si las vulnerabilidades detectadas son explotables."
+            : "SequrAI ha encontrado posibles vulnerabilidades en tu código. Podemos comprobar automáticamente si realmente pueden explotarse en tu aplicación."}
         </p>
       </div>
 
@@ -419,7 +493,7 @@ export function DynamicTargetAuthorizationPanel({
             </p>
           </div>
 
-          {manualFallback ? (
+          {manualFallback && !skipTargetVerification ? (
             <div className="rounded-lg border bg-muted/20 p-4 text-sm space-y-3">
               <p className="font-medium">Necesitamos confirmar que tienes acceso a esta aplicación.</p>
               <p className="text-muted-foreground">
@@ -437,7 +511,7 @@ export function DynamicTargetAuthorizationPanel({
             </div>
           ) : null}
 
-          {instructions ? (
+          {instructions && !skipTargetVerification ? (
             <details className="rounded-lg border bg-muted/20 p-4 text-sm">
               <summary className="cursor-pointer font-medium">
                 Necesito ayuda para verificar la aplicación
@@ -453,11 +527,15 @@ export function DynamicTargetAuthorizationPanel({
           <div className="flex flex-wrap gap-2">
             <Button
               disabled={loading}
-              onClick={() => void checkApplication()}
+              onClick={() => void (skipTargetVerification ? runSecurityCheckOnUrl() : checkApplication())}
             >
-              {phase === "checking" ? "Comprobando aplicación..." : "Continuar"}
+              {phase === "checking"
+                ? "Comprobando..."
+                : skipTargetVerification
+                  ? "Comprobar seguridad de esta URL"
+                  : "Continuar"}
             </Button>
-            {instructions ? (
+            {!skipTargetVerification && instructions ? (
               <Button variant="outline" disabled={loading} onClick={() => verifyApplication()}>
                 Verificar aplicación
               </Button>

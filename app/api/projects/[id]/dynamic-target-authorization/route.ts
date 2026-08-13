@@ -13,6 +13,7 @@ import {
   initiateDynamicTargetVerification,
   verifyDynamicTargetOwnership,
 } from "@/server/ai-red-team/authorization/dynamic-target-authorization-service";
+import { isDynamicTargetVerificationBypassEnabled } from "@/lib/security/dynamic-target-verification-bypass";
 import { normalizeHttpUrlInput } from "@/lib/url/normalize-http-url";
 import { reapproveExpandedDynamicTargetScope } from "@/server/ai-red-team/authorization/dynamic-scope-expansion";
 import { loadRequiredDynamicPathsForLatestScan } from "@/server/full-product-audit/load-required-dynamic-paths-for-project";
@@ -141,6 +142,7 @@ export async function POST(
       targetOrigin: body.data.targetOrigin,
       createdBy: access.userId,
       environmentType: body.data.environmentType,
+      userEmail: user?.email,
     });
     return NextResponse.json({
       verified: result.verified,
@@ -148,6 +150,7 @@ export async function POST(
       targetOrigin: result.targetOrigin,
       manualVerificationRequired:
         !result.verified && result.reason === "manual_verification_required",
+      verificationSkipped: isDynamicTargetVerificationBypassEnabled(user?.email),
       reason: result.verified ? null : result.reason,
     });
   }
@@ -159,15 +162,15 @@ export async function POST(
       targetOrigin: body.data.targetOrigin,
       environmentType: body.data.environmentType ?? "staging",
       createdBy: access.userId,
+      userEmail: user?.email,
     });
     return NextResponse.json({
       authorized: result.authorized,
       targetOrigin: result.targetOrigin,
-      automatic: result.authorized,
       manualVerificationRequired:
-        "manualVerificationRequired" in result
-          ? result.manualVerificationRequired
-          : false,
+        "manualVerificationRequired" in result ? result.manualVerificationRequired : false,
+      verificationSkipped:
+        "verificationSkipped" in result ? result.verificationSkipped : false,
       reason: "reason" in result ? result.reason : null,
     });
   }

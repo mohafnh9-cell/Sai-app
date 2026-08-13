@@ -19,6 +19,14 @@ import { normalizeOrigin } from "@/server/ai-red-team/authorization/types";
 import { reapproveExpandedDynamicTargetScope } from "@/server/ai-red-team/authorization/dynamic-scope-expansion";
 import { loadRequiredDynamicPathsForLatestScan } from "@/server/full-product-audit/load-required-dynamic-paths-for-project";
 
+async function resolveMcpUserEmail(
+  admin: McpAuthContext["admin"],
+  userId: string
+): Promise<string | null> {
+  const { data } = await admin.from("profiles").select("email").eq("id", userId).maybeSingle();
+  return data?.email?.trim() ?? null;
+}
+
 export type AuthorizeDynamicTargetInput = ProjectSelector & {
   action?:
     | "status"
@@ -98,6 +106,7 @@ export async function authorizeDynamicTarget(
   t: McpTranslator
 ) {
   const project = await resolveMcpProject(ctx, input, t);
+  const userEmail = await resolveMcpUserEmail(ctx.admin, ctx.userId);
   const action = input.action ?? "status";
   const targetOrigin = resolveTargetOrigin(input);
 
@@ -182,6 +191,7 @@ export async function authorizeDynamicTarget(
       targetOrigin,
       createdBy: ctx.userId,
       environmentType: input.environmentType,
+      userEmail,
     });
     if (!result.verified) {
       if (result.reason === "production_target_not_supported") {
@@ -262,6 +272,7 @@ export async function authorizeDynamicTarget(
       targetOrigin,
       environmentType: input.environmentType ?? "staging",
       createdBy: ctx.userId,
+      userEmail,
     });
 
     if (!result.authorized) {

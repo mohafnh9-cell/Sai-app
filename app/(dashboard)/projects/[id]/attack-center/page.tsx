@@ -16,6 +16,7 @@ import { attackCenterErrorFromUnknown } from "@/server/attack-simulation/api/err
 import { getSecurityTestContext } from "@/server/attack-simulation/get-security-test-context";
 import { getAttackCampaignByScanId } from "@/server/attack-simulation/persistence/campaign-repository";
 import { getDynamicTargetAuthorizationStatus } from "@/server/ai-red-team/authorization/dynamic-target-authorization-service";
+import { isDynamicTargetVerificationBypassEnabled } from "@/lib/security/dynamic-target-verification-bypass";
 import { isAnalysisRunOwnedByProject } from "@/server/analysis-runs/get-analysis-run-snapshot";
 import { resolveAnalysisRunForMissionControl } from "@/server/analysis-runs/resolve-analysis-run";
 import { appendAnalysisRunSearchParams } from "@/features/analysis-runs/lib/build-run-query";
@@ -176,6 +177,7 @@ export default async function AttackCenterPage({ params, searchParams }: PagePro
         projectId,
       })
     : null;
+  const skipTargetVerification = isDynamicTargetVerificationBypassEnabled(auth.user.email);
   const missionControlHref = hrefWithAnalysisRun(
     `/projects/${projectId}/mission-control`,
     isolationEnabled ? analysisRunId : undefined
@@ -199,6 +201,7 @@ export default async function AttackCenterPage({ params, searchParams }: PagePro
           <DynamicTargetAuthorizationPanel
             projectId={projectId}
             initialStatus={dynamicTargetAuthorizationStatus}
+            skipTargetVerification={skipTargetVerification}
           />
         </div>
         <AttackCenterExperience
