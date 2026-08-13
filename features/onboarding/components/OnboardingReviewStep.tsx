@@ -9,9 +9,11 @@ import { REVIEW_STAGE_KEYS, resolveReviewStageIndex } from "@/lib/onboarding/rev
 import { scanIsActive, scanIsCompleted } from "../onboarding-flow";
 import {
   isGitHubReauthRequired,
+  isSubscriptionRequired,
   resolveScanErrorMessage,
 } from "@/lib/github/scan-api-response";
 import { GitHubReauthBanner } from "@/features/github/components/GitHubReauthBanner";
+import { ScanPaywallBanner } from "@/features/billing/components/ScanPaywallBanner";
 import { useI18n } from "@/lib/i18n/client";
 import { translateStoredProgressMessage } from "@/lib/i18n/review-progress";
 
@@ -41,6 +43,7 @@ export function OnboardingReviewStep({
   const [scan, setScan] = useState<ScanPayload | null>(null);
   const [error, setError] = useState("");
   const [reauthRequired, setReauthRequired] = useState(false);
+  const [subscriptionRequired, setSubscriptionRequired] = useState(false);
   const [stalled, setStalled] = useState(false);
   const [queueStalled, setQueueStalled] = useState(false);
   const [starting, setStarting] = useState(false);
@@ -49,6 +52,7 @@ export function OnboardingReviewStep({
   const startScan = useCallback(async () => {
     setError("");
     setReauthRequired(false);
+    setSubscriptionRequired(false);
     setStalled(false);
     setQueueStalled(false);
     setStarting(true);
@@ -62,6 +66,17 @@ export function OnboardingReviewStep({
       const body = (await response.json().catch(() => null)) as
         | { scan_id?: string; error?: string; needsReauth?: boolean; code?: string }
         | null;
+
+      if (isSubscriptionRequired(body)) {
+        setSubscriptionRequired(true);
+        setError(
+          resolveScanErrorMessage(body, {
+            defaultMessage: te("scanStart"),
+            subscriptionRequired: te("subscriptionRequired"),
+          })
+        );
+        return;
+      }
 
       if (isGitHubReauthRequired(body)) {
         setReauthRequired(true);
@@ -230,6 +245,13 @@ export function OnboardingReviewStep({
         </div>
       )}
 
+      {subscriptionRequired ? (
+        <ScanPaywallBanner
+          message={error || undefined}
+          returnPath={`/onboarding?step=review&projectId=${projectId}`}
+        />
+      ) : null}
+
       {reauthRequired ? (
         <GitHubReauthBanner
           returnPath={`/onboarding?step=review&projectId=${projectId}`}
@@ -237,7 +259,7 @@ export function OnboardingReviewStep({
         />
       ) : null}
 
-      {error && !reauthRequired && (
+      {error && !reauthRequired && !subscriptionRequired && (
         <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 space-y-3">
           <div>
             <p className="text-sm font-medium">{t("reviewFailedTitle")}</p>

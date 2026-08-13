@@ -10,6 +10,7 @@ import { DEFAULT_SECURITY_TEST_IDS } from "@/features/security-testing/user-test
 import { startGitHubOAuth } from "@/lib/github/oauth-client";
 import {
   isGitHubReauthRequired,
+  isSubscriptionRequired,
   resolveScanErrorMessage,
 } from "@/lib/github/scan-api-response";
 
@@ -43,6 +44,7 @@ export function useMissionControlState(
   const [securityStarting, setSecurityStarting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [reauthRequired, setReauthRequired] = useState(false);
+  const [subscriptionRequired, setSubscriptionRequired] = useState(false);
 
   const query = useQuery({
     queryKey: analysisRunKeys.missionControl(projectId, analysisRunId),
@@ -79,6 +81,7 @@ export function useMissionControlState(
     if (scanStarting || state.actions.scan.disabled) return;
     setActionError(null);
     setReauthRequired(false);
+    setSubscriptionRequired(false);
 
     if (state.actions.scan.label === "cta" && !state.status.repositoryConnected) {
       await startGitHubOAuth(`/projects/${projectId}/mission-control`);
@@ -117,6 +120,17 @@ export function useMissionControlState(
         resumed?: boolean;
       } | null;
 
+      if (isSubscriptionRequired(body)) {
+        setSubscriptionRequired(true);
+        setActionError(
+          resolveScanErrorMessage(body, {
+            defaultMessage: "Failed to start scan",
+            subscriptionRequired: "Subscribe to Builder Edition to run Production Reviews.",
+          })
+        );
+        return;
+      }
+
       if (isGitHubReauthRequired(body)) {
         setReauthRequired(true);
         setActionError(
@@ -153,6 +167,7 @@ export function useMissionControlState(
       if (body?.reused || body?.resumed) {
         setActionError(null);
     setReauthRequired(false);
+    setSubscriptionRequired(false);
       }
 
       if (navigateMissionControlToRun(projectId, resolvedScanId)) return;
@@ -168,6 +183,7 @@ export function useMissionControlState(
     if (securityStarting || state.actions.security.disabled) return;
     setActionError(null);
     setReauthRequired(false);
+    setSubscriptionRequired(false);
     setSecurityStarting(true);
     try {
       const params = new URLSearchParams();
@@ -227,6 +243,7 @@ export function useMissionControlState(
     securityAction,
     actionError,
     reauthRequired,
+    subscriptionRequired,
     startScan,
     startSecurityTest,
     refresh,

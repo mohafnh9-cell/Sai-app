@@ -18,6 +18,7 @@ import {
 import { releaseActiveReviewForNewHead } from "@/server/review-start/release-active-review-for-new-head";
 import { resolveReviewIdempotency } from "@/brain/review-engine/idempotency";
 import { reconcileProjectOrphanScanJobs } from "@/server/jobs/reconcile-orphan-scan-job";
+import { assertOrganizationCanRunScan } from "@/server/billing/assert-scan-access";
 
 export type StartRepositoryManualScanInput = {
   repositoryId: string;
@@ -29,7 +30,7 @@ export type StartRepositoryManualScanInput = {
 export type StartRepositoryManualScanContext = {
   supabase: SupabaseClient;
   admin: SupabaseClient;
-  user: { id: string };
+  user: { id: string; email?: string | null };
   project: {
     id: string;
     organization_id: string;
@@ -80,6 +81,8 @@ export async function startRepositoryManualScan(
     );
   }
   parseGitHubRepository(ctx.project.github_repo);
+
+  await assertOrganizationCanRunScan(ctx.admin, ctx.project.organization_id, ctx.user);
 
   const now = Date.now();
   await expireStaleActiveReviewsForRepository(ctx.admin, repositoryId);

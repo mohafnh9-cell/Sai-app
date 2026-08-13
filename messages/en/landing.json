@@ -6,7 +6,7 @@
     "subline": "Analyze your application before production, detect priority risks and issues, and get a clear verdict on what to fix before you deploy.",
     "ctaPrimary": "Connect my repository",
     "ctaSecondary": "See how it works",
-    "footnote": "Builder Edition · €5/month · First verdict in minutes"
+    "footnote": "Free to explore · €5/month when you scan"
   },
   "features": {
     "productionVerdict": "Production Verdict",
@@ -60,9 +60,9 @@
   "pricing": {
     "eyebrow": "Pricing",
     "title": "Builder Edition",
-    "subtitle": "The security layer for AI builders. One plan. Everything in V1.",
+    "subtitle": "Explore Mission Control for free. Pay €5/month only when you run Production Reviews.",
     "perMonth": "/month",
-    "cta": "Get started — €5/month",
+    "cta": "Start free — scan from €5/month",
     "planName": "Builder Edition"
   },
   "finalCta": {

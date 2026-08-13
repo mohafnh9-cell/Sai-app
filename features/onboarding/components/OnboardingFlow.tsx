@@ -18,7 +18,6 @@ import {
 } from "../onboarding-flow";
 import { OnboardingProgressTracker } from "./OnboardingProgressTracker";
 import { OnboardingWelcomeStep } from "./OnboardingWelcomeStep";
-import { OnboardingSubscribeStep } from "./OnboardingSubscribeStep";
 import { OnboardingGitHubStep } from "./OnboardingGitHubStep";
 import { OnboardingRepoPicker } from "./OnboardingRepoPicker";
 import { OnboardingReviewStep } from "./OnboardingReviewStep";
@@ -225,25 +224,7 @@ export function OnboardingFlow({ initialContext }: { initialContext: OnboardingC
       {step === "welcome" && (
         <OnboardingWelcomeStep
           hasOrg={context.hasOrg}
-          onContinue={() =>
-            goTo(
-              !context.hasActiveSubscription
-                ? "subscribe"
-                : context.githubConnected
-                  ? "repository"
-                  : "github"
-            )
-          }
-        />
-      )}
-
-      {step === "subscribe" && (
-        <OnboardingSubscribeStep
-          onSubscribed={() => {
-            setContext((prev) => ({ ...prev, hasActiveSubscription: true }));
-            goTo(context.githubConnected ? "repository" : "github");
-          }}
-          onBack={() => goTo("welcome")}
+          onContinue={() => goTo(context.githubConnected ? "repository" : "github")}
         />
       )}
 

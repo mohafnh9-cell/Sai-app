@@ -13,6 +13,10 @@ export function isGitHubReauthRequired(body: ScanApiErrorBody | null | undefined
   );
 }
 
+export function isSubscriptionRequired(body: ScanApiErrorBody | null | undefined): boolean {
+  return body?.code === "SUBSCRIPTION_REQUIRED";
+}
+
 export function resolveScanErrorMessage(
   body: ScanApiErrorBody | null | undefined,
   fallbacks: {
@@ -20,8 +24,12 @@ export function resolveScanErrorMessage(
     rateLimited?: string;
     infrastructureMissing?: string;
     reauth?: string;
+    subscriptionRequired?: string;
   }
 ): string {
+  if (isSubscriptionRequired(body)) {
+    return fallbacks.subscriptionRequired ?? body?.error ?? fallbacks.defaultMessage;
+  }
   if (isGitHubReauthRequired(body)) {
     return fallbacks.reauth ?? body?.error ?? fallbacks.defaultMessage;
   }

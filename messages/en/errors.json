@@ -3,6 +3,7 @@
   "reviewSlow": "The review is taking longer than expected.",
   "scanStart": "The Production Review could not be started.",
   "scanRateLimited": "You reached the hourly scan limit for this repository. Try again later.",
+  "subscriptionRequired": "Subscribe to Builder Edition (€5/month) to run Production Reviews.",
   "scanLoad": "Could not load this Production Review.",
   "generic": "Something went wrong. Please try again.",
   "githubReconnect": "Reconnect GitHub before selecting repositories."

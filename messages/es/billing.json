@@ -6,12 +6,15 @@
   "statusActive": "Builder Edition activa",
   "statusActiveHelp": "Tu workspace tiene acceso completo a SequrAI.",
   "statusPending": "Suscripción requerida",
-  "statusPendingHelp": "Suscríbete para desbloquear onboarding, scans y Mission Control.",
+  "statusPendingHelp": "Suscríbete para ejecutar Production Reviews. Puedes explorar el dashboard gratis.",
   "badgeActive": "Activa",
   "badgePending": "Pago requerido",
   "subscribeCta": "Suscribirse por €5/mes",
   "manageSubscription": "Gestionar suscripción",
-  "subscriptionRequiredNotice": "Suscríbete a Builder Edition para seguir usando SequrAI.",
+  "subscriptionRequiredNotice": "Suscríbete a Builder Edition cuando quieras ejecutar una Production Review.",
   "checkoutCanceledNotice": "El checkout se canceló. Suscríbete cuando estés listo para continuar.",
-  "cancelAnytime": "Cancela cuando quieras desde el portal de facturación."
+  "cancelAnytime": "Cancela cuando quieras desde el portal de facturación.",
+  "scanPaywallTitle": "Suscríbete para escanear",
+  "scanPaywallBody": "Explora SequrAI gratis. Las Production Reviews empiezan en €5/mes.",
+  "scanPaywallBillingLink": "Ver detalles de facturación"
 }

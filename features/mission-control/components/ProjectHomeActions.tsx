@@ -2,6 +2,7 @@
 
 import { Loader2, ScanSearch, Shield, Sparkles } from "lucide-react";
 import { GitHubReauthBanner } from "@/features/github/components/GitHubReauthBanner";
+import { ScanPaywallBanner } from "@/features/billing/components/ScanPaywallBanner";
 import { VerdictStatusBadge } from "@/features/production-verdict/components/VerdictStatusBadge";
 import type { MissionControlState } from "@/features/mission-control/types/mission-control-state";
 import { useI18n } from "@/lib/i18n/client";
@@ -54,6 +55,7 @@ export function ProjectHomeActions({
   securityAction,
   actionError,
   reauthRequired,
+  subscriptionRequired,
   onStartScan,
   onStartSecurityTest,
 }: {
@@ -62,6 +64,7 @@ export function ProjectHomeActions({
   securityAction: MissionControlState["actions"]["security"] & { label: MissionControlState["actions"]["security"]["label"] };
   actionError: string | null;
   reauthRequired?: boolean;
+  subscriptionRequired?: boolean;
   onStartScan: () => void;
   onStartSecurityTest: () => void;
 }) {
@@ -153,12 +156,19 @@ export function ProjectHomeActions({
         ) : null}
       </div>
 
+      {subscriptionRequired ? (
+        <ScanPaywallBanner
+          message={actionError ?? undefined}
+          returnPath={`/projects/${state.projectId}/mission-control`}
+        />
+      ) : null}
+
       {reauthRequired ? (
         <GitHubReauthBanner
           returnPath={`/projects/${state.projectId}/mission-control`}
           message={actionError ?? undefined}
         />
-      ) : actionError ? (
+      ) : actionError && !reauthRequired && !subscriptionRequired ? (
         <p className="text-xs text-destructive" role="alert">
           {actionError}
         </p>

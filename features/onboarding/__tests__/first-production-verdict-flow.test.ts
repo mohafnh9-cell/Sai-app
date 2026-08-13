@@ -36,11 +36,8 @@ describe("Block 6.4 First Production Verdict onboarding flow", () => {
     expect(resolveInitialWizardStep(baseContext({ hasOrg: false }))).toBe("welcome");
   });
 
-  it("starts at subscribe when org exists but subscription is inactive", () => {
-    expect(resolveInitialWizardStep(baseContext({ hasActiveSubscription: false }))).toBe("subscribe");
-  });
-
   it("starts at github when org exists but GitHub is not connected", () => {
+    expect(resolveInitialWizardStep(baseContext({ hasActiveSubscription: false }))).toBe("github");
     expect(resolveInitialWizardStep(baseContext())).toBe("github");
   });
 
@@ -134,9 +131,9 @@ describe("Block 6.4 First Production Verdict onboarding flow", () => {
   it("parses wizard and legacy step params", () => {
     expect(parseWizardStep("review")).toBe("review");
     expect(parseWizardStep("invalid")).toBeNull();
-    expect(parseLegacyStepParam("2")).toBe("github");
-    expect(parseLegacyStepParam("4")).toBe("review");
-    expect(parseLegacyStepParam("6")).toBe("cursor");
+    expect(parseLegacyStepParam("2")).toBe("repository");
+    expect(parseLegacyStepParam("3")).toBe("review");
+    expect(parseLegacyStepParam("5")).toBe("cursor");
   });
 
   it("detects active and completed scan statuses", () => {

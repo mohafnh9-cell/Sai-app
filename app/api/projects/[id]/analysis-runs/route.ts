@@ -155,7 +155,7 @@ export async function POST(
     );
     const admin = createAdminClient();
     const result = await startRepositoryManualScan(
-      { supabase: scanSupabase, admin, user: scanUser, project },
+      { supabase: scanSupabase, admin, user: { id: scanUser.id, email: scanUser.email }, project },
       {
         repositoryId: projectId,
         scanType: "full",

@@ -35,34 +35,41 @@ export async function POST(request: Request) {
   const stripe = getStripe();
   const admin = createAdminClient();
 
-  const customerId = await ensureStripeCustomerForOrganization(
-    admin,
-    auth.organizationId,
-    auth.user.email ?? "",
-    auth.orgName ?? "SequrAI Workspace"
-  );
+  try {
+    const customerId = await ensureStripeCustomerForOrganization(
+      admin,
+      auth.organizationId,
+      auth.user.email ?? "",
+      auth.orgName ?? "SequrAI Workspace"
+    );
 
-  const session = await stripe.checkout.sessions.create({
-    customer: customerId,
-    mode: "subscription",
-    line_items: [{ price: BUILDER_PLAN.priceId, quantity: 1 }],
-    success_url: `${appUrl}/onboarding?step=github&checkout=success`,
-    cancel_url: `${appUrl}/billing?checkout=canceled`,
-    metadata: {
-      organization_id: auth.organizationId,
-      user_id: auth.user.id,
-    },
-    subscription_data: {
+    const session = await stripe.checkout.sessions.create({
+      customer: customerId,
+      mode: "subscription",
+      line_items: [{ price: BUILDER_PLAN.priceId, quantity: 1 }],
+      success_url: `${appUrl}/onboarding?step=github&checkout=success`,
+      cancel_url: `${appUrl}/billing?checkout=canceled`,
       metadata: {
         organization_id: auth.organizationId,
+        user_id: auth.user.id,
       },
-    },
-    allow_promotion_codes: true,
-  });
+      subscription_data: {
+        metadata: {
+          organization_id: auth.organizationId,
+        },
+      },
+      allow_promotion_codes: true,
+    });
 
-  if (!session.url) {
-    return NextResponse.json({ error: "Could not create checkout session" }, { status: 500 });
+    if (!session.url) {
+      return NextResponse.json({ error: "Could not create checkout session" }, { status: 500 });
+    }
+
+    return NextResponse.json({ url: session.url });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Could not start checkout";
+    console.error({ component: "stripe-checkout", error: message });
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-
-  return NextResponse.json({ url: session.url });
 }

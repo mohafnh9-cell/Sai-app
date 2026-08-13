@@ -16,29 +16,7 @@ export function hasActiveSubscriptionStatus(status: SubscriptionStatus | null | 
   return ACTIVE_SUBSCRIPTION_STATUSES.has(status);
 }
 
-const SUBSCRIPTION_EXEMPT_PREFIXES = ["/billing", "/settings"];
-
-const SUBSCRIPTION_REQUIRED_PREFIXES = [
-  "/dashboard",
-  "/projects",
-  "/security",
-  "/integrations",
-  "/ai-fixes",
-  "/timeline",
-];
-
-export function isSubscriptionExemptPath(pathname: string): boolean {
-  return SUBSCRIPTION_EXEMPT_PREFIXES.some((prefix) => pathname.startsWith(prefix));
-}
-
-export function isSubscriptionRequiredPath(pathname: string): boolean {
-  if (pathname.startsWith("/onboarding")) return false;
-  return SUBSCRIPTION_REQUIRED_PREFIXES.some((prefix) => pathname.startsWith(prefix));
-}
-
-export function subscriptionRedirectPath(pathname: string): string | null {
-  if (!isSubscriptionRequiredPath(pathname) || isSubscriptionExemptPath(pathname)) {
-    return null;
-  }
-  return "/billing?reason=subscription_required";
+/** Site-wide route paywalls are disabled; scans are gated at API level. */
+export function subscriptionRedirectPath(_pathname: string): string | null {
+  return null;
 }

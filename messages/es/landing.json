@@ -6,7 +6,7 @@
     "subline": "Analiza tu aplicación antes de producción, detecta riesgos y problemas prioritarios y obtén un veredicto claro sobre qué debes corregir antes de desplegar.",
     "ctaPrimary": "Conectar mi repositorio",
     "ctaSecondary": "Ver cómo funciona",
-    "footnote": "Builder Edition · €5/mes · Primer veredicto en minutos"
+    "footnote": "Explora gratis · €5/mes cuando escanees"
   },
   "features": {
     "productionVerdict": "Production Verdict",
@@ -60,9 +60,9 @@
   "pricing": {
     "eyebrow": "Precios",
     "title": "Builder Edition",
-    "subtitle": "La capa de seguridad para builders con IA. Un plan. Todo lo incluido en V1.",
+    "subtitle": "Explora Mission Control gratis. Paga €5/mes solo cuando ejecutes Production Reviews.",
     "perMonth": "/mes",
-    "cta": "Empezar — €5/mes",
+    "cta": "Empezar gratis — escanea desde €5/mes",
     "planName": "Builder Edition"
   },
   "finalCta": {

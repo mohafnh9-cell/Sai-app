@@ -6,12 +6,6 @@ import {
   internalOpsUnauthorizedResponse,
   verifyInternalOpsRequest,
 } from "@/lib/auth/internal-ops";
-import {
-  hasActiveSubscriptionStatus,
-  subscriptionRedirectPath,
-} from "@/lib/billing/access";
-import { ACTIVE_WORKSPACE_COOKIE } from "@/lib/workspaces/constants";
-import { isAuthBypassAllowed } from "@/lib/env/production-guard";
 
 const PROTECTED_PATHS = [
   "/dashboard",
@@ -26,65 +20,6 @@ const PROTECTED_PATHS = [
 ];
 
 const AUTH_PATHS = ["/login", "/signup"];
-
-async function resolveActiveOrganizationId(
-  supabase: ReturnType<typeof createServerClient>,
-  userId: string,
-  cookieOrganizationId?: string | null
-): Promise<string | null> {
-  if (cookieOrganizationId) {
-    const { data: membership } = await supabase
-      .from("organization_members")
-      .select("organization_id")
-      .eq("user_id", userId)
-      .eq("organization_id", cookieOrganizationId)
-      .maybeSingle();
-    if (membership?.organization_id) return membership.organization_id;
-  }
-
-  const { data: fallbackMembership } = await supabase
-    .from("organization_members")
-    .select("organization_id")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-
-  return fallbackMembership?.organization_id ?? null;
-}
-
-async function subscriptionGateRedirect(
-  request: NextRequest,
-  supabase: ReturnType<typeof createServerClient>,
-  userId: string
-): Promise<NextResponse | null> {
-  if (isAuthBypassAllowed()) return null;
-
-  const redirectPath = subscriptionRedirectPath(request.nextUrl.pathname);
-  if (!redirectPath) return null;
-
-  const organizationId = await resolveActiveOrganizationId(
-    supabase,
-    userId,
-    request.cookies.get(ACTIVE_WORKSPACE_COOKIE)?.value
-  );
-  if (!organizationId) return null;
-
-  const { data: subscription } = await supabase
-    .from("subscriptions")
-    .select("status")
-    .eq("organization_id", organizationId)
-    .maybeSingle();
-
-  if (hasActiveSubscriptionStatus(subscription?.status as Parameters<typeof hasActiveSubscriptionStatus>[0])) {
-    return null;
-  }
-
-  const url = request.nextUrl.clone();
-  url.pathname = "/billing";
-  url.searchParams.set("reason", "subscription_required");
-  return NextResponse.redirect(url);
-}
 
 export async function updateSession(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
@@ -151,11 +86,6 @@ export async function updateSession(request: NextRequest) {
     url.pathname = safeNextPath(request.nextUrl.searchParams.get("redirectTo"));
     url.searchParams.delete("redirectTo");
     return NextResponse.redirect(url);
-  }
-
-  if (user) {
-    const subscriptionRedirect = await subscriptionGateRedirect(request, supabase, user.id);
-    if (subscriptionRedirect) return subscriptionRedirect;
   }
 
   return supabaseResponse;
