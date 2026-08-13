@@ -17,31 +17,17 @@ export function Pricing() {
         </h2>
         <p className="mt-3 max-w-md text-sm text-muted-foreground">{t("pricing.subtitle")}</p>
 
-        <div className="mt-16 grid gap-6 md:grid-cols-2 md:gap-8">
+        <div className="mt-16 max-w-lg">
           {PRICING_PLANS.map((plan) => (
             <div
               key={plan.id}
-              className={`rounded-[20px] border p-8 md:p-10 ${
-                plan.highlighted
-                  ? "border-brand-violet/30 bg-surface"
-                  : "border-border bg-background"
-              }`}
-              style={
-                plan.highlighted
-                  ? {
-                      boxShadow:
-                        "0 0 0 1px rgb(123 92 255 / 0.12), 0 24px 80px rgb(0 0 0 / 0.35)",
-                    }
-                  : undefined
-              }
+              className="rounded-[20px] border border-brand-violet/30 bg-surface p-8 md:p-10"
+              style={{
+                boxShadow:
+                  "0 0 0 1px rgb(123 92 255 / 0.12), 0 24px 80px rgb(0 0 0 / 0.35)",
+              }}
             >
-              <div className="flex items-baseline justify-between gap-4">
-                <h3 className="text-xl font-semibold tracking-[-0.02em]">{t("pricing.planName")}</h3>
-                <span className="text-[10px] uppercase tracking-[0.16em] text-text-muted">
-                  {t(`pricing.${plan.id}.phase`)}
-                </span>
-              </div>
-              <p className="mt-2 text-sm text-muted-foreground">{t(`pricing.${plan.id}.positioning`)}</p>
+              <h3 className="text-xl font-semibold tracking-[-0.02em]">{t("pricing.planName")}</h3>
               <div className="mt-8 flex items-baseline gap-1">
                 <span className="text-5xl font-semibold tracking-[-0.04em]">€{plan.price}</span>
                 <span className="text-muted-foreground">{t("pricing.perMonth")}</span>
@@ -55,14 +41,8 @@ export function Pricing() {
                 ))}
               </ul>
 
-              <Button
-                className={`mt-10 h-11 w-full rounded-full ${
-                  plan.highlighted ? "bg-brand-gradient hover:opacity-90" : ""
-                }`}
-                variant={plan.highlighted ? "default" : "outline"}
-                asChild
-              >
-                <Link href="/connect">{t(`pricing.${plan.id}.cta`)}</Link>
+              <Button className="mt-10 h-11 w-full rounded-full bg-brand-gradient hover:opacity-90" asChild>
+                <Link href="/connect">{t("pricing.cta")}</Link>
               </Button>
             </div>
           ))}

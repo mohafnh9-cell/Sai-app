@@ -1,6 +1,7 @@
 "use client";
 
 import { Loader2, ScanSearch, Shield, Sparkles } from "lucide-react";
+import { GitHubReauthBanner } from "@/features/github/components/GitHubReauthBanner";
 import { VerdictStatusBadge } from "@/features/production-verdict/components/VerdictStatusBadge";
 import type { MissionControlState } from "@/features/mission-control/types/mission-control-state";
 import { useI18n } from "@/lib/i18n/client";
@@ -52,6 +53,7 @@ export function ProjectHomeActions({
   scanAction,
   securityAction,
   actionError,
+  reauthRequired,
   onStartScan,
   onStartSecurityTest,
 }: {
@@ -59,6 +61,7 @@ export function ProjectHomeActions({
   scanAction: MissionControlState["actions"]["scan"] & { label: MissionControlState["actions"]["scan"]["label"] };
   securityAction: MissionControlState["actions"]["security"] & { label: MissionControlState["actions"]["security"]["label"] };
   actionError: string | null;
+  reauthRequired?: boolean;
   onStartScan: () => void;
   onStartSecurityTest: () => void;
 }) {
@@ -150,7 +153,12 @@ export function ProjectHomeActions({
         ) : null}
       </div>
 
-      {actionError ? (
+      {reauthRequired ? (
+        <GitHubReauthBanner
+          returnPath={`/projects/${state.projectId}/mission-control`}
+          message={actionError ?? undefined}
+        />
+      ) : actionError ? (
         <p className="text-xs text-destructive" role="alert">
           {actionError}
         </p>

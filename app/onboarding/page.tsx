@@ -26,6 +26,17 @@ export default async function OnboardingPage({
   const forcedStep = params.step != null;
   const context = await getOnboardingContext(supabase, user.id);
 
+  const parsedStep = params.step?.trim();
+  if (
+    context.hasOrg &&
+    !context.hasActiveSubscription &&
+    parsedStep &&
+    parsedStep !== "welcome" &&
+    parsedStep !== "subscribe"
+  ) {
+    redirect("/onboarding?step=subscribe");
+  }
+
   if (context.isComplete && !forcedStep) {
     redirect("/dashboard");
   }

@@ -6,7 +6,7 @@
     "subline": "Analyze your application before production, detect priority risks and issues, and get a clear verdict on what to fix before you deploy.",
     "ctaPrimary": "Connect my repository",
     "ctaSecondary": "See how it works",
-    "footnote": "Private beta · First verdict in minutes"
+    "footnote": "Builder Edition · €5/month · First verdict in minutes"
   },
   "features": {
     "productionVerdict": "Production Verdict",
@@ -62,16 +62,7 @@
     "title": "Builder Edition",
     "subtitle": "The security layer for AI builders. One plan. Everything in V1.",
     "perMonth": "/month",
-    "privateBeta": {
-      "phase": "Private Beta",
-      "positioning": "For indie hackers and AI builders shipping every week.",
-      "cta": "Start private beta"
-    },
-    "publicBeta": {
-      "phase": "Public Beta",
-      "positioning": "Same product. Opens after private beta.",
-      "cta": "Join waitlist"
-    },
+    "cta": "Get started — €5/month",
     "planName": "Builder Edition"
   },
   "finalCta": {

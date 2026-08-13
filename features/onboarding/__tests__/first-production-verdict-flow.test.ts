@@ -20,6 +20,7 @@ function baseContext(overrides: Partial<OnboardingContext> = {}): OnboardingCont
   return {
     hasOrg: true,
     orgId: "org-1",
+    hasActiveSubscription: true,
     githubConnected: false,
     projects: [],
     activeScan: null,
@@ -33,6 +34,10 @@ function baseContext(overrides: Partial<OnboardingContext> = {}): OnboardingCont
 describe("Block 6.4 First Production Verdict onboarding flow", () => {
   it("starts at welcome when user has no organization", () => {
     expect(resolveInitialWizardStep(baseContext({ hasOrg: false }))).toBe("welcome");
+  });
+
+  it("starts at subscribe when org exists but subscription is inactive", () => {
+    expect(resolveInitialWizardStep(baseContext({ hasActiveSubscription: false }))).toBe("subscribe");
   });
 
   it("starts at github when org exists but GitHub is not connected", () => {
@@ -129,9 +134,9 @@ describe("Block 6.4 First Production Verdict onboarding flow", () => {
   it("parses wizard and legacy step params", () => {
     expect(parseWizardStep("review")).toBe("review");
     expect(parseWizardStep("invalid")).toBeNull();
-    expect(parseLegacyStepParam("2")).toBe("repository");
-    expect(parseLegacyStepParam("4")).toBe("finale");
-    expect(parseLegacyStepParam("5")).toBe("cursor");
+    expect(parseLegacyStepParam("2")).toBe("github");
+    expect(parseLegacyStepParam("4")).toBe("review");
+    expect(parseLegacyStepParam("6")).toBe("cursor");
   });
 
   it("detects active and completed scan statuses", () => {

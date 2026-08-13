@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { appendAnalysisRunSearchParams } from "@/features/analysis-runs/lib/build-run-query";
+import { trackEvent } from "@/lib/analytics/track";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { ProductionVerdictV1 } from "@/brain/production-verdict/schema";
 import { markOnboardingWizardComplete } from "@/lib/onboarding/mark-onboarding-complete";
@@ -17,6 +18,7 @@ import {
 } from "../onboarding-flow";
 import { OnboardingProgressTracker } from "./OnboardingProgressTracker";
 import { OnboardingWelcomeStep } from "./OnboardingWelcomeStep";
+import { OnboardingSubscribeStep } from "./OnboardingSubscribeStep";
 import { OnboardingGitHubStep } from "./OnboardingGitHubStep";
 import { OnboardingRepoPicker } from "./OnboardingRepoPicker";
 import { OnboardingReviewStep } from "./OnboardingReviewStep";
@@ -72,7 +74,19 @@ export function OnboardingFlow({ initialContext }: { initialContext: OnboardingC
   const forcedStep = explicitStep;
   const paramProjectId = searchParams.get("projectId");
 
-  const [context, setContext] = useState(initialContext);
+  const checkoutSuccess = searchParams.get("checkout") === "success";
+
+  useEffect(() => {
+    if (checkoutSuccess) {
+      trackEvent("checkout_completed");
+    }
+  }, [checkoutSuccess]);
+
+  const [context, setContext] = useState(() =>
+    checkoutSuccess && initialContext.hasOrg
+      ? { ...initialContext, hasActiveSubscription: true }
+      : initialContext
+  );
   const [rawStep, setRawStep] = useState<WizardStep>(() =>
     resolveInitialWizardStep(initialContext, forcedStep)
   );
@@ -211,7 +225,25 @@ export function OnboardingFlow({ initialContext }: { initialContext: OnboardingC
       {step === "welcome" && (
         <OnboardingWelcomeStep
           hasOrg={context.hasOrg}
-          onContinue={() => goTo(context.githubConnected ? "repository" : "github")}
+          onContinue={() =>
+            goTo(
+              !context.hasActiveSubscription
+                ? "subscribe"
+                : context.githubConnected
+                  ? "repository"
+                  : "github"
+            )
+          }
+        />
+      )}
+
+      {step === "subscribe" && (
+        <OnboardingSubscribeStep
+          onSubscribed={() => {
+            setContext((prev) => ({ ...prev, hasActiveSubscription: true }));
+            goTo(context.githubConnected ? "repository" : "github");
+          }}
+          onBack={() => goTo("welcome")}
         />
       )}
 

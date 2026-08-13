@@ -10,6 +10,7 @@ import {
   scanIsCompleted,
 } from "@/features/onboarding/onboarding-flow";
 import { getWorkspaceGitHubConnectionView } from "@/server/github/workspace-connection-service";
+import { organizationHasActiveSubscription } from "@/server/billing/subscription-status";
 import { resolveActiveWorkspaceIdForUser } from "@/server/workspaces/service";
 
 function mapScan(row: {
@@ -34,6 +35,10 @@ export async function getOnboardingContext(
 ): Promise<OnboardingContext> {
   const orgId = await resolveActiveWorkspaceIdForUser(supabase, userId);
   const hasOrg = Boolean(orgId);
+
+  const hasActiveSubscription = orgId
+    ? await organizationHasActiveSubscription(supabase, orgId)
+    : false;
 
   const githubConnected = orgId
     ? (await getWorkspaceGitHubConnectionView(supabase, orgId)).status === "connected"
@@ -128,6 +133,7 @@ export async function getOnboardingContext(
   return {
     hasOrg,
     orgId,
+    hasActiveSubscription,
     githubConnected,
     projects,
     activeScan,

@@ -1,5 +1,7 @@
 # Private Beta Environment Checklist
 
+> For **market launch** (Builder Edition €5/month, paid-only), use [MARKET_LAUNCH_CHECKLIST.md](./MARKET_LAUNCH_CHECKLIST.md).
+
 Use this before inviting the first 25 builders.
 
 ## 1. Supabase migrations

@@ -140,6 +140,12 @@ async function main() {
   const { admin, cookieHeader } = await authenticateProductionSession();
   log("AUTH session", true);
 
+  const billingPage = await productionFetch("/billing", { cookieHeader });
+  log("BILLING page", billingPage.response.status === 200, `${billingPage.response.status}`);
+
+  const checkoutUnauth = await productionFetch("/api/stripe/checkout", { method: "POST" });
+  log("BILLING checkout unauthenticated", checkoutUnauth.response.status === 401, `${checkoutUnauth.response.status}`);
+
   // FLOW 1 — never analyzed project MC state
   const mc1 = await productionFetch(
     `/api/projects/${NEVER_ANALYZED_PROJECT_ID}/mission-control`,

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { getRequestLocale } from "@/lib/i18n/server";
 import { inter } from "@/lib/fonts";
+import { VercelAnalytics } from "@/components/analytics/VercelAnalytics";
 import "./globals.css";
 
 export const viewport: Viewport = {
@@ -59,6 +60,7 @@ export default async function RootLayout({
     <html lang={locale} className={inter.variable} suppressHydrationWarning>
       <body className={`${inter.className} min-h-app antialiased`}>
         {children}
+        <VercelAnalytics />
       </body>
     </html>
   );

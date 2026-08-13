@@ -3,6 +3,8 @@ export type AnalyticsEvent =
   | "workspace_ready"
   | "github_connected"
   | "repository_selected"
+  | "checkout_started"
+  | "checkout_completed"
   | "first_review_requested"
   | "first_review_started"
   | "first_review_completed"
@@ -36,5 +38,12 @@ export function trackEvent(event: AnalyticsEvent, payload?: AnalyticsPayload): v
   if (process.env.NODE_ENV === "development") {
     console.info({ component: "analytics", event, ...payload });
   }
-  // Provider hook: wire PostHog/Segment here when available.
+
+  if (typeof window === "undefined") return;
+
+  void import("@vercel/analytics")
+    .then(({ track }) => {
+      track(event, payload as Record<string, string | number | boolean | null>);
+    })
+    .catch(() => undefined);
 }

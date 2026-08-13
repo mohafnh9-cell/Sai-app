@@ -6,7 +6,7 @@
     "subline": "Analiza tu aplicación antes de producción, detecta riesgos y problemas prioritarios y obtén un veredicto claro sobre qué debes corregir antes de desplegar.",
     "ctaPrimary": "Conectar mi repositorio",
     "ctaSecondary": "Ver cómo funciona",
-    "footnote": "Beta privada · Primer veredicto en minutos"
+    "footnote": "Builder Edition · €5/mes · Primer veredicto en minutos"
   },
   "features": {
     "productionVerdict": "Production Verdict",
@@ -62,16 +62,7 @@
     "title": "Builder Edition",
     "subtitle": "La capa de seguridad para builders con IA. Un plan. Todo lo incluido en V1.",
     "perMonth": "/mes",
-    "privateBeta": {
-      "phase": "Beta privada",
-      "positioning": "Para indie hackers y builders con IA que lanzan cada semana.",
-      "cta": "Empezar beta privada"
-    },
-    "publicBeta": {
-      "phase": "Beta pública",
-      "positioning": "El mismo producto. Se abre tras la beta privada.",
-      "cta": "Unirse a la lista de espera"
-    },
+    "cta": "Empezar — €5/mes",
     "planName": "Builder Edition"
   },
   "finalCta": {

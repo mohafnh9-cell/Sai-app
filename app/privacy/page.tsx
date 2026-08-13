@@ -31,8 +31,9 @@ export default function PrivacyPage() {
           <section className="space-y-3">
             <h2 className="text-base font-semibold text-foreground">2. How We Use Your Information</h2>
             <p>
-              We use your information to provide and improve the SequrAI service, send security
-              reports, and communicate important updates about your account.
+              We use your information to provide and improve the SequrAI service, process your
+              Builder Edition subscription (€5/month via Stripe), send security reports, and
+              communicate important updates about your account.
             </p>
           </section>
 
@@ -47,8 +48,9 @@ export default function PrivacyPage() {
           <section className="space-y-3">
             <h2 className="text-base font-semibold text-foreground">4. Third-Party Services</h2>
             <p>
-              We use GitHub for authentication, Stripe for payments, and Supabase for data storage.
-              Each service has its own privacy policy governing their use of your information.
+              We use GitHub for authentication, Stripe for Builder Edition billing (€5/month),
+              and Supabase for data storage. Each service has its own privacy policy governing
+              their use of your information.
             </p>
           </section>
 

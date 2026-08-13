@@ -7,7 +7,11 @@ import { Progress } from "@/components/ui/progress";
 import type { ProductionVerdictV1 } from "@/brain/production-verdict/schema";
 import { REVIEW_STAGE_KEYS, resolveReviewStageIndex } from "@/lib/onboarding/review-stages";
 import { scanIsActive, scanIsCompleted } from "../onboarding-flow";
-import { startGitHubOAuth } from "@/lib/github/oauth-client";
+import {
+  isGitHubReauthRequired,
+  resolveScanErrorMessage,
+} from "@/lib/github/scan-api-response";
+import { GitHubReauthBanner } from "@/features/github/components/GitHubReauthBanner";
 import { useI18n } from "@/lib/i18n/client";
 import { translateStoredProgressMessage } from "@/lib/i18n/review-progress";
 
@@ -36,6 +40,7 @@ export function OnboardingReviewStep({
   const [scanId, setScanId] = useState<string | null>(existingScanId ?? null);
   const [scan, setScan] = useState<ScanPayload | null>(null);
   const [error, setError] = useState("");
+  const [reauthRequired, setReauthRequired] = useState(false);
   const [stalled, setStalled] = useState(false);
   const [queueStalled, setQueueStalled] = useState(false);
   const [starting, setStarting] = useState(false);
@@ -43,6 +48,7 @@ export function OnboardingReviewStep({
 
   const startScan = useCallback(async () => {
     setError("");
+    setReauthRequired(false);
     setStalled(false);
     setQueueStalled(false);
     setStarting(true);
@@ -57,17 +63,26 @@ export function OnboardingReviewStep({
         | { scan_id?: string; error?: string; needsReauth?: boolean; code?: string }
         | null;
 
-      if (body?.needsReauth || body?.code === "GITHUB_REAUTH_REQUIRED") {
-        localStorage.setItem(`sequrai_github_scan_${projectId}`, "1");
-        await startGitHubOAuth(`/onboarding?step=review&projectId=${projectId}`);
+      if (isGitHubReauthRequired(body)) {
+        setReauthRequired(true);
+        setError(
+          resolveScanErrorMessage(body, {
+            defaultMessage: te("scanStart"),
+            reauth: te("githubReconnect"),
+          })
+        );
         return;
       }
 
       if (!response.ok || !body?.scan_id) {
-        if (body?.code === "SCAN_JOB_INFRASTRUCTURE_MISSING") {
-          throw new Error(t("reviewInfrastructureMissing"));
-        }
-        throw new Error(body?.error || te("scanStart"));
+        setReauthRequired(false);
+        throw new Error(
+          resolveScanErrorMessage(body, {
+            defaultMessage: te("scanStart"),
+            rateLimited: te("scanRateLimited"),
+            infrastructureMissing: t("reviewInfrastructureMissing"),
+          })
+        );
       }
 
       setScanId(body.scan_id);
@@ -215,7 +230,14 @@ export function OnboardingReviewStep({
         </div>
       )}
 
-      {error && (
+      {reauthRequired ? (
+        <GitHubReauthBanner
+          returnPath={`/onboarding?step=review&projectId=${projectId}`}
+          message={error || undefined}
+        />
+      ) : null}
+
+      {error && !reauthRequired && (
         <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 space-y-3">
           <div>
             <p className="text-sm font-medium">{t("reviewFailedTitle")}</p>

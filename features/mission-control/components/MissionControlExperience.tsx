@@ -29,6 +29,7 @@ export function MissionControlExperience({
     scanAction,
     securityAction,
     actionError,
+    reauthRequired,
     startScan,
     startSecurityTest,
   } = useMissionControlState(initialState.projectId, {
@@ -124,6 +125,7 @@ export function MissionControlExperience({
         scanAction={scanAction}
         securityAction={securityAction}
         actionError={actionError}
+        reauthRequired={reauthRequired}
         onStartScan={() => void startScan()}
         onStartSecurityTest={() => void startSecurityTest()}
       />

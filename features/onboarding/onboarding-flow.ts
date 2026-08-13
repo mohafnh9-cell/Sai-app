@@ -2,6 +2,7 @@ import type { ProductionVerdictV1 } from "@/brain/production-verdict/schema";
 
 export const WIZARD_STEPS = [
   "welcome",
+  "subscribe",
   "github",
   "repository",
   "review",
@@ -50,6 +51,7 @@ export type OnboardingScan = {
 export type OnboardingContext = {
   hasOrg: boolean;
   orgId: string | null;
+  hasActiveSubscription: boolean;
   githubConnected: boolean;
   projects: OnboardingProject[];
   activeScan: OnboardingScan | null;
@@ -105,6 +107,7 @@ export function resolveInitialWizardStep(
   }
   if (ctx.isComplete) return "cursor";
   if (!ctx.hasOrg) return "welcome";
+  if (!ctx.hasActiveSubscription) return "subscribe";
   if (!ctx.githubConnected) return "github";
   if (ctx.projects.length === 0) return "repository";
   if (ctx.activeScan || !ctx.latestCompletedScan || !ctx.latestVerdict) return "review";
@@ -124,6 +127,7 @@ export function parseLegacyStepParam(value: string | null | undefined): WizardSt
   if (!Number.isFinite(index)) return null;
   const legacy: WizardStep[] = [
     "welcome",
+    "subscribe",
     "github",
     "repository",
     "review",

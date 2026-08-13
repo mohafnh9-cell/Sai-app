@@ -31,13 +31,23 @@ export default function TermsPage() {
           <section className="space-y-3">
             <h2 className="text-base font-semibold text-foreground">2. Description of Service</h2>
             <p>
-              SequrAI is a security analysis platform for applications developed with AI tools.
-              We provide vulnerability scanning, security scoring, and AI-powered remediation suggestions.
+              SequrAI is a production readiness platform for applications developed with AI tools.
+              We provide security reviews, Production Verdicts, and remediation guidance through a
+              single Builder Edition plan (€5/month).
             </p>
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-base font-semibold text-foreground">3. User Accounts</h2>
+            <h2 className="text-base font-semibold text-foreground">3. Subscriptions and Billing</h2>
+            <p>
+              Access to SequrAI requires an active Builder Edition subscription billed monthly
+              through Stripe. You may cancel anytime from the billing portal; cancellation stops
+              future charges but does not refund the current billing period unless required by law.
+            </p>
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="text-base font-semibold text-foreground">4. User Accounts</h2>
             <p>
               You are responsible for maintaining the confidentiality of your account credentials
               and for all activities that occur under your account.
@@ -45,7 +55,7 @@ export default function TermsPage() {
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-base font-semibold text-foreground">4. Acceptable Use</h2>
+            <h2 className="text-base font-semibold text-foreground">5. Acceptable Use</h2>
             <p>
               You agree to use SequrAI only for lawful purposes and in accordance with these Terms.
               You may not use the service to scan systems you do not own or have explicit permission to test.
@@ -53,7 +63,7 @@ export default function TermsPage() {
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-base font-semibold text-foreground">5. Limitation of Liability</h2>
+            <h2 className="text-base font-semibold text-foreground">6. Limitation of Liability</h2>
             <p>
               SequrAI is provided &quot;as is&quot; without warranties of any kind. We are not liable for
               any security incidents that occur in your applications.
@@ -61,7 +71,7 @@ export default function TermsPage() {
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-base font-semibold text-foreground">6. Contact</h2>
+            <h2 className="text-base font-semibold text-foreground">7. Contact</h2>
             <p>
               For questions about these Terms, contact us at{" "}
               <a href="mailto:legal@sequrai.com" className="text-primary hover:underline">

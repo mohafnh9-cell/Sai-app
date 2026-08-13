@@ -1,0 +1,17 @@
+{
+  "title": "Billing",
+  "subtitle": "Manage your Builder Edition subscription.",
+  "perMonth": "/month",
+  "planDescription": "One plan. Everything you need to ship AI-built software with confidence.",
+  "statusActive": "Builder Edition is active",
+  "statusActiveHelp": "Your workspace has full access to SequrAI.",
+  "statusPending": "Subscription required",
+  "statusPendingHelp": "Subscribe to unlock onboarding, scans, and Mission Control.",
+  "badgeActive": "Active",
+  "badgePending": "Payment required",
+  "subscribeCta": "Subscribe for €5/month",
+  "manageSubscription": "Manage subscription",
+  "subscriptionRequiredNotice": "Subscribe to Builder Edition to continue using SequrAI.",
+  "checkoutCanceledNotice": "Checkout was canceled. Subscribe when you are ready to continue.",
+  "cancelAnytime": "Cancel anytime from the billing portal."
+}

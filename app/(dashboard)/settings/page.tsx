@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { LanguageSelector } from "@/components/shared/LanguageSelector";
 import { getTranslator } from "@/lib/i18n/server";
 import type { Metadata } from "next";
+import { DeleteAccountPanel } from "@/features/settings/DeleteAccountPanel";
 import { VerdictAutopilotToggle } from "@/features/autopilot/components/VerdictAutopilotToggle";
 import { McpApiKeysPanel } from "@/features/settings/McpApiKeysPanel";
 import { isVerdictAutopilotEnabled } from "@/server/autopilot";
@@ -84,6 +85,8 @@ export default async function SettingsPage() {
           <LanguageSelector variant="settings" />
         </CardContent>
       </Card>
+
+      <DeleteAccountPanel />
     </div>
   );
 }

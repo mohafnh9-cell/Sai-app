@@ -1,0 +1,17 @@
+{
+  "title": "Facturación",
+  "subtitle": "Gestiona tu suscripción Builder Edition.",
+  "perMonth": "/mes",
+  "planDescription": "Un plan. Todo lo que necesitas para lanzar software con IA con confianza.",
+  "statusActive": "Builder Edition activa",
+  "statusActiveHelp": "Tu workspace tiene acceso completo a SequrAI.",
+  "statusPending": "Suscripción requerida",
+  "statusPendingHelp": "Suscríbete para desbloquear onboarding, scans y Mission Control.",
+  "badgeActive": "Activa",
+  "badgePending": "Pago requerido",
+  "subscribeCta": "Suscribirse por €5/mes",
+  "manageSubscription": "Gestionar suscripción",
+  "subscriptionRequiredNotice": "Suscríbete a Builder Edition para seguir usando SequrAI.",
+  "checkoutCanceledNotice": "El checkout se canceló. Suscríbete cuando estés listo para continuar.",
+  "cancelAnytime": "Cancela cuando quieras desde el portal de facturación."
+}

@@ -8,6 +8,10 @@ import { analysisRunKeys } from "@/features/analysis-runs/lib/query-keys";
 import { appendAnalysisRunSearchParams } from "@/features/analysis-runs/lib/build-run-query";
 import { DEFAULT_SECURITY_TEST_IDS } from "@/features/security-testing/user-test-catalog";
 import { startGitHubOAuth } from "@/lib/github/oauth-client";
+import {
+  isGitHubReauthRequired,
+  resolveScanErrorMessage,
+} from "@/lib/github/scan-api-response";
 
 const POLL_INTERVAL_MS = 4000;
 
@@ -38,6 +42,7 @@ export function useMissionControlState(
   const [scanStarting, setScanStarting] = useState(false);
   const [securityStarting, setSecurityStarting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [reauthRequired, setReauthRequired] = useState(false);
 
   const query = useQuery({
     queryKey: analysisRunKeys.missionControl(projectId, analysisRunId),
@@ -73,6 +78,7 @@ export function useMissionControlState(
   const startScan = useCallback(async () => {
     if (scanStarting || state.actions.scan.disabled) return;
     setActionError(null);
+    setReauthRequired(false);
 
     if (state.actions.scan.label === "cta" && !state.status.repositoryConnected) {
       await startGitHubOAuth(`/projects/${projectId}/mission-control`);
@@ -111,9 +117,24 @@ export function useMissionControlState(
         resumed?: boolean;
       } | null;
 
-      if (body?.needsReauth || body?.code === "GITHUB_REAUTH_REQUIRED") {
-        setActionError(body.error ?? "Reconnect GitHub to run a new review.");
-        await startGitHubOAuth(`/projects/${projectId}/mission-control`);
+      if (isGitHubReauthRequired(body)) {
+        setReauthRequired(true);
+        setActionError(
+          resolveScanErrorMessage(body, {
+            defaultMessage: "Failed to start scan",
+            reauth: body?.error ?? "Reconnect GitHub to run a new review.",
+          })
+        );
+        return;
+      }
+
+      if (body?.code === "SCAN_RATE_LIMITED") {
+        setActionError(
+          resolveScanErrorMessage(body, {
+            defaultMessage: "Failed to start scan",
+            rateLimited: "You reached the hourly scan limit for this repository. Try again later.",
+          })
+        );
         return;
       }
 
@@ -131,6 +152,7 @@ export function useMissionControlState(
 
       if (body?.reused || body?.resumed) {
         setActionError(null);
+    setReauthRequired(false);
       }
 
       if (navigateMissionControlToRun(projectId, resolvedScanId)) return;
@@ -145,6 +167,7 @@ export function useMissionControlState(
   const startSecurityTest = useCallback(async () => {
     if (securityStarting || state.actions.security.disabled) return;
     setActionError(null);
+    setReauthRequired(false);
     setSecurityStarting(true);
     try {
       const params = new URLSearchParams();
@@ -203,6 +226,7 @@ export function useMissionControlState(
     scanAction,
     securityAction,
     actionError,
+    reauthRequired,
     startScan,
     startSecurityTest,
     refresh,

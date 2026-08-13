@@ -1,43 +1,12 @@
-import type { Instrumentation } from "next";
+import * as Sentry from "@sentry/nextjs";
 
-function serializeRequestError(error: unknown): Record<string, unknown> {
-  if (error instanceof Error) {
-    const extra = error as Error & { digest?: string; cause?: unknown };
-    return {
-      name: extra.name,
-      message: extra.message,
-      stack: extra.stack,
-      digest: extra.digest ?? null,
-      cause: extra.cause instanceof Error ? extra.cause.message : extra.cause ?? null,
-    };
+export async function register() {
+  if (process.env.NEXT_RUNTIME === "nodejs") {
+    await import("./sentry.server.config");
   }
-  if (typeof error === "object" && error !== null) {
-    return { ...(error as Record<string, unknown>) };
+  if (process.env.NEXT_RUNTIME === "edge") {
+    await import("./sentry.client.config");
   }
-  return { raw: String(error) };
 }
 
-export async function register(): Promise<void> {
-  console.info({
-    component: "instrumentation",
-    event: "register",
-    nodeEnv: process.env.NODE_ENV,
-    vercelEnv: process.env.VERCEL_ENV ?? null,
-  });
-}
-
-export const onRequestError: Instrumentation.onRequestError = async (error, request, context) => {
-  console.error({
-    component: "instrumentation",
-    event: "onRequestError",
-    error: serializeRequestError(error),
-    request: {
-      path: request.path,
-      method: request.method,
-    },
-    context,
-    nodeEnv: process.env.NODE_ENV,
-    vercelEnv: process.env.VERCEL_ENV ?? null,
-    nextRuntime: process.env.NEXT_RUNTIME ?? null,
-  });
-};
+export const onRequestError = Sentry.captureRequestError;

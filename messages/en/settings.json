@@ -43,5 +43,11 @@
   "workspaceManageDescription": "Switch between Workspaces you can access.",
   "workspaceManageCta": "Manage Workspaces",
   "dangerTitle": "Danger zone",
-  "dangerSubtitle": "Irreversible actions for your account."
+  "dangerSubtitle": "Irreversible actions for your account.",
+  "deleteAccountTitle": "Delete account",
+  "deleteAccountDescription": "Permanently delete your account, workspace data, and cancel any active subscription.",
+  "deleteAccountConfirmLabel": "Type DELETE to confirm",
+  "deleteAccountCta": "Delete my account",
+  "deleteAccountFailed": "Could not delete account",
+  "deleteAccountSuccess": "Your account was deleted."
 }

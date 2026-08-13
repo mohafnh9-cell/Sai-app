@@ -31,6 +31,7 @@ export type MessageNamespace =
   | "reviewProgress"
   | "evidenceFinding"
   | "landing"
+  | "billing"
   | "readiness";
 
 export type Messages = Record<string, string | Record<string, unknown>>;

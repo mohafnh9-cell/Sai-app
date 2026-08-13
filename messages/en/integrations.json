@@ -35,5 +35,7 @@
   "webhookHealthDegraded": "Needs attention",
   "webhookHealthAllHealthy": "All connected repositories are ready for Production Review.",
   "webhookHealthSomeDegraded": "{count} repositories need attention before Production Review can run reliably.",
-  "webhookHealthReconnect": "Reconnect GitHub or reconnect the repository to restore Production Review."
+  "webhookHealthReconnect": "Reconnect GitHub or reconnect the repository to restore Production Review.",
+  "githubReauthRequired": "GitHub access expired. Reconnect to continue running reviews.",
+  "githubReauthCta": "Reconnect GitHub"
 }

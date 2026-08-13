@@ -21,7 +21,7 @@ export function OnboardingWelcomeStep({
           <h2 className="text-2xl font-semibold tracking-tight">{t("welcomeHeadline")}</h2>
           <p className="text-sm text-muted-foreground leading-relaxed">{t("welcomeSub")}</p>
         </div>
-        <OrgSetupForm nextStep="github" />
+        <OrgSetupForm nextStep="subscribe" />
       </div>
     );
   }
