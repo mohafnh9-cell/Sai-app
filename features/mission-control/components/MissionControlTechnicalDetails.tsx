@@ -1,14 +1,16 @@
 "use client";
 
-import Link from "next/link";
-import { Check, AlertTriangle } from "lucide-react";
 import type { ProductionVerdictV1 } from "@/brain/production-verdict/schema";
+import type { FixPromptContext } from "@/features/production-verdict/fix-prompt-context";
+import type { ScanFinding } from "@/features/security-scanner/components/types";
 import type { MissionControlView } from "../types";
 import { MissionHeader } from "./MissionHeader";
 import { ActiveTeams } from "./ActiveTeams";
 import { WhyTheseTeams } from "./WhyTheseTeams";
 import { MissionFeed } from "./MissionFeed";
 import { ProductionVerdictCardSection } from "./ProductionVerdictCard";
+import { CoverageBreakdown } from "@/features/production-verdict/components/CoverageBreakdown";
+import { TechnicalFindingsSection } from "@/features/production-verdict/components/TechnicalFindingsSection";
 import { useI18n } from "@/lib/i18n/client";
 
 function DetailSubsection({
@@ -30,31 +32,48 @@ export function MissionControlTechnicalDetails({
   view,
   verdict,
   framework,
-  reportHref,
+  findings,
+  fixPromptContext,
   openByDefault = false,
 }: {
   view: MissionControlView;
   verdict: ProductionVerdictV1 | null;
   framework?: string | null;
-  reportHref?: string;
+  findings?: ScanFinding[];
+  fixPromptContext?: FixPromptContext;
   openByDefault?: boolean;
 }) {
   const { t } = useI18n("missionControl");
-  const { t: tp } = useI18n("projects");
-
-  const areas = verdict
-    ? [...(verdict.evaluatedAreas ?? []), ...(verdict.partiallyEvaluatedAreas ?? [])]
-    : [];
 
   return (
     <details className="rounded-2xl border border-border/60 group" open={openByDefault || undefined}>
       <summary className="cursor-pointer px-5 py-4 text-sm font-medium text-muted-foreground list-none [&::-webkit-details-marker]:hidden">
         <span className="inline-flex items-center gap-2">
           <span className="transition-transform group-open:rotate-90">›</span>
-          {t("technicalDetails")}
+          {t("fullReport.title")}
         </span>
+        <p className="mt-1 text-xs font-normal text-muted-foreground/80">{t("fullReport.subtitle")}</p>
       </summary>
       <div className="px-5 pb-8 space-y-10 border-t border-border/40 pt-8">
+        {verdict?.executiveSummary ? (
+          <DetailSubsection title={t("fullReport.summary")}>
+            <p className="text-sm leading-relaxed text-foreground/90">{verdict.executiveSummary}</p>
+            {verdict.methodologyNote ? (
+              <p className="text-xs leading-relaxed text-muted-foreground">{verdict.methodologyNote}</p>
+            ) : null}
+          </DetailSubsection>
+        ) : null}
+
+        {verdict ? <CoverageBreakdown verdict={verdict} /> : null}
+
+        {findings && findings.length > 0 ? (
+          <TechnicalFindingsSection findings={findings} fixPromptContext={fixPromptContext} />
+        ) : verdict ? (
+          <DetailSubsection title={t("fullReport.findings")}>
+            <p className="text-sm text-muted-foreground">{t("fullReport.noFindings")}</p>
+          </DetailSubsection>
+        ) : null}
+
         <DetailSubsection title={t("technical.repository")}>
           <p className="text-sm font-medium">{view.header.projectName}</p>
         </DetailSubsection>
@@ -69,36 +88,7 @@ export function MissionControlTechnicalDetails({
           {!view.hideProductionVerdict ? (
             <ProductionVerdictCardSection verdict={view.verdict} />
           ) : null}
-          {reportHref ? (
-            <Link
-              href={reportHref}
-              className="inline-block text-sm text-primary underline-offset-4 hover:underline mt-4"
-            >
-              {tp("technicalDetails")}
-            </Link>
-          ) : null}
         </DetailSubsection>
-
-        {areas.length > 0 ? (
-          <DetailSubsection title={t("technical.architecture")}>
-            <ul className="grid gap-2 sm:grid-cols-2">
-              {areas.map((area) => {
-                const ok = area.status === "evaluated" && (area.score == null || area.score >= 70);
-                const partial = area.status === "partial";
-                return (
-                  <li key={area.key} className="flex items-center gap-2 text-sm">
-                    {ok ? (
-                      <Check className="h-4 w-4 text-emerald-400 shrink-0" aria-hidden />
-                    ) : (
-                      <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0" aria-hidden />
-                    )}
-                    <span className={partial ? "text-muted-foreground" : undefined}>{area.label}</span>
-                  </li>
-                );
-              })}
-            </ul>
-          </DetailSubsection>
-        ) : null}
 
         <DetailSubsection title={t("technical.attackDetails")}>
           <MissionHeader header={view.header} />

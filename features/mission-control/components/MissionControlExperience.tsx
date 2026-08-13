@@ -176,8 +176,11 @@ export function MissionControlExperience({
             view={state.view}
             verdict={verdict}
             framework={state.framework}
-            reportHref={state.ui.reportHref}
-            openByDefault={state.ui.openTechnicalDetails}
+            findings={state.ui.fixPromptContext?.findings}
+            fixPromptContext={state.ui.fixPromptContext}
+            openByDefault={
+              state.ui.openTechnicalDetails || verdict.status === "ready_to_ship"
+            }
           />
         </>
       ) : null}

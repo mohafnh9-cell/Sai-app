@@ -11,6 +11,7 @@ import { loadMissionControlWithRecovery } from "./load-mission-control-with-reco
 import { buildMissionControlState } from "./build-mission-control-state";
 import { fixPromptContextFromScan } from "@/features/production-verdict/fix-prompt-context";
 import { loadAnalysisRunFindingsForFixPrompt } from "@/server/analysis-runs/load-run-findings-for-fix";
+import { projectVerdictHref } from "@/lib/navigation/project-hrefs";
 
 export async function loadFullMissionControlState(
   supabase: SupabaseClient,
@@ -78,16 +79,13 @@ export async function loadFullMissionControlState(
         .limit(1)
         .maybeSingle();
 
-  const runFindings =
-    isolationEnabled && findingsRunId
-      ? await loadAnalysisRunFindingsForFixPrompt(supabase, findingsRunId)
-      : undefined;
+  const scanIdForFindings = findingsRunId ?? scanForContext.data?.id ?? null;
 
-  const latestReportHref =
-    scanForContext.data?.id &&
-    (scanForContext.data.status === "completed" || !isolationEnabled)
-      ? `/projects/${projectId}/scans/${scanForContext.data.id}/report`
-      : undefined;
+  const runFindings = scanIdForFindings
+    ? await loadAnalysisRunFindingsForFixPrompt(supabase, scanIdForFindings)
+    : undefined;
+
+  const latestReportHref = verdict ? projectVerdictHref(projectId, { technical: "open" }) : undefined;
 
   const fixPromptContext = verdict
     ? fixPromptContextFromScan({
