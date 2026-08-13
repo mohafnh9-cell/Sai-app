@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useI18n } from "@/lib/i18n/client";
-import { McpUniversalConnect } from "@/features/mcp/components/McpUniversalConnect";
+import { McpConnectGuide } from "@/features/mcp/components/McpConnectGuide";
 
 type McpKeyRow = {
   id: string;
@@ -23,7 +23,6 @@ export function McpApiKeysPanel() {
   const [newKey, setNewKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
 
   const apiUrl = useMemo(() => {
     if (typeof window !== "undefined") {
@@ -51,7 +50,6 @@ export function McpApiKeysPanel() {
   async function createKey() {
     setLoading(true);
     setError(null);
-    setCopied(false);
     try {
       const response = await fetch("/api/mcp/keys", {
         method: "POST",
@@ -79,50 +77,43 @@ export function McpApiKeysPanel() {
         setError(t("mcpRevokeKeyFailed"));
         return;
       }
+      if (newKey) setNewKey(null);
       await loadKeys();
     } finally {
       setLoading(false);
     }
   }
 
-  async function copyKey() {
-    if (!newKey) return;
-    await navigator.clipboard.writeText(newKey);
-    setCopied(true);
-  }
-
   return (
-    <div className="space-y-4">
-      <div className="space-y-1.5">
-        <Label htmlFor="mcp-key-name">{t("mcpKeyNameLabel")}</Label>
-        <Input
-          id="mcp-key-name"
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          placeholder={t("mcpKeyNamePlaceholder")}
-        />
-      </div>
-
-      <Button size="sm" onClick={createKey} disabled={loading || !name.trim()}>
-        {t("mcpGenerateKey")}
-      </Button>
-
-      {error && <p className="text-sm text-destructive">{error}</p>}
-
-      {newKey && (
-        <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3 space-y-3">
-          <p className="text-sm font-medium">{t("mcpCopyKeyTitle")}</p>
-          <p className="text-xs text-muted-foreground">{t("mcpCopyKeyBody")}</p>
-          <code className="block text-xs break-all bg-muted p-2 rounded">{newKey}</code>
-          <Button size="sm" variant="outline" onClick={copyKey}>
-            {copied ? t("mcpCopied") : t("mcpCopyKey")}
+    <div className="space-y-5">
+      {!newKey ? (
+        <div className="rounded-lg border border-border/60 bg-muted/20 p-4 space-y-3">
+          <p className="text-sm font-medium">{t("mcpStep1Title")}</p>
+          <p className="text-sm text-muted-foreground">{t("mcpBeforeConnect")}</p>
+          <div className="space-y-1.5">
+            <Label htmlFor="mcp-key-name">{t("mcpKeyNameLabel")}</Label>
+            <Input
+              id="mcp-key-name"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder={t("mcpKeyNamePlaceholder")}
+            />
+          </div>
+          <Button onClick={createKey} disabled={loading || !name.trim()}>
+            {loading ? t("mcpGeneratingKey") : t("mcpGenerateKey")}
           </Button>
-          <McpUniversalConnect apiKey={newKey} apiUrl={apiUrl} />
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <p className="text-sm font-medium text-emerald-400">✓ {t("mcpStep1Done")}</p>
+          <McpConnectGuide apiKey={newKey} apiUrl={apiUrl} />
         </div>
       )}
 
+      {error && <p className="text-sm text-destructive">{error}</p>}
+
       {keys.length > 0 && (
-        <div className="space-y-2 pt-2">
+        <div className="space-y-2 pt-2 border-t border-border/50">
           <p className="text-sm font-medium">{t("mcpActiveKeys")}</p>
           {keys.map((key) => (
             <div
@@ -154,15 +145,11 @@ export function McpApiKeysPanel() {
               </div>
             </div>
           ))}
+          {!newKey ? (
+            <p className="text-xs text-muted-foreground">{t("mcpRegenerateHint")}</p>
+          ) : null}
         </div>
       )}
-
-      {!newKey ? (
-        <div className="rounded-md bg-muted/50 p-3 text-xs text-muted-foreground">
-          <p className="font-medium text-foreground">{t("mcpCursorSetupTitle")}</p>
-          <p>{t("mcpUniversalIntro")}</p>
-        </div>
-      ) : null}
     </div>
   );
 }
