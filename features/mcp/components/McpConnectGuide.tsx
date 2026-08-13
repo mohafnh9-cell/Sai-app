@@ -1,11 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Check, ClipboardCopy, ExternalLink, MessageCircleQuestion } from "lucide-react";
+import { Check, ClipboardCopy, MessageCircleQuestion } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n/client";
 import {
-  buildMcpCursorInstallLink,
   buildMcpManualSetup,
   buildMcpUniversalInstallCommand,
 } from "@/lib/mcp/client-config";
@@ -29,10 +28,6 @@ export function McpConnectGuide({
     () => buildMcpUniversalInstallCommand(apiKey, apiUrl),
     [apiKey, apiUrl]
   );
-  const cursorInstallLink = useMemo(
-    () => buildMcpCursorInstallLink(apiKey, apiUrl),
-    [apiKey, apiUrl]
-  );
   const prompt = exampleQuestion ?? t("mcpStep3Example");
 
   async function copyValue(field: CopyField, value: string) {
@@ -49,29 +44,30 @@ export function McpConnectGuide({
           <p className="text-sm text-muted-foreground">{t("mcpStep2Body")}</p>
         </div>
 
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <Button className="flex-1" onClick={() => void copyValue("command", installCommand)}>
-            {copied === "command" ? (
-              <>
-                <Check className="mr-2 h-4 w-4" aria-hidden />
-                {t("mcpCommandCopied")}
-              </>
-            ) : (
-              <>
-                <ClipboardCopy className="mr-2 h-4 w-4" aria-hidden />
-                {t("mcpCopyCommand")}
-              </>
-            )}
-          </Button>
-          <Button variant="outline" className="flex-1" asChild>
-            <a href={cursorInstallLink}>
-              <ExternalLink className="mr-2 h-4 w-4" aria-hidden />
-              {t("mcpOpenCursor")}
-            </a>
-          </Button>
-        </div>
+        <Button className="w-full" onClick={() => void copyValue("command", installCommand)}>
+          {copied === "command" ? (
+            <>
+              <Check className="mr-2 h-4 w-4" aria-hidden />
+              {t("mcpCommandCopied")}
+            </>
+          ) : (
+            <>
+              <ClipboardCopy className="mr-2 h-4 w-4" aria-hidden />
+              {t("mcpCopyCommand")}
+            </>
+          )}
+        </Button>
 
         <p className="text-xs text-muted-foreground">{t("mcpKeyOnceNote")}</p>
+
+        <div className="rounded-md border border-border/60 bg-background/50 p-3 space-y-2">
+          <p className="text-sm font-medium text-foreground">{t("mcpTroubleshootingTitle")}</p>
+          <ul className="list-disc space-y-1 pl-5 text-xs text-muted-foreground">
+            <li>{t("mcpTroubleshootingRestart")}</li>
+            <li>{t("mcpTroubleshootingGreen")}</li>
+            <li>{t("mcpTroubleshootingFolder")}</li>
+          </ul>
+        </div>
 
         <details className="rounded-md border border-border/60 bg-background/50 p-3">
           <summary className="cursor-pointer text-sm font-medium text-foreground">

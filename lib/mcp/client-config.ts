@@ -28,13 +28,6 @@ function claudeHttpServer(apiKey: string, apiUrl: string) {
   };
 }
 
-function base64Encode(value: string): string {
-  if (typeof Buffer !== "undefined") {
-    return Buffer.from(value, "utf8").toString("base64");
-  }
-  return btoa(value);
-}
-
 export function buildMcpClientConfig(
   client: McpClient,
   apiKey: string,
@@ -57,17 +50,11 @@ export function buildMcpClientConfig(
   return JSON.stringify(config, null, 2);
 }
 
-/** One terminal command — configures Cursor, Claude Code, and VS Code in the current folder. */
+/** One terminal command — installs stdio bridge and configures Cursor globally. */
 export function buildMcpUniversalInstallCommand(apiKey: string, apiUrl: string): string {
   const installerUrl = `${apiUrl.replace(/\/$/, "")}/mcp/install.mjs`;
   const escapedKey = apiKey.replace(/"/g, '\\"');
   return `curl -fsSL "${installerUrl}" -o .sequrai-mcp-install.mjs && node .sequrai-mcp-install.mjs --key "${escapedKey}" && rm .sequrai-mcp-install.mjs`;
-}
-
-/** Cursor deeplink — optional one-click when the developer uses Cursor. */
-export function buildMcpCursorInstallLink(apiKey: string, apiUrl: string): string {
-  const encoded = base64Encode(JSON.stringify(httpServer(apiKey, apiUrl)));
-  return `cursor://anysphere.cursor-deeplink/mcp/install?name=sequrai&config=${encoded}`;
 }
 
 export function buildMcpManualSetup(apiKey: string, apiUrl: string) {

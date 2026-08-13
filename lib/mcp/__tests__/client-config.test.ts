@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   buildMcpAuthorizationHeader,
   buildMcpClientConfig,
-  buildMcpCursorInstallLink,
   buildMcpManualSetup,
   buildMcpUniversalInstallCommand,
   getMcpEndpoint,
@@ -55,12 +54,5 @@ describe("MCP client configuration", () => {
     const command = buildMcpUniversalInstallCommand(KEY, URL);
     expect(command).toContain("https://sequrai.example.com/mcp/install.mjs");
     expect(command).toContain(`--key "${KEY}"`);
-  });
-
-  it("builds a Cursor install deeplink", () => {
-    const link = buildMcpCursorInstallLink(KEY, URL);
-    expect(link.startsWith("cursor://anysphere.cursor-deeplink/mcp/install?name=sequrai&config=")).toBe(
-      true
-    );
   });
 });

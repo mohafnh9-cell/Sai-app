@@ -2,14 +2,12 @@
 /**
  * Universal SequrAI MCP installer — run from any project folder.
  *
- * Usage:
- *   curl -fsSL https://sequrai-app.vercel.app/mcp/install.mjs -o install.mjs
- *   node install.mjs --key seq_live_...
- *
- * Writes project-level MCP config for Cursor, Claude Code, and VS Code.
+ * Cursor requires a local stdio bridge (HTTP URL alone does not work reliably).
+ * This script installs the bridge once under ~/.sequrai/ and configures Cursor globally.
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
 const SERVER_NAME = "sequrai";
@@ -60,6 +58,49 @@ function mergeServer(existing, serverName, serverConfig) {
   return next;
 }
 
+async function downloadBridge(baseUrl, destination) {
+  const response = await fetch(`${baseUrl}/mcp/stdio-bridge.mjs`);
+  if (!response.ok) {
+    throw new Error(`Could not download stdio bridge (${response.status}). Check ${baseUrl}/mcp/stdio-bridge.mjs`);
+  }
+  mkdirSync(dirname(destination), { recursive: true });
+  writeFileSync(destination, await response.text(), "utf8");
+}
+
+async function verifyKey(key, url) {
+  const response = await fetch(`${url}/api/mcp`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${key}`,
+    },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/list",
+      params: {},
+    }),
+  });
+
+  if (response.status === 401) {
+    throw new Error("Invalid API key. Generate a new one in SequrAI Settings → Connect my agent.");
+  }
+  if (!response.ok) {
+    throw new Error(`SequrAI API check failed (${response.status}). Try again in a moment.`);
+  }
+}
+
+function cursorStdioServer(key, url, bridgePath) {
+  return {
+    command: "node",
+    args: [bridgePath],
+    env: {
+      SEQURAI_API_KEY: key,
+      SEQURAI_API_URL: url,
+    },
+  };
+}
+
 function httpServer(key, url) {
   return {
     url: `${url}/api/mcp`,
@@ -77,42 +118,61 @@ function installAt(root, relativePath, mutator) {
   return path;
 }
 
-function main() {
+async function main() {
   const { key, url } = parseArgs();
-  const root = process.cwd();
-  const transport = httpServer(key, url);
+  const projectRoot = process.cwd();
+  const home = homedir();
+  const bridgePath = join(home, ".sequrai/stdio-bridge.mjs");
 
-  const cursorPath = installAt(root, ".cursor/mcp.json", (existing) => ({
+  console.log("Checking your SequrAI API key…");
+  await verifyKey(key, url);
+
+  console.log("Installing SequrAI bridge…");
+  await downloadBridge(url, bridgePath);
+
+  const cursorServer = cursorStdioServer(key, url, bridgePath);
+  const globalCursorPath = installAt(home, ".cursor/mcp.json", (existing) => ({
     ...existing,
-    mcpServers: mergeServer(existing.mcpServers, SERVER_NAME, transport),
+    mcpServers: mergeServer(existing.mcpServers, SERVER_NAME, cursorServer),
+  }));
+  const projectCursorPath = installAt(projectRoot, ".cursor/mcp.json", (existing) => ({
+    ...existing,
+    mcpServers: mergeServer(existing.mcpServers, SERVER_NAME, cursorServer),
   }));
 
-  const claudePath = installAt(root, ".mcp.json", (existing) => ({
+  const claudePath = installAt(projectRoot, ".mcp.json", (existing) => ({
     ...existing,
     mcpServers: mergeServer(existing.mcpServers, SERVER_NAME, {
       type: "http",
-      ...transport,
+      ...httpServer(key, url),
     }),
   }));
 
-  const vscodePath = installAt(root, ".vscode/mcp.json", (existing) => ({
+  const vscodePath = installAt(projectRoot, ".vscode/mcp.json", (existing) => ({
     ...existing,
     servers: mergeServer(existing.servers, SERVER_NAME, {
       type: "http",
-      ...transport,
+      ...httpServer(key, url),
     }),
   }));
 
-  console.log("SequrAI MCP connected for this project.");
   console.log("");
-  console.log(`Endpoint: ${transport.url}`);
+  console.log("SequrAI connected.");
   console.log("");
-  console.log("Updated:");
-  console.log(`  • Cursor:      ${cursorPath}`);
+  console.log("Next steps:");
+  console.log("  1. Quit Cursor completely and reopen it");
+  console.log("  2. Settings → Tools & MCP → confirm “sequrai” is green");
+  console.log("  3. Ask your agent: Can I deploy?");
+  console.log("");
+  console.log("Installed:");
+  console.log(`  • Bridge:      ${bridgePath}`);
+  console.log(`  • Cursor:      ${globalCursorPath}`);
+  console.log(`  • Cursor proj: ${projectCursorPath}`);
   console.log(`  • Claude Code: ${claudePath}`);
   console.log(`  • VS Code:     ${vscodePath}`);
-  console.log("");
-  console.log("Restart your code agent, then ask: Can I deploy?");
 }
 
-main();
+main().catch((error) => {
+  console.error(error instanceof Error ? error.message : "Install failed");
+  process.exit(1);
+});
