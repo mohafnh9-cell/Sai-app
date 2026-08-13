@@ -14,11 +14,17 @@
 
 ## 2. Required transport
 
-SequrAI's MCP server exposes a single HTTP endpoint (`POST /api/mcp`, JSON-RPC 2.0) and does not require a persistent process on the SequrAI side. Cursor launches MCP servers as local `command` (stdio) processes, so we ship a small stdio bridge that forwards every message from Cursor to that HTTP endpoint:
+SequrAI's MCP server is a single HTTP endpoint (`POST /api/mcp`, JSON-RPC 2.0). **Recommended for all developers:** connect directly over HTTP — no local files, no SequrAI repo clone.
 
-- Bridge script: `mcp/stdio-bridge.mjs` (checked into the `sequrai-app` repo you're working in — no separate install needed if you already have the repo cloned).
+- Transport: **HTTPS** (`POST https://<your-sequrai-host>/api/mcp`), authenticated with your API key as a Bearer token.
+- Paste the config into `.cursor/mcp.json` in **your project root** (the app you are building).
+
+### Optional: stdio bridge (SequrAI contributors only)
+
+If HTTP MCP is unavailable in your Cursor version, use the bundled bridge in a checkout of `sequrai-app`:
+
+- Bridge script: `mcp/stdio-bridge.mjs` (local clone only — not shipped on the deployed URL).
 - Transport as seen by Cursor: **stdio** (`command` + `args`, no `url`).
-- Transport as seen by SequrAI: **HTTPS** (`POST https://<your-sequrai-host>/api/mcp`), authenticated with your API key as a Bearer token.
 
 ---
 
@@ -31,7 +37,25 @@ Cursor reads MCP servers from either of:
 
 Both use the same top-level `mcpServers` object; project-level config takes priority if a server name collides.
 
-### Exact config
+### Exact config (recommended — HTTP, no local bridge)
+
+```json
+{
+  "mcpServers": {
+    "sequrai": {
+      "url": "https://your-sequrai-deployment.example.com/api/mcp",
+      "headers": {
+        "Authorization": "Bearer seq_live_your_key_here"
+      }
+    }
+  }
+}
+```
+
+- Paste into `.cursor/mcp.json` at the root of **your project** (not inside a SequrAI clone).
+- Replace the Bearer token with the key from Settings → MCP Integration.
+
+### Legacy: stdio via local bridge (contributors / older Cursor)
 
 ```json
 {
@@ -48,26 +72,9 @@ Both use the same top-level `mcpServers` object; project-level config takes prio
 }
 ```
 
-- `args` must be an **absolute path** to `mcp/stdio-bridge.mjs` inside your checkout of `sequrai-app`. If you use `${workspaceFolder}` and your Cursor workspace root **is** the `sequrai-app` repo, `"${workspaceFolder}/mcp/stdio-bridge.mjs"` also works.
+- `args` must be an **absolute path** to `mcp/stdio-bridge.mjs` inside a local checkout of `sequrai-app`. If you use `${workspaceFolder}` and your Cursor workspace root **is** the `sequrai-app` repo, `"${workspaceFolder}/mcp/stdio-bridge.mjs"` also works.
 - `SEQURAI_API_URL` defaults to `https://sequrai-app.vercel.app` if omitted — set it explicitly if you're pointing at a different deployment (staging, self-hosted, etc.).
 - Prefer `"env": { "SEQURAI_API_KEY": "${env:SEQURAI_API_KEY}" }` over a literal key if you want to keep the committed `.cursor/mcp.json` secret-free and set the real value in your shell profile instead. Cursor resolves `${env:NAME}` in `command`, `args`, `env`, `url`, and `headers`.
-
-### Alternative: connect directly over HTTP (no bridge)
-
-If your Cursor version supports remote/HTTP MCP servers and you don't want to run a local process, you can point Cursor directly at the HTTP endpoint instead — **this variant has not been manually verified end-to-end and should be smoke-tested before relying on it**:
-
-```json
-{
-  "mcpServers": {
-    "sequrai": {
-      "url": "https://your-sequrai-deployment.example.com/api/mcp",
-      "headers": {
-        "Authorization": "Bearer seq_live_your_key_here"
-      }
-    }
-  }
-}
-```
 
 ---
 
@@ -110,8 +117,8 @@ You can also invoke tools directly from Cursor's tool-call UI with explicit argu
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| Server shows as disconnected / not listed | Wrong absolute path to `stdio-bridge.mjs`, or `node` not on PATH | Use an absolute path; confirm `node --version` works in the same shell Cursor uses |
-| `unauthorized` on every call | Missing/invalid `SEQURAI_API_KEY` | Regenerate a key in SequrAI Settings and update `env` |
+| Server shows as disconnected / not listed | Invalid URL or Bearer token, or HTTP MCP not supported in your Cursor version | Confirm `url` ends with `/api/mcp`; regenerate key in Settings; try legacy stdio bridge if needed |
+| `unauthorized` on every call | Missing/invalid Bearer token in `headers` | Regenerate a key in SequrAI Settings and update `headers.Authorization` |
 | `invalid_api_key` | Key was revoked | Generate a new key; revoked keys cannot be un-revoked |
 | `project_not_found` | Wrong `projectId`/`repositoryFullName`, or it belongs to another organization | Omit the field to auto-select (if you have one project) or call any tool with no selector to receive the `ambiguous_project` list |
 | `ambiguous_project` | Your organization has multiple projects and none was specified | Pass one of the returned project IDs |

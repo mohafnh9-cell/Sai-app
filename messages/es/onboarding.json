@@ -98,7 +98,7 @@
   "cursorCopyKey": "Copiar clave",
   "cursorCopied": "Copiado",
   "cursorStepTwoTitle": "Añádela a tu agente de código",
-  "cursorStepTwoBody": "En tu agente de código: Ajustes → MCP → Editar config. Pega este fragmento.",
+  "cursorStepTwoBody": "Crea `.cursor/mcp.json` en la raíz de tu proyecto y pega este fragmento. Funciona desde cualquier repo — no hace falta clonar SequrAI.",
   "cursorCopySetup": "Copiar configuración",
   "cursorConfigCopied": "Configuración copiada",
   "cursorStepThreeTitle": "Pruébalo en tu agente",

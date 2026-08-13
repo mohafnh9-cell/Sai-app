@@ -142,6 +142,7 @@ export function McpApiKeysPanel() {
           <div className="rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3 space-y-3">
             <p className="text-sm font-medium">✓ {t("mcpConnectionCreated")}</p>
             <p className="text-xs text-muted-foreground">{t("mcpCursorSetupBody")}</p>
+            <p className="text-xs text-muted-foreground">{t("mcpSetupFileHint")}</p>
             <pre className="max-h-56 overflow-auto whitespace-pre-wrap rounded bg-muted p-2 text-[11px]">
               {configs?.cursor}
             </pre>

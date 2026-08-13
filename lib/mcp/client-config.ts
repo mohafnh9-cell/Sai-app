@@ -1,13 +1,26 @@
 export type McpClient = "cursor" | "claude" | "vscode";
 
-function stdioServer(apiKey: string, apiUrl: string) {
+function mcpEndpoint(apiUrl: string): string {
+  return `${apiUrl.replace(/\/$/, "")}/api/mcp`;
+}
+
+function authHeaders(apiKey: string) {
+  return { Authorization: `Bearer ${apiKey}` };
+}
+
+/** HTTP transport — works from any project; no local bridge script required. */
+function httpServer(apiKey: string, apiUrl: string) {
   return {
-    command: "node",
-    args: ["${workspaceFolder}/mcp/stdio-bridge.mjs"],
-    env: {
-      SEQURAI_API_KEY: apiKey,
-      SEQURAI_API_URL: apiUrl,
-    },
+    url: mcpEndpoint(apiUrl),
+    headers: authHeaders(apiKey),
+  };
+}
+
+function claudeHttpServer(apiKey: string, apiUrl: string) {
+  return {
+    type: "http" as const,
+    url: mcpEndpoint(apiUrl),
+    headers: authHeaders(apiKey),
   };
 }
 
@@ -16,10 +29,19 @@ export function buildMcpClientConfig(
   apiKey: string,
   apiUrl: string
 ): string {
-  const server = stdioServer(apiKey, apiUrl);
   const config =
     client === "vscode"
-      ? { servers: { sequrai: { type: "stdio", ...server } } }
-      : { mcpServers: { sequrai: server } };
+      ? {
+          servers: {
+            sequrai: {
+              type: "http",
+              ...httpServer(apiKey, apiUrl),
+            },
+          },
+        }
+      : client === "claude"
+        ? { mcpServers: { sequrai: claudeHttpServer(apiKey, apiUrl) } }
+        : { mcpServers: { sequrai: httpServer(apiKey, apiUrl) } };
+
   return JSON.stringify(config, null, 2);
 }

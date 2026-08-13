@@ -98,7 +98,7 @@
   "cursorCopyKey": "Copy key",
   "cursorCopied": "Copied",
   "cursorStepTwoTitle": "Add it to your code agent",
-  "cursorStepTwoBody": "In your code agent: Settings → MCP → Edit config. Paste this snippet.",
+  "cursorStepTwoBody": "Create `.cursor/mcp.json` in your project root and paste this snippet. Works from any repo — no SequrAI clone needed.",
   "cursorCopySetup": "Copy setup",
   "cursorConfigCopied": "Setup copied",
   "cursorStepThreeTitle": "Try it in your agent",

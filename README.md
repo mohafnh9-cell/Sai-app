@@ -107,20 +107,22 @@ Connect Cursor or Claude Code to your Production Copilot:
 
 1. Run migration **009** in Supabase (`mcp_api_keys` table).
 2. Open **Settings → MCP Integration** and generate an API key.
-3. Add to `~/.cursor/mcp.json`:
+3. Add to `.cursor/mcp.json` in **your project root** (any repo — no SequrAI clone):
 
 ```json
 {
-  "sequrai": {
-    "command": "node",
-    "args": ["/absolute/path/to/sequrai-app/mcp/stdio-bridge.mjs"],
-    "env": {
-      "SEQURAI_API_KEY": "your-mcp-api-key-from-settings",
-      "SEQURAI_API_URL": "https://sequrai-app.vercel.app"
+  "mcpServers": {
+    "sequrai": {
+      "url": "https://sequrai-app.vercel.app/api/mcp",
+      "headers": {
+        "Authorization": "Bearer your-mcp-api-key-from-settings"
+      }
     }
   }
 }
 ```
+
+For Claude Code, add `"type": "http"` under the `sequrai` server entry. See `docs/MCP_CURSOR_SETUP.md` for details.
 
 ### Available MCP tools
 
