@@ -34,7 +34,7 @@ function discovery(overrides?: Partial<DiscoveryReport>): DiscoveryReport {
 }
 
 describe("Autonomous Security Orchestrator RT13", () => {
-  it("scenario A: static site selects only Browser among attack teams", () => {
+  it("scenario A: static site selects all attack teams by default", () => {
     const disc = discovery({
       projectSummary: "Marketing landing page",
       potentialAttackSurface: [{ area: "marketing", label: "Landing", rationale: "x", confidence: 0.9 }],
@@ -47,8 +47,19 @@ describe("Autonomous Security Orchestrator RT13", () => {
       projectId: "p",
       discovery: disc,
     });
-    expect(staticSiteBrowserOnly(plan.teamSelections)).toBe(true);
-    expect(plan.attackDomains).toEqual(["browser"]);
+    expect(staticSiteBrowserOnly(plan.teamSelections)).toBe(false);
+    expect(plan.selectedTeams).toEqual(
+      expect.arrayContaining([
+        "browser",
+        "authentication",
+        "api",
+        "authorization",
+        "business_logic",
+        "llm",
+        "adversarial",
+      ])
+    );
+    expect(plan.waves.every((w) => !w.parallel || w.nodeIds.length === 1)).toBe(true);
   });
 
   it("scenario B: AI SaaS selects required teams", () => {
@@ -107,7 +118,7 @@ describe("Autonomous Security Orchestrator RT13", () => {
     expect(plan.engineeringStrategy).toBe("best_practice");
   });
 
-  it("scenario E: no LLM skips LLM team", () => {
+  it("scenario E: adaptive mode can skip LLM team when no AI stack", () => {
     const plan = scheduleOrchestrator({
       requestId: "r",
       organizationId: "o",
@@ -117,6 +128,7 @@ describe("Autonomous Security Orchestrator RT13", () => {
         authenticationProviders: [{ id: "a", name: "Auth.js", category: "auth", confidence: 0.8, evidence: [] }],
         potentialAttackSurface: [{ area: "rest_api", label: "API", rationale: "x", confidence: 0.9 }],
       }),
+      adaptiveTeamSelection: true,
     });
     const llmSkip = plan.skippedTeams.find((s) => s.teamId === "llm");
     expect(llmSkip).toBeDefined();

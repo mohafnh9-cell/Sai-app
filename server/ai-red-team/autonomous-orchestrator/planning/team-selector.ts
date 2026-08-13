@@ -5,6 +5,16 @@ import type {
 } from "../aso.types";
 import type { AttackDomain } from "../../types";
 
+const ATTACK_TEAMS: OrchestratorTeamId[] = [
+  "browser",
+  "authentication",
+  "api",
+  "authorization",
+  "business_logic",
+  "llm",
+  "adversarial",
+];
+
 const TEAM_DOMAIN: Partial<Record<OrchestratorTeamId, AttackDomain>> = {
   browser: "browser",
   authentication: "authentication",
@@ -29,125 +39,83 @@ const RUNTIME_EST: Record<OrchestratorTeamId, number> = {
   verdict: 1_000,
 };
 
+const COMPLEXITY: Record<OrchestratorTeamId, TeamSelection["estimatedComplexity"]> = {
+  browser: "medium",
+  authentication: "medium",
+  api: "medium",
+  authorization: "high",
+  business_logic: "high",
+  llm: "medium",
+  adversarial: "high",
+  intelligence: "low",
+  decision: "low",
+  engineering: "medium",
+  replay: "medium",
+  verdict: "low",
+};
+
+const ADAPTIVE_SKIP: Partial<Record<OrchestratorTeamId, (signals: DiscoverySignals) => string | null>> = {
+  browser: (signals) => (signals.hasBrowserSurface ? null : "No browser attack surface detected"),
+  authentication: (signals) =>
+    signals.isStaticSite
+      ? "Static site — authentication not applicable"
+      : signals.hasAuthentication
+        ? null
+        : "No authentication stack detected",
+  api: (signals) => (signals.hasApiSurface ? null : "No API surface detected"),
+  authorization: (signals) => (signals.hasAuthorizationModel ? null : "No authorization model detected"),
+  business_logic: (signals) =>
+    signals.isStaticSite
+      ? "Static site — business logic not applicable"
+      : signals.hasBusinessWorkflows
+        ? null
+        : "No business workflow signals",
+  llm: (signals) => (signals.hasLlm ? null : "No LLM or AI provider detected"),
+  adversarial: (signals) =>
+    signals.hasLlm || signals.hasMcp ? null : "Adversarial team requires LLM or MCP usage",
+};
+
+function buildSelection(
+  teamId: OrchestratorTeamId,
+  selected: boolean,
+  skipReason: string | null
+): TeamSelection {
+  return {
+    teamId,
+    selected,
+    skipReason,
+    attackDomain: TEAM_DOMAIN[teamId] ?? null,
+    estimatedRuntimeMs: RUNTIME_EST[teamId],
+    estimatedComplexity: COMPLEXITY[teamId],
+  };
+}
+
 export function selectTeams(input: {
   signals: DiscoverySignals;
   adaptive: boolean;
 }): TeamSelection[] {
   const { signals, adaptive } = input;
 
-  const rules: Array<{
-    teamId: OrchestratorTeamId;
-    when: boolean;
-    skipReason: string;
-    complexity: TeamSelection["estimatedComplexity"];
-  }> = [
-    {
-      teamId: "browser",
-      when: signals.hasBrowserSurface,
-      skipReason: "No browser attack surface detected",
-      complexity: "medium",
-    },
-    {
-      teamId: "authentication",
-      when: !adaptive || (signals.hasAuthentication && !signals.isStaticSite),
-      skipReason: signals.isStaticSite ? "Static site — authentication not applicable" : "No authentication stack detected",
-      complexity: "medium",
-    },
-    {
-      teamId: "api",
-      when: !adaptive || signals.hasApiSurface,
-      skipReason: "No API surface detected",
-      complexity: "medium",
-    },
-    {
-      teamId: "authorization",
-      when: !adaptive || signals.hasAuthorizationModel,
-      skipReason: "No authorization model detected",
-      complexity: "high",
-    },
-    {
-      teamId: "business_logic",
-      when: !adaptive || signals.hasBusinessWorkflows,
-      skipReason: signals.isStaticSite ? "Static site — business logic not applicable" : "No business workflow signals",
-      complexity: "high",
-    },
-    {
-      teamId: "llm",
-      when: !adaptive || signals.hasLlm,
-      skipReason: "No LLM or AI provider detected",
-      complexity: "medium",
-    },
-    {
-      teamId: "adversarial",
-      when: !adaptive || signals.hasLlm || signals.hasMcp,
-      skipReason: "Adversarial team requires LLM or MCP usage",
-      complexity: "high",
-    },
-    {
-      teamId: "intelligence",
-      when: true,
-      skipReason: "",
-      complexity: "low",
-    },
-    {
-      teamId: "decision",
-      when: true,
-      skipReason: "",
-      complexity: "low",
-    },
-    {
-      teamId: "engineering",
-      when: true,
-      skipReason: "",
-      complexity: "medium",
-    },
-    {
-      teamId: "replay",
-      when: true,
-      skipReason: "",
-      complexity: "medium",
-    },
-    {
-      teamId: "verdict",
-      when: true,
-      skipReason: "",
-      complexity: "low",
-    },
+  const attackSelections = ATTACK_TEAMS.map((teamId) => {
+    if (!adaptive) {
+      return buildSelection(teamId, true, null);
+    }
+    const skipReason = ADAPTIVE_SKIP[teamId]?.(signals) ?? null;
+    return buildSelection(teamId, skipReason === null, skipReason);
+  });
+
+  const postPipeline: OrchestratorTeamId[] = [
+    "intelligence",
+    "decision",
+    "engineering",
+    "replay",
+    "verdict",
   ];
 
-  if (signals.isStaticSite) {
-    return rules.map((rule) => {
-      const post = ["intelligence", "decision", "engineering", "replay", "verdict"].includes(rule.teamId);
-      if (post) {
-        return {
-          teamId: rule.teamId,
-          selected: true,
-          skipReason: null,
-          attackDomain: TEAM_DOMAIN[rule.teamId] ?? null,
-          estimatedRuntimeMs: RUNTIME_EST[rule.teamId],
-          estimatedComplexity: rule.complexity,
-        };
-      }
-      const onlyBrowser = rule.teamId === "browser";
-      return {
-        teamId: rule.teamId,
-        selected: onlyBrowser,
-        skipReason: onlyBrowser ? null : "Static site — team not required",
-        attackDomain: TEAM_DOMAIN[rule.teamId] ?? null,
-        estimatedRuntimeMs: RUNTIME_EST[rule.teamId],
-        estimatedComplexity: rule.complexity,
-      };
-    });
-  }
-
-  return rules.map((rule) => ({
-    teamId: rule.teamId,
-    selected: rule.when,
-    skipReason: rule.when ? null : rule.skipReason,
-    attackDomain: TEAM_DOMAIN[rule.teamId] ?? null,
-    estimatedRuntimeMs: RUNTIME_EST[rule.teamId],
-    estimatedComplexity: rule.complexity,
-  }));
+  return [
+    ...attackSelections,
+    ...postPipeline.map((teamId) => buildSelection(teamId, true, null)),
+  ];
 }
 
 export function selectedAttackDomains(selections: TeamSelection[]): AttackDomain[] {
@@ -166,11 +134,7 @@ export function selectedAttackDomains(selections: TeamSelection[]): AttackDomain
 }
 
 export function staticSiteBrowserOnly(selections: TeamSelection[]): boolean {
-  const attackTeams = selections.filter((s) =>
-    ["browser", "authentication", "api", "authorization", "business_logic", "llm", "adversarial"].includes(
-      s.teamId
-    )
-  );
+  const attackTeams = selections.filter((s) => ATTACK_TEAMS.includes(s.teamId));
   const selected = attackTeams.filter((t) => t.selected);
   return selected.length === 1 && selected[0]?.teamId === "browser";
 }

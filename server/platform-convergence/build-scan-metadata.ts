@@ -9,16 +9,38 @@ import {
   collectLlmReplayPlansFromResult,
 } from "@/server/ai-red-team/llm-team/integration/platform-bridge";
 
+function mapAgentStatus(status: AttackResult["status"]): string {
+  if (status === "completed") return "completed";
+  if (status === "failed") return "failed";
+  if (status === "skipped") return "skipped";
+  return "queued";
+}
+
 function teamStatusFromResults(results: AttackResult[]): Record<string, string> {
   const out: Record<string, string> = {};
+  const agentToTeam: Record<string, string> = {
+    "surface.browser": "browser",
+    "auth.authentication": "authentication",
+    "surface.api": "api",
+    "auth.authorization": "authorization",
+    "logic.business": "business_logic",
+    "ai.llm": "llm",
+  };
+
   for (const r of results) {
-    if (r.agentId === "logic.business" && r.metadata?.teamExecution) {
-      Object.assign(out, r.metadata.teamExecution as Record<string, string>);
+    const teamId = agentToTeam[r.agentId];
+    if (teamId) {
+      out[teamId] = mapAgentStatus(r.status);
     }
-    if (r.agentId === "ai.llm" && r.metadata?.teamExecution) {
+    if (r.metadata?.teamExecution && typeof r.metadata.teamExecution === "object") {
       Object.assign(out, r.metadata.teamExecution as Record<string, string>);
     }
   }
+
+  if (out.llm === "completed" && !out.adversarial) {
+    out.adversarial = "completed";
+  }
+
   return out;
 }
 

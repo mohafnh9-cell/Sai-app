@@ -31,25 +31,8 @@ function signals(input: MissionControlBuildInput) {
   };
 }
 
-function teamSelected(id: MissionTeamId, sig: ReturnType<typeof signals>): boolean {
-  switch (id) {
-    case "browser":
-      return sig.frontend;
-    case "authentication":
-      return sig.auth;
-    case "api":
-      return sig.api;
-    case "authorization":
-      return sig.authz;
-    case "business_logic":
-      return sig.business;
-    case "llm":
-      return sig.llm;
-    case "adversarial":
-      return sig.adversarial && (sig.llm || /mcp/.test(stackText()));
-    default:
-      return false;
-  }
+function teamSelected(id: MissionTeamId, _sig: ReturnType<typeof signals>): boolean {
+  return true;
 }
 
 function teamReason(id: MissionTeamId, sig: ReturnType<typeof signals>, t: Translator): MissionTeamReason {
@@ -67,7 +50,7 @@ function teamReason(id: MissionTeamId, sig: ReturnType<typeof signals>, t: Trans
   return {
     teamId: id,
     teamName: t(`teams.${teamKey}`),
-    reason: teamSelected(id, sig) ? t(entry.reasonKey) : t("teams.reasons.notRequired"),
+    reason: t(entry.reasonKey),
     confidence: entry.confidence,
   };
 }
@@ -183,9 +166,7 @@ export function buildMissionControlView(
   const teams = MISSION_TEAMS.map((team, index) =>
     deriveTeamStatus(team.id, teamSelected(team.id, sig), input, index, selectedIds.length, t)
   );
-  const teamReasons = MISSION_TEAMS.map((team) => teamReason(team.id, sig, t)).filter((r) =>
-    teamSelected(r.teamId, sig)
-  );
+  const teamReasons = MISSION_TEAMS.map((team) => teamReason(team.id, sig, t));
 
   const progress =
     input.cancelledReview?.progressAtCancellation ??

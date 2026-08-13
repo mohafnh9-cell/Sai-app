@@ -47,7 +47,7 @@ function minimalVerdict(overrides?: Partial<ProductionVerdictV1>): ProductionVer
 }
 
 describe("Mission Control view model", () => {
-  it("scenario A: static site profile selects browser only among attack teams", () => {
+  it("scenario A: static site profile still schedules all attack teams", () => {
     const view = buildMissionControlView({
       projectId: "p",
       projectName: "Landing",
@@ -57,8 +57,8 @@ describe("Mission Control view model", () => {
       feedFromDb: [],
     });
     const attackTeams = view.teams.filter((t) => t.status !== "skipped");
-    expect(attackTeams.length).toBe(1);
-    expect(attackTeams[0]?.id).toBe("browser");
+    expect(attackTeams.length).toBe(7);
+    expect(attackTeams.every((t) => t.status === "completed")).toBe(true);
   });
 
   it("scenario B: AI SaaS stack selects multiple teams with reasons", () => {
@@ -79,7 +79,7 @@ describe("Mission Control view model", () => {
     expect(view.teamReasons.some((r) => r.teamId === "llm")).toBe(true);
   });
 
-  it("scenario E: no LLM in stack skips LLM team", () => {
+  it("scenario E: all teams active even without LLM in stack", () => {
     const view = buildMissionControlView({
       projectId: "p",
       projectName: "API",
@@ -89,7 +89,7 @@ describe("Mission Control view model", () => {
       feedFromDb: [],
     });
     const llm = view.teams.find((t) => t.id === "llm");
-    expect(llm?.status).toBe("skipped");
+    expect(llm?.status).toBe("completed");
   });
 
   it("maps production verdict to mission display labels", () => {

@@ -26,7 +26,7 @@ export class AutonomousSecurityOrchestrator {
     const scheduleStart = Date.now();
     const budgetMode = input.budgetMode ?? "balanced";
     const signals = analyzeDiscoverySignals(input.discovery);
-    const adaptive = input.adaptiveTeamSelection !== false;
+    const adaptive = input.adaptiveTeamSelection === true;
 
     const teamSelections = selectTeams({ signals, adaptive });
     const selectedTeams = teamSelections.filter((s) => s.selected).map((s) => s.teamId);
@@ -35,7 +35,7 @@ export class AutonomousSecurityOrchestrator {
       .map((s) => ({ teamId: s.teamId, reason: s.skipReason ?? "skipped" }));
 
     const executionGraph = buildExecutionGraph(teamSelections);
-    const parallelEnabled = input.parallelExecutionEnabled !== false;
+    const parallelEnabled = input.parallelExecutionEnabled === true;
     const waves = buildParallelWaves({ selections: teamSelections, parallelEnabled });
     const attackDomains = selectedAttackDomains(teamSelections);
     const domainOrder = domainOrderFromGraph(teamSelections);
