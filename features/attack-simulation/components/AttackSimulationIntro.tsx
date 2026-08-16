@@ -19,20 +19,6 @@ export function AttackSimulationIntro() {
           </p>
         </div>
       </div>
-      <ol className="grid gap-2 sm:grid-cols-3 text-sm text-muted-foreground pt-2">
-        <li className="rounded-xl border border-border/50 bg-muted/20 px-4 py-3">
-          <span className="font-medium text-foreground">{t("page.step1Title")}</span>
-          <p className="mt-1 text-xs">{t("page.step1Body")}</p>
-        </li>
-        <li className="rounded-xl border border-border/50 bg-muted/20 px-4 py-3">
-          <span className="font-medium text-foreground">{t("page.step2Title")}</span>
-          <p className="mt-1 text-xs">{t("page.step2Body")}</p>
-        </li>
-        <li className="rounded-xl border border-border/50 bg-muted/20 px-4 py-3">
-          <span className="font-medium text-foreground">{t("page.step3Title")}</span>
-          <p className="mt-1 text-xs">{t("page.step3Body")}</p>
-        </li>
-      </ol>
     </header>
   );
 }

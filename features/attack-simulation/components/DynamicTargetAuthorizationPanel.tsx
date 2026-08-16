@@ -9,6 +9,7 @@ import type { DynamicTargetAuthorizationStatus } from "@/server/ai-red-team/auth
 import { normalizeHttpUrlInput } from "@/lib/url/normalize-http-url";
 import { useI18n } from "@/lib/i18n/client";
 import { AttackSimulationLoadingPanel } from "./AttackSimulationLoadingPanel";
+import { AttackSimulationFlowSteps } from "./AttackSimulationFlowSteps";
 
 export function DynamicTargetAuthorizationPanel({
   projectId,
@@ -149,12 +150,12 @@ export function DynamicTargetAuthorizationPanel({
       );
     } finally {
       setLoading(false);
-      setPhase("idle");
     }
   }
 
   async function startManualVerification() {
     setLoading(true);
+    setPhase("checking");
     setError(null);
     try {
       const response = await fetch(`/api/projects/${projectId}/dynamic-target-authorization`, {
@@ -184,6 +185,7 @@ export function DynamicTargetAuthorizationPanel({
       );
     } finally {
       setLoading(false);
+      setPhase((current) => (current === "checking" ? "idle" : current));
     }
   }
 
@@ -197,7 +199,6 @@ export function DynamicTargetAuthorizationPanel({
       setTargetOrigin(normalizedOrigin);
     }
     setLoading(true);
-    setPhase("checking");
     setError(null);
     setMessage(null);
     try {
@@ -250,7 +251,11 @@ export function DynamicTargetAuthorizationPanel({
       );
     } finally {
       setLoading(false);
-      setPhase("idle");
+      setPhase((current) =>
+        current === "preparing" || current === "testing" || current === "analyzing" || current === "verified"
+          ? current
+          : "idle"
+      );
     }
   }
 
@@ -260,7 +265,6 @@ export function DynamicTargetAuthorizationPanel({
       return;
     }
     setLoading(true);
-    setPhase("checking");
     setError(null);
     setMessage(null);
     try {
@@ -305,7 +309,11 @@ export function DynamicTargetAuthorizationPanel({
       );
     } finally {
       setLoading(false);
-      setPhase("idle");
+      setPhase((current) =>
+        current === "preparing" || current === "testing" || current === "analyzing" || current === "verified"
+          ? current
+          : "idle"
+      );
     }
   }
 
@@ -339,6 +347,11 @@ export function DynamicTargetAuthorizationPanel({
       );
     } finally {
       setLoading(false);
+      setPhase((current) =>
+        current === "preparing" || current === "testing" || current === "analyzing" || current === "verified"
+          ? current
+          : "idle"
+      );
     }
   }
 
@@ -348,6 +361,7 @@ export function DynamicTargetAuthorizationPanel({
       return;
     }
     setLoading(true);
+    setPhase("checking");
     setError(null);
     setMessage(null);
     try {
@@ -384,6 +398,11 @@ export function DynamicTargetAuthorizationPanel({
       );
     } finally {
       setLoading(false);
+      setPhase((current) =>
+        current === "preparing" || current === "testing" || current === "analyzing" || current === "verified"
+          ? current
+          : "idle"
+      );
     }
   }
 
@@ -391,31 +410,50 @@ export function DynamicTargetAuthorizationPanel({
     return null;
   }
 
-  const showLoadingPanel =
-    loading ||
-    phase === "checking" ||
-    phase === "preparing" ||
-    phase === "testing" ||
-    phase === "analyzing";
+  const isAttackRunning =
+    phase === "preparing" || phase === "testing" || phase === "analyzing";
+  const isVerificationRunning = (loading || phase === "checking") && !isAttackRunning;
 
-  const loadingTitle =
-    phase === "checking"
-      ? t("loadingPanel.checking")
-      : phase === "preparing"
-        ? t("dynamicTarget.preparing")
-        : phase === "testing"
-          ? t("dynamicTarget.testing")
-          : phase === "analyzing"
-            ? t("dynamicTarget.analyzing")
-            : t("loadingPanel.title");
+  const flowStep: 1 | 2 | 3 =
+    status.authorized || isAttackRunning || ownershipConfirmed
+      ? 3
+      : manualFallback || phase === "checking" || instructions
+        ? 2
+        : 1;
 
   return (
-    <section className="rounded-xl border bg-card p-6 space-y-4">
-      {showLoadingPanel ? (
-        <AttackSimulationLoadingPanel title={loadingTitle} subtitle={t("loadingPanel.subtitle")} progress={48} />
+    <section className="rounded-xl border bg-card p-6 space-y-5">
+      <AttackSimulationFlowSteps currentStep={flowStep} />
+
+      {isAttackRunning ? (
+        <AttackSimulationLoadingPanel
+          variant="attack"
+          title={
+            phase === "preparing"
+              ? t("dynamicTarget.preparing")
+              : phase === "testing"
+                ? t("dynamicTarget.testing")
+                : t("dynamicTarget.analyzing")
+          }
+          subtitle={t("loadingPanel.subtitle")}
+          progress={phase === "analyzing" ? 72 : phase === "testing" ? 48 : 28}
+        />
       ) : null}
 
-      <div className={showLoadingPanel ? "opacity-50 pointer-events-none" : undefined}>
+      {isVerificationRunning ? (
+        <AttackSimulationLoadingPanel
+          variant="verification"
+          title={
+            phase === "checking"
+              ? t("loadingPanel.checking")
+              : t("loadingPanel.verifyingTitle")
+          }
+          subtitle={t("loadingPanel.verifyingSubtitle")}
+          progress={36}
+        />
+      ) : null}
+
+      <div className={isAttackRunning ? "opacity-50 pointer-events-none space-y-4" : "space-y-4"}>
       <div>
         <h2 className="text-lg font-semibold">{t("dynamicTarget.title")}</h2>
         <p className="text-sm text-muted-foreground">
@@ -513,7 +551,7 @@ export function DynamicTargetAuthorizationPanel({
                   disabled={loading}
                   onClick={() => void startManualVerification()}
                 >
-                  {t("dynamicTarget.verifyApplication")}
+                  {t("dynamicTarget.getVerificationInstructions")}
                 </Button>
               ) : null}
             </div>
@@ -540,38 +578,47 @@ export function DynamicTargetAuthorizationPanel({
                   ? t("dynamicTarget.checkSecurityOnUrl")
                   : t("dynamicTarget.continue")}
             </Button>
-            {!skipTargetVerification && instructions ? (
-              <Button variant="outline" disabled={loading} onClick={() => verifyApplication()}>
+            {!skipTargetVerification && (manualFallback || instructions) ? (
+              <Button variant="outline" disabled={loading} onClick={() => void verifyApplication()}>
                 {t("dynamicTarget.verifyApplication")}
               </Button>
-            ) : (
-              <Button
-                variant="outline"
-                disabled={loading}
-                onClick={() => {
-                  setLoading(true);
-                  void runFullAudit("static_only")
-                    .catch((auditError: unknown) =>
-                      setError(
-                        auditError instanceof Error
-                          ? auditError.message
-                          : t("dynamicTarget.errors.staticAnalysisFailed")
-                      )
-                    )
-                    .finally(() => setLoading(false));
-                }}
-              >
-                {t("dynamicTarget.staticOnly")}
-              </Button>
-            )}
+            ) : null}
           </div>
+
+          {!skipTargetVerification ? (
+            <details className="rounded-lg border border-border/50 bg-muted/10 px-4 py-3 text-sm">
+              <summary className="cursor-pointer font-medium text-muted-foreground">
+                {t("dynamicTarget.advancedOptions")}
+              </summary>
+              <div className="mt-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={loading}
+                  onClick={() => {
+                    setLoading(true);
+                    void runFullAudit("static_only")
+                      .catch((auditError: unknown) =>
+                        setError(
+                          auditError instanceof Error
+                            ? auditError.message
+                            : t("dynamicTarget.errors.staticAnalysisFailed")
+                        )
+                      )
+                      .finally(() => setLoading(false));
+                  }}
+                >
+                  {t("dynamicTarget.staticOnly")}
+                </Button>
+                <p className="mt-2 text-xs text-muted-foreground">{t("dynamicTarget.staticOnlyHint")}</p>
+              </div>
+            </details>
+          ) : null}
         </div>
       )}
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
-      {message && !showLoadingPanel ? (
-        <p className="text-sm text-muted-foreground">{message}</p>
-      ) : null}
+      {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
       </div>
     </section>
   );

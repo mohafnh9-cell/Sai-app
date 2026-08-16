@@ -3,7 +3,9 @@
   "loadingPanel": {
     "title": "Simulating attacks…",
     "subtitle": "SequrAI is testing your application in a controlled way. This may take a few minutes.",
-    "checking": "Checking your application…"
+    "checking": "Checking your application…",
+    "verifyingTitle": "Verifying your application…",
+    "verifyingSubtitle": "We confirm you have access before running controlled attacks."
   },
   "disabled": {
     "headline": "Security Test is not available",
@@ -69,8 +71,8 @@
     "intro": "We simulate real attacks against your deployed application — the way an attacker would — to confirm whether verdict risks are exploitable.",
     "step1Title": "1. Your app",
     "step1Body": "The URL where your application is deployed.",
-    "step2Title": "2. Authorize",
-    "step2Body": "We confirm you have access before attacking.",
+    "step2Title": "2. Verify",
+    "step2Body": "We confirm you have access to the application.",
     "step3Title": "3. Attack",
     "step3Body": "We run safe simulations and update your verdict.",
     "backToMissionControl": "Production Verdict"
@@ -97,11 +99,14 @@
     "manualVerificationTitle": "We need to confirm you have access to this application.",
     "manualVerificationBody": "You can verify it safely so SequrAI can run the tests.",
     "verifyApplication": "Verify application",
+    "getVerificationInstructions": "Get verification instructions",
     "manualHelpSummary": "I need help verifying the application",
     "manualHelpBody": "Manual verification is only needed because we did not find an authenticated connection to your deployment provider.",
     "checking": "Checking...",
     "checkSecurityOnUrl": "Check security on this URL",
     "continue": "Continue",
+    "advancedOptions": "Advanced options",
+    "staticOnlyHint": "Analyze repository code only, without attacks against the deployed URL.",
     "errors": {
       "loadStatus": "Could not load authorization status.",
       "auditFailed": "Could not complete the audit.",

@@ -77,8 +77,11 @@ export function AttackCenterExperience({
     if (findingId) {
       return buildLiveProgressSteps("fix_ready", ts);
     }
-    return securityTestContext?.progressSteps ?? null;
-  }, [viewState, findingId, securityTestContext?.progressSteps, ts]);
+    if (viewState.kind === "content" && viewState.snapshot.kind === "execution") {
+      return buildLiveProgressSteps("running", ts);
+    }
+    return null;
+  }, [viewState, findingId, ts]);
 
   const handleOpenFinding = useCallback((nextFindingId: string) => {
     setFindingId(nextFindingId);

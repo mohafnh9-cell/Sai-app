@@ -3,7 +3,9 @@
   "loadingPanel": {
     "title": "Simulando ataques…",
     "subtitle": "SequrAI está probando tu aplicación de forma controlada. Esto puede tardar unos minutos.",
-    "checking": "Comprobando tu aplicación…"
+    "checking": "Comprobando tu aplicación…",
+    "verifyingTitle": "Verificando tu aplicación…",
+    "verifyingSubtitle": "Confirmamos que tienes acceso antes de ejecutar ataques controlados."
   },
   "disabled": {
     "headline": "Las pruebas en vivo no están disponibles",
@@ -69,8 +71,8 @@
     "intro": "Simulamos ataques reales contra tu aplicación desplegada — como lo haría un atacante — para confirmar si los riesgos del veredicto son explotables.",
     "step1Title": "1. Indica tu app",
     "step1Body": "La URL donde está desplegada tu aplicación.",
-    "step2Title": "2. Autoriza",
-    "step2Body": "Confirmamos que tienes acceso antes de atacar.",
+    "step2Title": "2. Verifica",
+    "step2Body": "Confirmamos que tienes acceso a la aplicación.",
     "step3Title": "3. Atacamos",
     "step3Body": "Ejecutamos simulaciones seguras y actualizamos tu veredicto.",
     "backToMissionControl": "Veredicto"
@@ -97,11 +99,14 @@
     "manualVerificationTitle": "Necesitamos confirmar que tienes acceso a esta aplicación.",
     "manualVerificationBody": "Puedes verificarla de forma segura para que SequrAI pueda realizar las pruebas.",
     "verifyApplication": "Verificar aplicación",
+    "getVerificationInstructions": "Obtener instrucciones de verificación",
     "manualHelpSummary": "Necesito ayuda para verificar la aplicación",
     "manualHelpBody": "Esta comprobación manual solo es necesaria porque no encontramos una conexión autenticada con el proveedor del despliegue.",
     "checking": "Comprobando...",
     "checkSecurityOnUrl": "Comprobar seguridad de esta URL",
     "continue": "Continuar",
+    "advancedOptions": "Opciones avanzadas",
+    "staticOnlyHint": "Analiza solo el código del repositorio, sin ataques contra la URL desplegada.",
     "errors": {
       "loadStatus": "No se pudo cargar el estado de autorización.",
       "auditFailed": "No se pudo completar la auditoría.",
