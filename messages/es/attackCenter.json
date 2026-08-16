@@ -23,6 +23,13 @@
   "campaign": {
     "title": "Simulación de ataques",
     "checksDone": "{done} de {total} comprobaciones completadas",
+    "resultsHeadline": "Informe de la simulación",
+    "resultsDescription": "Estos son los resultados de las pruebas controladas contra tu aplicación desplegada.",
+    "resultsTitle": "Resultados por prueba",
+    "resultsIssuesFound": "SequrAI detectó {count} problema(s) explotable(s).",
+    "resultsNoIssues": "No se reprodujeron problemas explotables en esta simulación.",
+    "viewReport": "Ver informe",
+    "resultsHint": "Abre cada informe para ver la evidencia, el impacto y la corrección recomendada.",
     "testDetails": "Detalles de la prueba",
     "show": "Mostrar",
     "hide": "Ocultar",
@@ -136,6 +143,8 @@
       "followManualSteps": "Sigue esta última comprobación y después pulsa Verificar aplicación.",
       "staticOnlyComplete": "Análisis de código completado. No se realizaron pruebas dinámicas por tu elección.",
       "auditContinuing": "La auditoría continúa procesándose. Puedes consultar el progreso en esta pantalla.",
+      "simulationRunningBelow": "La simulación está en curso. Sigue el progreso en el informe de abajo.",
+      "resultsBelow": "Simulación completada. Revisa el informe de resultados abajo.",
       "auditComplete": "Auditoría completada. Los resultados ya incluyen las comprobaciones autorizadas."
     }
   }

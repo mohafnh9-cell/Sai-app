@@ -23,6 +23,13 @@
   "campaign": {
     "title": "Attack simulation",
     "checksDone": "{done} of {total} checks done",
+    "resultsHeadline": "Simulation report",
+    "resultsDescription": "These are the results of controlled tests against your deployed application.",
+    "resultsTitle": "Results by test",
+    "resultsIssuesFound": "SequrAI found {count} exploitable issue(s).",
+    "resultsNoIssues": "No exploitable issues were reproduced in this simulation.",
+    "viewReport": "View report",
+    "resultsHint": "Open each report to review evidence, impact, and the recommended fix.",
     "testDetails": "Test details",
     "show": "Show",
     "hide": "Hide",
@@ -136,6 +143,8 @@
       "followManualSteps": "Follow this last check, then click Verify application.",
       "staticOnlyComplete": "Code analysis complete. No dynamic tests were run by your choice.",
       "auditContinuing": "The audit is still processing. You can follow progress on this screen.",
+      "simulationRunningBelow": "The simulation is running. Follow progress in the report below.",
+      "resultsBelow": "Simulation complete. Review the results report below.",
       "auditComplete": "Audit complete. Results now include the authorized checks."
     }
   }

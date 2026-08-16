@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AttackSimulationLoadingPanel } from "./components/AttackSimulationLoadingPanel";
+import { DynamicTargetAuthorizationPanel } from "./components/DynamicTargetAuthorizationPanel";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n/client";
 import type { AttackCenterSnapshot } from "./types";
@@ -12,29 +13,27 @@ import { useAttackCenterLive } from "./hooks/useAttackCenterLive";
 import { AttackCampaignView } from "./components/AttackCampaignView";
 import { AttackExecutionViewPanel } from "./components/AttackExecutionViewPanel";
 import { AttackFindingViewPanel } from "./components/AttackFindingViewPanel";
-import type { SecurityTestContext } from "@/features/security-testing/types";
-import { SecurityTestProgressSteps } from "@/features/security-testing/components/SecurityTestProgressSteps";
-import {
-  buildLiveProgressSteps,
-  deriveLiveTestPhase,
-} from "@/features/security-testing/lib/live-test-copy";
 import { emptyStateCopy } from "@/features/security-testing/lib/product-copy";
 import { PrimaryActionButton, SecurityTestHero } from "@/features/security-testing/components/SecurityTestHero";
+import type { DynamicTargetAuthorizationStatus } from "@/server/ai-red-team/authorization/dynamic-target-authorization-types";
+import { deriveAttackCampaignUiMode } from "./lib/campaign-ui-mode";
 
 export function AttackCenterExperience({
   projectId,
   initialSnapshot,
   initialCampaignId,
   initialCapability = null,
-  securityTestContext = null,
   analysisRunId = null,
+  dynamicTargetAuthorizationStatus = null,
+  skipTargetVerification = false,
 }: {
   projectId: string;
   initialSnapshot: AttackCenterSnapshot | null;
   initialCampaignId?: string | null;
   initialCapability?: AttackCenterCapability | null;
-  securityTestContext?: SecurityTestContext | null;
   analysisRunId?: string | null;
+  dynamicTargetAuthorizationStatus?: DynamicTargetAuthorizationStatus | null;
+  skipTargetVerification?: boolean;
 }) {
   const router = useRouter();
   const { t: ts } = useI18n("securityTest");
@@ -69,19 +68,10 @@ export function AttackCenterExperience({
   });
 
   const emptyCopy = emptyStateCopy(ts);
-
-  const liveProgressSteps = useMemo(() => {
-    if (viewState.kind === "content" && viewState.snapshot.kind === "campaign") {
-      return buildLiveProgressSteps(deriveLiveTestPhase(viewState.snapshot), ts);
-    }
-    if (findingId) {
-      return buildLiveProgressSteps("fix_ready", ts);
-    }
-    if (viewState.kind === "content" && viewState.snapshot.kind === "execution") {
-      return buildLiveProgressSteps("running", ts);
-    }
-    return null;
-  }, [viewState, findingId, ts]);
+  const campaignUiMode = useMemo(
+    () => deriveAttackCampaignUiMode(snapshot),
+    [snapshot]
+  );
 
   const handleOpenFinding = useCallback((nextFindingId: string) => {
     setFindingId(nextFindingId);
@@ -124,9 +114,17 @@ export function AttackCenterExperience({
     Boolean(viewState.snapshot.protection);
 
   return (
-    <div className="space-y-6 max-w-2xl">
-      {liveProgressSteps ? <SecurityTestProgressSteps steps={liveProgressSteps} /> : null}
+    <div className="space-y-8">
+      {dynamicTargetAuthorizationStatus ? (
+        <DynamicTargetAuthorizationPanel
+          projectId={projectId}
+          initialStatus={dynamicTargetAuthorizationStatus}
+          skipTargetVerification={skipTargetVerification}
+          campaignUiMode={campaignUiMode}
+        />
+      ) : null}
 
+      <div className="space-y-6 max-w-2xl">
       {viewState.kind === "loading" ? (
         <AttackSimulationLoadingPanel />
       ) : null}
@@ -135,7 +133,7 @@ export function AttackCenterExperience({
         <SecurityTestHero
           headline={ta("disabled.headline")}
           description={ta("disabled.description")}
-          progressSteps={liveProgressSteps ?? []}
+          progressSteps={[]}
           primaryAction={<PrimaryActionButton disabled>{ta("disabled.action")}</PrimaryActionButton>}
         />
       ) : null}
@@ -171,7 +169,7 @@ export function AttackCenterExperience({
         <SecurityTestHero
           headline={emptyCopy.headline}
           description={emptyCopy.description}
-          progressSteps={liveProgressSteps ?? securityTestContext?.progressSteps ?? []}
+          progressSteps={[]}
           showEstimatedDuration
           showSafetyNote
           primaryAction={
@@ -217,6 +215,7 @@ export function AttackCenterExperience({
           {ta("back")}
         </button>
       ) : null}
+      </div>
     </div>
   );
 }

@@ -10,6 +10,7 @@ import { normalizeHttpUrlInput } from "@/lib/url/normalize-http-url";
 import { useI18n } from "@/lib/i18n/client";
 import { AttackSimulationLoadingPanel } from "./AttackSimulationLoadingPanel";
 import { AttackSimulationFlowSteps } from "./AttackSimulationFlowSteps";
+import type { AttackCampaignUiMode } from "../lib/campaign-ui-mode";
 
 async function readJsonResponse<T>(response: Response): Promise<
   | { ok: true; body: T }
@@ -36,10 +37,12 @@ export function DynamicTargetAuthorizationPanel({
   projectId,
   initialStatus,
   skipTargetVerification = false,
+  campaignUiMode = "none",
 }: {
   projectId: string;
   initialStatus: DynamicTargetAuthorizationStatus | null;
   skipTargetVerification?: boolean;
+  campaignUiMode?: AttackCampaignUiMode;
 }) {
   const router = useRouter();
   const { t } = useI18n("attackCenter");
@@ -126,7 +129,7 @@ export function DynamicTargetAuthorizationPanel({
         dynamicVerificationDecision === "static_only"
           ? t("dynamicTarget.messages.staticOnlyComplete")
           : body.timedOut
-            ? t("dynamicTarget.messages.auditContinuing")
+            ? t("dynamicTarget.messages.simulationRunningBelow")
             : t("dynamicTarget.messages.auditComplete")
       );
       router.refresh();
@@ -455,9 +458,11 @@ export function DynamicTargetAuthorizationPanel({
         ? 2
         : 1;
 
+  const showCampaignSummary = campaignUiMode !== "none" && status.authorized;
+
   return (
     <section className="rounded-xl border bg-card p-6 space-y-5">
-      <AttackSimulationFlowSteps currentStep={flowStep} />
+      {!showCampaignSummary ? <AttackSimulationFlowSteps currentStep={flowStep} /> : null}
 
       {isAttackRunning ? (
         <AttackSimulationLoadingPanel
@@ -501,7 +506,13 @@ export function DynamicTargetAuthorizationPanel({
         <div className="space-y-3 text-sm">
           <p className="font-medium text-emerald-600">{t("dynamicTarget.verified")}</p>
           <p>{t("dynamicTarget.applicationLabel", { url: status.targetOrigin ?? "" })}</p>
-          {awaitingScopeApproval ? (
+          {showCampaignSummary ? (
+            <p className="text-muted-foreground">
+              {campaignUiMode === "running"
+                ? t("dynamicTarget.messages.simulationRunningBelow")
+                : t("dynamicTarget.messages.resultsBelow")}
+            </p>
+          ) : awaitingScopeApproval ? (
             <>
               <p>{t("dynamicTarget.scopeExpansionHint")}</p>
               <Button disabled={loading} onClick={() => void approveScopeExpansion()}>
@@ -653,7 +664,9 @@ export function DynamicTargetAuthorizationPanel({
       )}
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
-      {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
+      {message && !showCampaignSummary ? (
+        <p className="text-sm text-muted-foreground">{message}</p>
+      ) : null}
       </div>
     </section>
   );

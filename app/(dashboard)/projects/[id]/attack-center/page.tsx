@@ -3,7 +3,6 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AttackCenterExperience } from "@/features/attack-simulation/AttackCenterExperience";
-import { DynamicTargetAuthorizationPanel } from "@/features/attack-simulation/components/DynamicTargetAuthorizationPanel";
 import { AttackSimulationIntro } from "@/features/attack-simulation/components/AttackSimulationIntro";
 import {
   ProjectWorkflowNav,
@@ -14,7 +13,6 @@ import { createAdminClient } from "@/server/security-scanner/admin-client";
 import { loadAttackCenterListState } from "@/server/attack-simulation/api/load-attack-center-list";
 import { buildAttackCenterCapability } from "@/server/attack-simulation/api/attack-center-contract";
 import { attackCenterErrorFromUnknown } from "@/server/attack-simulation/api/errors";
-import { getSecurityTestContext } from "@/server/attack-simulation/get-security-test-context";
 import { getAttackCampaignByScanId } from "@/server/attack-simulation/persistence/campaign-repository";
 import { getDynamicTargetAuthorizationStatus } from "@/server/ai-red-team/authorization/dynamic-target-authorization-service";
 import { isDynamicTargetVerificationBypassEnabled } from "@/lib/security/dynamic-target-verification-bypass";
@@ -22,7 +20,6 @@ import { isAnalysisRunOwnedByProject } from "@/server/analysis-runs/get-analysis
 import { resolveAnalysisRunForMissionControl } from "@/server/analysis-runs/resolve-analysis-run";
 import { appendAnalysisRunSearchParams } from "@/features/analysis-runs/lib/build-run-query";
 import type { AttackCenterCapability } from "@/features/attack-simulation/api-types";
-import type { SecurityTestContext } from "@/features/security-testing/types";
 import type { AttackCenterSnapshot } from "@/server/attack-simulation/ui/types";
 import type { Metadata } from "next";
 import { getTranslator } from "@/lib/i18n/server";
@@ -129,7 +126,6 @@ export default async function AttackCenterPage({ params, searchParams }: PagePro
   let initialCapability: AttackCenterCapability | null = buildAttackCenterCapability({
     organizationId: auth.organizationId,
   });
-  let securityTestContext: SecurityTestContext | null = null;
   let initialCampaignId: string | null = null;
 
   if (isolationEnabled && analysisRunId) {
@@ -154,19 +150,6 @@ export default async function AttackCenterPage({ params, searchParams }: PagePro
       code: mapped.code,
       message: mapped.message,
     });
-  }
-
-  try {
-    const fullContext = await getSecurityTestContext(admin, {
-      projectId,
-      organizationId: auth.organizationId,
-      analysisRunId: isolationEnabled ? analysisRunId : undefined,
-      isolationEnabled,
-    });
-    const { hypotheses: _hypotheses, analysisRunId: _runId, ...publicContext } = fullContext;
-    securityTestContext = publicContext;
-  } catch {
-    securityTestContext = null;
   }
 
   const { t: ta } = await getTranslator("attackCenter");
@@ -199,23 +182,17 @@ export default async function AttackCenterPage({ params, searchParams }: PagePro
           showSecurityTest
         />
         <AttackSimulationIntro />
-        <div className="mb-8">
-          <DynamicTargetAuthorizationPanel
-            projectId={projectId}
-            initialStatus={dynamicTargetAuthorizationStatus}
-            skipTargetVerification={skipTargetVerification}
-          />
-        </div>
         <AttackCenterExperience
           projectId={projectId}
           initialSnapshot={initialSnapshot}
           initialCapability={initialCapability}
-          securityTestContext={securityTestContext}
           initialCampaignId={
             initialCampaignId ??
             (initialSnapshot?.kind === "campaign" ? initialSnapshot.campaign.id : null)
           }
           analysisRunId={isolationEnabled ? analysisRunId : undefined}
+          dynamicTargetAuthorizationStatus={dynamicTargetAuthorizationStatus}
+          skipTargetVerification={skipTargetVerification}
         />
       </div>
     </div>

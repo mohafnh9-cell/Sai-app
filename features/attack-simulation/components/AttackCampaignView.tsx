@@ -1,11 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { Loader2, ShieldCheck } from "lucide-react";
+import { useMemo, useState } from "react";
+import { ChevronRight, Loader2, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n/client";
 import { Progress } from "@/components/ui/progress";
+import { cn } from "@/lib/utils";
 import type { AttackCenterCampaignView } from "../types";
 import {
   deriveLiveTestDisplay,
@@ -14,7 +15,12 @@ import {
   friendlyScenarioTitle,
   humanFeedLabel,
 } from "@/features/security-testing/lib/live-test-copy";
+import { TERMINAL_DISPLAY_PHASES } from "@/features/security-testing/lib/derive-phase";
 import { PrimaryActionButton } from "@/features/security-testing/components/SecurityTestHero";
+
+function isIssueStatus(status: string): boolean {
+  return status === "fix_ready" || status === "confirmed" || status === "still_vulnerable";
+}
 
 export function AttackCampaignView({
   view,
@@ -26,10 +32,21 @@ export function AttackCampaignView({
   const router = useRouter();
   const { t: ts } = useI18n("securityTest");
   const { t: ta } = useI18n("attackCenter");
-  const [showDetails, setShowDetails] = useState(() => deriveLiveTestPhase(view) === "running");
+  const phase = deriveLiveTestPhase(view);
+  const isRunning = phase === "running" || phase === "preparing";
+  const showResultsReport = !isRunning;
+  const [showDetails, setShowDetails] = useState(() => isRunning);
   const { executions, feed } = view;
   const display = deriveLiveTestDisplay(view, ts);
-  const hasPrimaryAction = Boolean(display.primaryAction);
+  const hasPrimaryAction = Boolean(display.primaryAction) && !showResultsReport;
+
+  const headline = showResultsReport ? ta("campaign.resultsHeadline") : display.headline;
+  const description = showResultsReport ? ta("campaign.resultsDescription") : display.description;
+
+  const issueCount = useMemo(
+    () => executions.filter((execution) => isIssueStatus(execution.status)).length,
+    [executions]
+  );
 
   const handlePrimary = () => {
     if (!display.primaryAction) return;
@@ -47,8 +64,8 @@ export function AttackCampaignView({
       <section className="surface-premium rounded-3xl p-8 sm:p-10 space-y-6">
         <div className="space-y-2">
           <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">{ta("campaign.title")}</p>
-          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">{display.headline}</h1>
-          <p className="text-sm sm:text-base text-muted-foreground max-w-2xl">{display.description}</p>
+          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">{headline}</h1>
+          <p className="text-sm sm:text-base text-muted-foreground max-w-2xl">{description}</p>
         </div>
 
         {display.waitMessage ? (
@@ -68,7 +85,7 @@ export function AttackCampaignView({
           <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
             <div className="flex items-center gap-2 font-medium">
               {display.showSpinner ? <Loader2 className="h-4 w-4 animate-spin text-primary" /> : null}
-              {!display.showSpinner && display.phase === "protected" ? (
+              {!display.showSpinner && TERMINAL_DISPLAY_PHASES.has(phase) ? (
                 <ShieldCheck className="h-4 w-4 text-primary" />
               ) : null}
               <span>{display.statusLabel}</span>
@@ -82,6 +99,63 @@ export function AttackCampaignView({
           </div>
         </div>
       </section>
+
+      {showResultsReport && executions.length > 0 ? (
+        <section className="rounded-2xl border border-border/60 bg-card p-5 sm:p-6 space-y-4">
+          <div className="space-y-1">
+            <h2 className="text-lg font-semibold">{ta("campaign.resultsTitle")}</h2>
+            <p className="text-sm text-muted-foreground">
+              {issueCount > 0
+                ? ta("campaign.resultsIssuesFound", { count: issueCount })
+                : ta("campaign.resultsNoIssues")}
+            </p>
+          </div>
+          <ul className="space-y-3">
+            {executions.map((execution) => {
+              const title = friendlyScenarioTitle(execution.adapterId, execution.scenarioTitle, ts);
+              const statusLabel = executionStatusLabel(execution.status, ts);
+              const hasReport = Boolean(execution.findingId);
+              const issue = isIssueStatus(execution.status);
+
+              return (
+                <li
+                  key={execution.id}
+                  className={cn(
+                    "rounded-xl border px-4 py-4 text-sm",
+                    issue ? "border-red-500/30 bg-red-500/5" : "border-border/40 bg-muted/10"
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <p className="font-medium leading-snug">{title}</p>
+                      <p className="text-xs text-muted-foreground">{statusLabel}</p>
+                    </div>
+                    {hasReport ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={issue ? "default" : "outline"}
+                        className="shrink-0 gap-1"
+                        onClick={() => onOpenFinding(execution.findingId!)}
+                      >
+                        {ta("campaign.viewReport")}
+                        <ChevronRight className="h-4 w-4" aria-hidden />
+                      </Button>
+                    ) : null}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          {issueCount > 0 ? (
+            <p className="text-xs text-muted-foreground">{ta("campaign.resultsHint")}</p>
+          ) : (
+            <PrimaryActionButton onClick={() => router.push(`/projects/${view.projectId}/mission-control`)}>
+              {ta("deployWithConfidence")}
+            </PrimaryActionButton>
+          )}
+        </section>
+      ) : null}
 
       {executions.length > 0 ? (
         <details
