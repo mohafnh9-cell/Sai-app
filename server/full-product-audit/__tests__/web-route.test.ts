@@ -89,6 +89,24 @@ describe("web full product audit route", () => {
     );
   });
 
+  it("returns JSON when the audit throws an unexpected error", async () => {
+    vi.mocked(runFullProductAudit).mockRejectedValueOnce(new Error("Database unavailable"));
+
+    const response = await POST(
+      new Request("https://sequrai.example/api/projects/p/full-product-audit", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ dynamicVerificationDecision: "authorize" }),
+      }),
+      { params }
+    );
+
+    expect(response.status).toBe(500);
+    const body = await response.json();
+    expect(body.error).toBe("internal_error");
+    expect(body.message).toContain("Database unavailable");
+  });
+
   it("does not accept a URL as a direct audit target", async () => {
     const response = await POST(
       new Request("https://sequrai.example/api/projects/p/full-product-audit", {

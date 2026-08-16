@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { DEFAULT_SECURITY_TEST_IDS } from "@/features/security-testing/user-test-catalog";
 import { isFeatureEnabled } from "@/server/feature-flags";
+import { AttackExecutionEnqueueError } from "@/server/attack-simulation/executor/enqueue-attack-execution";
 import { startAttackCampaign, StartAttackCampaignError } from "@/server/attack-simulation/start-attack-campaign";
 import { getAttackCampaignByScanId, getAttackCampaignById, listAttackScenariosForCampaign } from "@/server/attack-simulation/persistence/campaign-repository";
 import { listAttackExecutionsForCampaign } from "@/server/attack-simulation/persistence/execution-repository";
@@ -223,7 +224,7 @@ export async function ensureSecurityTestsForAudit(
         },
       });
     } catch (error) {
-      if (error instanceof StartAttackCampaignError) {
+      if (error instanceof StartAttackCampaignError || error instanceof AttackExecutionEnqueueError) {
         return {
           campaignId: null,
           executionIds: [],

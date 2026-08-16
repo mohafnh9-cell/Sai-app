@@ -412,9 +412,11 @@ export async function listAllAttackFindingsForCampaign(
 
   if (error || !data) return [];
 
-  return data.map((row) => {
-    const finding = attackFindingSchema.parse(mapAttackFindingRow(row));
-    return {
+  return data.flatMap((row) => {
+    const parsed = attackFindingSchema.safeParse(mapAttackFindingRow(row));
+    if (!parsed.success) return [];
+    const finding = parsed.data;
+    return [{
       id: finding.id,
       title: finding.title,
       description: finding.description,
@@ -425,6 +427,6 @@ export async function listAllAttackFindingsForCampaign(
       adapterId:
         typeof finding.metadata?.adapterId === "string" ? finding.metadata.adapterId : null,
       confidence: finding.confidence,
-    };
+    }];
   });
 }

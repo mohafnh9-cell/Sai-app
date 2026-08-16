@@ -19,6 +19,9 @@
     },
     "app/api/projects/**/mission-control/route.ts": {
       "maxDuration": 60
+    },
+    "app/api/projects/**/full-product-audit/route.ts": {
+      "maxDuration": 300
     }
   }
 }

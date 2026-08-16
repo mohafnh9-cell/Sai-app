@@ -8,6 +8,7 @@ import {
   FullProductAuditError,
   runFullProductAudit,
 } from "@/server/full-product-audit";
+import { ScanRequestError } from "@/server/security-scanner/request-context";
 
 export const maxDuration = 300;
 
@@ -79,6 +80,27 @@ export async function POST(
         { status: error.status }
       );
     }
-    throw error;
+    if (error instanceof ScanRequestError) {
+      return NextResponse.json(
+        { error: error.code, message: error.message },
+        { status: error.status }
+      );
+    }
+    console.error({
+      component: "full-product-audit-route",
+      event: "audit_failed",
+      projectId,
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
+    return NextResponse.json(
+      {
+        error: "internal_error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Could not complete the audit. Try again in a moment.",
+      },
+      { status: 500 }
+    );
   }
 }

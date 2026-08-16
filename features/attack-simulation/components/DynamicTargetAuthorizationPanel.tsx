@@ -11,6 +11,27 @@ import { useI18n } from "@/lib/i18n/client";
 import { AttackSimulationLoadingPanel } from "./AttackSimulationLoadingPanel";
 import { AttackSimulationFlowSteps } from "./AttackSimulationFlowSteps";
 
+async function readJsonResponse<T>(response: Response): Promise<
+  | { ok: true; body: T }
+  | { ok: false; message: string }
+> {
+  const text = await response.text();
+  if (!text.trim()) {
+    return {
+      ok: false,
+      message: response.ok ? "Empty response" : `Request failed (${response.status})`,
+    };
+  }
+  try {
+    return { ok: true, body: JSON.parse(text) as T };
+  } catch {
+    return {
+      ok: false,
+      message: text.trim().slice(0, 240),
+    };
+  }
+}
+
 export function DynamicTargetAuthorizationPanel({
   projectId,
   initialStatus,
@@ -67,39 +88,52 @@ export function DynamicTargetAuthorizationPanel({
   async function runFullAudit(
     dynamicVerificationDecision: "authorize" | "static_only"
   ) {
+    const resetPhase = status?.authorized || ownershipConfirmed ? "verified" : "idle";
     setPhase("preparing");
-    const response = await fetch(`/api/projects/${projectId}/full-product-audit`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ dynamicVerificationDecision }),
-    });
-    const body = (await response.json()) as {
-      error?: string;
-      message?: string;
-      dynamicTestsExecuted?: boolean;
-      timedOut?: boolean;
-      awaitingScopeApproval?: boolean;
-    };
-    if (!response.ok) {
-      throw new Error(body.message ?? body.error ?? t("dynamicTarget.errors.auditFailed"));
-    }
-    if (body.awaitingScopeApproval) {
-      setAwaitingScopeApproval(true);
-      setPhase("verified");
-      setMessage(t("dynamicTarget.messages.scopeUpdateNeeded"));
+    setError(null);
+    try {
+      const response = await fetch(`/api/projects/${projectId}/full-product-audit`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ dynamicVerificationDecision }),
+      });
+      const parsed = await readJsonResponse<{
+        error?: string;
+        message?: string;
+        dynamicTestsExecuted?: boolean;
+        timedOut?: boolean;
+        awaitingScopeApproval?: boolean;
+      }>(response);
+
+      if (!parsed.ok) {
+        throw new Error(parsed.message);
+      }
+
+      const body = parsed.body;
+      if (!response.ok) {
+        throw new Error(body.message ?? body.error ?? t("dynamicTarget.errors.auditFailed"));
+      }
+      if (body.awaitingScopeApproval) {
+        setAwaitingScopeApproval(true);
+        setPhase("verified");
+        setMessage(t("dynamicTarget.messages.scopeUpdateNeeded"));
+        router.refresh();
+        return;
+      }
+      setAwaitingScopeApproval(false);
+      setPhase(resetPhase);
+      setMessage(
+        dynamicVerificationDecision === "static_only"
+          ? t("dynamicTarget.messages.staticOnlyComplete")
+          : body.timedOut
+            ? t("dynamicTarget.messages.auditContinuing")
+            : t("dynamicTarget.messages.auditComplete")
+      );
       router.refresh();
-      return;
+    } catch (auditError) {
+      setPhase(resetPhase);
+      throw auditError;
     }
-    setAwaitingScopeApproval(false);
-    setPhase(body.dynamicTestsExecuted ? "analyzing" : "verified");
-    setMessage(
-      dynamicVerificationDecision === "static_only"
-        ? t("dynamicTarget.messages.staticOnlyComplete")
-        : body.timedOut
-          ? t("dynamicTarget.messages.auditContinuing")
-          : t("dynamicTarget.messages.auditComplete")
-    );
-    router.refresh();
   }
 
   async function checkApplication() {
@@ -478,9 +512,10 @@ export function DynamicTargetAuthorizationPanel({
             <>
               <p>{t("dynamicTarget.readyToRun")}</p>
               <Button
-                disabled={loading}
+                disabled={loading || isAttackRunning}
                 onClick={() => {
                   setLoading(true);
+                  setError(null);
                   void runFullAudit("authorize")
                     .catch((auditError: unknown) =>
                       setError(
