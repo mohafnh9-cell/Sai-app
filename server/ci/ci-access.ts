@@ -42,7 +42,8 @@ export async function requireCiProjectAccess(
           },
           userId: mcpAuth.userId,
           admin: mcpAuth.admin,
-          authSource: mcpAuth.authType === "api_key" ? "api_key" : "oauth",
+          // Committed MCP auth resolves seq_live_* API keys only; OAuth is a separate rollout.
+          authSource: "api_key",
         },
       };
     } catch (error) {
