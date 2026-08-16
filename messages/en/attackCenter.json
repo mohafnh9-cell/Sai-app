@@ -1,5 +1,10 @@
 {
   "loading": "Loading…",
+  "loadingPanel": {
+    "title": "Simulating attacks…",
+    "subtitle": "SequrAI is testing your application in a controlled way. This may take a few minutes.",
+    "checking": "Checking your application…"
+  },
   "disabled": {
     "headline": "Security Test is not available",
     "description": "Ask your admin to turn this on for your project.",
@@ -14,7 +19,7 @@
   "back": "← Back",
   "deployWithConfidence": "Back to Production Verdict",
   "campaign": {
-    "title": "Test security",
+    "title": "Attack simulation",
     "checksDone": "{done} of {total} checks done",
     "testDetails": "Test details",
     "show": "Show",
@@ -22,7 +27,7 @@
     "technicalDetails": "Evidence"
   },
   "execution": {
-    "title": "Test security",
+    "title": "Attack simulation",
     "inProgress": "Testing in progress",
     "waitMessage": "Please wait while this check finishes.",
     "technicalDetails": "Evidence"
@@ -60,13 +65,20 @@
     "requestFailed": "Security Test request failed."
   },
   "page": {
-    "title": "Test security",
+    "title": "Can it be attacked?",
+    "intro": "We simulate real attacks against your deployed application — the way an attacker would — to confirm whether verdict risks are exploitable.",
+    "step1Title": "1. Your app",
+    "step1Body": "The URL where your application is deployed.",
+    "step2Title": "2. Authorize",
+    "step2Body": "We confirm you have access before attacking.",
+    "step3Title": "3. Attack",
+    "step3Body": "We run safe simulations and update your verdict.",
     "backToMissionControl": "Production Verdict"
   },
   "dynamicTarget": {
-    "title": "Live security check",
-    "descriptionDefault": "SequrAI found possible vulnerabilities in your code. We can automatically check whether they are exploitable in your application.",
-    "descriptionSkipVerification": "Enter your application URL and SequrAI will check whether detected vulnerabilities are exploitable.",
+    "title": "Prepare attack simulation",
+    "descriptionDefault": "Enter your application URL. SequrAI will run controlled attacks to check whether detected vulnerabilities are exploitable.",
+    "descriptionSkipVerification": "Enter your application URL. SequrAI will run controlled attacks against that URL.",
     "verified": "Application verified",
     "applicationLabel": "Application: {url}",
     "readyToRun": "SequrAI can now run the authorized security checks.",

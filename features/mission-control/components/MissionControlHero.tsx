@@ -40,9 +40,14 @@ export function MissionControlHero({ verdict }: { verdict: ProductionVerdictV1 }
       className={`rounded-3xl border p-8 sm:p-10 surface-premium ${tone}`}
       aria-labelledby="mission-control-verdict-heading"
     >
-      <p className="text-sm uppercase tracking-[0.24em] text-muted-foreground">
-        {t("verdict.productionVerdict")}
-      </p>
+      <div className="flex flex-wrap items-center gap-3">
+        <p className="text-sm uppercase tracking-[0.24em] text-muted-foreground">
+          {t("verdict.productionVerdict")}
+        </p>
+        <span className="inline-flex items-center rounded-full border border-border/60 bg-muted/30 px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+          {tm("verdictSource.github")}
+        </span>
+      </div>
       <div className="mt-4 flex flex-wrap items-end gap-6">
         {showScore && verdict.score != null ? (
           <div>

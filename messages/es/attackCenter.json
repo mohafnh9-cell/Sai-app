@@ -1,5 +1,10 @@
 {
   "loading": "Cargando…",
+  "loadingPanel": {
+    "title": "Simulando ataques…",
+    "subtitle": "SequrAI está probando tu aplicación de forma controlada. Esto puede tardar unos minutos.",
+    "checking": "Comprobando tu aplicación…"
+  },
   "disabled": {
     "headline": "Las pruebas en vivo no están disponibles",
     "description": "Pide a tu administrador que active esta función para tu proyecto.",
@@ -14,7 +19,7 @@
   "back": "← Volver",
   "deployWithConfidence": "Volver al veredicto",
   "campaign": {
-    "title": "Prueba en vivo",
+    "title": "Simulación de ataques",
     "checksDone": "{done} de {total} comprobaciones completadas",
     "testDetails": "Detalles de la prueba",
     "show": "Mostrar",
@@ -22,7 +27,7 @@
     "technicalDetails": "Detalles técnicos"
   },
   "execution": {
-    "title": "Prueba en vivo",
+    "title": "Simulación de ataques",
     "inProgress": "Prueba en curso",
     "waitMessage": "Espera mientras termina esta comprobación.",
     "technicalDetails": "Detalles técnicos"
@@ -60,13 +65,20 @@
     "requestFailed": "La solicitud de prueba falló."
   },
   "page": {
-    "title": "Prueba en vivo",
+    "title": "¿Puede ser atacada?",
+    "intro": "Simulamos ataques reales contra tu aplicación desplegada — como lo haría un atacante — para confirmar si los riesgos del veredicto son explotables.",
+    "step1Title": "1. Indica tu app",
+    "step1Body": "La URL donde está desplegada tu aplicación.",
+    "step2Title": "2. Autoriza",
+    "step2Body": "Confirmamos que tienes acceso antes de atacar.",
+    "step3Title": "3. Atacamos",
+    "step3Body": "Ejecutamos simulaciones seguras y actualizamos tu veredicto.",
     "backToMissionControl": "Veredicto"
   },
   "dynamicTarget": {
-    "title": "Comprobación de seguridad en vivo",
-    "descriptionDefault": "SequrAI ha encontrado posibles vulnerabilidades en tu código. Podemos comprobar automáticamente si realmente pueden explotarse en tu aplicación.",
-    "descriptionSkipVerification": "Introduce la URL de tu aplicación y SequrAI comprobará si las vulnerabilidades detectadas son explotables.",
+    "title": "Preparar la simulación de ataques",
+    "descriptionDefault": "Indica la URL de tu aplicación. SequrAI simulará ataques controlados para comprobar si las vulnerabilidades detectadas son explotables.",
+    "descriptionSkipVerification": "Indica la URL de tu aplicación. SequrAI ejecutará ataques controlados contra esa URL.",
     "verified": "Aplicación verificada",
     "applicationLabel": "Aplicación: {url}",
     "readyToRun": "SequrAI ya puede realizar las comprobaciones de seguridad autorizadas.",

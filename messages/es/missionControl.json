@@ -6,9 +6,9 @@
   },
   "subNav": {
     "productionVerdict": "Veredicto",
-    "securityTest": "Prueba en vivo",
+    "securityTest": "Ataques",
     "verdict": "Veredicto",
-    "validate": "Prueba en vivo",
+    "validate": "Ataques",
     "history": "Historial",
     "technical": "Técnico",
     "ariaLabel": "Secciones del proyecto"
@@ -27,10 +27,10 @@
       "retry": "Reintentar análisis"
     },
     "testSecurity": {
-      "title": "Prueba en vivo",
-      "description": "Conecta la URL de tu aplicación y comprueba si los riesgos del veredicto son explotables en producción.",
-      "cta": "Continuar con prueba en vivo",
-      "running": "Ejecutando prueba en vivo..."
+      "title": "¿Puede ser atacada?",
+      "description": "Simulamos ataques reales contra tu app desplegada para confirmar si los riesgos son explotables.",
+      "cta": "Simular ataques",
+      "running": "Atacando tu aplicación..."
     },
     "aiFix": {
       "title": "Corregir con IA",
@@ -53,7 +53,7 @@
     "autoRecoveryBanner": "Este run de análisis aún no tiene veredicto. Mostramos tu vista de producción actual.",
     "selector": {
       "label": "Análisis",
-      "hint": "El veredicto, la prueba en vivo y las correcciones con IA corresponden a este análisis.",
+      "hint": "El veredicto y las correcciones con IA corresponden a este análisis del repositorio GitHub.",
       "noScore": "—",
       "runOption": "{sha} · {score} · {status}",
       "runStatus": {
@@ -180,8 +180,28 @@
     "primaryAction": "Siguiente paso",
     "history": "Historial",
     "historyDescription": "Ver historial y tendencias del veredicto",
-    "reviewInProgress": "Escaneando código…",
-    "securityTestRunning": "Prueba en vivo en curso. Los resultados actualizarán tu veredicto al terminar."
+    "reviewInProgress": "Analizando tu código en GitHub…",
+    "securityTestRunning": "Simulando ataques contra tu aplicación. El veredicto se actualizará al terminar."
+  },
+  "activity": {
+    "scan": {
+      "title": "Analizando tu código…",
+      "subtitle": "SequrAI está revisando tu repositorio conectado en GitHub.",
+      "detail": "Esto puede tardar uno o dos minutos."
+    },
+    "attack": {
+      "title": "Simulando ataques…",
+      "subtitle": "SequrAI está probando si tu aplicación puede ser atacada de verdad.",
+      "detail": "Nada en producción se modifica — solo comprobaciones controladas."
+    },
+    "staleVerdictScan": "El veredicto de abajo puede estar desactualizado mientras termina el análisis.",
+    "staleVerdictAttack": "El veredicto de abajo puede cambiar cuando terminen los ataques."
+  },
+  "verdictSource": {
+    "github": "Basado en GitHub"
+  },
+  "localCorrelation": {
+    "title": "Comparar con análisis local (avanzado)"
   },
   "technical": {
     "repository": "Repositorio",

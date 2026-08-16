@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import type { DynamicTargetAuthorizationStatus } from "@/server/ai-red-team/authorization/dynamic-target-authorization-types";
 import { normalizeHttpUrlInput } from "@/lib/url/normalize-http-url";
 import { useI18n } from "@/lib/i18n/client";
+import { AttackSimulationLoadingPanel } from "./AttackSimulationLoadingPanel";
 
 export function DynamicTargetAuthorizationPanel({
   projectId,
@@ -390,8 +391,31 @@ export function DynamicTargetAuthorizationPanel({
     return null;
   }
 
+  const showLoadingPanel =
+    loading ||
+    phase === "checking" ||
+    phase === "preparing" ||
+    phase === "testing" ||
+    phase === "analyzing";
+
+  const loadingTitle =
+    phase === "checking"
+      ? t("loadingPanel.checking")
+      : phase === "preparing"
+        ? t("dynamicTarget.preparing")
+        : phase === "testing"
+          ? t("dynamicTarget.testing")
+          : phase === "analyzing"
+            ? t("dynamicTarget.analyzing")
+            : t("loadingPanel.title");
+
   return (
     <section className="rounded-xl border bg-card p-6 space-y-4">
+      {showLoadingPanel ? (
+        <AttackSimulationLoadingPanel title={loadingTitle} subtitle={t("loadingPanel.subtitle")} progress={48} />
+      ) : null}
+
+      <div className={showLoadingPanel ? "opacity-50 pointer-events-none" : undefined}>
       <div>
         <h2 className="text-lg font-semibold">{t("dynamicTarget.title")}</h2>
         <p className="text-sm text-muted-foreground">
@@ -545,7 +569,10 @@ export function DynamicTargetAuthorizationPanel({
       )}
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
-      {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
+      {message && !showLoadingPanel ? (
+        <p className="text-sm text-muted-foreground">{message}</p>
+      ) : null}
+      </div>
     </section>
   );
 }

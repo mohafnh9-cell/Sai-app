@@ -6,9 +6,9 @@
   },
   "subNav": {
     "productionVerdict": "Production Verdict",
-    "securityTest": "Live test",
+    "securityTest": "Attack simulation",
     "verdict": "Production Verdict",
-    "validate": "Test security",
+    "validate": "Attack simulation",
     "history": "History",
     "technical": "Technical",
     "ariaLabel": "Project sections"
@@ -27,10 +27,10 @@
       "retry": "Retry scan"
     },
     "testSecurity": {
-      "title": "Live test",
-      "description": "Connect your application URL and check whether verdict risks are exploitable in production.",
-      "cta": "Continue with live test",
-      "running": "Running live test..."
+      "title": "Can it be attacked?",
+      "description": "We simulate real attacks against your deployed app to confirm whether risks are exploitable.",
+      "cta": "Simulate attacks",
+      "running": "Attacking your application..."
     },
     "aiFix": {
       "title": "Fix with AI",
@@ -53,7 +53,7 @@
     "autoRecoveryBanner": "This analysis run has no Production Verdict yet. Showing your current production view instead.",
     "selector": {
       "label": "Analysis run",
-      "hint": "Production Verdict, security test, and AI fixes reflect this run.",
+      "hint": "Production Verdict and AI fixes reflect this GitHub repository analysis run.",
       "noScore": "—",
       "runOption": "{sha} · {score} · {status}",
       "runStatus": {
@@ -180,8 +180,28 @@
     "primaryAction": "Next step",
     "history": "History",
     "historyDescription": "View History and readiness trends",
-    "reviewInProgress": "Scanning code…",
-    "securityTestRunning": "Security test in progress. Results will update your Production Verdict when complete."
+    "reviewInProgress": "Analyzing your code on GitHub…",
+    "securityTestRunning": "Simulating attacks against your application. Your verdict will update when finished."
+  },
+  "activity": {
+    "scan": {
+      "title": "Analyzing your code…",
+      "subtitle": "SequrAI is reviewing your connected GitHub repository.",
+      "detail": "This usually takes one or two minutes."
+    },
+    "attack": {
+      "title": "Simulating attacks…",
+      "subtitle": "SequrAI is testing whether your application can really be attacked.",
+      "detail": "Nothing in production is modified — only controlled checks."
+    },
+    "staleVerdictScan": "The verdict below may be outdated while analysis finishes.",
+    "staleVerdictAttack": "The verdict below may change when attacks finish."
+  },
+  "verdictSource": {
+    "github": "Based on GitHub"
+  },
+  "localCorrelation": {
+    "title": "Compare with local analysis (advanced)"
   },
   "technical": {
     "repository": "Repository",

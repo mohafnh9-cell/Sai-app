@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import { AttackSimulationLoadingPanel } from "./components/AttackSimulationLoadingPanel";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n/client";
 import type { AttackCenterSnapshot } from "./types";
@@ -125,10 +125,7 @@ export function AttackCenterExperience({
       {liveProgressSteps ? <SecurityTestProgressSteps steps={liveProgressSteps} /> : null}
 
       {viewState.kind === "loading" ? (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground py-8">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          {ta("loading")}
-        </div>
+        <AttackSimulationLoadingPanel />
       ) : null}
 
       {viewState.kind === "disabled" ? (

@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AttackCenterExperience } from "@/features/attack-simulation/AttackCenterExperience";
 import { DynamicTargetAuthorizationPanel } from "@/features/attack-simulation/components/DynamicTargetAuthorizationPanel";
+import { AttackSimulationIntro } from "@/features/attack-simulation/components/AttackSimulationIntro";
 import {
   ProjectWorkflowNav,
 } from "@/features/mission-control/components/ProjectWorkflowNav";
@@ -197,6 +198,7 @@ export default async function AttackCenterPage({ params, searchParams }: PagePro
           analysisRunId={isolationEnabled ? analysisRunId : undefined}
           showSecurityTest
         />
+        <AttackSimulationIntro />
         <div className="mb-8">
           <DynamicTargetAuthorizationPanel
             projectId={projectId}

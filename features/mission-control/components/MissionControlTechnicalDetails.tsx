@@ -12,7 +12,7 @@ import { ProductionVerdictCardSection } from "./ProductionVerdictCard";
 import { CoverageBreakdown } from "@/features/production-verdict/components/CoverageBreakdown";
 import { TechnicalFindingsSection } from "@/features/production-verdict/components/TechnicalFindingsSection";
 import { FastestPathForward } from "@/features/production-verdict/components/FastestPathForward";
-import { useI18n } from "@/lib/i18n/client";
+import { LocalGitHubCorrelationPanel } from "@/features/local-github-correlation/components/LocalGitHubCorrelationPanel";
 
 function DetailSubsection({
   title,
@@ -35,6 +35,7 @@ export function MissionControlTechnicalDetails({
   framework,
   findings,
   fixPromptContext,
+  projectId,
   openByDefault = false,
 }: {
   view: MissionControlView;
@@ -42,6 +43,7 @@ export function MissionControlTechnicalDetails({
   framework?: string | null;
   findings?: ScanFinding[];
   fixPromptContext?: FixPromptContext;
+  projectId?: string;
   openByDefault?: boolean;
 }) {
   const { t } = useI18n("missionControl");
@@ -116,6 +118,17 @@ export function MissionControlTechnicalDetails({
           <DetailSubsection title={t("technical.logs")}>
             <MissionFeed items={view.feed} />
           </DetailSubsection>
+        ) : null}
+
+        {projectId ? (
+          <details className="rounded-xl border border-border/50">
+            <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-muted-foreground">
+              {t("localCorrelation.title")}
+            </summary>
+            <div className="px-4 pb-4">
+              <LocalGitHubCorrelationPanel projectId={projectId} />
+            </div>
+          </details>
         ) : null}
       </div>
     </details>

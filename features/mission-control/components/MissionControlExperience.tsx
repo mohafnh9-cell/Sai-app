@@ -16,7 +16,7 @@ import { MissionControlProtectionStatus } from "./MissionControlProtectionStatus
 import { AnalysisRunSelector } from "@/features/analysis-runs/components/AnalysisRunSelector";
 import { ProjectOnboardedBanner } from "@/features/projects/components/ProjectOnboardedBanner";
 import { McpPromoBanner } from "@/features/mcp/components/McpPromoBanner";
-import { LocalGitHubCorrelationPanel } from "@/features/local-github-correlation/components/LocalGitHubCorrelationPanel";
+import { MissionControlActivityBanner } from "./MissionControlActivityBanner";
 
 export function MissionControlExperience({
   initialState,
@@ -61,6 +61,9 @@ export function MissionControlExperience({
 
   const blockers = verdict?.topPriorities ?? [];
   const showBlockers = blockers.length > 0 && verdict?.status !== "ready_to_ship";
+  const showScanActivity = state.status.reviewInProgress;
+  const showAttackActivity = state.status.securityRunning;
+  const staleVerdictWhileBusy = Boolean(verdict && (showScanActivity || showAttackActivity));
 
   const recoveryBannerKey =
     state.recoveryReason === "scoped_verdict_missing"
@@ -133,17 +136,35 @@ export function MissionControlExperience({
         onStartSecurityTest={() => void startSecurityTest()}
       />
 
-      {state.status.reviewInProgress && !verdict ? (
+      {showScanActivity ? (
+        <MissionControlActivityBanner
+          kind="scan"
+          progress={state.status.progress}
+          progressMessage={state.status.progressMessage}
+        />
+      ) : null}
+
+      {showAttackActivity ? (
+        <MissionControlActivityBanner kind="attack" />
+      ) : null}
+
+      {!verdict && !showScanActivity ? (
         <div
-          className="rounded-2xl border border-border/60 bg-muted/20 px-5 py-4 text-sm text-muted-foreground text-center"
+          className="rounded-2xl border border-border/60 bg-muted/20 px-5 py-8 text-center space-y-2"
           role="status"
         >
-          {t("sections.reviewInProgress")}
+          <p className="text-sm font-medium">{t("empty.noVerdictTitle")}</p>
+          <p className="text-sm text-muted-foreground">{t("empty.noVerdictBody")}</p>
         </div>
       ) : null}
 
       {verdict ? (
-        <>
+        <div className={staleVerdictWhileBusy ? "space-y-10 opacity-60 pointer-events-none" : "space-y-10"}>
+          {staleVerdictWhileBusy ? (
+            <p className="text-sm text-muted-foreground text-center -mb-4" role="status">
+              {showAttackActivity ? t("activity.staleVerdictAttack") : t("activity.staleVerdictScan")}
+            </p>
+          ) : null}
           <MissionControlHero verdict={verdict} />
 
           {showBlockers ? <DeploymentBlockersList blockers={blockers} /> : null}
@@ -179,13 +200,12 @@ export function MissionControlExperience({
             framework={state.framework}
             findings={state.ui.fixPromptContext?.findings}
             fixPromptContext={state.ui.fixPromptContext}
+            projectId={state.projectId}
             openByDefault={
               state.ui.openTechnicalDetails || verdict.status === "ready_to_ship"
             }
           />
-
-          <LocalGitHubCorrelationPanel projectId={state.projectId} />
-        </>
+        </div>
       ) : null}
 
       {state.view.cancelledReview ? (
