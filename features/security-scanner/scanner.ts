@@ -1,5 +1,6 @@
 import { resolveConfig, type ScanConfigInput } from "./config";
 import { findingFingerprint } from "./fingerprint";
+import { buildFindingCorrelationKey } from "@/lib/correlation/finding-identity";
 import { normalizeFiles } from "./normalization";
 import { redactEvidence } from "./redaction";
 import { createDefaultRegistry, RuleRegistry } from "./rules/registry";
@@ -81,17 +82,29 @@ export async function scanRepository(files: readonly InputFile[], options: ScanO
 }
 
 function finalizeFinding(draft: FindingDraft): Finding {
+  const material = draft.fingerprintMaterial ?? draft.title;
   const fingerprint = findingFingerprint(
     draft.ruleId,
     draft.location.path,
     draft.location.line,
-    draft.fingerprintMaterial ?? draft.title,
+    material,
   );
+  const correlationKey = buildFindingCorrelationKey({
+    ruleId: draft.ruleId,
+    filePath: draft.location.path,
+    fingerprintMaterial: material,
+  });
   const { fingerprintMaterial: _discarded, ...finding } = draft;
   return {
     ...finding,
     id: `${draft.ruleId}:${fingerprint}`,
     fingerprint,
+    correlationKey,
+    metadata: {
+      ...(draft.metadata ?? {}),
+      correlationKey,
+      correlationMaterial: material,
+    },
     evidence: draft.evidence ? redactEvidence(draft.evidence) : undefined,
   };
 }

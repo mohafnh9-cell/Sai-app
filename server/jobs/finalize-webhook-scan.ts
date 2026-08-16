@@ -5,10 +5,16 @@ import {
   postGitHubCommitStatus,
   statusFromSecurityCheck,
 } from "@/server/github-automation/github-status";
+import {
+  buildCheckRunExternalId,
+  postGitHubCheckRun,
+  verdictStatusToCheckConclusion,
+} from "@/server/github-automation/github-check-run";
 import { finalizeScanAutomation } from "@/server/github-automation/post-scan";
 import { resolveOrganizationGitHubToken } from "@/server/github-automation/token-resolver";
 import { formatGithubCheckDescription } from "@/brain/production-verdict/build-verdict";
 import { buildScanProductionVerdict } from "@/server/brain/build-scan-verdict";
+import { getProductionVerdictByScan } from "@/server/production-verdict/service";
 import {
   buildIdempotencyKey,
   runIdempotentSideEffect,
@@ -24,8 +30,14 @@ export async function finalizeWebhookAutomationScan(
     triggerLabel: string;
     statusSha?: string;
     appUrl?: string;
+    pullRequestNumber?: number;
   }
-): Promise<{ checkStatus: "passed" | "failed" | "warning" | "pending" }> {
+): Promise<{
+  checkStatus: "passed" | "failed" | "warning" | "pending";
+  productionVerdictId?: string | null;
+  githubCheckRunId?: number | null;
+  verdictStatus?: string | null;
+}> {
   const { data: project } = await admin
     .from("projects")
     .select("github_repo, security_score")
@@ -109,8 +121,11 @@ export async function finalizeWebhookAutomationScan(
     );
     if (tokenResult) {
       const reportUrl = input.appUrl
-        ? `${input.appUrl}/projects/${input.projectId}/scans/${input.scanId}`
+        ? input.pullRequestNumber != null
+          ? `${input.appUrl}/projects/${input.projectId}/pull-requests/${input.pullRequestNumber}?head=${input.statusSha}`
+          : `${input.appUrl}/projects/${input.projectId}/scans/${input.scanId}`
         : undefined;
+      const persistedVerdict = await getProductionVerdictByScan(admin, input.scanId);
       const idempotencyKey = buildIdempotencyKey({
         organizationId: input.organizationId,
         projectId: input.projectId,
@@ -143,8 +158,69 @@ export async function finalizeWebhookAutomationScan(
           });
         }
       );
+
+      if (input.pullRequestNumber != null && persistedVerdict) {
+        const checkIdempotencyKey = buildIdempotencyKey({
+          organizationId: input.organizationId,
+          projectId: input.projectId,
+          scanId: input.scanId,
+          commitSha: input.statusSha,
+          operationType: "github_check_run",
+        });
+        const checkOutcome = await runIdempotentSideEffect(
+          admin,
+          {
+            idempotencyKey: checkIdempotencyKey,
+            organizationId: input.organizationId,
+            projectId: input.projectId,
+            scanId: input.scanId,
+            operationType: "github_check_run",
+          },
+          async () =>
+            postGitHubCheckRun({
+              githubRepo: project.github_repo,
+              sha: input.statusSha!,
+              token: tokenResult.token,
+              conclusion: verdictStatusToCheckConclusion(persistedVerdict.status, {
+                checkStatus,
+              }),
+              verdict: persistedVerdict,
+              reportUrl,
+              pullRequestNumber: input.pullRequestNumber,
+              externalId: buildCheckRunExternalId({
+                pullRequestNumber: input.pullRequestNumber!,
+                headSha: input.statusSha!,
+              }),
+            })
+        );
+
+        const { data: verdictRow } = await admin
+          .from("production_verdicts")
+          .select("id")
+          .eq("scan_id", input.scanId)
+          .maybeSingle();
+
+        return {
+          checkStatus,
+          productionVerdictId: (verdictRow?.id as string | undefined) ?? null,
+          githubCheckRunId: checkOutcome.result?.checkRunId ?? null,
+          verdictStatus: persistedVerdict.status,
+        };
+      }
     }
   }
 
-  return { checkStatus };
+  const persisted = await getProductionVerdictByScan(admin, input.scanId);
+  const { data: verdictRow } = await admin
+    .from("production_verdicts")
+    .select("id")
+    .eq("scan_id", input.scanId)
+    .maybeSingle();
+
+  return {
+    checkStatus,
+    productionVerdictId: (verdictRow?.id as string | undefined) ?? null,
+    githubCheckRunId: null,
+    verdictStatus: persisted?.status ?? verdict.status,
+  };
 }

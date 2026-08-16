@@ -11,7 +11,9 @@ import {
 import { resolveUserOrganizationId } from "@/server/organizations/resolve-user-organization";
 import { resolveActiveWorkspaceIdForUser, assertWorkspaceMembership } from "@/server/workspaces/service";
 import { switchActiveWorkspace } from "@/server/workspaces/mutations";
-import { resolveWorkspaceGitHubToken } from "@/server/github/workspace-connection-service";
+import { resolveGitHubCredential } from "@/server/github-app/credential-provider";
+import { assertInstallationOwnsRepository } from "@/server/github-app/installation-events";
+import { loadInstallationForOrganization } from "@/server/github-app/installation-store";
 import { enforceRateLimit } from "@/server/http/rate-limit";
 
 const requestSchema = z.object({
@@ -51,7 +53,12 @@ async function upsertConnectedProject(
   supabase: Awaited<ReturnType<typeof createClient>>,
   organizationId: string,
   repo: GitHubRepo,
-  connectionMeta?: { connectionId: string; connectedByUserId: string }
+  connectionMeta?: {
+    connectionId: string;
+    connectedByUserId: string;
+    authMode?: "oauth_legacy" | "github_app";
+    installationRowId?: string | null;
+  }
 ): Promise<string> {
   const reference = gitHubRepositoryReferenceFromApi(repo);
   const { data: existingById } = await supabase
@@ -81,6 +88,8 @@ async function upsertConnectedProject(
         ? {
             github_connection_id: connectionMeta.connectionId,
             connected_by_user_id: connectionMeta.connectedByUserId,
+            github_auth_mode: connectionMeta.authMode ?? "oauth_legacy",
+            github_app_installation_id: connectionMeta.installationRowId ?? null,
           }
         : {}),
     };
@@ -121,6 +130,8 @@ async function upsertConnectedProject(
       ? {
           github_connection_id: connectionMeta.connectionId,
           connected_by_user_id: connectionMeta.connectedByUserId,
+          github_auth_mode: connectionMeta.authMode ?? "oauth_legacy",
+          github_app_installation_id: connectionMeta.installationRowId ?? null,
         }
       : {}),
   };
@@ -185,7 +196,7 @@ async function connectRepositories(request: Request) {
     );
   }
 
-  const tokenResult = await resolveWorkspaceGitHubToken(admin, organizationId);
+  const tokenResult = await resolveGitHubCredential(admin, organizationId);
   if (!tokenResult) {
     return NextResponse.json(
       {
@@ -197,6 +208,19 @@ async function connectRepositories(request: Request) {
     );
   }
   const providerToken = tokenResult.token;
+  const usingGitHubApp = tokenResult.source === "github_app";
+
+  let installationRowId: string | null = null;
+  if (usingGitHubApp) {
+    const installation = await loadInstallationForOrganization(admin, organizationId);
+    installationRowId = installation?.id ?? null;
+    if (!installationRowId) {
+      return NextResponse.json(
+        { error: "GitHub App installation not found for this Workspace", code: "installation_not_found" },
+        { status: 403 }
+      );
+    }
+  }
 
   const selectedIds = [...new Set(parsed.data.repos.map((repo) => repo.id))];
   const verifiedRepos = await Promise.all(
@@ -259,12 +283,36 @@ async function connectRepositories(request: Request) {
 
   for (const repo of verifiedRepos) {
     if (!repo) continue;
+    if (usingGitHubApp && installationRowId) {
+      const owns = await assertInstallationOwnsRepository({
+        admin,
+        organizationId,
+        installationRowId,
+        githubRepositoryId: repo.id,
+      });
+      if (!owns) {
+        return NextResponse.json(
+          {
+            error: "Repository is not accessible through the installed GitHub App",
+            code: "repository_not_in_installation",
+          },
+          { status: 403 }
+        );
+      }
+    }
     const projectId = await upsertConnectedProject(supabase, organizationId, repo, {
-      connectionId: tokenResult.connectionId,
+      connectionId: tokenResult.connectionId ?? "github-app",
       connectedByUserId: tokenResult.userId,
+      authMode: usingGitHubApp ? "github_app" : "oauth_legacy",
+      installationRowId,
     });
     projectIds.push(projectId);
     saved++;
+
+    if (usingGitHubApp) {
+      webhooksSkipped++;
+      continue;
+    }
 
     if (!admin) {
       webhooksSkipped++;

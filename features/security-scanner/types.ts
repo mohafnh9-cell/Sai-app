@@ -31,10 +31,12 @@ export interface Finding {
   evidence?: string;
   remediation: string;
   fingerprint: string;
+  /** Line-independent identity for local ↔ GitHub correlation (Phase D.7). */
+  correlationKey: string;
   metadata?: Record<string, unknown>;
 }
 
-export interface FindingDraft extends Omit<Finding, "id" | "fingerprint"> {
+export interface FindingDraft extends Omit<Finding, "id" | "fingerprint" | "correlationKey"> {
   fingerprintMaterial?: string;
 }
 

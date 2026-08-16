@@ -67,7 +67,7 @@ describe("deterministic utilities", () => {
     const fingerprint = findingFingerprint("rule", "A.ts", 3, "x");
     expect(fingerprint).toBe(findingFingerprint("rule", "a.ts", 3, " X "));
     const finding: Finding = {
-      id: "one", fingerprint, ruleId: "rule", title: "Title", description: "Description",
+      id: "one", fingerprint, correlationKey: "corr-one", ruleId: "rule", title: "Title", description: "Description",
       severity: "high", confidence: "high", category: "test",
       location: { path: "a.ts", line: 3 }, remediation: "Fix it",
     };
@@ -98,7 +98,7 @@ describe("deterministic utilities", () => {
       detectStack(credentialedDependency.files).dependencies["private-package"]
     ).toBe("[remote-reference]");
     const base = {
-      id: "x", fingerprint: "x", ruleId: "x", title: "x", description: "x",
+      id: "x", fingerprint: "x", correlationKey: "corr-x", ruleId: "x", title: "x", description: "x",
       confidence: "high" as const, category: "x", location: { path: "x", line: 1 }, remediation: "x",
     };
     expect(scoreFindings([{ ...base, severity: "critical" }, { ...base, severity: "high" }]).score).toBe(60);

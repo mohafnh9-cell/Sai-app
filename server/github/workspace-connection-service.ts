@@ -8,6 +8,7 @@ import {
   TokenEncryptionError,
 } from "@/lib/crypto/token-encryption";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { validateGitHubAccessToken } from "@/server/github/token-lifecycle";
 
 export type WorkspaceGitHubConnectionStatus =
   | "connected"
@@ -396,6 +397,13 @@ export async function resolveWorkspaceGitHubToken(
   ) {
     return null;
   }
+
+  const valid = await validateGitHubAccessToken(admin, {
+    token,
+    connectionId: connection.id,
+    organizationId,
+  });
+  if (!valid) return null;
 
   return {
     token,

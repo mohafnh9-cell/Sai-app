@@ -31,8 +31,12 @@ export type GitHubPullRequestPayload = {
 
 export type GitHubRepositoryPayload = {
   action: string;
-  repository?: { id: number; full_name: string; default_branch: string };
-  changes?: { repository?: { name?: { from?: string } } };
+  repository?: { id: number; full_name: string; default_branch: string; owner?: { id?: number; login?: string } };
+  changes?: {
+    repository?: { name?: { from?: string } };
+    owner?: { from?: { user?: { id?: number; login?: string }; organization?: { id?: number; login?: string } } };
+  };
+  sender?: { id?: number; login?: string };
 };
 
 export function parseRepositoryFullName(fullName: string): { owner: string; repo: string } | null {

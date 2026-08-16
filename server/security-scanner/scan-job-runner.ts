@@ -10,6 +10,7 @@ import { ANALYSIS_ENGINE_V2_VERSION } from "@/brain/prompts/analysis-engine-v2";
 import { scanRepository as scanRepositoryFiles, scoreFindings } from "@/features/security-scanner";
 import { stubNormalizedFile } from "@/features/security-scanner/normalization";
 import type { Confidence, Finding as ScannerFinding, Severity } from "@/features/security-scanner";
+import { buildFindingCorrelationKeyFromParts } from "@/lib/correlation/finding-identity";
 import { generateAndPersistProductionVerdict } from "@/server/production-verdict/service";
 import {
   assertScanContinues,
@@ -52,6 +53,7 @@ type ScanContext = {
 type Finding = {
   ruleId: string;
   fingerprint: string;
+  correlationKey: string;
   severity: string;
   category: string;
   title: string;
@@ -133,6 +135,11 @@ function findingRow(
     fingerprint: fingerprint(context.repositoryId, finding),
     metadata: {
       column: finding.location.column,
+      correlationKey: finding.correlationKey,
+      correlationMaterial:
+        typeof finding.metadata?.correlationMaterial === "string"
+          ? finding.metadata.correlationMaterial
+          : undefined,
       ...finding.metadata,
     },
   };
@@ -278,6 +285,7 @@ export class InlineScanJobRunner implements ScanJobRunner {
             id: `merged-${index}`,
             ruleId: finding.ruleId,
             fingerprint: finding.fingerprint,
+            correlationKey: finding.correlationKey,
             severity: finding.severity as Severity,
             confidence: finding.confidence as Confidence,
             category: finding.category,
@@ -533,6 +541,7 @@ export class InlineScanJobRunner implements ScanJobRunner {
     newFindings: Array<{
       ruleId: string;
       fingerprint: string;
+      correlationKey: string;
       severity: string;
       category: string;
       title: string;
@@ -571,6 +580,12 @@ export class InlineScanJobRunner implements ScanJobRunner {
           .map((row) => ({
             ruleId: row.rule_id,
             fingerprint: row.fingerprint,
+            correlationKey: buildFindingCorrelationKeyFromParts({
+              ruleId: row.rule_id,
+              filePath: row.file_path,
+              title: row.title,
+              metadata: (row.metadata as Record<string, unknown> | null) ?? null,
+            }),
             severity: row.severity,
             category: row.category,
             title: row.title,

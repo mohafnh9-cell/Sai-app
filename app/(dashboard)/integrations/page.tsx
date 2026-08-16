@@ -47,6 +47,20 @@ type WebhookHealthPayload = {
   summary: { total: number; healthy: number; degraded: number };
 };
 
+type GitHubAppStatusPayload = {
+  configured: boolean;
+  installation: {
+    id: string;
+    githubInstallationId: number;
+    accountLogin: string;
+    accountType: string;
+    status: string;
+    repositorySelection: string;
+    installedAt: string;
+  } | null;
+  webhookUrl: string | null;
+};
+
 export default function IntegrationsPage() {
   const webhookPayloadUrl = useMemo(() => {
     const base = process.env.NEXT_PUBLIC_APP_URL ?? "https://sequrai-app.vercel.app";
@@ -77,6 +91,10 @@ export default function IntegrationsPage() {
   const [webhookHealthState, setWebhookHealthState] = useState<"idle" | "loading" | "ready" | "error">(
     "idle"
   );
+  const [githubAppStatus, setGithubAppStatus] = useState<GitHubAppStatusPayload | null>(null);
+  const [githubAppStatusState, setGithubAppStatusState] = useState<
+    "idle" | "loading" | "ready" | "error"
+  >("idle");
 
   const fetchConnection = useCallback(async () => {
     setConnectionState("loading");
@@ -108,11 +126,27 @@ export default function IntegrationsPage() {
     setWebhookHealthState("ready");
   }, []);
 
+  const fetchGitHubAppStatus = useCallback(async () => {
+    setGithubAppStatusState("loading");
+    const res = await fetch("/api/github/app/status", { cache: "no-store" });
+    const data = (await res.json().catch(() => null)) as GitHubAppStatusPayload | null;
+    if (!res.ok || !data) {
+      setGithubAppStatusState("error");
+      return;
+    }
+    setGithubAppStatus(data);
+    setGithubAppStatusState("ready");
+  }, []);
+
   const fetchRepos = useCallback(async () => {
     setStep("loading");
     setErrorMsg("");
 
-    const res = await fetch("/api/github/repos");
+    const useAppRepos =
+      githubAppStatus?.configured === true &&
+      githubAppStatus.installation?.status === "active";
+
+    const res = await fetch(useAppRepos ? "/api/github/app/repos" : "/api/github/repos");
     const data = await res.json();
 
     if (data.needsReauth || res.status === 403) {
@@ -127,9 +161,15 @@ export default function IntegrationsPage() {
       return;
     }
 
+    if (useAppRepos && data.installationActive === false) {
+      setErrorMsg("GitHub App installation is not active for this workspace.");
+      setStep("error");
+      return;
+    }
+
     setRepos(data.repos);
     setStep("selecting");
-  }, [t]);
+  }, [githubAppStatus, t]);
 
   const connectGitHub = useCallback(async () => {
     setErrorMsg("");
@@ -156,7 +196,8 @@ export default function IntegrationsPage() {
 
   useEffect(() => {
     queueMicrotask(() => void fetchConnection());
-  }, [fetchConnection]);
+    queueMicrotask(() => void fetchGitHubAppStatus());
+  }, [fetchConnection, fetchGitHubAppStatus]);
 
   useEffect(() => {
     if (connectionState !== "ready" || connection?.connection.status !== "connected") {
@@ -166,6 +207,7 @@ export default function IntegrationsPage() {
   }, [connection?.connection.status, connectionState, fetchWebhookHealth]);
 
   const githubErrorParam = searchParams.get("githubError");
+  const githubAppParam = searchParams.get("githubApp");
   const githubErrorMessage = useMemo(() => {
     if (!githubErrorParam) return null;
     const messages: Record<string, string> = {
@@ -178,9 +220,11 @@ export default function IntegrationsPage() {
   }, [githubErrorParam, t]);
 
   useEffect(() => {
-    if (!githubErrorParam) return;
+    if (!githubErrorParam && !githubAppParam) return;
     router.replace("/integrations", { scroll: false });
-  }, [githubErrorParam, router]);
+  }, [githubAppParam, githubErrorParam, router]);
+
+  const githubAppInstallSuccess = githubAppParam === "installed";
 
   const displayError = errorMsg || githubErrorMessage || "";
 
@@ -288,6 +332,80 @@ export default function IntegrationsPage() {
 
       {connectionState === "ready" && connection?.connection.status === "connected" ? (
         <McpPromoBanner />
+      ) : null}
+
+      {githubAppStatusState === "ready" && githubAppStatus?.configured ? (
+        <Card className="border-border/50">
+          <CardHeader className="pb-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-base">GitHub App (recommended)</CardTitle>
+                <CardDescription className="text-xs">
+                  Least-privilege access via installation tokens. OAuth legacy remains available as
+                  fallback.
+                </CardDescription>
+              </div>
+              <Badge
+                variant="outline"
+                className={`text-xs ${
+                  githubAppStatus.installation?.status === "active"
+                    ? "text-emerald-400 border-emerald-400/30 bg-emerald-400/10"
+                    : "text-muted-foreground"
+                }`}
+              >
+                {githubAppStatus.installation?.status === "active"
+                  ? "Installed"
+                  : "Not installed"}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            {githubAppStatus.installation ? (
+              <div className="rounded-lg border border-border/50 bg-secondary/20 p-3 space-y-1">
+                <p className="font-medium">
+                  {githubAppStatus.installation.accountLogin}{" "}
+                  <span className="text-muted-foreground font-normal">
+                    ({githubAppStatus.installation.accountType})
+                  </span>
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Installation #{githubAppStatus.installation.githubInstallationId} ·{" "}
+                  {githubAppStatus.installation.repositorySelection} repositories
+                </p>
+              </div>
+            ) : (
+              <p className="text-muted-foreground text-xs">
+                Install the SequrAI GitHub App on your organization or account to use short-lived
+                installation tokens instead of broad OAuth scopes.
+              </p>
+            )}
+            <div className="flex flex-wrap gap-2">
+              {!githubAppStatus.installation ? (
+                <Button asChild className="gap-2">
+                  <a href="/api/github/app/install">Install GitHub App</a>
+                </Button>
+              ) : (
+                <Button variant="outline" asChild className="gap-2">
+                  <a href="/api/github/app/install">Manage installation</a>
+                </Button>
+              )}
+              {githubAppStatus.webhookUrl ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => void fetchGitHubAppStatus()}
+                  className="gap-1.5"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  Refresh
+                </Button>
+              ) : null}
+            </div>
+            {githubAppInstallSuccess && (
+              <p className="text-xs text-emerald-400">GitHub App installation saved successfully.</p>
+            )}
+          </CardContent>
+        </Card>
       ) : null}
 
       {/* GitHub Card */}

@@ -2,17 +2,20 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { resolveWorkspaceGitHubToken } from "@/server/github/workspace-connection-service";
+import { resolveGitHubCredential } from "@/server/github-app/credential-provider";
 
 export async function resolveOrganizationGitHubToken(
   admin: SupabaseClient,
   organizationId: string,
   projectId?: string
-): Promise<{ token: string; userId: string } | null> {
-  const scopedAdmin = admin;
-  const resolved = await resolveWorkspaceGitHubToken(scopedAdmin, organizationId, projectId);
-  if (resolved) {
-    return { token: resolved.token, userId: resolved.userId };
+): Promise<{ token: string; userId: string; authSource?: "github_app" | "oauth_legacy" } | null> {
+  const credential = await resolveGitHubCredential(admin, organizationId, projectId);
+  if (credential) {
+    return {
+      token: credential.token,
+      userId: credential.userId,
+      authSource: credential.source,
+    };
   }
 
   // Legacy fallback during migration only when table is missing.

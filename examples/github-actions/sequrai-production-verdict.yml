@@ -1,0 +1,96 @@
+# Poll SequrAI Production Verdict for the exact commit SHA.
+# Push/PR scans are normally triggered by the SequrAI GitHub webhook — this workflow
+# waits for the canonical verdict and fails the job when merge should be blocked.
+#
+# Copy to .github/workflows/sequrai-production-verdict.yml in your application repo.
+#
+# Required secrets:
+#   SEQURAI_API_KEY      — seq_live_… MCP API key
+#   SEQURAI_PROJECT_ID   — SequrAI project UUID
+#   SEQURAI_BASE_URL     — e.g. https://app.sequrai.com
+
+name: SequrAI Production Verdict
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: sequrai-${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  production-verdict:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Resolve commit SHA
+        id: sha
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "commit=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
+            echo "pr=${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "commit=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+            echo "pr=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Ensure scan (push / manual only)
+        if: github.event_name != 'pull_request'
+        env:
+          SEQURAI_BASE_URL: ${{ secrets.SEQURAI_BASE_URL }}
+          SEQURAI_API_KEY: ${{ secrets.SEQURAI_API_KEY }}
+          SEQURAI_PROJECT_ID: ${{ secrets.SEQURAI_PROJECT_ID }}
+        run: |
+          curl -sf -X POST \
+            -H "Authorization: Bearer ${SEQURAI_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "{\"commitSha\":\"${{ steps.sha.outputs.commit }}\"}" \
+            "${SEQURAI_BASE_URL}/api/projects/${SEQURAI_PROJECT_ID}/ci/scan"
+
+      - name: Wait for Production Verdict
+        env:
+          SEQURAI_BASE_URL: ${{ secrets.SEQURAI_BASE_URL }}
+          SEQURAI_API_KEY: ${{ secrets.SEQURAI_API_KEY }}
+          SEQURAI_PROJECT_ID: ${{ secrets.SEQURAI_PROJECT_ID }}
+          COMMIT_SHA: ${{ steps.sha.outputs.commit }}
+          PR_NUMBER: ${{ steps.sha.outputs.pr }}
+        run: |
+          set -euo pipefail
+          deadline=$(( $(date +%s) + 1500 ))
+          query="commitSha=${COMMIT_SHA}"
+          if [ -n "${PR_NUMBER}" ]; then
+            query="${query}&prNumber=${PR_NUMBER}&headSha=${COMMIT_SHA}"
+          fi
+          while [ $(date +%s) -lt $deadline ]; do
+            body=$(curl -sf \
+              -H "Authorization: Bearer ${SEQURAI_API_KEY}" \
+              "${SEQURAI_BASE_URL}/api/projects/${SEQURAI_PROJECT_ID}/ci/status?${query}")
+            phase=$(echo "$body" | jq -r '.status.scanPhase')
+            conclusion=$(echo "$body" | jq -r '.status.checkRun.conclusion')
+            stale=$(echo "$body" | jq -r '.status.stale')
+            echo "scanPhase=${phase} conclusion=${conclusion} stale=${stale}"
+            if [ "$stale" = "true" ]; then
+              echo "Stale SHA — waiting for fresh scan"
+              sleep 20
+              continue
+            fi
+            if [ "$phase" = "completed" ]; then
+              case "$conclusion" in
+                success) echo "Production Verdict: GO"; exit 0 ;;
+                action_required)
+                  echo "Production Verdict: insufficient data — review required"
+                  exit 1
+                  ;;
+                *) echo "Production Verdict: NO-GO ($conclusion)"; exit 1 ;;
+              esac
+            fi
+            if [ "$phase" = "failed" ]; then
+              echo "Scan failed"; exit 1
+            fi
+            sleep 20
+          done
+          echo "Timed out waiting for SequrAI Production Verdict"
+          exit 1

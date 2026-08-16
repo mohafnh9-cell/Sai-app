@@ -6,6 +6,7 @@ import { createHash } from "node:crypto";
 export type SideEffectOperation =
   | "production_verdict"
   | "github_commit_status"
+  | "github_check_run"
   | "in_app_notification"
   | "email_notification"
   | "safe_fix_generation"

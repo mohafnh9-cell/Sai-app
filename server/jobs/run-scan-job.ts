@@ -294,7 +294,7 @@ export async function executeScanRunJob(
           await recordIncrementalScan(admin, payload, payload.finalize.incremental);
         }
       } else if (payload.finalize.kind === "webhook_pr") {
-        const { checkStatus } = await finalizeWebhookAutomationScan(admin, {
+        const finalizeResult = await finalizeWebhookAutomationScan(admin, {
           scanId: payload.scanId,
           projectId: payload.projectId,
           organizationId: payload.organizationId,
@@ -302,8 +302,9 @@ export async function executeScanRunJob(
           triggerLabel: `Pull Request #${payload.finalize.pullRequestNumber}`,
           statusSha: payload.finalize.headSha,
           appUrl: payload.finalize.appUrl,
+          pullRequestNumber: payload.finalize.pullRequestNumber,
         });
-        await finalizePullRequestScan(admin, payload, checkStatus);
+        await finalizePullRequestScan(admin, payload, finalizeResult);
       } else if (payload.finalize.kind === "automatic_review") {
         await finalizeAutomaticReviewJob(admin, {
           organizationId: payload.organizationId,
@@ -422,10 +423,16 @@ async function recordIncrementalScan(
 async function finalizePullRequestScan(
   admin: SupabaseClient,
   payload: ScanRunPayload,
-  checkStatus: "passed" | "failed" | "warning" | "pending"
+  finalizeResult: {
+    checkStatus: "passed" | "failed" | "warning" | "pending";
+    productionVerdictId?: string | null;
+    githubCheckRunId?: number | null;
+    verdictStatus?: string | null;
+  }
 ) {
   if (payload.finalize?.kind !== "webhook_pr") return;
   const finalize = payload.finalize;
+  const checkStatus = finalizeResult.checkStatus;
   const { data: completed } = await admin
     .from("scans")
     .select("security_score")
@@ -460,6 +467,9 @@ async function finalizePullRequestScan(
       security_score_after: scoreAfter,
       score_delta: scoreDelta,
       check_status: checkStatus,
+      production_verdict_id: finalizeResult.productionVerdictId ?? null,
+      github_check_run_id: finalizeResult.githubCheckRunId ?? null,
+      verdict_status: finalizeResult.verdictStatus ?? null,
       impact_summary: {
         scoreDelta,
         added,

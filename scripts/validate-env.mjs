@@ -98,6 +98,25 @@ function validate() {
   if (production && !process.env.GITHUB_TOKEN_ENCRYPTION_KEY) {
     errors.push("GITHUB_TOKEN_ENCRYPTION_KEY is required in production");
   }
+
+  const githubAppKeys = [
+    "GITHUB_APP_ID",
+    "GITHUB_APP_PRIVATE_KEY",
+    "GITHUB_APP_WEBHOOK_SECRET",
+    "GITHUB_APP_SLUG",
+  ];
+  const githubAppSet = githubAppKeys.filter((key) => process.env[key]?.trim()).length;
+  if (githubAppSet > 0 && githubAppSet < githubAppKeys.length) {
+    warnings.push(
+      "Partial GitHub App configuration — set all of GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY, GITHUB_APP_WEBHOOK_SECRET, GITHUB_APP_SLUG or leave all unset (OAuth legacy only)"
+    );
+  }
+  if ((production || staging) && githubAppSet === 0) {
+    warnings.push(
+      "GitHub App not configured — OAuth legacy remains the only GitHub auth path until App env vars are set"
+    );
+  }
+
   const encryptionKey = process.env.GITHUB_TOKEN_ENCRYPTION_KEY;
   if (
     encryptionKey &&
@@ -117,6 +136,7 @@ function validate() {
     "INTERNAL_OPS_TOKEN",
     "GITHUB_WEBHOOK_SECRET",
     "GITHUB_TOKEN_ENCRYPTION_KEY",
+    "GITHUB_APP_WEBHOOK_SECRET",
     "SUPABASE_SERVICE_ROLE_KEY",
   ];
   for (const key of secretKeys) {

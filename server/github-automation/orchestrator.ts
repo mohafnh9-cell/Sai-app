@@ -5,6 +5,10 @@ import { createAdminClient } from "@/server/security-scanner/admin-client";
 import {
   postGitHubCommitStatus,
 } from "./github-status";
+import {
+  buildCheckRunExternalId,
+  postPendingGitHubCheckRun,
+} from "./github-check-run";
 import { resolveOrganizationGitHubToken } from "./token-resolver";
 import {
   branchFromRef,
@@ -672,6 +676,17 @@ async function handlePullRequestEvent(
     description: "Pull Request production analysis in progress",
   });
 
+  const prReportBase = input.appUrl
+    ? `${input.appUrl}/projects/${input.project.id}/pull-requests/${pr.number}`
+    : undefined;
+  await postPendingGitHubCheckRun({
+    githubRepo: input.project.github_repo!,
+    sha: headSha,
+    token: input.token,
+    externalId: buildCheckRunExternalId({ pullRequestNumber: pr.number, headSha }),
+    reportUrl: prReportBase ? `${prReportBase}?head=${headSha}` : undefined,
+  });
+
   await enqueueAutomationScan(admin, {
     scanId,
     project: input.project,
@@ -724,11 +739,24 @@ async function handleRepositoryEvent(
   }
 ) {
   const action = input.payload.action;
+  const repositoryId = input.payload.repository?.id ?? input.project.github_repository_id;
+
   if (action === "deleted") {
     await admin
       .from("projects")
       .update({ webhook_enabled: false, github_last_commit_sha: null })
       .eq("id", input.project.id);
+    await admin.from("repository_sync_status").upsert(
+      {
+        project_id: input.project.id,
+        organization_id: input.project.organization_id,
+        github_repository_id: repositoryId,
+        connection_status: "disconnected",
+        last_error: "GitHub repository was deleted.",
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "project_id" }
+    );
     await recordRepositoryActivity(admin, {
       organizationId: input.project.organization_id,
       projectId: input.project.id,
@@ -736,14 +764,46 @@ async function handleRepositoryEvent(
       title: "GitHub repository deleted",
       description: "Automation paused until repository is reconnected.",
     });
-  } else if (action === "renamed" && input.payload.changes?.repository?.name?.from) {
-    const from = input.payload.changes.repository.name.from;
+  } else if (action === "renamed" && input.payload.repository?.full_name) {
+    const fullName = input.payload.repository.full_name;
+    const githubRepoUrl = `https://github.com/${fullName}`;
+    const previousName = input.payload.changes?.repository?.name?.from;
+    await admin
+      .from("projects")
+      .update({ github_repo: githubRepoUrl, name: fullName.split("/")[1] ?? input.project.name })
+      .eq("id", input.project.id)
+      .eq("github_repository_id", repositoryId);
     await recordRepositoryActivity(admin, {
       organizationId: input.project.organization_id,
       projectId: input.project.id,
       eventType: "repository_renamed",
       title: "GitHub repository renamed",
-      description: `Previously ${from}`,
+      description: previousName ? `Previously ${previousName} · now ${fullName}` : `Now ${fullName}`,
+    });
+  } else if (action === "transferred") {
+    await admin
+      .from("projects")
+      .update({ webhook_enabled: false })
+      .eq("id", input.project.id);
+    await admin.from("repository_sync_status").upsert(
+      {
+        project_id: input.project.id,
+        organization_id: input.project.organization_id,
+        github_repository_id: repositoryId,
+        connection_status: "connection_issue",
+        last_error:
+          "Repository ownership changed on GitHub. Revalidate the connection in SequrAI before scanning resumes.",
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "project_id" }
+    );
+    await recordRepositoryActivity(admin, {
+      organizationId: input.project.organization_id,
+      projectId: input.project.id,
+      eventType: "repository_transferred",
+      title: "GitHub repository transferred",
+      description:
+        "SequrAI paused automation until the Workspace explicitly revalidates repository ownership.",
     });
   }
 
