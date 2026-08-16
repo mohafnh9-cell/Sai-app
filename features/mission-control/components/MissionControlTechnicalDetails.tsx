@@ -13,6 +13,7 @@ import { CoverageBreakdown } from "@/features/production-verdict/components/Cove
 import { TechnicalFindingsSection } from "@/features/production-verdict/components/TechnicalFindingsSection";
 import { FastestPathForward } from "@/features/production-verdict/components/FastestPathForward";
 import { LocalGitHubCorrelationPanel } from "@/features/local-github-correlation/components/LocalGitHubCorrelationPanel";
+import { useI18n } from "@/lib/i18n/client";
 
 function DetailSubsection({
   title,
