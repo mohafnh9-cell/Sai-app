@@ -38,6 +38,7 @@ export type SafeFixBlockerSummary = {
 export type SafeFixResult =
   | {
       mode: "safe_fix";
+      source: "github";
       status: "choose_blocker";
       project: { id: string; name: string; repositoryFullName: string | null };
       blockers: SafeFixBlockerSummary[];
@@ -45,12 +46,14 @@ export type SafeFixResult =
     }
   | {
       mode: "safe_fix";
+      source: "github";
       status: "no_blockers";
       project: { id: string; name: string; repositoryFullName: string | null };
       summary: string;
     }
   | {
       mode: "safe_fix";
+      source: "github";
       status: "prompt_ready";
       project: { id: string; name: string; repositoryFullName: string | null };
       blocker: {
@@ -108,6 +111,7 @@ export async function safeFix(
   if (verdict.blockersCount === 0 && verdict.topPriorities.length === 0) {
     return {
       mode: "safe_fix",
+      source: "github" as const,
       status: "no_blockers",
       project,
       summary: formatSafeFixNoBlockers(t),
@@ -149,6 +153,7 @@ export async function safeFix(
 
     return {
       mode: "safe_fix",
+      source: "github" as const,
       status: "choose_blocker",
       project,
       blockers,
@@ -239,6 +244,7 @@ export async function safeFix(
 
   return {
     mode: "safe_fix",
+    source: "github" as const,
     status: "prompt_ready",
     project,
     blocker: { ...blockerSummary, evidence },

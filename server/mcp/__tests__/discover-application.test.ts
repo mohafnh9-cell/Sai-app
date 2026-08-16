@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { discoverApplication } from "../tools/discover-application";
 import { getMcpTranslator } from "../i18n";
 import type { McpAuthContext } from "../auth";
+import { ALL_MCP_SCOPES } from "../oauth/scopes";
 
 vi.mock("@/server/ai-red-team/discovery", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/server/ai-red-team/discovery")>();
@@ -24,6 +25,9 @@ vi.mock("@/server/ai-red-team/discovery", async (importOriginal) => {
 
 function fakeCtx(): McpAuthContext {
   return {
+    authType: "api_key",
+    source: "legacy_api_key",
+    keyId: "key-1",
     admin: {
       from: () => ({
         select: () => ({
@@ -44,6 +48,7 @@ function fakeCtx(): McpAuthContext {
     } as never,
     organizationId: "org-1",
     userId: "user-1",
+    scopes: [...ALL_MCP_SCOPES],
   };
 }
 

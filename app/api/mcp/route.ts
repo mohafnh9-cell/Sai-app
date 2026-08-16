@@ -9,6 +9,10 @@ import {
 } from "@/server/mcp/prompt-definitions";
 import { mcpPostBodySchema } from "@/server/mcp/request.schema";
 import { enforceRateLimit } from "@/server/http/rate-limit";
+import {
+  mcpInsufficientScopeResponse,
+  mcpUnauthorizedResponse,
+} from "@/server/mcp/oauth/errors";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -145,7 +149,7 @@ export async function GET(request: Request) {
 
   const auth = await resolveMcpAuth(request);
   if (!auth) {
-    return NextResponse.json({ error: "Unauthorized", code: "unauthorized" }, { status: 401 });
+    return mcpUnauthorizedResponse();
   }
   return NextResponse.json({
     server: MCP_SERVER_INFO,
@@ -159,7 +163,7 @@ export async function POST(request: Request) {
 
   const auth = await resolveMcpAuth(request);
   if (!auth) {
-    return NextResponse.json({ error: "Unauthorized", code: "unauthorized" }, { status: 401 });
+    return mcpUnauthorizedResponse();
   }
 
   const contentLength = Number(request.headers.get("content-length") ?? 0);
@@ -193,6 +197,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ result });
   } catch (error) {
     if (error instanceof McpError) {
+      if (error.code === "insufficient_scope") {
+        const requiredScope = error.data?.requiredScope as string | undefined;
+        return mcpInsufficientScopeResponse(requiredScope);
+      }
       return NextResponse.json(
         { error: error.message, code: error.code, ...(error.data ? { data: error.data } : {}) },
         { status: error.status }

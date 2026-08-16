@@ -21,6 +21,7 @@ export type FullProductAuditMcpResponse = Omit<
   FullProductAuditResult,
   "reviewId" | "engines" | "dynamicVerification" | "findings" | "topRisks"
 > & {
+  source: "github";
   findings: PublicAuditFinding[];
   topRisks: PublicAuditFinding[];
   codeAnalysis: {
@@ -164,11 +165,26 @@ function appendFinalVerdict(lines: string[], t: McpTranslator, result: FullProdu
   } else {
     lines.push(`⚠ ${t("fullProductAudit.report.unknownLimitedDynamic")}`);
   }
-  lines.push("", t("fullProductAudit.report.nextStepsHeader"));
-  lines.push(`1. ${t("fullProductAudit.report.nextReviewValue")}`);
-  lines.push(`2. ${t("fullProductAudit.report.nextRemoveSecret")}`);
-  lines.push(`3. ${t("fullProductAudit.report.nextRotateSecret")}`);
-  lines.push(`4. ${t("fullProductAudit.report.nextRerunAudit")}`);
+
+  const hasSecretFindings = result.findings.some(
+    (finding) =>
+      finding.category?.toLowerCase().includes("secret") ||
+      finding.title.toLowerCase().includes("secret") ||
+      finding.title.toLowerCase().includes("credential")
+  );
+  const hasActionableRisks = result.topRisks.length > 0;
+
+  if (hasActionableRisks || hasSecretFindings) {
+    lines.push("", t("fullProductAudit.report.nextStepsHeader"));
+    lines.push(`1. ${t("fullProductAudit.report.nextReviewValue")}`);
+    if (hasSecretFindings) {
+      lines.push(`2. ${t("fullProductAudit.report.nextRemoveSecret")}`);
+      lines.push(`3. ${t("fullProductAudit.report.nextRotateSecret")}`);
+      lines.push(`4. ${t("fullProductAudit.report.nextRerunAudit")}`);
+    } else {
+      lines.push(`2. ${t("fullProductAudit.report.nextRerunAudit")}`);
+    }
+  }
 }
 
 export function formatFullProductAuditResponse(
@@ -289,6 +305,7 @@ export function formatFullProductAuditResponse(
   } = result;
   return {
     ...publicResult,
+    source: "github" as const,
     findings: result.findings.map(publicFinding),
     topRisks: result.topRisks.map(publicFinding),
     codeAnalysis: {

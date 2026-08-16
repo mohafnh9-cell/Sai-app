@@ -67,6 +67,9 @@ function buildRecommendation(input: {
   if (input.verdictStatus === "not_ready" || (input.counts.critical + input.counts.high) > 0) {
     return "Do not deploy until production blockers are resolved. Start with the top risk below.";
   }
+  if (input.topRisks.length === 0) {
+    return "No production blockers were identified in this audit. Run Full Product Audit again after your next significant change.";
+  }
   return "Address the top risks below, then run Full Product Audit again to verify.";
 }
 
@@ -317,7 +320,7 @@ export async function runFullProductAudit(
       (finding.severity.toLowerCase() === "critical" || finding.severity.toLowerCase() === "high") &&
       !finding.userFacing?.safeToIgnore
   );
-  const topRisks = (productionRisks.length > 0 ? productionRisks : consolidated).slice(0, 6);
+  const topRisks = productionRisks.slice(0, 6);
   const whatToFixFirst = buildWhatToFixFirst(topRisks);
   const verdictStatus = (verdict?.status as VerdictStatus | null) ?? null;
   const score = verdict?.score ?? null;

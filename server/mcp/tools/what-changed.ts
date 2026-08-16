@@ -15,6 +15,7 @@ export type WhatChangedInput = ProjectSelector;
 
 export type WhatChangedResult = {
   mode: "continuous_review";
+  source: "github";
   project: { id: string; name: string; repositoryFullName: string | null };
   currentScore: number | null;
   previousScore: number | null;
@@ -111,6 +112,7 @@ export async function whatChanged(
 
   return {
     mode: "continuous_review",
+    source: "github",
     project,
     currentScore: current.score,
     previousScore: previous?.score ?? null,

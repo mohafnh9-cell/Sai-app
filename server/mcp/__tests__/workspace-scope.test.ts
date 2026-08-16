@@ -3,6 +3,7 @@ import { assertProjectInOrg } from "@/server/mcp/auth";
 import { resolveMcpProject } from "@/server/mcp/project-resolution";
 import { getMcpTranslator } from "@/server/mcp/i18n";
 import { createFakeAdmin } from "./fake-admin";
+import { testMcpAuthContext } from "./test-context";
 
 const ORG_A = "org-a";
 const ORG_B = "org-b";
@@ -21,12 +22,11 @@ describe("MCP workspace scope", () => {
     ],
   });
 
-  const ctx = {
+  const ctx = testMcpAuthContext(admin, {
     keyId: "key-a",
     organizationId: ORG_A,
     userId: "user-a",
-    admin: admin as never,
-  };
+  });
 
   const t = getMcpTranslator("en");
 

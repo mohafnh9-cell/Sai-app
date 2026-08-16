@@ -25,6 +25,7 @@ export type ProductionHistoryPoint = {
 
 export type ProductionHistoryResult = {
   mode: "production_history";
+  source: "github";
   project: { id: string; name: string; repositoryFullName: string | null };
   currentVerdict: VerdictStatus | null;
   currentScore: number | null;
@@ -69,6 +70,7 @@ export async function productionHistory(
   if (records.length === 0) {
     return {
       mode: "production_history",
+      source: "github",
       project,
       currentVerdict: null,
       currentScore: null,
@@ -108,6 +110,7 @@ export async function productionHistory(
 
   return {
     mode: "production_history",
+    source: "github",
     project,
     currentVerdict: journey.currentStatus,
     currentScore: journey.currentScore,

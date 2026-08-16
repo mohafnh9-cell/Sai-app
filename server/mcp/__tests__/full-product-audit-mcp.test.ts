@@ -7,6 +7,7 @@ import {
 } from "@/server/mcp/tools/full-product-audit";
 import { createFakeAdmin, type FakeTables } from "./fake-admin";
 import { buildVerdictFixture, verdictRow } from "./verdict-fixture";
+import { testMcpAuthContext } from "./test-context";
 
 const ORG = "66666666-6666-4666-8666-666666666666";
 const PROJECT = "55555555-5555-4555-8555-555555555555";
@@ -24,12 +25,7 @@ vi.mock("@/server/full-product-audit", async (importOriginal) => {
 import { fullProductAudit } from "@/server/mcp/tools/full-product-audit";
 
 function ctxFor(admin: ReturnType<typeof createFakeAdmin>): McpAuthContext {
-  return {
-    keyId: "key-1",
-    organizationId: ORG,
-    userId: "user-1",
-    admin: admin as unknown as McpAuthContext["admin"],
-  };
+  return testMcpAuthContext(admin, { organizationId: ORG });
 }
 
 describe("MCP full_product_audit integration", () => {

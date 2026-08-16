@@ -56,6 +56,8 @@ describe("MCP API key auth", () => {
     );
 
     expect(context).toMatchObject({
+      authType: "api_key",
+      source: "legacy_api_key",
       keyId: "key-1",
       organizationId: "org-1",
       userId: "user-1",

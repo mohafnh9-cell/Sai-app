@@ -20,6 +20,7 @@ export type ReviewNowStatus = "queued" | "processing" | "already_completed";
 
 export type ReviewNowResult = {
   mode: "production_review_request";
+  source: "github";
   project: { id: string; name: string; repositoryFullName: string | null };
   reviewId: string | null;
   commitSha: string | null;
@@ -88,6 +89,7 @@ export async function reviewNow(
   if (outcome.outcome === "queued") {
     return {
       mode: "production_review_request",
+      source: "github",
       project,
       reviewId: outcome.reviewId,
       commitSha: outcome.commitSha,
@@ -106,6 +108,7 @@ export async function reviewNow(
   if (outcome.outcome === "processing") {
     return {
       mode: "production_review_request",
+      source: "github",
       project,
       reviewId: outcome.reviewId,
       commitSha: null,
@@ -123,6 +126,7 @@ export async function reviewNow(
 
   return {
     mode: "production_review_request",
+    source: "github",
     project,
     reviewId: outcome.reviewId,
     commitSha: outcome.reviewedCommitSha,

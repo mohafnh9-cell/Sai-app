@@ -4,18 +4,14 @@ import { getMcpTranslator } from "@/server/mcp/i18n";
 import { canIDeploy } from "@/server/mcp/tools/can-i-deploy";
 import { createFakeAdmin, type FakeTables } from "@/server/mcp/__tests__/fake-admin";
 import { buildVerdictFixture, verdictRow } from "@/server/mcp/__tests__/verdict-fixture";
+import { testMcpAuthContext } from "@/server/mcp/__tests__/test-context";
 import { REVIEW_STALE_FAILURE_CODE } from "@/server/review-recovery/stale-review";
 
 const ORG_A = "org-a";
 const PROJECT_1 = "11111111-1111-4111-8111-111111111111";
 
 function ctxFor(admin: ReturnType<typeof createFakeAdmin>): McpAuthContext {
-  return {
-    keyId: "key-1",
-    organizationId: ORG_A,
-    userId: "user-1",
-    admin: admin as unknown as McpAuthContext["admin"],
-  };
+  return testMcpAuthContext(admin, { organizationId: ORG_A });
 }
 
 function baseTables(overrides: Partial<FakeTables> = {}): FakeTables {

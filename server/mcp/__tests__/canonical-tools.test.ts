@@ -8,6 +8,7 @@ import { safeFix } from "@/server/mcp/tools/safe-fix";
 import { whatChanged } from "@/server/mcp/tools/what-changed";
 import { createFakeAdmin, type FakeTables } from "./fake-admin";
 import { buildVerdictFixture, verdictRow } from "./verdict-fixture";
+import { testMcpAuthContext } from "./test-context";
 
 const ORG_A = "org-a";
 const ORG_B = "org-b";
@@ -15,12 +16,7 @@ const PROJECT_1 = "11111111-1111-4111-8111-111111111111";
 const PROJECT_2 = "22222222-2222-4222-8222-222222222222";
 
 function ctxFor(admin: ReturnType<typeof createFakeAdmin>, organizationId = ORG_A): McpAuthContext {
-  return {
-    keyId: "key-1",
-    organizationId,
-    userId: "user-1",
-    admin: admin as unknown as McpAuthContext["admin"],
-  };
+  return testMcpAuthContext(admin, { organizationId });
 }
 
 function baseTables(overrides: Partial<FakeTables> = {}): FakeTables {
@@ -103,8 +99,10 @@ describe("can_i_deploy", () => {
     const result = await canIDeploy(ctxFor(createFakeAdmin(tables)), {}, t);
 
     expect(result.deploymentRecommendation).toBe("SHIP_IT");
-    // Live recompute derives confidence from materialized scan coverage.
-    expect(result.confidenceBand).toBe("high");
+    expect(result.source).toBe("github");
+    expect(result.authoritative).toBe("persisted");
+    // Authoritative persisted verdict keeps its stored confidence band.
+    expect(result.confidenceBand).toBe("low");
     expect(result.latestReviewId).toBe("44444444-4444-4444-8444-444444444441");
     expect(result.latestReviewStatus).toBe("completed");
   });

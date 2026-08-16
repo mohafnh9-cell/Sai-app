@@ -8,6 +8,9 @@ export type McpCallLog = {
   result: "success" | "error";
   errorCode?: string;
   clientName?: string | null;
+  authType?: "api_key" | "oauth" | null;
+  clientId?: string | null;
+  source?: "legacy_api_key" | "oauth_token" | null;
 };
 
 /**
@@ -26,5 +29,8 @@ export function logMcpCall(entry: McpCallLog): void {
     result: entry.result,
     errorCode: entry.errorCode ?? null,
     clientName: entry.clientName ?? null,
+    authType: entry.authType ?? null,
+    clientId: entry.clientId ?? null,
+    source: entry.source ?? null,
   });
 }

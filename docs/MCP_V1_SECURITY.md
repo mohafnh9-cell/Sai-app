@@ -45,7 +45,10 @@
 
 ## 6. What MCP tools cannot do (by construction)
 
-- **Cannot trigger a repository scan.** `can_i_deploy`, `what_changed`, `production_history`, and `deployment_confidence` only read persisted rows (`production_verdicts`, `repository_scan_state`). `safe_fix` only reads persisted findings/priorities and calls the existing prompt-generation engine — none of the five tools can enqueue or start a scan.
+- **Cannot trigger a repository scan.** `can_i_deploy`, `what_changed`, and `production_history` read persisted rows (`production_verdicts`, `repository_scan_state`). `review_now` and `full_product_audit` enqueue reviews through existing server paths. `safe_fix` only reads persisted findings/priorities and returns a prompt — it never writes code or opens PRs.
+- **Verdict source tagging:** remote tools that expose Production Verdict data include `source: "github"` or `source: "pr"`. Local stdio tools include `source: "local"`. `discover_application`, `cancel_review`, and `authorize_dynamic_target` omit source when no verdict applies.
+- **Authoritative deploy answer:** `can_i_deploy` uses the **persisted** Production Verdict as authoritative; live recompute is exposed only as optional divergence metadata (`consistency`, `liveVerdictStatus`).
+- **GitHub App (Phase D.3):** When configured, `resolveGitHubCredential()` prefers installation tokens over OAuth legacy. Installation tokens are ephemeral (in-memory cache only). Separate webhook secrets: `GITHUB_WEBHOOK_SECRET` (legacy) vs `GITHUB_APP_WEBHOOK_SECRET` (App). See `docs/GITHUB_APP_MIGRATION.md`.
 - **Cannot modify files, execute commands, or create commits/PRs.** `safe_fix` returns a prompt as *text* for the caller's own AI coding agent to act on; the MCP server itself has no filesystem or git write path.
 - **Cannot expose detected secrets or raw source content.** `safe_fix` evidence is limited to file paths (and optionally line numbers), never file contents; findings queries never `select` a raw code snippet column.
 - **Cannot calculate a second verdict, score, or confidence number.** See `docs/ADR_001_SINGLE_SOURCE_OF_TRUTH.md` — this is a security property too, since a second, uncontrolled calculation path would be a second attack surface for producing misleading "safe to deploy" signals.
@@ -59,3 +62,16 @@
 - Rate limiting is in-memory per server instance (`server/http/rate-limit.ts`), not a shared/distributed limiter. On a multi-instance deployment this means the effective limit is `limit × instance count`. Acceptable for private beta traffic volumes; should move to a shared store (e.g. Redis) before public beta if abuse is observed.
 - The rate-limit response on `/api/mcp` is issued **before** locale resolution (which requires a valid API key), so its error message is always English even when the caller's profile locale is Spanish. This is a deliberate trade-off: resolving locale would require authenticating first, defeating the purpose of rate-limiting the auth lookup itself.
 - There is no repository-diff-evidence system wired to MCP yet, which is why `what_changed.confirmedIntroducedBlockers` is always empty (see `docs/MCP_V1_IMPLEMENTATION.md` §5). This is a correctness/trust decision, not a security gap, but is noted here because it bounds what MCP can honestly claim about causality.
+
+## 9. OAuth 2.1 (Fase C — remote MCP)
+
+Remote MCP now supports **OAuth 2.1 + PKCE S256** alongside legacy `seq_live_*` API keys.
+
+- **Dual auth:** `resolveMcpAuth()` accepts `Bearer seq_live_*` (legacy, all scopes) or `Bearer seq_oat_*` (OAuth, scoped).
+- **Discovery:** `/.well-known/oauth-authorization-server` and `/.well-known/oauth-protected-resource`.
+- **Tokens:** opaque access tokens (`seq_oat_*`), hashed at rest; refresh tokens (`seq_ort_*`) with rotation and family revocation on reuse.
+- **Scopes:** enforced centrally via `assertToolScope()` — see `docs/MCP_OAUTH.md`.
+- **Tenant isolation:** OAuth tokens bind `organization_id` at issuance; project resolution unchanged.
+- **Local MCP:** unchanged — stdio bridge does not use OAuth in Fase C.
+
+Full OAuth documentation: `docs/MCP_OAUTH.md`.

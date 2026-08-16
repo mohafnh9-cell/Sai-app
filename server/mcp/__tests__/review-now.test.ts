@@ -6,6 +6,7 @@ import { reviewNow } from "@/server/mcp/tools/review-now";
 import { MCP_REVIEWS_PER_ORGANIZATION_PER_HOUR } from "@/server/review-now/rate-limit";
 import { createFakeAdmin, type FakeTables } from "./fake-admin";
 import { buildVerdictFixture, verdictRow } from "./verdict-fixture";
+import { testMcpAuthContext } from "./test-context";
 
 const ORG_A = "org-a";
 const ORG_B = "org-b";
@@ -13,12 +14,7 @@ const PROJECT_1 = "11111111-1111-4111-8111-111111111111";
 const PROJECT_2 = "22222222-2222-4222-8222-222222222222";
 
 function ctxFor(admin: ReturnType<typeof createFakeAdmin>, organizationId = ORG_A): McpAuthContext {
-  return {
-    keyId: "key-1",
-    organizationId,
-    userId: "user-1",
-    admin: admin as unknown as McpAuthContext["admin"],
-  };
+  return testMcpAuthContext(admin, { organizationId });
 }
 
 function baseTables(overrides: Partial<FakeTables> = {}): FakeTables {

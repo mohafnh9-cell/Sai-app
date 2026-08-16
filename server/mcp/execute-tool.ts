@@ -6,6 +6,8 @@ import { getMcpTranslator, resolveMcpLocale } from "./i18n";
 import { logMcpCall } from "./observability";
 import { recordOperationDuration } from "@/server/observability/operation-timing";
 import { MCP_PUBLIC_TOOL_NAMES } from "./tool-definitions";
+import { assertToolScope } from "./oauth/scopes";
+import { logOAuthEvent } from "./oauth/audit";
 import { cancelReview } from "./tools/cancel-review";
 import { canIDeploy } from "./tools/can-i-deploy";
 import { productionHistory } from "./tools/production-history";
@@ -107,6 +109,8 @@ export async function executeMcpTool(
     throw new McpError(404, "unknown_tool", `Unknown tool: ${toolName}`);
   }
 
+  assertToolScope(ctx, toolName);
+
   const startedAt = Date.now();
   const locale = await resolveMcpLocale(ctx.admin, ctx.userId, str(input.locale));
   const t = getMcpTranslator(locale);
@@ -134,6 +138,9 @@ export async function executeMcpTool(
       projectId: (result as { project?: { id?: string } })?.project?.id ?? null,
       durationMs: Date.now() - startedAt,
       result: "success",
+      authType: ctx.authType,
+      clientId: ctx.clientId ?? null,
+      source: ctx.source,
     });
     recordOperationDuration("mcp.tool", Date.now() - startedAt, {
       organizationId: ctx.organizationId,
@@ -141,12 +148,30 @@ export async function executeMcpTool(
     });
     return enriched;
   } catch (error) {
+    if (
+      error instanceof McpError &&
+      error.code === "insufficient_scope" &&
+      ctx.authType === "oauth"
+    ) {
+      logOAuthEvent({
+        eventType: "oauth.scope.denied",
+        userId: ctx.userId,
+        organizationId: ctx.organizationId,
+        clientId: ctx.clientId ?? null,
+        scopes: ctx.scopes,
+        result: "denied",
+        metadata: { tool: toolName, requiredScope: error.data?.requiredScope },
+      });
+    }
     logMcpCall({
       tool: toolName,
       organizationId: ctx.organizationId,
       durationMs: Date.now() - startedAt,
       result: "error",
       errorCode: error instanceof McpError ? error.code : "internal_error",
+      authType: ctx.authType,
+      clientId: ctx.clientId ?? null,
+      source: ctx.source,
     });
     throw error;
   }

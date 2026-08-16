@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createFakeAdmin } from "@/server/mcp/__tests__/fake-admin";
+import { testMcpAuthContext } from "@/server/mcp/__tests__/test-context";
 import { startDynamicSecurityLab, type DynamicSecurityLab } from "@/fixtures/dynamic-security-lab/server";
 import { resolveDynamicTargetForAudit } from "@/server/full-product-audit/resolve-dynamic-target";
 import { runFullProductAudit } from "@/server/full-product-audit/orchestrate";
@@ -60,12 +61,7 @@ beforeEach(() => {
 });
 
 function mcpCtx(admin: ReturnType<typeof createFakeAdmin>) {
-  return {
-    admin: admin as never,
-    organizationId: E2E_ORG_ID,
-    userId: "user-1",
-    apiKeyId: "key-1",
-  };
+  return testMcpAuthContext(admin, { organizationId: E2E_ORG_ID, userId: "user-1" });
 }
 
 function buildApprovedAuthorization(origin: string, projectId = E2E_PROJECT_ID) {

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getLiveProductionVerdict } from "@/server/production-verdict/service";
+import { getAuthoritativeProductionVerdict } from "@/server/production-verdict/authoritative-verdict";
 import type { McpAuthContext } from "../auth";
 import { McpError } from "../auth";
 import { mapVerdictStatusToDecision } from "../decision-mapping";
@@ -19,6 +19,8 @@ import { resolveMcpProject } from "../project-resolution";
 import { buildProjectReportUrl } from "../report-url";
 import { getStalenessInfo } from "../staleness";
 import { applyLatestSecurityDecisionToVerdict } from "../security-decision-overlay";
+import type { VerdictConsistency } from "@/server/production-verdict/authoritative-verdict";
+import { resolveVerdictSourceForScan } from "../verdict-source";
 
 export type CanIDeployInput = ProjectSelector;
 
@@ -31,6 +33,11 @@ export type CanIDeployBlocker = {
 
 export type CanIDeployResult = {
   mode: "production_review";
+  source: "github" | "pr";
+  authoritative: "persisted";
+  consistency: VerdictConsistency;
+  liveVerdictStatus?: string | null;
+  liveScore?: number | null;
   project: { id: string; name: string; repositoryFullName: string | null };
   verdictStatus: string;
   score: number | null;
@@ -66,10 +73,14 @@ export async function canIDeploy(
 ): Promise<CanIDeployResult> {
   const project = await resolveMcpProject(ctx, input, t);
 
-  let verdict = await getLiveProductionVerdict(ctx.admin, project.id);
-  if (!verdict) {
+  const authoritative = await getAuthoritativeProductionVerdict(ctx.admin, project.id);
+  if (!authoritative) {
     throw new McpError(404, "no_verdict_available", t("errors.no_verdict_available"));
   }
+
+  let verdict = authoritative.verdict;
+  const rawSource = await resolveVerdictSourceForScan(ctx.admin, verdict.scanId);
+  const source: "github" | "pr" = rawSource === "pr" ? "pr" : "github";
 
   const securityOverlay = applyLatestSecurityDecisionToVerdict(project.id, verdict);
   verdict = securityOverlay.verdict;
@@ -130,6 +141,11 @@ export async function canIDeploy(
 
     return {
       mode: "production_review",
+      source,
+      authoritative: "persisted",
+      consistency: authoritative.consistency,
+      liveVerdictStatus: authoritative.liveVerdict?.status ?? null,
+      liveScore: authoritative.liveVerdict?.score ?? null,
       project,
       verdictStatus: verdict.status,
       score: verdict.score,
@@ -193,6 +209,11 @@ export async function canIDeploy(
 
   return {
     mode: "production_review",
+    source,
+    authoritative: "persisted",
+    consistency: authoritative.consistency,
+    liveVerdictStatus: authoritative.liveVerdict?.status ?? null,
+    liveScore: authoritative.liveVerdict?.score ?? null,
     project,
     verdictStatus: verdict.status,
     score: verdict.score,

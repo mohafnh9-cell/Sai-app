@@ -16,6 +16,7 @@ import { MissionControlProtectionStatus } from "./MissionControlProtectionStatus
 import { AnalysisRunSelector } from "@/features/analysis-runs/components/AnalysisRunSelector";
 import { ProjectOnboardedBanner } from "@/features/projects/components/ProjectOnboardedBanner";
 import { McpPromoBanner } from "@/features/mcp/components/McpPromoBanner";
+import { LocalGitHubCorrelationPanel } from "@/features/local-github-correlation/components/LocalGitHubCorrelationPanel";
 
 export function MissionControlExperience({
   initialState,
@@ -182,6 +183,8 @@ export function MissionControlExperience({
               state.ui.openTechnicalDetails || verdict.status === "ready_to_ship"
             }
           />
+
+          <LocalGitHubCorrelationPanel projectId={state.projectId} />
         </>
       ) : null}
 

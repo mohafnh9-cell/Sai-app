@@ -121,6 +121,13 @@ class FakeQuery
     return this;
   }
 
+  delete() {
+    const matched = this.rows.filter((r) => matches(r, this.filters));
+    this.rows.splice(0, this.rows.length, ...this.rows.filter((r) => !matches(r, this.filters)));
+    this.pendingRows = matched;
+    return this;
+  }
+
   upsert(row: Row, opts?: { onConflict?: string }) {
     const conflictCols = (opts?.onConflict ?? "id").split(",").map((c) => c.trim());
     const existing = this.rows.find((r) => conflictCols.every((c) => r[c] === row[c]));

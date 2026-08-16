@@ -1,15 +1,17 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Check, ClipboardCopy, MessageCircleQuestion } from "lucide-react";
+import { Check, ClipboardCopy, Eye, EyeOff, MessageCircleQuestion } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n/client";
 import {
+  buildMcpEnvExportCommand,
   buildMcpManualSetup,
+  buildMcpSourceEnvCommand,
   buildMcpUniversalInstallCommand,
 } from "@/lib/mcp/client-config";
 
-type CopyField = "command" | "url" | "authorization" | "question" | null;
+type CopyField = "env" | "command" | "source" | "url" | "authorization" | "question" | "key" | null;
 
 export function McpConnectGuide({
   apiKey,
@@ -22,13 +24,19 @@ export function McpConnectGuide({
 }) {
   const { t } = useI18n("settings");
   const [copied, setCopied] = useState<CopyField>(null);
+  const [revealed, setRevealed] = useState(false);
 
-  const manual = useMemo(() => buildMcpManualSetup(apiKey, apiUrl), [apiKey, apiUrl]);
-  const installCommand = useMemo(
-    () => buildMcpUniversalInstallCommand(apiKey, apiUrl),
-    [apiKey, apiUrl]
-  );
+  const manual = useMemo(() => buildMcpManualSetup(apiUrl), [apiUrl]);
+  const envExportCommand = useMemo(() => buildMcpEnvExportCommand(apiKey), [apiKey]);
+  const installCommand = useMemo(() => buildMcpUniversalInstallCommand(apiUrl), [apiUrl]);
+  const sourceEnvCommand = useMemo(() => buildMcpSourceEnvCommand(), []);
   const prompt = exampleQuestion ?? t("mcpStep3Example");
+  const maskedKey = useMemo(() => `${apiKey.slice(0, 16)}${"•".repeat(24)}`, [apiKey]);
+
+  const oauthDiscoveryUrl = useMemo(
+    () => `${apiUrl.replace(/\/$/, "")}/.well-known/oauth-authorization-server`,
+    [apiUrl]
+  );
 
   async function copyValue(field: CopyField, value: string) {
     await navigator.clipboard.writeText(value);
@@ -38,36 +46,96 @@ export function McpConnectGuide({
 
   return (
     <div className="space-y-4">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="rounded-lg border border-border/60 bg-muted/20 p-4 space-y-1">
+          <p className="text-sm font-medium">{t("mcpLocalTitle")}</p>
+          <p className="text-xs text-muted-foreground">{t("mcpLocalBody")}</p>
+        </div>
+        <div className="rounded-lg border border-border/60 bg-muted/20 p-4 space-y-1">
+          <p className="text-sm font-medium">{t("mcpRemoteTitle")}</p>
+          <p className="text-xs text-muted-foreground">{t("mcpRemoteBody")}</p>
+        </div>
+      </div>
+
       <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-4">
         <div className="space-y-1">
           <p className="text-sm font-medium">{t("mcpStep2Title")}</p>
           <p className="text-sm text-muted-foreground">{t("mcpStep2Body")}</p>
         </div>
 
-        <Button className="w-full" onClick={() => void copyValue("command", installCommand)}>
-          {copied === "command" ? (
-            <>
-              <Check className="mr-2 h-4 w-4" aria-hidden />
-              {t("mcpCommandCopied")}
-            </>
-          ) : (
-            <>
-              <ClipboardCopy className="mr-2 h-4 w-4" aria-hidden />
-              {t("mcpCopyCommand")}
-            </>
-          )}
-        </Button>
+        <div className="rounded-md border border-border/60 bg-background/50 p-3 space-y-2">
+          <p className="text-xs font-medium uppercase tracking-wide">API key (legacy / local)</p>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <code className="flex-1 overflow-x-auto rounded bg-muted px-3 py-2 text-[11px] font-mono break-all">
+              {revealed ? apiKey : maskedKey}
+            </code>
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={() => setRevealed((v) => !v)}>
+                {revealed ? (
+                  <>
+                    <EyeOff className="mr-1 h-3 w-3" aria-hidden />
+                    {t("mcpKeyHide")}
+                  </>
+                ) : (
+                  <>
+                    <Eye className="mr-1 h-3 w-3" aria-hidden />
+                    {t("mcpKeyReveal")}
+                  </>
+                )}
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => void copyValue("key", apiKey)}>
+                {copied === "key" ? t("mcpCopied") : t("mcpKeyCopy")}
+              </Button>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">{t("mcpKeyNeverShare")}</p>
+        </div>
+
+        <div className="grid gap-2 sm:grid-cols-2">
+          <Button className="w-full" onClick={() => void copyValue("env", envExportCommand)}>
+            {copied === "env" ? (
+              <>
+                <Check className="mr-2 h-4 w-4" aria-hidden />
+                {t("mcpEnvCopied")}
+              </>
+            ) : (
+              <>
+                <ClipboardCopy className="mr-2 h-4 w-4" aria-hidden />
+                {t("mcpCopyEnvExport")}
+              </>
+            )}
+          </Button>
+          <Button
+            className="w-full"
+            variant="secondary"
+            onClick={() => void copyValue("command", installCommand)}
+          >
+            {copied === "command" ? (
+              <>
+                <Check className="mr-2 h-4 w-4" aria-hidden />
+                {t("mcpCommandCopied")}
+              </>
+            ) : (
+              <>
+                <ClipboardCopy className="mr-2 h-4 w-4" aria-hidden />
+                {t("mcpCopyCommand")}
+              </>
+            )}
+          </Button>
+        </div>
 
         <p className="text-xs text-muted-foreground">{t("mcpKeyOnceNote")}</p>
+        <p className="text-xs text-muted-foreground">{t("mcpNeverCommitKey")}</p>
 
-        <div className="rounded-md border border-border/60 bg-background/50 p-3 space-y-2">
-          <p className="text-sm font-medium text-foreground">{t("mcpTroubleshootingTitle")}</p>
-          <ul className="list-disc space-y-1 pl-5 text-xs text-muted-foreground">
-            <li>{t("mcpTroubleshootingRestart")}</li>
-            <li>{t("mcpTroubleshootingGreen")}</li>
-            <li>{t("mcpTroubleshootingFolder")}</li>
-          </ul>
-        </div>
+        <details className="rounded-md border border-border/60 bg-background/50 p-3">
+          <summary className="cursor-pointer text-sm font-medium text-foreground">
+            Remote OAuth (Claude Desktop / ChatGPT)
+          </summary>
+          <div className="mt-3 space-y-2 text-xs text-muted-foreground">
+            <p>{t("mcpRemoteOAuthHint")}</p>
+            <code className="block overflow-x-auto rounded bg-muted px-3 py-2">{oauthDiscoveryUrl}</code>
+          </div>
+        </details>
 
         <details className="rounded-md border border-border/60 bg-background/50 p-3">
           <summary className="cursor-pointer text-sm font-medium text-foreground">
@@ -75,6 +143,21 @@ export function McpConnectGuide({
           </summary>
           <div className="mt-3 space-y-3 text-sm text-muted-foreground">
             <p>{t("mcpManualStep1")}</p>
+            <div className="space-y-2">
+              <p className="text-xs font-medium uppercase tracking-wide">{t("mcpManualStepEnvFile")}</p>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <code className="flex-1 overflow-x-auto rounded bg-muted px-3 py-2 text-[11px]">
+                  {manual.envFile}
+                </code>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void copyValue("source", sourceEnvCommand)}
+                >
+                  {copied === "source" ? t("mcpCopied") : t("mcpCopySourceEnv")}
+                </Button>
+              </div>
+            </div>
             <div className="space-y-2">
               <p className="text-xs font-medium uppercase tracking-wide">{t("mcpManualStep2Url")}</p>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -129,6 +212,7 @@ export function McpConnectGuide({
             {copied === "question" ? t("mcpCopied") : t("mcpCopyQuestion")}
           </Button>
         </div>
+        <p className="text-xs text-muted-foreground">{t("mcpLocalVsRemoteHint")}</p>
       </div>
 
       <p className="text-xs text-muted-foreground">{t("mcpSecurityNote")}</p>

@@ -4,6 +4,7 @@ import { getMcpTranslator } from "@/server/mcp/i18n";
 import { authorizeDynamicTarget } from "../tools/authorize-dynamic-target";
 import { parseTargetOriginFromUserText } from "@/server/ai-red-team/authorization/dynamic-target-authorization-service";
 import { verifyTargetFromAuthenticatedGitHubDeployments } from "@/server/ai-red-team/authorization/github-deployment-ownership";
+import { testMcpAuthContext } from "./test-context";
 
 vi.mock("@/server/ai-red-team/authorization/github-deployment-ownership", () => ({
   verifyTargetFromAuthenticatedGitHubDeployments: vi.fn(),
@@ -35,12 +36,7 @@ describe("authorize_dynamic_target MCP tool", () => {
     });
 
     const result = await authorizeDynamicTarget(
-      {
-        admin: admin as never,
-        organizationId: E2E_ORG_ID,
-        userId: "user-1",
-        apiKeyId: "key-1",
-      },
+      testMcpAuthContext(admin, { organizationId: E2E_ORG_ID, userId: "user-1" }),
       { projectId: E2E_PROJECT_ID, action: "status" },
       t
     );
@@ -72,12 +68,7 @@ describe("authorize_dynamic_target MCP tool", () => {
     });
 
     const result = await authorizeDynamicTarget(
-      {
-        admin: admin as never,
-        organizationId: E2E_ORG_ID,
-        userId: "user-1",
-        apiKeyId: "key-1",
-      },
+      testMcpAuthContext(admin, { organizationId: E2E_ORG_ID, userId: "user-1" }),
       {
         projectId: E2E_PROJECT_ID,
         action: "authorize_and_check",
@@ -110,12 +101,7 @@ describe("authorize_dynamic_target MCP tool", () => {
     const admin = createFakeAdmin(tables);
 
     const result = await authorizeDynamicTarget(
-      {
-        admin: admin as never,
-        organizationId: E2E_ORG_ID,
-        userId: "user-1",
-        apiKeyId: "key-1",
-      },
+      testMcpAuthContext(admin, { organizationId: E2E_ORG_ID, userId: "user-1" }),
       {
         projectId: E2E_PROJECT_ID,
         action: "check",
@@ -159,12 +145,7 @@ describe("authorize_dynamic_target MCP tool", () => {
     };
 
     const result = await authorizeDynamicTarget(
-      {
-        admin: createFakeAdmin(tables) as never,
-        organizationId: E2E_ORG_ID,
-        userId: "user-1",
-        apiKeyId: "key-1",
-      },
+      testMcpAuthContext(createFakeAdmin(tables), { organizationId: E2E_ORG_ID, userId: "user-1" }),
       {
         projectId: E2E_PROJECT_ID,
         action: "check",
@@ -212,12 +193,7 @@ describe("authorize_dynamic_target MCP tool", () => {
     };
 
     const result = await authorizeDynamicTarget(
-      {
-        admin: createFakeAdmin(tables) as never,
-        organizationId: E2E_ORG_ID,
-        userId: "user-1",
-        apiKeyId: "key-1",
-      },
+      testMcpAuthContext(createFakeAdmin(tables), { organizationId: E2E_ORG_ID, userId: "user-1" }),
       {
         projectId: E2E_PROJECT_ID,
         action: "authorize_and_check",
@@ -267,12 +243,7 @@ describe("authorize_dynamic_target MCP tool", () => {
     });
 
     const result = await authorizeDynamicTarget(
-      {
-        admin: admin as never,
-        organizationId: E2E_ORG_ID,
-        userId: "user-1",
-        apiKeyId: "key-1",
-      },
+      testMcpAuthContext(admin, { organizationId: E2E_ORG_ID, userId: "user-1" }),
       {
         projectId: E2E_PROJECT_ID,
         action: "authorize_and_check",

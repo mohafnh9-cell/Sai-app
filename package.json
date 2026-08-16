@@ -33,7 +33,8 @@
     "validate:threat-model": "vitest run server/ai-red-team/threat-model",
     "load-test:staging": "node scripts/staging-load-test.mjs",
     "db:apply-migrations": "node scripts/apply-migrations.mjs",
-    "mcp": "node mcp/stdio-bridge.mjs"
+    "mcp": "node mcp/stdio-bridge.mjs",
+    "build:mcp-local": "node scripts/bundle-local-mcp.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.111.0",
@@ -86,6 +87,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "dotenv": "^17.4.2",
+    "esbuild": "^0.25.12",
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
     "prisma": "^7.8.0",

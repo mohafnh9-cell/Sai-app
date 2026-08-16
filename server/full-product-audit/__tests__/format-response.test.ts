@@ -166,6 +166,31 @@ describe("formatFullProductAuditResponse", () => {
     expect(JSON.stringify(formatted)).not.toMatch(/allowedPaths|Gate 3|authorizationId/);
   });
 
+  it("does not show secret rotation steps when there are zero findings", () => {
+    const formatted = formatFullProductAuditResponse(
+      baseResult({
+        findings: [],
+        topRisks: [],
+        counts: {
+          critical: 0,
+          high: 0,
+          medium: 0,
+          low: 0,
+          info: 0,
+          confirmed: 0,
+          likely: 0,
+          potential: 0,
+          notReproduced: 0,
+          falsePositive: 0,
+          notApplicable: 0,
+        },
+      }),
+      t
+    );
+    expect(formatted.summary).not.toContain("Remove it if it is a real credential");
+    expect(formatted.summary).not.toContain("Rotate the credential if necessary");
+  });
+
   it("keeps internal execution and authorization terminology out of MCP data", () => {
     const formatted = formatFullProductAuditResponse(baseResult({}), t);
     const serialized = JSON.stringify(formatted);
