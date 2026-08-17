@@ -171,6 +171,7 @@
   "fullReport": {
     "title": "Full report",
     "subtitle": "Everything SequrAI analyzed in this review — areas, Safe Fix recommendations, findings, and evidence.",
+    "viewLink": "View full report",
     "summary": "Summary",
     "findings": "Analysis findings",
     "noFindings": "No findings were detected in the static analysis for this review."

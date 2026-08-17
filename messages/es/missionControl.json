@@ -171,6 +171,7 @@
   "fullReport": {
     "title": "Informe completo",
     "subtitle": "Todo lo que SequrAI analizó en esta revisión — áreas, recomendaciones con Safe Fix, hallazgos y evidencia.",
+    "viewLink": "Ver informe completo",
     "summary": "Resumen",
     "findings": "Hallazgos del análisis",
     "noFindings": "No se detectaron hallazgos en el análisis estático de esta revisión."

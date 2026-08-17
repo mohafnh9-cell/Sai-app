@@ -50,7 +50,11 @@ export function MissionControlTechnicalDetails({
   const { t } = useI18n("missionControl");
 
   return (
-    <details className="rounded-2xl border border-border/60 group" open={openByDefault || undefined}>
+    <details
+      id="mission-control-full-report"
+      className="rounded-2xl border border-border/60 group scroll-mt-24"
+      open={openByDefault || undefined}
+    >
       <summary className="cursor-pointer px-5 py-4 text-sm font-medium text-muted-foreground list-none [&::-webkit-details-marker]:hidden">
         <span className="inline-flex items-center gap-2">
           <span className="transition-transform group-open:rotate-90">›</span>

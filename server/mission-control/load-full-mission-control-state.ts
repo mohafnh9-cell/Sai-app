@@ -55,7 +55,7 @@ export async function loadFullMissionControlState(
   });
 
   const { verdict, runScoped, activeRunId } = missionLoad;
-  const findingsRunId = runScoped && activeRunId ? activeRunId : null;
+  const findingsRunId = activeRunId ?? verdict?.scanId ?? null;
 
   const reviewSignals = await loadMissionControlReviewSignals(supabase, {
     projectId,

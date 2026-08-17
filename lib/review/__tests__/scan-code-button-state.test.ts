@@ -50,6 +50,17 @@ describe("deriveScanCodeButtonState", () => {
     ).toBe("completed");
   });
 
+  it("returns completed when a completed analysis exists even if the latest review failed", () => {
+    expect(
+      deriveScanCodeButtonState({
+        uiStatus: "failed",
+        requesting: false,
+        reviewInProgress: false,
+        hasCompletedAnalysis: true,
+      })
+    ).toBe("completed");
+  });
+
   it("returns failed for failed reviews", () => {
     expect(
       deriveScanCodeButtonState({

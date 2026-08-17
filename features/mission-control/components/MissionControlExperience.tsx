@@ -64,6 +64,58 @@ export function MissionControlExperience({
   const showScanActivity = state.status.reviewInProgress;
   const showAttackActivity = state.status.securityRunning;
   const staleVerdictWhileBusy = Boolean(verdict && (showScanActivity || showAttackActivity));
+  const openFullReport =
+    state.ui.openTechnicalDetails ||
+    state.ui.showReviewCompleteBanner ||
+    Boolean(verdict && state.status.hasCompletedAnalysis);
+
+  const verdictSection = verdict ? (
+    <div className={staleVerdictWhileBusy ? "space-y-10 opacity-60 pointer-events-none" : "space-y-10"}>
+      {staleVerdictWhileBusy ? (
+        <p className="text-sm text-muted-foreground text-center -mb-4" role="status">
+          {showAttackActivity ? t("activity.staleVerdictAttack") : t("activity.staleVerdictScan")}
+        </p>
+      ) : null}
+      <MissionControlHero verdict={verdict} showViewReportLink={state.status.hasCompletedAnalysis} />
+
+      {showBlockers ? <DeploymentBlockersList blockers={blockers} /> : null}
+
+      {showSafeFixCard ? (
+        <>
+          <SafeFixHeroCard
+            topPriority={topPriority}
+            fixPromptInput={safeFixPromptInput}
+            labels={{
+              eyebrow: t("projectHome.aiFix.title"),
+              copyLabel: t("projectHome.aiFix.openInCursor"),
+            }}
+          />
+          <p className="text-xs text-muted-foreground -mt-4">{tp("safeFixMcpHint")}</p>
+        </>
+      ) : null}
+
+      <MissionControlPrimaryAction
+        state={state}
+        scanAction={scanAction}
+        onStartScan={() => void startScan()}
+        hidden={Boolean(showSafeFixCard)}
+      />
+
+      {state.ui.showProtectionStatus && state.protectionCenter ? (
+        <MissionControlProtectionStatus model={state.protectionCenter} />
+      ) : null}
+
+      <MissionControlTechnicalDetails
+        view={state.view}
+        verdict={verdict}
+        framework={state.framework}
+        findings={state.ui.fixPromptContext?.findings}
+        fixPromptContext={state.ui.fixPromptContext}
+        projectId={state.projectId}
+        openByDefault={openFullReport}
+      />
+    </div>
+  ) : null;
 
   const recoveryBannerKey =
     state.recoveryReason === "scoped_verdict_missing"
@@ -113,6 +165,12 @@ export function MissionControlExperience({
         <div className="surface-premium rounded-2xl p-5" role="status">
           <p className="text-sm font-medium">{tp("reviewCompleteGuidanceTitle")}</p>
           <p className="mt-1 text-sm text-muted-foreground">{tp("reviewCompleteGuidanceBody")}</p>
+          <a
+            href="#mission-control-full-report"
+            className="mt-3 inline-flex text-sm font-medium text-primary underline-offset-4 hover:underline"
+          >
+            {t("fullReport.viewLink")}
+          </a>
         </div>
       ) : null}
 
@@ -124,17 +182,6 @@ export function MissionControlExperience({
           {tp("latestCommitNotReviewedBanner")}
         </div>
       ) : null}
-
-      <ProjectHomeActions
-        state={state}
-        scanAction={scanAction}
-        securityAction={securityAction}
-        actionError={actionError}
-        reauthRequired={reauthRequired}
-        subscriptionRequired={subscriptionRequired}
-        onStartScan={() => void startScan()}
-        onStartSecurityTest={() => void startSecurityTest()}
-      />
 
       {showScanActivity ? (
         <MissionControlActivityBanner
@@ -148,6 +195,19 @@ export function MissionControlExperience({
         <MissionControlActivityBanner kind="attack" />
       ) : null}
 
+      {verdictSection}
+
+      <ProjectHomeActions
+        state={state}
+        scanAction={scanAction}
+        securityAction={securityAction}
+        actionError={actionError}
+        reauthRequired={reauthRequired}
+        subscriptionRequired={subscriptionRequired}
+        onStartScan={() => void startScan()}
+        onStartSecurityTest={() => void startSecurityTest()}
+      />
+
       {!verdict && !showScanActivity ? (
         <div
           className="rounded-2xl border border-border/60 bg-muted/20 px-5 py-8 text-center space-y-2"
@@ -155,56 +215,6 @@ export function MissionControlExperience({
         >
           <p className="text-sm font-medium">{t("empty.noVerdictTitle")}</p>
           <p className="text-sm text-muted-foreground">{t("empty.noVerdictBody")}</p>
-        </div>
-      ) : null}
-
-      {verdict ? (
-        <div className={staleVerdictWhileBusy ? "space-y-10 opacity-60 pointer-events-none" : "space-y-10"}>
-          {staleVerdictWhileBusy ? (
-            <p className="text-sm text-muted-foreground text-center -mb-4" role="status">
-              {showAttackActivity ? t("activity.staleVerdictAttack") : t("activity.staleVerdictScan")}
-            </p>
-          ) : null}
-          <MissionControlHero verdict={verdict} />
-
-          {showBlockers ? <DeploymentBlockersList blockers={blockers} /> : null}
-
-          {showSafeFixCard ? (
-            <>
-              <SafeFixHeroCard
-                topPriority={topPriority}
-                fixPromptInput={safeFixPromptInput}
-                labels={{
-                  eyebrow: t("projectHome.aiFix.title"),
-                  copyLabel: t("projectHome.aiFix.openInCursor"),
-                }}
-              />
-              <p className="text-xs text-muted-foreground -mt-4">{tp("safeFixMcpHint")}</p>
-            </>
-          ) : null}
-
-          <MissionControlPrimaryAction
-            state={state}
-            scanAction={scanAction}
-            onStartScan={() => void startScan()}
-            hidden={Boolean(showSafeFixCard)}
-          />
-
-          {state.ui.showProtectionStatus && state.protectionCenter ? (
-            <MissionControlProtectionStatus model={state.protectionCenter} />
-          ) : null}
-
-          <MissionControlTechnicalDetails
-            view={state.view}
-            verdict={verdict}
-            framework={state.framework}
-            findings={state.ui.fixPromptContext?.findings}
-            fixPromptContext={state.ui.fixPromptContext}
-            projectId={state.projectId}
-            openByDefault={
-              state.ui.openTechnicalDetails || verdict.status === "ready_to_ship"
-            }
-          />
         </div>
       ) : null}
 

@@ -11,7 +11,13 @@ import { formatPriorityTitleForLocale } from "@/lib/i18n/priority-display";
 /**
  * Production Verdict hero — answers "Can I deploy?" with score and main blocker.
  */
-export function MissionControlHero({ verdict }: { verdict: ProductionVerdictV1 }) {
+export function MissionControlHero({
+  verdict,
+  showViewReportLink = false,
+}: {
+  verdict: ProductionVerdictV1;
+  showViewReportLink?: boolean;
+}) {
   const { t, locale } = useI18n();
   const { t: tm } = useI18n("missionControl");
   const translate = (key: string, params?: Record<string, string | number | null | undefined>) =>
@@ -81,6 +87,14 @@ export function MissionControlHero({ verdict }: { verdict: ProductionVerdictV1 }
             <p className="text-sm text-muted-foreground leading-relaxed">{topBlocker.reason}</p>
           ) : null}
         </div>
+      ) : null}
+      {showViewReportLink ? (
+        <a
+          href="#mission-control-full-report"
+          className="mt-6 inline-flex text-sm font-medium text-primary underline-offset-4 hover:underline"
+        >
+          {tm("fullReport.viewLink")}
+        </a>
       ) : null}
     </section>
   );

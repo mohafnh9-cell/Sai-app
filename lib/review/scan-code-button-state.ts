@@ -23,16 +23,16 @@ export function deriveScanCodeButtonState(input: {
     return "running";
   }
 
-  if (input.uiStatus === "failed" || input.uiStatus === "stale") {
-    return "failed";
-  }
-
   if (
     input.uiStatus === "completed" ||
     input.uiStatus === "cancelled" ||
     input.hasCompletedAnalysis
   ) {
     return "completed";
+  }
+
+  if (input.uiStatus === "failed" || input.uiStatus === "stale") {
+    return "failed";
   }
 
   return "idle";
