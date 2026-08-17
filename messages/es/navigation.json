@@ -14,5 +14,17 @@
   "pricing": "Precios",
   "signIn": "Iniciar sesión",
   "connectRepository": "Conectar mi repositorio",
-  "cursorMcp": "Agente / MCP"
+  "cursorMcp": "Agente / MCP",
+  "breadcrumbs": {
+    "missionControl": "Centro de control",
+    "projects": "Proyectos",
+    "integrations": "Integraciones",
+    "settings": "Ajustes",
+    "onboarding": "Onboarding",
+    "productionIntelligence": "Inteligencia de producción",
+    "attackCenter": "Prueba de seguridad",
+    "journey": "Historial",
+    "billing": "Facturación",
+    "project": "Proyecto"
+  }
 }

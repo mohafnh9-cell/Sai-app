@@ -1,6 +1,7 @@
 "use client";
 
 import type { AreaProgress } from "@/brain/production-journey/schema";
+import { useI18n } from "@/lib/i18n/client";
 import { cn } from "@/lib/utils";
 
 type RepositoryHealthProps = {
@@ -10,6 +11,7 @@ type RepositoryHealthProps = {
 
 /** Repository health dimensions — only renders evaluated areas with real scores. */
 export function RepositoryHealth({ areas, className }: RepositoryHealthProps) {
+  const { t } = useI18n("missionControl");
   const evaluated = areas.filter(
     (area) => area.status === "evaluated" && area.currentScore != null
   );
@@ -20,9 +22,9 @@ export function RepositoryHealth({ areas, className }: RepositoryHealthProps) {
     <section className={cn("space-y-4", className)} aria-labelledby="repository-health-heading">
       <div>
         <h2 id="repository-health-heading" className="text-sm font-semibold tracking-tight">
-          Repository health
+          {t("repositoryHealth.title")}
         </h2>
-        <p className="text-xs text-muted-foreground mt-0.5">Evaluated dimensions from your latest analysis.</p>
+        <p className="text-xs text-muted-foreground mt-0.5">{t("repositoryHealth.subtitle")}</p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         {evaluated.map((area) => (

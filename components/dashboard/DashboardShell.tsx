@@ -9,6 +9,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { WorkspacePresentation } from "@/lib/workspaces/presentation";
+import { useI18n } from "@/lib/i18n/client";
 
 type DashboardUser = {
   id: string;
@@ -35,6 +36,7 @@ export function DashboardShell({
   children: React.ReactNode;
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { t } = useI18n("dashboard");
 
   return (
     <div className="flex h-app max-h-app overflow-hidden app-cinematic-bg">
@@ -46,7 +48,7 @@ export function DashboardShell({
           size="icon"
           className="shrink-0"
           onClick={() => setMobileOpen(true)}
-          aria-label="Open menu"
+          aria-label={t("openMenu")}
         >
           <Menu className="h-5 w-5" />
         </Button>
@@ -58,7 +60,7 @@ export function DashboardShell({
           size="icon"
           className="shrink-0"
           onClick={() => openCommandPalette()}
-          aria-label="Search"
+          aria-label={t("search")}
         >
           <Search className="h-5 w-5" />
         </Button>
@@ -78,7 +80,7 @@ export function DashboardShell({
           <button
             type="button"
             className="fixed inset-0 z-50 bg-black/50 md:hidden"
-            aria-label="Close menu"
+            aria-label={t("closeMenu")}
             onClick={() => setMobileOpen(false)}
           />
           <div className="fixed inset-y-0 left-0 z-50 md:hidden shadow-xl">
@@ -93,7 +95,7 @@ export function DashboardShell({
                   variant="ghost"
                   size="icon"
                   onClick={() => setMobileOpen(false)}
-                  aria-label="Close menu"
+                  aria-label={t("closeMenu")}
                 >
                   <X className="h-5 w-5" />
                 </Button>
@@ -112,7 +114,7 @@ export function DashboardShell({
         >
           {bypass && (
             <div className="border-b border-warning/30 bg-warning/5 px-4 py-2 text-center text-xs text-warning">
-              Auth bypass active (SEQURAI_BYPASS_AUTH) — remove before production
+              {t("authBypassBanner")}
             </div>
           )}
           {children}

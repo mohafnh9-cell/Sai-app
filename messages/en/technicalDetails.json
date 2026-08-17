@@ -49,5 +49,14 @@
     "false_positive": "False positive",
     "not_applicable": "Not applicable",
     "ariaLabel": "Verification status: {status}"
+  },
+  "codeSnippet": "Code snippet",
+  "diffContext": {
+    "introduced": "Introduced by this change",
+    "affected": "Affected by this change",
+    "pre_existing": "Pre-existing",
+    "unrelated": "Unrelated to this change",
+    "unknown": "Change relationship unknown",
+    "unavailable": "Change relationship unavailable for this finding."
   }
 }

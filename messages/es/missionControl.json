@@ -41,8 +41,8 @@
     "verdictSummary": {
       "title": "Veredicto de producción",
       "score": "Puntuación de producción",
-      "mainBlocker": "Bloqueador principal",
-      "noBlocker": "Sin bloqueadores",
+      "mainBlocker": "Bloqueo principal",
+      "noBlocker": "Sin bloqueos",
       "viewVerdict": "Ver detalle del veredicto",
       "scanAgain": "Escanear código de nuevo"
     }
@@ -164,7 +164,7 @@
     "deploymentRecommendation": {
       "safe": "Procede cuando tu proceso de release lo permita.",
       "warnings": "Aborda las prioridades principales antes de un despliegue amplio.",
-      "blocked": "No despliegues hasta resolver los bloqueadores."
+      "blocked": "No despliegues hasta resolver los bloqueos."
     }
   },
   "technicalDetails": "Detalles técnicos",
@@ -241,6 +241,34 @@
   },
   "empty": {
     "noVerdictTitle": "Aún no hay veredicto",
-    "noVerdictBody": "Ejecuta un análisis de producción para saber si esta aplicación está lista para desplegar."
+    "noVerdictBody": "Ejecuta un análisis para saber si esta aplicación está lista para desplegar."
+  },
+  "productionIntelligence": {
+    "eyebrow": "Inteligencia de producción",
+    "latestAnalysis": "Último análisis"
+  },
+  "timeline": {
+    "heading": "Cronología de seguridad",
+    "analysisRun": "Análisis {status}",
+    "analysisRunStarted": "Análisis iniciado",
+    "repositoryAnalyzed": "Repositorio analizado",
+    "findingsDetected_one": "{count} hallazgo detectado",
+    "findingsDetected_other": "{count} hallazgos detectados",
+    "risksIntroduced_one": "{count} riesgo introducido por el último cambio",
+    "risksIntroduced_other": "{count} riesgos introducidos por el último cambio",
+    "verdictUpdated": "Veredicto de Producción actualizado — {headline}"
+  },
+  "repositoryHealth": {
+    "title": "Estado del repositorio",
+    "subtitle": "Dimensiones evaluadas en tu último análisis."
+  },
+  "reviewPhase": {
+    "idle": "Listo",
+    "queued": "En cola",
+    "running": "Analizando",
+    "analyzing": "Analizando",
+    "verifying": "Verificando",
+    "completed": "Completado",
+    "failed": "Fallido"
   }
 }

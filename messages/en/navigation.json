@@ -14,5 +14,17 @@
   "pricing": "Pricing",
   "signIn": "Sign in",
   "connectRepository": "Connect my repository",
-  "cursorMcp": "Code agent / MCP"
+  "cursorMcp": "Code agent / MCP",
+  "breadcrumbs": {
+    "missionControl": "Mission Control",
+    "projects": "Projects",
+    "integrations": "Integrations",
+    "settings": "Settings",
+    "onboarding": "Onboarding",
+    "productionIntelligence": "Production Intelligence",
+    "attackCenter": "Security Test",
+    "journey": "History",
+    "billing": "Billing",
+    "project": "Project"
+  }
 }

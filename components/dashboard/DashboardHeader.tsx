@@ -11,7 +11,21 @@ import { useI18n } from "@/lib/i18n/client";
 export function DashboardHeader() {
   const pathname = usePathname();
   const { t: td } = useI18n("dashboard");
-  const breadcrumbs = buildBreadcrumbsFromPathname(pathname ?? "/dashboard");
+  const { t: tn } = useI18n("navigation");
+  const breadcrumbs = buildBreadcrumbsFromPathname(pathname ?? "/dashboard", {
+    labels: {
+      missionControl: tn("breadcrumbs.missionControl"),
+      projects: tn("breadcrumbs.projects"),
+      integrations: tn("breadcrumbs.integrations"),
+      settings: tn("breadcrumbs.settings"),
+      onboarding: tn("breadcrumbs.onboarding"),
+      productionIntelligence: tn("breadcrumbs.productionIntelligence"),
+      attackCenter: tn("breadcrumbs.attackCenter"),
+      journey: tn("breadcrumbs.journey"),
+      billing: tn("breadcrumbs.billing"),
+      project: tn("breadcrumbs.project"),
+    },
+  });
 
   return (
     <header className="sticky top-0 z-30 hidden md:flex h-14 shrink-0 items-center gap-4 border-b border-border/50 bg-background/80 glass-surface px-6">

@@ -145,7 +145,7 @@ export function ProductionJourneyView({
                   ))}
                 </ul>
               ) : latest.resolvedBlockersCount > 0 ? (
-                <p>{latest.resolvedBlockersCount} resolved</p>
+                <p>{t("resolvedCount", { count: latest.resolvedBlockersCount })}</p>
               ) : (
                 <p className="text-muted-foreground">—</p>
               )}
@@ -163,7 +163,7 @@ export function ProductionJourneyView({
               ) : latest.introducedBlockersCount === 0 ? (
                 <p className="text-muted-foreground">{t("noNewBlockers")}</p>
               ) : (
-                <p>{latest.introducedBlockersCount} introduced</p>
+                <p>{t("introducedCount", { count: latest.introducedBlockersCount })}</p>
               )}
             </div>
           </CardContent>
@@ -181,7 +181,7 @@ export function ProductionJourneyView({
                 <span className="absolute -left-[5px] top-2 h-2 w-2 rounded-full bg-primary" aria-hidden />
                 <p className="font-medium text-sm">{t(milestone.titleKey)}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {milestone.score != null ? `Score: ${milestone.score}` : ""}
+                  {milestone.score != null ? t("scoreLabel", { score: milestone.score }) : ""}
                 </p>
               </li>
             ))}

@@ -1,5 +1,5 @@
 {
-  "title": "Detalles técnicos",
+  "title": "Evidencias",
   "subtitle": "Hallazgos, reglas y evidencia para ingenieros.",
   "findings": "Hallazgos",
   "noFindings": "No hay hallazgos técnicos para esta revisión.",
@@ -10,11 +10,11 @@
   "group": "Grupo",
   "sort": "Ordenar",
   "searchPlaceholder": "Buscar hallazgos, reglas o archivos…",
-  "productionBlockers": "Bloqueadores de producción",
+  "productionBlockers": "Bloqueos de producción",
   "warnings": "Advertencias",
   "improvements": "Mejoras",
   "informational": "Informativo",
-  "productionBlocker": "Bloqueador de producción",
+  "productionBlocker": "Bloqueo de producción",
   "untitledFinding": "Hallazgo sin título",
   "evaluated": "Evaluado",
   "partiallyEvaluated": "Parcialmente evaluado",
@@ -49,5 +49,14 @@
     "false_positive": "Falso positivo",
     "not_applicable": "No aplicable",
     "ariaLabel": "Estado de verificación: {status}"
+  },
+  "codeSnippet": "Fragmento de código",
+  "diffContext": {
+    "introduced": "Introducido por este cambio",
+    "affected": "Afectado por este cambio",
+    "pre_existing": "Preexistente",
+    "unrelated": "No relacionado con este cambio",
+    "unknown": "Relación con el cambio desconocida",
+    "unavailable": "Relación con el cambio no disponible para este hallazgo."
   }
 }

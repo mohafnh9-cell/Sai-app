@@ -1,4 +1,7 @@
+"use client";
+
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n/client";
 
 type SkeletonBlockProps = {
   className?: string;
@@ -22,11 +25,13 @@ export function SkeletonBlock({ className, lines = 1 }: SkeletonBlockProps) {
 }
 
 export function SkeletonCard({ className }: { className?: string }) {
+  const { t } = useI18n("common");
+
   return (
     <div
       className={cn("rounded-2xl border border-border/60 p-6 space-y-4", className)}
       aria-busy="true"
-      aria-label="Loading"
+      aria-label={t("loading")}
     >
       <SkeletonBlock lines={1} className="max-w-[40%]" />
       <SkeletonBlock lines={3} />

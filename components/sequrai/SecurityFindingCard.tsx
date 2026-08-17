@@ -106,7 +106,7 @@ export function SecurityFindingCard({
       {snippet ? (
         <details className="mt-3 rounded-lg border border-border/60">
           <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-muted-foreground seq-focus-ring">
-            Code snippet
+            {t("codeSnippet")}
           </summary>
           <pre className="overflow-x-auto border-t border-border/40 p-3 text-xs bg-muted/30">
             <code>{snippet}</code>

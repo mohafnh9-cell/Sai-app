@@ -242,5 +242,33 @@
   "empty": {
     "noVerdictTitle": "No Production Verdict yet",
     "noVerdictBody": "Scan your code to see whether this application is ready to deploy."
+  },
+  "productionIntelligence": {
+    "eyebrow": "Production Intelligence",
+    "latestAnalysis": "Latest analysis"
+  },
+  "timeline": {
+    "heading": "Security timeline",
+    "analysisRun": "Analysis run {status}",
+    "analysisRunStarted": "Analysis started",
+    "repositoryAnalyzed": "Repository analyzed",
+    "findingsDetected_one": "{count} finding detected",
+    "findingsDetected_other": "{count} findings detected",
+    "risksIntroduced_one": "{count} risk introduced by latest change",
+    "risksIntroduced_other": "{count} risks introduced by latest change",
+    "verdictUpdated": "Production Verdict updated — {headline}"
+  },
+  "repositoryHealth": {
+    "title": "Repository health",
+    "subtitle": "Evaluated dimensions from your latest analysis."
+  },
+  "reviewPhase": {
+    "idle": "Ready",
+    "queued": "Queued",
+    "running": "Scanning",
+    "analyzing": "Analyzing",
+    "verifying": "Verifying",
+    "completed": "Complete",
+    "failed": "Failed"
   }
 }

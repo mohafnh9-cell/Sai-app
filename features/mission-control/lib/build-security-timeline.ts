@@ -1,10 +1,20 @@
 import type { MissionControlState } from "@/features/mission-control/types/mission-control-state";
 import type { ProductionIntelligence } from "@/brain/production-intelligence/schema";
 import type { SecurityTimelineEvent } from "@/components/sequrai/SecurityTimeline";
-import { verdictHeadlineDisplay } from "@/brain/production-verdict/status-ui";
+import type { VerdictStatus } from "@/brain/production-verdict/schema";
+
+export type SecurityTimelineCopy = {
+  analysisRun: (status: string) => string;
+  repositoryAnalyzed: string;
+  findingsDetected: (count: number) => string;
+  risksIntroduced: (count: number) => string;
+  verdictUpdated: (headline: string) => string;
+  verdictHeadline: (status: VerdictStatus) => string;
+};
 
 export function buildSecurityTimelineEvents(
   state: MissionControlState,
+  copy: SecurityTimelineCopy,
   _intelligence?: ProductionIntelligence | null
 ): SecurityTimelineEvent[] {
   const events: SecurityTimelineEvent[] = [];
@@ -15,7 +25,7 @@ export function buildSecurityTimelineEvents(
       events.push({
         id: `run-${run.runId}`,
         at: run.createdAt,
-        label: `Analysis run ${run.status ?? "started"}`,
+        label: copy.analysisRun(run.status ?? "started"),
         tone: run.status === "failed" ? "danger" : run.status === "completed" ? "success" : "info",
       });
     }
@@ -25,7 +35,7 @@ export function buildSecurityTimelineEvents(
     events.push({
       id: "last-analysis",
       at: state.status.lastAnalysisAt,
-      label: "Repository analyzed",
+      label: copy.repositoryAnalyzed,
       tone: "neutral",
     });
   }
@@ -36,7 +46,7 @@ export function buildSecurityTimelineEvents(
       events.push({
         id: "findings-detected",
         at: state.status.lastAnalysisAt,
-        label: `${findingsCount} findings detected`,
+        label: copy.findingsDetected(findingsCount),
         tone: findingsCount > 0 ? "warning" : "neutral",
       });
     }
@@ -45,7 +55,7 @@ export function buildSecurityTimelineEvents(
       events.push({
         id: "risks-introduced",
         at: state.status.lastAnalysisAt,
-        label: `${verdict.introducedBlockers} risk${verdict.introducedBlockers === 1 ? "" : "s"} introduced by latest change`,
+        label: copy.risksIntroduced(verdict.introducedBlockers),
         tone: "warning",
       });
     }
@@ -53,7 +63,7 @@ export function buildSecurityTimelineEvents(
     events.push({
       id: "verdict-updated",
       at: verdict.generatedAt ?? state.status.lastAnalysisAt ?? new Date().toISOString(),
-      label: `Production Verdict updated — ${verdictHeadlineDisplay(verdict.status)}`,
+      label: copy.verdictUpdated(copy.verdictHeadline(verdict.status)),
       tone:
         verdict.status === "ready_to_ship"
           ? "success"
@@ -61,10 +71,6 @@ export function buildSecurityTimelineEvents(
             ? "danger"
             : "warning",
     });
-  }
-
-  if (_intelligence?.whatChanged.hasChanges && _intelligence.improvements[0]) {
-    // Timeline uses verdict update as the consolidated change signal — i18n keys are rendered in WhatChangedSection.
   }
 
   return events

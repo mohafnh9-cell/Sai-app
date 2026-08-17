@@ -10,23 +10,27 @@
     "eyebrow": "Veredicto de producción"
   },
   "blockers": {
-    "title_one": "Tu aplicación casi está lista. {count} bloqueador impide desplegar.",
-    "title_other": "Tu aplicación casi está lista. {count} bloqueadores impiden desplegar.",
-    "subtitle": "Prueba la seguridad de cada bloqueador antes de corregir con IA.",
-    "subtitleReadOnly": "Estos bloqueadores impiden desplegar hasta que se resuelvan.",
+    "title_one": "Tu aplicación casi está lista. {count} bloqueo impide desplegar.",
+    "title_other": "Tu aplicación casi está lista. {count} bloqueos impiden desplegar.",
+    "subtitle": "Prueba la seguridad de cada bloqueo antes de corregir con IA.",
+    "subtitleReadOnly": "Estos bloqueos impiden desplegar hasta que se resuelvan.",
     "validate": "Probar seguridad",
     "starting": "Iniciando…",
     "viewDetails": "Ver evidencia"
   },
   "severity": {
-    "critical": "Crítico",
-    "high": "Alto",
-    "medium": "Medio",
-    "low": "Bajo",
-    "info": "Info"
+    "critical": "Riesgo crítico",
+    "high": "Riesgo alto",
+    "medium": "Riesgo medio",
+    "low": "Riesgo bajo",
+    "info": "Informativo"
+  },
+  "topRisks": {
+    "title": "Principales riesgos",
+    "subtitle": "Resuélvelos antes del despliegue."
   },
   "ready": {
-    "noBlockersTitle": "No hay bloqueadores de despliegue",
+    "noBlockersTitle": "No se han detectado bloqueos de despliegue",
     "noBlockersDescription": "Prueba la seguridad para confirmar que tu aplicación se comporta de forma segura.",
     "runValidation": "Probar seguridad"
   }

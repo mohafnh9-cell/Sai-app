@@ -19,11 +19,15 @@
     "viewDetails": "View Evidence"
   },
   "severity": {
-    "critical": "Critical",
-    "high": "High",
-    "medium": "Medium",
-    "low": "Low",
+    "critical": "Critical risk",
+    "high": "High risk",
+    "medium": "Medium risk",
+    "low": "Low risk",
     "info": "Info"
+  },
+  "topRisks": {
+    "title": "Top risks",
+    "subtitle": "Resolve these before deployment."
   },
   "ready": {
     "noBlockersTitle": "No deployment blockers found",

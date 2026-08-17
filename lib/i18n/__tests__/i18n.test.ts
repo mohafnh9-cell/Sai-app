@@ -27,12 +27,13 @@ describe("Block 6.4.1 i18n foundation", () => {
 
     expect(en("verdict.productionBlocker", { count: 1 })).toContain("1");
     expect(en("verdict.productionBlocker", { count: 3 })).toContain("blockers");
-    expect(es("verdict.productionBlocker", { count: 3 })).toContain("bloqueadores");
+    expect(es("verdict.productionBlocker", { count: 3 })).toContain("bloqueos");
   });
 
-  it("keeps brand product names in Spanish verdict labels", () => {
+  it("uses canonical Spanish deployment terminology in verdict labels", () => {
     const es = createTranslator({ verdict: loadNamespace("es", "verdict") }, "es");
-    expect(verdictStatusLabel("not_ready", (key) => es(key))).toContain("producción");
+    expect(verdictStatusLabel("not_ready", (key) => es(key))).toContain("desplegar");
+    expect(es("verdict.productionVerdict")).toContain("Veredicto de Producción");
   });
 
   it("loads onboarding progress keys", () => {

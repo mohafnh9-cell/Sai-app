@@ -145,7 +145,7 @@ export function JourneyScoreChart({
                 }).format(new Date(hovered.point.generatedAt))}
               </p>
               <p>
-                Score: <strong>{hovered.point.score}</strong>
+                {t("chartTooltipScore", { score: hovered.point.score ?? "—" })}
                 {hovered.point.scoreDelta != null && (
                   <span className={hovered.point.scoreDelta >= 0 ? " text-success" : " text-danger"}>
                     {" "}
@@ -159,9 +159,13 @@ export function JourneyScoreChart({
           )}
           <p className="sr-only">
             {chartPoints
-              .map(
-                (p) =>
-                  `${p.generatedAt}: score ${p.score}, delta ${p.scoreDelta ?? "n/a"}, status ${p.status}`
+              .map((p) =>
+                t("chartSrSummary", {
+                  date: p.generatedAt,
+                  score: p.score ?? t("notAvailable"),
+                  delta: p.scoreDelta ?? t("notAvailable"),
+                  status: p.status ?? t("notAvailable"),
+                })
               )
               .join("; ")}
           </p>

@@ -25,9 +25,9 @@ export function TopRisksList({ blockers, findingsById, className, onSelect }: To
     <section className={cn("space-y-4", className)} aria-labelledby="top-risks-heading">
       <div>
         <h2 id="top-risks-heading" className="text-sm font-semibold tracking-tight uppercase">
-          {t("blockers.title", { count: blockers.length })}
+          {t("topRisks.title")}
         </h2>
-        <p className="mt-1 text-xs text-muted-foreground">{t("blockers.subtitleReadOnly")}</p>
+        <p className="mt-1 text-xs text-muted-foreground">{t("topRisks.subtitle")}</p>
       </div>
       <ul className="divide-y divide-border/50 list-none">
         {blockers.slice(0, 5).map((blocker) => {

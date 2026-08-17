@@ -1,5 +1,5 @@
 {
-  "productionVerdict": "Veredicto de producción",
+  "productionVerdict": "Veredicto de Producción",
   "badgeAriaLabel": "Veredicto de producción: {status}",
   "canIDeploy": {
     "question": "¿Puedo desplegar?",
@@ -8,11 +8,11 @@
     "no": "NO.",
     "insufficient": "AÚN NO LO SABEMOS."
   },
-  "productionReadyScore": "Puntuación de preparación",
-  "productionBlocker_one": "{count} bloqueador de producción",
-  "productionBlocker_other": "{count} bloqueadores de producción",
-  "blockersRequireAttention_one": "Hay {count} bloqueador de producción que requiere tu atención.",
-  "blockersRequireAttention_other": "Hay {count} bloqueadores de producción que requieren tu atención.",
+  "productionReadyScore": "Puntuación del Veredicto de Producción",
+  "productionBlocker_one": "{count} bloqueo de producción",
+  "productionBlocker_other": "{count} bloqueos de producción",
+  "blockersRequireAttention_one": "Hay {count} bloqueo de producción que requiere tu atención.",
+  "blockersRequireAttention_other": "Hay {count} bloqueos de producción que requieren tu atención.",
   "estimatedPathForward": "Camino estimado hacia producción",
   "projectedScore": "Score proyectado",
   "scoreDelta": "Cambio de score",
@@ -20,9 +20,9 @@
   "sincePreviousReview": "Desde la revisión anterior",
   "fastestPathTitle": "Recomendaciones",
   "fastestPathSubtitle": "Resuelve estas prioridades en orden para llegar antes a producción.",
-  "productionBlockersTitle": "Bloqueadores de producción",
+  "productionBlockersTitle": "Bloqueos de producción",
   "productionBlockersSubtitle": "Copia un prompt de corrección listo para pegar en tu agente de código.",
-  "criticalBlockersTitle": "Bloqueadores críticos detectados",
+  "criticalBlockersTitle": "Bloqueos críticos detectados",
   "criticalBlockersSubtitle": "Genera un Safe Fix Prompt y pégalo en tu agente de código — solo el cambio seguro mínimo.",
   "copySafeFixPrompt": "Abrir en tu agente",
   "copiedSafeFixPrompt": "Copiado",
@@ -58,28 +58,28 @@
   "points": "+{count} puntos",
   "status": {
     "ready_to_ship": {
-      "label": "Lista para producción",
-      "headline": "LISTA PARA PRODUCCIÓN",
-      "description": "Sin bloqueadores de producción. Cumple el umbral actual de preparación.",
-      "message": "Tu aplicación está lista para producción."
+      "label": "Listo para desplegar",
+      "headline": "LISTO PARA DESPLEGAR",
+      "description": "No se han detectado bloqueos de producción.",
+      "message": "Tu aplicación está lista para desplegar."
     },
     "almost_ready": {
-      "label": "Casi lista",
-      "headline": "CASI LISTA",
-      "description": "Cerca de producción. Resuelve los bloqueadores restantes en tu camino más rápido.",
-      "message": "Estás cerca de producción."
+      "label": "Casi listo",
+      "headline": "CASI LISTO",
+      "description": "Cerca del despliegue. Resuelve los bloqueos restantes en tu camino más rápido.",
+      "message": "Estás cerca de poder desplegar."
     },
     "needs_improvement": {
       "label": "Necesita mejoras",
       "headline": "NECESITA MEJORAS",
-      "description": "Se requieren mejoras antes del despliegue a producción.",
-      "message": "Tu aplicación necesita una pasada enfocada hacia producción."
+      "description": "Se requieren mejoras antes del despliegue.",
+      "message": "Tu aplicación necesita una pasada enfocada antes del despliegue."
     },
     "not_ready": {
-      "label": "No está lista para producción",
-      "headline": "NO ESTÁ LISTA PARA PRODUCCIÓN",
-      "description": "Los bloqueadores de producción impiden un despliegue seguro.",
-      "message": "Tu aplicación todavía no está lista para producción."
+      "label": "No listo para desplegar",
+      "headline": "NO LISTO PARA DESPLEGAR",
+      "description": "Los bloqueos de producción impiden un despliegue seguro.",
+      "message": "No despliegues esta versión todavía."
     },
     "insufficient_data": {
       "label": "Se necesita más análisis",
@@ -98,8 +98,8 @@
     "badge": "Listo para producción",
     "disclaimer": "No se encontraron bloqueadores de producción en esta revisión. SequrAI evalúa la preparación mediante análisis estático — sigue monitorizando a medida que evoluciona tu código.",
     "reviewedCommit": "Revisado",
-    "blockersResolved_one": "{count} bloqueador de producción resuelto desde la última revisión",
-    "blockersResolved_other": "{count} bloqueadores de producción resueltos desde la última revisión",
+    "blockersResolved_one": "{count} bloqueo de producción resuelto desde la última revisión",
+    "blockersResolved_other": "{count} bloqueos de producción resueltos desde la última revisión",
     "areasEvaluated_one": "{count} área de producción evaluada",
     "areasEvaluated_other": "{count} áreas de producción evaluadas"
   },
@@ -110,5 +110,21 @@
   "improvement": "Mejora",
   "projectionEstimate": "Esta proyección es una estimación basada en las prioridades recomendadas, no una garantía.",
   "scoreChangeSinceReview": "{delta} desde la revisión anterior",
-  "noScoreChangeSinceReview": "Sin cambio de score desde la revisión anterior"
+  "noScoreChangeSinceReview": "Sin cambio de puntuación desde la revisión anterior",
+  "minutesUnit": "min",
+  "insufficientFiles": "Archivos analizados insuficientes para un veredicto completo.",
+  "partialCoverage": "Se detectó cobertura parcial del repositorio.",
+  "analysisFailedFallback": "El análisis no se completó correctamente.",
+  "severity": {
+    "critical": "Crítico",
+    "high": "Alto",
+    "medium": "Medio",
+    "low": "Bajo",
+    "info": "Informativo"
+  },
+  "implementationRiskLevel": {
+    "low": "Bajo",
+    "medium": "Medio",
+    "high": "Alto"
+  }
 }

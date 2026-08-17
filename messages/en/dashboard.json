@@ -38,5 +38,10 @@
   "commandGroupNavigate": "Navigate",
   "commandGroupProjects": "Projects",
   "commandGroupRecent": "Recent projects",
-  "commandGroupSecurity": "Security"
+  "commandGroupSecurity": "Security",
+  "openMenu": "Open menu",
+  "closeMenu": "Close menu",
+  "search": "Search",
+  "breadcrumb": "Breadcrumb",
+  "authBypassBanner": "Auth bypass active (SEQURAI_BYPASS_AUTH) — remove before production"
 }

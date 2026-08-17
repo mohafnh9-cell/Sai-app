@@ -25,6 +25,7 @@ const toneDot: Record<NonNullable<SecurityTimelineEvent["tone"]>, string> = {
 
 export function SecurityTimeline({ events, className }: SecurityTimelineProps) {
   const { locale } = useI18n();
+  const { t } = useI18n("missionControl");
 
   if (events.length === 0) return null;
 
@@ -36,7 +37,7 @@ export function SecurityTimeline({ events, className }: SecurityTimelineProps) {
   return (
     <section className={cn("space-y-4", className)} aria-labelledby="security-timeline-heading">
       <h2 id="security-timeline-heading" className="text-sm font-semibold tracking-tight">
-        Analysis timeline
+        {t("timeline.heading")}
       </h2>
       <ol className="relative space-y-0 border-l border-border/50 ml-2">
         {events.map((event, index) => {

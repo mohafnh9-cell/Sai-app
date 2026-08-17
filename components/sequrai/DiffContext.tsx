@@ -1,5 +1,8 @@
+"use client";
+
 import type { DiffContext as DiffContextType } from "@/features/security-analysis/git-diff/types";
 import type { ScanFinding } from "@/features/security-scanner/components/types";
+import { useI18n } from "@/lib/i18n/client";
 import { cn } from "@/lib/utils";
 
 export function findingDiffContext(finding: ScanFinding): DiffContextType | null {
@@ -9,14 +12,6 @@ export function findingDiffContext(finding: ScanFinding): DiffContextType | null
   if (typeof status !== "string") return null;
   return raw as DiffContextType;
 }
-
-const STATUS_LABEL: Record<string, string> = {
-  introduced: "Introduced by this change",
-  affected: "Affected by this change",
-  pre_existing: "Pre-existing",
-  unrelated: "Unrelated to this change",
-  unknown: "Change relationship unknown",
-};
 
 const STATUS_CLASS: Record<string, string> = {
   introduced: "border-severity-high/30 bg-severity-high/5 text-severity-high",
@@ -34,9 +29,13 @@ type DiffContextProps = {
 
 /** Visualizes git-diff relationship — never implies introduced without backend status. */
 export function DiffContextBadge({ context, className, compact }: DiffContextProps) {
+  const { t } = useI18n("technicalDetails");
+
   if (!context) return null;
 
-  const label = STATUS_LABEL[context.status] ?? STATUS_LABEL.unknown;
+  const label =
+    t(`diffContext.${context.status}` as "diffContext.introduced") ??
+    t("diffContext.unknown");
   const tone = STATUS_CLASS[context.status] ?? STATUS_CLASS.unknown;
 
   return (
@@ -66,10 +65,12 @@ export function DiffContextPanel({
   line,
   className,
 }: DiffContextPanelProps) {
+  const { t } = useI18n("technicalDetails");
+
   if (!context) {
     return (
       <div className={cn("rounded-lg border border-dashed border-border/60 px-4 py-3 text-sm text-muted-foreground", className)}>
-        Change relationship unavailable for this finding.
+        {t("diffContext.unavailable")}
       </div>
     );
   }

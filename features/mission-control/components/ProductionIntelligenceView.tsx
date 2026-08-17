@@ -19,6 +19,7 @@ import { fixPromptInputFromPriority, findingsByIdMap } from "@/brain/fix-prompt"
 import { buildSecurityTimelineEvents } from "../lib/build-security-timeline";
 import { formatRelativeLocalized } from "@/lib/i18n/format";
 import { useI18n } from "@/lib/i18n/client";
+import { verdictStatusHeadline } from "@/lib/i18n/verdict-copy";
 
 type ProductionIntelligenceViewProps = {
   state: MissionControlState;
@@ -48,13 +49,35 @@ export function ProductionIntelligenceView({
   const { t, locale } = useI18n("missionControl");
   const { t: tp } = useI18n("projects");
   const { t: tc } = useI18n("common");
+  const { t: tAll } = useI18n();
   const verdict = state.productionVerdict;
 
   if (!verdict) return null;
 
   const findings = state.ui.fixPromptContext?.findings ?? [];
   const findingsMap = findingsByIdMap(findings);
-  const timelineEvents = buildSecurityTimelineEvents(state, intelligence);
+  const timelineEvents = buildSecurityTimelineEvents(state, {
+    analysisRun: (status) => {
+      const statusKey = `analysisRun.runStatus.${status}`;
+      const knownStatuses = new Set([
+        "completed",
+        "running",
+        "failed",
+        "queued",
+        "cancelled",
+        "unknown",
+      ]);
+      if (knownStatuses.has(status)) {
+        return t(statusKey as "analysisRun.runStatus.completed");
+      }
+      return t("timeline.analysisRunStarted");
+    },
+    repositoryAnalyzed: t("timeline.repositoryAnalyzed"),
+    findingsDetected: (count) => t("timeline.findingsDetected", { count }),
+    risksIntroduced: (count) => t("timeline.risksIntroduced", { count }),
+    verdictUpdated: (headline) => t("timeline.verdictUpdated", { headline }),
+    verdictHeadline: (status) => verdictStatusHeadline(status, tAll),
+  }, intelligence);
   const lastAnalysis = state.status.lastAnalysisAt
     ? formatRelativeLocalized(locale, state.status.lastAnalysisAt, {
         never: tc("never"),
@@ -78,12 +101,12 @@ export function ProductionIntelligenceView({
       ) : null}
 
       <header className="space-y-3 product-section">
-        <p className="text-eyebrow">Production Intelligence</p>
+        <p className="text-eyebrow">{t("productionIntelligence.eyebrow")}</p>
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">{state.projectName}</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Latest analysis · {lastAnalysis}
+              {t("productionIntelligence.latestAnalysis")} · {lastAnalysis}
               {state.status.currentCommitSha ? (
                 <span className="ml-2 font-mono text-xs">{state.status.currentCommitSha.slice(0, 7)}</span>
               ) : null}

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { BreadcrumbItem } from "@/lib/navigation/breadcrumbs";
+import { useI18n } from "@/lib/i18n/client";
 
 export function AppBreadcrumbs({
   items,
@@ -12,10 +13,12 @@ export function AppBreadcrumbs({
   items: BreadcrumbItem[];
   className?: string;
 }) {
+  const { t } = useI18n("dashboard");
+
   if (items.length === 0) return null;
 
   return (
-    <nav aria-label="Breadcrumb" className={cn("min-w-0", className)}>
+    <nav aria-label={t("breadcrumb")} className={cn("min-w-0", className)}>
       <ol className="flex flex-wrap items-center gap-1 text-sm text-muted-foreground">
         {items.map((item, index) => {
           const isLast = index === items.length - 1;

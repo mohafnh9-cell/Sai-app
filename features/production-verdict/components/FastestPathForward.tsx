@@ -10,12 +10,13 @@ import {
 import type { ProductionPriority } from "@/brain/production-verdict/schema";
 import { trackEvent } from "@/lib/analytics/track";
 import { useI18n } from "@/lib/i18n/client";
+import type { Translator } from "@/lib/i18n/types";
 import type { FixPromptContext } from "../fix-prompt-context";
 import { CopySafeFixPromptButton } from "./CopySafeFixPromptButton";
 import { SafeFixMetrics } from "./SafeFixMetrics";
 
-function severityLabel(severity: ProductionPriority["severity"]) {
-  return severity.charAt(0).toUpperCase() + severity.slice(1);
+function severityLabel(severity: ProductionPriority["severity"], t: Translator) {
+  return t(`severity.${severity}`);
 }
 
 export function ProductionPriorityItem({
@@ -28,6 +29,7 @@ export function ProductionPriorityItem({
   fixPromptContext?: FixPromptContext;
 }) {
   const { t } = useI18n("verdict");
+  const { t: tr } = useI18n("readiness");
   const findingsMap = fixPromptContext?.findings
     ? findingsByIdMap(fixPromptContext.findings)
     : undefined;
@@ -63,7 +65,7 @@ export function ProductionPriorityItem({
               {priority.category}
             </Badge>
             <Badge variant="secondary" className="text-xs">
-              {t("technicalSeverity")}: {severityLabel(priority.severity)}
+              {t("technicalSeverity")}: {severityLabel(priority.severity, tr)}
             </Badge>
           </div>
 

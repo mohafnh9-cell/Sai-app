@@ -108,9 +108,9 @@ export function ProductionVerdictHero({
           </p>
           {view.status === "insufficient_data" && (
             <ul className="text-sm text-muted-foreground space-y-1 list-disc pl-5">
-              {verdict.filesAnalyzed < 10 && <li>Insufficient files analyzed for a full verdict.</li>}
+              {verdict.filesAnalyzed < 10 && <li>{t("verdict.insufficientFiles")}</li>}
               {verdict.coverageRatio != null && verdict.coverageRatio < 0.3 && (
-                <li>Partial repository coverage detected.</li>
+                <li>{t("verdict.partialCoverage")}</li>
               )}
               <li>{view.recommendedAction}</li>
             </ul>
@@ -119,7 +119,7 @@ export function ProductionVerdictHero({
             <div className="rounded-lg border border-danger/30 bg-danger/5 p-4 text-sm space-y-3">
               <p className="flex items-start gap-2">
                 <AlertTriangle className="h-4 w-4 text-danger shrink-0 mt-0.5" aria-hidden />
-                {view.executiveSummary || "The analysis did not complete successfully."}
+                {view.executiveSummary || t("verdict.analysisFailedFallback")}
               </p>
               {retryHref && (
                 <Button variant="outline" size="sm" asChild>
@@ -146,7 +146,7 @@ export function ProductionVerdictHero({
         {view.showScore && view.estimatedFixMinutes > 0 && (
           <Metric
             label={t("verdict.estimatedPathForward")}
-            value={`${view.estimatedFixMinutes} min`}
+            value={`${view.estimatedFixMinutes} ${t("verdict.minutesUnit")}`}
           />
         )}
         {view.showScore && view.projectedScore != null && (

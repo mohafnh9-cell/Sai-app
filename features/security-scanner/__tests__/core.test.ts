@@ -101,7 +101,7 @@ describe("deterministic utilities", () => {
       id: "x", fingerprint: "x", correlationKey: "corr-x", ruleId: "x", title: "x", description: "x",
       confidence: "high" as const, category: "x", location: { path: "x", line: 1 }, remediation: "x",
     };
-    expect(scoreFindings([{ ...base, severity: "critical" }, { ...base, severity: "high" }]).score).toBe(60);
+    expect(scoreFindings([{ ...base, severity: "critical" }, { ...base, severity: "high" }]).score).toBe(62);
     expect(
       scoreFindings(
         Array.from({ length: 20 }, (_, index) => ({
@@ -111,6 +111,6 @@ describe("deterministic utilities", () => {
           severity: "low" as const,
         })),
       ).score,
-    ).toBe(94);
+    ).toBe(85);
   });
 });

@@ -110,5 +110,21 @@
   "improvement": "Improvement",
   "projectionEstimate": "This projection is an estimate based on recommended priorities, not a guarantee.",
   "scoreChangeSinceReview": "{delta} since previous review",
-  "noScoreChangeSinceReview": "No score change since previous review"
+  "noScoreChangeSinceReview": "No score change since previous review",
+  "minutesUnit": "min",
+  "insufficientFiles": "Insufficient files analyzed for a full verdict.",
+  "partialCoverage": "Partial repository coverage detected.",
+  "analysisFailedFallback": "The analysis did not complete successfully.",
+  "severity": {
+    "critical": "Critical",
+    "high": "High",
+    "medium": "Medium",
+    "low": "Low",
+    "info": "Info"
+  },
+  "implementationRiskLevel": {
+    "low": "Low",
+    "medium": "Medium",
+    "high": "High"
+  }
 }

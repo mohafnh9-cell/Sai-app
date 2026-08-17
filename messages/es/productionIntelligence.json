@@ -15,8 +15,8 @@
   "thisWeek": "Esta semana",
   "last7Days": "Últimos 7 días",
   "last30Days": "Últimos 30 días",
-  "blockersResolved": "bloqueadores resueltos",
-  "blockersIntroduced": "bloqueadores introducidos",
+  "blockersResolved": "bloqueos resueltos",
+  "blockersIntroduced": "bloqueos introducidos",
   "estimatedPath": "Camino estimado hacia producción",
   "minutes": "{count} minutos",
   "productionMomentum": "Impulso de producción",
@@ -36,8 +36,8 @@
     "declining": "Las revisiones recientes muestran regresión. Enfócate en la acción recomendada."
   },
   "whatChanged": {
-    "scoreIncreased": "El puntuación de preparación ha aumentado {points} puntos.",
-    "scoreDecreased": "El puntuación de preparación ha bajado {points} puntos.",
+    "scoreIncreased": "La puntuación de preparación ha aumentado {points} puntos.",
+    "scoreDecreased": "La puntuación de preparación ha bajado {points} puntos.",
     "blockersResolved_one": "Se ha resuelto {count} bloqueador",
     "blockersResolved_other": "Se han resuelto {count} bloqueadores",
     "blockersIntroduced_one": "Se ha introducido {count} bloqueador nuevo",
@@ -98,7 +98,7 @@
     "technicalReview": "Una revisión técnica enfocada aclarará el camino más rápido hacia producción."
   },
   "dashboard": {
-    "title": "Recommendations",
+    "title": "Recomendaciones",
     "subtitle": "Qué ha cambiado, qué necesita atención y qué hacer a continuación en tu portfolio.",
     "whatChanged": "¿Qué ha cambiado?",
     "needsAttention": "¿Qué necesita atención?",
