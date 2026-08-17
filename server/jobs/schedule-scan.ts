@@ -10,7 +10,7 @@ import {
 } from "@/lib/env/scan-scheduler";
 import { resolveScanSchedulerPlan } from "@/lib/env/scan-scheduler-plan";
 import { createAdminClient } from "@/server/security-scanner/admin-client";
-import { createScanJob } from "./scan-job-store";
+import { createScanJob, findActiveScanJobByScanId } from "./scan-job-store";
 import type { ScanJobType, ScanRunPayload, WebhookProcessPayload } from "./types";
 import { processGitHubWebhookEvent } from "@/server/github-automation/orchestrator";
 import {
@@ -134,7 +134,46 @@ export async function scheduleScanRun(
   }
 
   if (duplicate || !job) {
-    return { scanJobId: job?.id ?? payload.scanJobId, duplicate: true };
+    const existing = await findActiveScanJobByScanId(admin, payload.scanId);
+    if (!existing) {
+      return { scanJobId: payload.scanJobId ?? "", duplicate: true };
+    }
+
+    if (existing.status === "running") {
+      log("scan_schedule_existing_running", {
+        scanJobId: existing.id,
+        scanId: payload.scanId,
+      });
+      return { scanJobId: existing.id, duplicate: true };
+    }
+
+    const runPayload = { ...payload, scanJobId: existing.id };
+    log("scan_schedule_re_enqueue_existing", {
+      scanJobId: existing.id,
+      scanId: payload.scanId,
+      organizationId: payload.organizationId,
+    });
+
+    try {
+      await enqueueScanRunExecution(admin, existing, runPayload, {
+        scheduler: options?.scheduler ?? defaultScheduler,
+        commitSha: payload.headCommitSha ?? payload.baseCommitSha ?? null,
+        awaitInline: options?.awaitInlineExecution,
+      });
+    } catch (error) {
+      if (error instanceof ScanEnqueueError) {
+        log("scan_re_enqueue_failed", {
+          scanJobId: existing.id,
+          scanId: payload.scanId,
+          code: error.code,
+          message: error.message,
+        });
+        throw error;
+      }
+      throw error;
+    }
+
+    return { scanJobId: existing.id, duplicate: true };
   }
 
   const runPayload = { ...payload, scanJobId: job.id };

@@ -3,6 +3,10 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ProductionVerdictV1 } from "@/brain/production-verdict/schema";
 import type { MissionControlView } from "@/features/mission-control/types";
+import {
+  getCurrentProductionVerdict,
+  getProductionVerdictByScan,
+} from "@/server/production-verdict/service";
 import { getMissionControlView } from "./get-mission-control";
 
 export type MissionControlRecoveryReason =
@@ -29,9 +33,10 @@ type LoadInput = {
 
 /**
  * Recovery ladder:
- * 1. Requested analysis run (scoped)
- * 2. Current production verdict (unscoped) when scoped run has no verdict
- * 3. Empty state from scoped loader when neither exists
+ * 1. Resolve scoped verdict first (cheap lookup)
+ * 2. Load scoped Mission Control view only when scoped verdict exists
+ * 3. Fall back to current production verdict + unscoped view when scoped run has no verdict
+ * 4. Empty scoped state when neither exists
  */
 export async function loadMissionControlWithRecovery(
   supabase: SupabaseClient,
@@ -39,6 +44,7 @@ export async function loadMissionControlWithRecovery(
   organizationId: string,
   input: LoadInput
 ): Promise<MissionControlLoadResult> {
+  const dataClient = input.admin ?? supabase;
   const scopedRunId =
     input.isolationEnabled && input.analysisRunId && !input.manualRecovery
       ? input.analysisRunId
@@ -57,12 +63,13 @@ export async function loadMissionControlWithRecovery(
     };
   }
 
-  const scoped = await getMissionControlView(supabase, projectId, organizationId, {
-    analysisRunId: scopedRunId,
-    admin: input.admin,
-  });
-
-  if (scoped.verdict) {
+  const scopedVerdict = await getProductionVerdictByScan(dataClient, scopedRunId);
+  if (scopedVerdict) {
+    const scoped = await getMissionControlView(supabase, projectId, organizationId, {
+      analysisRunId: scopedRunId,
+      admin: input.admin,
+      preloadedVerdict: scopedVerdict,
+    });
     return {
       view: scoped.view,
       verdict: scoped.verdict,
@@ -72,16 +79,17 @@ export async function loadMissionControlWithRecovery(
     };
   }
 
-  const unscoped = await getMissionControlView(supabase, projectId, organizationId, {
-    admin: input.admin,
-  });
-
-  if (unscoped.verdict) {
+  const currentVerdict = await getCurrentProductionVerdict(dataClient, projectId);
+  if (currentVerdict) {
     console.info({
       component: "mission-control-recovery",
       event: "fallback_to_current_verdict",
       projectId,
       requestedRunId: scopedRunId,
+    });
+    const unscoped = await getMissionControlView(supabase, projectId, organizationId, {
+      admin: input.admin,
+      preloadedVerdict: currentVerdict,
     });
     return {
       view: unscoped.view,
@@ -92,6 +100,11 @@ export async function loadMissionControlWithRecovery(
     };
   }
 
+  const scoped = await getMissionControlView(supabase, projectId, organizationId, {
+    analysisRunId: scopedRunId,
+    admin: input.admin,
+    preloadedVerdict: null,
+  });
   return {
     view: scoped.view,
     verdict: null,

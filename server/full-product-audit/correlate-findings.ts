@@ -8,7 +8,9 @@ import {
 import {
   AUDIT_CORRELATION_RULES,
   attackFindingMatchesRule,
+  isHeuristicSecurityAnalysisFinding,
   staticFindingMatchesRule,
+  staticFindingMatchesRuleForConfirmation,
 } from "./correlation-rules";
 import type { ConsolidatedAuditFinding, FindingVerificationStatus } from "./types";
 
@@ -76,9 +78,10 @@ function findCorrelationRule(
   staticFinding: StaticFindingInput,
   attackFinding: AttackFindingInput
 ): boolean {
+  if (isHeuristicSecurityAnalysisFinding(staticFinding)) return false;
   return AUDIT_CORRELATION_RULES.some(
     (rule) =>
-      staticFindingMatchesRule(staticFinding, rule) &&
+      staticFindingMatchesRuleForConfirmation(staticFinding, rule) &&
       attackFindingMatchesRule(attackFinding, rule)
   );
 }

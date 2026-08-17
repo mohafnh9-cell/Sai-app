@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { projectSchema } from "@/features/projects/schemas/project.schema";
 import { normalizeStoredGitHubRepository } from "@/lib/github/repository-reference";
 import { enforceRateLimit } from "@/server/http/rate-limit";
+import { resolveActiveWorkspaceIdForUser } from "@/server/workspaces/service";
 
 // ─── GET /api/projects ────────────────────────────────────────────────────────
 
@@ -19,21 +20,15 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { data: membership } = await supabase
-    .from("organization_members")
-    .select("organization_id")
-    .eq("user_id", user.id)
-    .limit(1)
-    .maybeSingle();
-
-  if (!membership) {
+  const organizationId = await resolveActiveWorkspaceIdForUser(supabase, user.id);
+  if (!organizationId) {
     return NextResponse.json({ error: "No organization found" }, { status: 404 });
   }
 
   const { data: projects, error } = await supabase
     .from("projects")
     .select("*")
-    .eq("organization_id", membership.organization_id)
+    .eq("organization_id", organizationId)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -71,21 +66,15 @@ export async function POST(request: Request) {
     );
   }
 
-  const { data: membership } = await supabase
-    .from("organization_members")
-    .select("organization_id")
-    .eq("user_id", user.id)
-    .limit(1)
-    .maybeSingle();
-
-  if (!membership) {
+  const organizationId = await resolveActiveWorkspaceIdForUser(supabase, user.id);
+  if (!organizationId) {
     return NextResponse.json({ error: "No organization found" }, { status: 404 });
   }
 
   const { data: project, error } = await supabase
     .from("projects")
     .insert({
-      organization_id: membership.organization_id,
+      organization_id: organizationId,
       name: parsed.data.name,
       description: parsed.data.description ?? null,
       github_repo: normalizeStoredGitHubRepository(parsed.data.github_repo ?? null),

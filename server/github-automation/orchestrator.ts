@@ -27,8 +27,10 @@ import {
 import { runAutomaticProductionReview } from "@/server/automatic-review";
 import { isVerdictAutopilotEnabled } from "@/server/autopilot";
 import {
-  isDeliveryAlreadyHandled,
+  ensureDeliveryProcessing,
+  updateDeliveryEventStatus,
 } from "./delivery-idempotency";
+import { createAutomationScan } from "./automation-scan";
 import { scheduleAutomationScan } from "@/server/jobs/schedule-scan";
 import type { ScanRunPayload } from "@/server/jobs/types";
 
@@ -74,88 +76,41 @@ async function recordEvent(
     errorMessage?: string;
   }
 ) {
-  const { error } = await admin.from("repository_events").upsert(
-    {
-      organization_id: input.organizationId,
-      project_id: input.projectId,
-      github_delivery_id: input.deliveryId,
-      event_type: input.eventType,
-      action: input.action ?? null,
-      branch: input.branch ?? null,
-      commit_sha: input.commitSha ?? null,
-      base_commit_sha: input.baseCommitSha ?? null,
-      pull_request_number: input.pullRequestNumber ?? null,
-      payload: input.payload,
+  if (input.deliveryId) {
+    await updateDeliveryEventStatus(admin, {
+      organizationId: input.organizationId,
+      deliveryId: input.deliveryId,
       status: input.status,
-      error_message: input.errorMessage ?? null,
-      processed_at: input.status === "processed" ? new Date().toISOString() : null,
-    },
-    { onConflict: "github_delivery_id", ignoreDuplicates: false }
-  );
-  if (error && error.code !== "23505") {
-    console.warn("repository_event_upsert_failed", { message: error.message });
+      eventType: input.eventType,
+      action: input.action,
+      branch: input.branch,
+      commitSha: input.commitSha,
+      baseCommitSha: input.baseCommitSha,
+      pullRequestNumber: input.pullRequestNumber,
+      payload: input.payload,
+      errorMessage: input.errorMessage,
+    });
+    return;
   }
-}
 
-async function createAutomationScan(
-  admin: SupabaseClient,
-  input: {
-    organizationId: string;
-    projectId: string;
-    userId: string;
-    scanType: "incremental" | "full";
-    branch?: string;
-    commitSha?: string;
-    triggerType?: "webhook" | "scheduled";
-  }
-) {
-  const { data: active } = await admin
-    .from("scans")
-    .select("id")
-    .eq("repository_id", input.projectId)
-    .in("status", [
-      "queued",
-      "fetching_repository",
-      "indexing",
-      "scanning",
-      "calculating_score",
-    ])
-    .limit(1)
-    .maybeSingle();
-  if (active) return null;
-
-  const { data: scan, error } = await admin
-    .from("scans")
-    .insert({
-      organization_id: input.organizationId,
-      project_id: input.projectId,
-      repository_id: input.projectId,
-      triggered_by_user_id: input.userId,
-      trigger_type: input.triggerType ?? "webhook",
-      scan_type: input.scanType,
-      status: "queued",
-      progress: 0,
-      progress_message: "githubQueued",
-      branch: input.branch ?? null,
-      commit_sha: input.commitSha ?? null,
-    })
-    .select("id")
-    .single();
+  const { error } = await admin.from("repository_events").insert({
+    organization_id: input.organizationId,
+    project_id: input.projectId,
+    github_delivery_id: null,
+    event_type: input.eventType,
+    action: input.action ?? null,
+    branch: input.branch ?? null,
+    commit_sha: input.commitSha ?? null,
+    base_commit_sha: input.baseCommitSha ?? null,
+    pull_request_number: input.pullRequestNumber ?? null,
+    payload: input.payload,
+    status: input.status,
+    error_message: input.errorMessage ?? null,
+    processed_at: input.status === "processed" ? new Date().toISOString() : null,
+  });
   if (error) {
-    if (error.code === "23505") return null;
-    throw new Error(`Could not create automation scan: ${error.message}`);
+    console.warn("repository_event_insert_failed", { message: error.message });
   }
-
-  await admin.from("repository_scan_state").upsert(
-    {
-      repository_id: input.projectId,
-      organization_id: input.organizationId,
-      active_scan_id: scan.id,
-    },
-    { onConflict: "repository_id" }
-  );
-
-  return scan.id;
 }
 
 async function enqueueAutomationScan(
@@ -216,11 +171,54 @@ export async function processGitHubWebhookEvent(input: {
   }
 
   const results = [];
+  const claimedOrganizations = new Set<string>();
+  const duplicateOrganizations = new Set<string>();
+
   for (const project of projects) {
     if (!project.github_repo) continue;
     if (project.webhook_enabled === false) {
       results.push({ projectId: project.id, ok: true, action: "ignored", reason: "webhook_disabled" });
       continue;
+    }
+
+    if (deliveryId) {
+      if (duplicateOrganizations.has(project.organization_id)) {
+        results.push({
+          projectId: project.id,
+          ok: true,
+          action: "duplicate",
+          reason: "duplicate_delivery",
+        });
+        continue;
+      }
+
+      if (!claimedOrganizations.has(project.organization_id)) {
+        const gate = await ensureDeliveryProcessing(admin, {
+          organizationId: project.organization_id,
+          projectId: project.id,
+          deliveryId,
+          eventType,
+          payload,
+        });
+        if (!gate.shouldProcess) {
+          duplicateOrganizations.add(project.organization_id);
+          log("duplicate_delivery", {
+            organizationId: project.organization_id,
+            projectId: project.id,
+            deliveryId,
+            reason: gate.reason,
+            status: gate.status,
+          });
+          results.push({
+            projectId: project.id,
+            ok: true,
+            action: "duplicate",
+            reason: "duplicate_delivery",
+          });
+          continue;
+        }
+        claimedOrganizations.add(project.organization_id);
+      }
     }
 
     const tokenResult = await resolveOrganizationGitHubToken(
@@ -352,15 +350,6 @@ async function handlePushEvent(
       status: "ignored",
     });
     return { ok: true, action: "ignored", reason: "branch_delete_or_invalid" };
-  }
-
-  if (await isDeliveryAlreadyHandled(admin, input.deliveryId)) {
-    log("duplicate_delivery", {
-      projectId: input.project.id,
-      deliveryId: input.deliveryId,
-      commitSha: parsed.commitSha,
-    });
-    return { ok: true, action: "ignored", reason: "duplicate_delivery" };
   }
 
   await recordEvent(admin, {

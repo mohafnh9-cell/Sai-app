@@ -3,11 +3,40 @@ import type Stripe from "stripe";
 import { getStripe, isStripeConfigured } from "@/lib/stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
+  claimStripeWebhookEvent,
+  markStripeWebhookEventFailed,
+  markStripeWebhookEventProcessed,
+} from "@/server/billing/stripe-webhook-idempotency";
+import {
   syncSubscriptionFromCheckoutSession,
   syncSubscriptionFromStripe,
 } from "@/server/billing/sync-subscription";
 
 export const runtime = "nodejs";
+
+async function processStripeEvent(
+  admin: ReturnType<typeof createAdminClient>,
+  stripe: ReturnType<typeof getStripe>,
+  event: Stripe.Event
+): Promise<void> {
+  switch (event.type) {
+    case "checkout.session.completed": {
+      const session = event.data.object as Stripe.Checkout.Session;
+      if (session.mode === "subscription") {
+        await syncSubscriptionFromCheckoutSession(admin, stripe, session);
+      }
+      break;
+    }
+    case "customer.subscription.updated":
+    case "customer.subscription.deleted": {
+      const subscription = event.data.object as Stripe.Subscription;
+      await syncSubscriptionFromStripe(admin, subscription);
+      break;
+    }
+    default:
+      break;
+  }
+}
 
 export async function POST(request: Request) {
   if (!isStripeConfigured()) {
@@ -32,27 +61,21 @@ export async function POST(request: Request) {
   }
 
   const admin = createAdminClient();
+  const claim = await claimStripeWebhookEvent(admin, {
+    stripeEventId: event.id,
+    eventType: event.type,
+  });
+
+  if (!claim.claimed) {
+    return NextResponse.json({ received: true, duplicate: true });
+  }
 
   try {
-    switch (event.type) {
-      case "checkout.session.completed": {
-        const session = event.data.object as Stripe.Checkout.Session;
-        if (session.mode === "subscription") {
-          await syncSubscriptionFromCheckoutSession(admin, stripe, session);
-        }
-        break;
-      }
-      case "customer.subscription.updated":
-      case "customer.subscription.deleted": {
-        const subscription = event.data.object as Stripe.Subscription;
-        await syncSubscriptionFromStripe(admin, subscription);
-        break;
-      }
-      default:
-        break;
-    }
+    await processStripeEvent(admin, stripe, event);
+    await markStripeWebhookEventProcessed(admin, event.id);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Webhook handler failed";
+    await markStripeWebhookEventFailed(admin, event.id, message);
     console.error({ component: "stripe-webhook", eventType: event.type, error: message });
     return NextResponse.json({ error: message }, { status: 500 });
   }

@@ -8,6 +8,7 @@ import {
 } from "@/brain/repository-model";
 import { ANALYSIS_ENGINE_V2_VERSION } from "@/brain/prompts/analysis-engine-v2";
 import { scanRepository as scanRepositoryFiles, scoreFindings } from "@/features/security-scanner";
+import { enrichFindingsWithDiffContext } from "@/features/security-analysis/git-diff/enrich-findings";
 import { stubNormalizedFile } from "@/features/security-scanner/normalization";
 import type { Confidence, Finding as ScannerFinding, Severity } from "@/features/security-scanner";
 import { buildFindingCorrelationKeyFromParts } from "@/lib/correlation/finding-identity";
@@ -48,6 +49,8 @@ type ScanContext = {
   headCommitSha?: string;
   /** Automatic reviews store scan results without updating verdicts or project scores. */
   persistMode?: "full" | "review_only";
+  /** Reuse GitHub API responses within a single scan execution. */
+  githubService?: GitHubRepositoryService;
 };
 
 type Finding = {
@@ -173,21 +176,29 @@ export class InlineScanJobRunner implements ScanJobRunner {
       }
 
       const ref = parseGitHubRepository(context.githubRepo);
-      const github = new GitHubRepositoryService(context.providerToken);
+      const ownsGithubService = !context.githubService;
+      const github = context.githubService ?? new GitHubRepositoryService(context.providerToken);
       const isIncremental =
         context.scanType === "incremental" &&
         Boolean(context.baseCommitSha && context.headCommitSha);
 
-      const snapshot = isIncremental
-        ? await github.fetchCompareSnapshot(
-            ref,
-            context.baseCommitSha!,
-            context.headCommitSha!
-          )
-        : await github.fetchSnapshot(ref, {
-            branch: context.branch,
-            commitSha: context.headCommitSha,
-          });
+      let snapshot;
+      try {
+        snapshot = isIncremental
+          ? await github.fetchCompareSnapshot(
+              ref,
+              context.baseCommitSha!,
+              context.headCommitSha!
+            )
+          : await github.fetchSnapshot(ref, {
+              branch: context.branch,
+              commitSha: context.headCommitSha,
+            });
+      } finally {
+        if (ownsGithubService) {
+          github.dispose();
+        }
+      }
 
       if (
         context.headCommitSha &&
@@ -262,7 +273,14 @@ export class InlineScanJobRunner implements ScanJobRunner {
         snapshot.files.map((file) => stubNormalizedFile(file.path, file.content)),
         result.stack
       );
-      let rows = result.findings.map((finding) => findingRow(context, finding));
+      const scannedFindings =
+        isIncremental && snapshot.changedPaths?.length
+          ? enrichFindingsWithDiffContext(result.findings, {
+              kind: "paths",
+              changedPaths: snapshot.changedPaths,
+            })
+          : result.findings;
+      let rows = scannedFindings.map((finding) => findingRow(context, finding));
       let scoreBreakdown = result.score;
       let stack = result.stack;
       let metrics = {
@@ -277,7 +295,7 @@ export class InlineScanJobRunner implements ScanJobRunner {
         const merged = await this.mergeIncrementalFindings(
           context,
           snapshot.changedPaths,
-          result.findings
+          scannedFindings
         );
         rows = merged.rows;
         scoreBreakdown = scoreFindings(
@@ -300,7 +318,7 @@ export class InlineScanJobRunner implements ScanJobRunner {
         metrics = {
           ...metrics,
           mergedFindings: merged.findings.length,
-          incrementalFindings: result.findings.length,
+          incrementalFindings: scannedFindings.length,
         };
       }
       logScan("info", "rules_completed", {
@@ -313,8 +331,7 @@ export class InlineScanJobRunner implements ScanJobRunner {
       });
 
       if (rows.length > 0) {
-        const { error } = await this.supabase.from("scan_findings").insert(rows);
-        if (error) throw new Error(`Could not persist scan findings: ${error.message}`);
+        await this.replaceScanFindings(context.scanId, rows);
       }
 
       await this.updateScan(context.scanId, {
@@ -619,8 +636,7 @@ export class InlineScanJobRunner implements ScanJobRunner {
     const priorCoverage = await this.loadPreviousScanCoverage(context);
     const merged = await this.mergeIncrementalFindings(context, [], []);
     if (merged.rows.length > 0) {
-      const { error } = await this.supabase.from("scan_findings").insert(merged.rows);
-      if (error) throw new Error(`Could not persist retained scan findings: ${error.message}`);
+      await this.replaceScanFindings(context.scanId, merged.rows);
     }
     const filesAnalyzed = priorCoverage
       ? Math.max(priorCoverage.filesAnalyzed, snapshot.discoveredFiles)
@@ -695,6 +711,23 @@ export class InlineScanJobRunner implements ScanJobRunner {
         scanJobId: context.scanJobId ?? null,
       });
     }
+  }
+
+  private async replaceScanFindings(
+    scanId: string,
+    rows: Array<Record<string, unknown>>
+  ): Promise<void> {
+    const { error: deleteError } = await this.supabase
+      .from("scan_findings")
+      .delete()
+      .eq("scan_id", scanId);
+    if (deleteError) {
+      throw new Error(`Could not reset scan findings: ${deleteError.message}`);
+    }
+    if (rows.length === 0) return;
+
+    const { error } = await this.supabase.from("scan_findings").insert(rows);
+    if (error) throw new Error(`Could not persist scan findings: ${error.message}`);
   }
 
   private async updateActiveScan(scanId: string, values: Record<string, unknown>): Promise<boolean> {

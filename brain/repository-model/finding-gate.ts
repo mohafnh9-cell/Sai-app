@@ -122,6 +122,20 @@ export function validateFindingAgainstRepository(
     };
   }
 
+  const securityAnalysis = finding.metadata?.securityAnalysis as
+    | { verificationStatus?: string }
+    | undefined;
+  if (
+    securityAnalysis?.verificationStatus &&
+    securityAnalysis.verificationStatus !== "CONFIRMED"
+  ) {
+    return {
+      allowed: true,
+      classification: "potential_observation",
+      evidenceReport: evidenceReport ?? undefined,
+    };
+  }
+
   const classification: FindingClassification =
     confidence >= CONFIDENCE_FINDING_THRESHOLD
       ? finding.severity === "critical" || finding.severity === "high"

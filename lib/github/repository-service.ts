@@ -137,59 +137,11 @@ export async function resolveCommitReference(
   ref: GitHubRepositoryRef,
   input: { commitSha?: string; branch?: string }
 ): Promise<ResolvedCommitReference> {
-  const controller = new AbortController();
-  const deadline = setTimeout(() => controller.abort(), 10_000);
-  const base = `/repos/${encodeURIComponent(ref.owner)}/${encodeURIComponent(ref.repo)}`;
-
-  async function request<T>(path: string): Promise<T> {
-    const response = await fetch(`${GITHUB_API}${path}`, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: "application/vnd.github+json",
-        "X-GitHub-Api-Version": API_VERSION,
-        "User-Agent": "SequrAI-Scanner/1.0",
-      },
-      cache: "no-store",
-      signal: controller.signal,
-    });
-    if (!response.ok) {
-      const remaining = response.headers.get("x-ratelimit-remaining");
-      if (response.status === 429 || (response.status === 403 && remaining === "0")) {
-        throw new GitHubServiceError("GITHUB_RATE_LIMIT", "GitHub API rate limit reached", 429);
-      }
-      if (response.status === 401) {
-        throw new GitHubServiceError("GITHUB_AUTH", "GitHub authorization has expired", 401);
-      }
-      if (response.status === 403) {
-        throw new GitHubServiceError("GITHUB_FORBIDDEN", "GitHub repository access was denied", 403);
-      }
-      if (response.status === 404) {
-        throw new GitHubServiceError("GITHUB_NOT_FOUND", "GitHub commit or repository was not found", 404);
-      }
-      throw new GitHubServiceError("GITHUB_RESPONSE", `GitHub API request failed (${response.status})`, 502);
-    }
-    return (await response.json()) as T;
-  }
-
+  const service = new GitHubRepositoryService(accessToken);
   try {
-    if (input.commitSha?.trim()) {
-      const commit = await request<{ sha: string }>(
-        `${base}/commits/${encodeURIComponent(input.commitSha.trim())}`
-      );
-      return { sha: commit.sha, branch: input.branch?.trim() || null };
-    }
-    const repository = await request<GitHubRepo>(base);
-    const branch = input.branch?.trim() || repository.default_branch;
-    const commit = await request<{ sha: string }>(`${base}/commits/${encodeURIComponent(branch)}`);
-    return { sha: commit.sha, branch };
-  } catch (error) {
-    if (error instanceof GitHubServiceError) throw error;
-    if (controller.signal.aborted) {
-      throw new GitHubServiceError("GITHUB_TIMEOUT", "GitHub commit lookup timed out", 504);
-    }
-    throw error;
+    return await service.resolveCommitReference(ref, input);
   } finally {
-    clearTimeout(deadline);
+    service.dispose();
   }
 }
 
@@ -211,6 +163,8 @@ function normalizeFetchSnapshotOptions(
 export class GitHubRepositoryService {
   private readonly controller = new AbortController();
   private readonly deadline: ReturnType<typeof setTimeout>;
+  private readonly requestCache = new Map<string, Promise<unknown>>();
+  private disposed = false;
 
   constructor(private readonly accessToken: string) {
     if (!accessToken) throw new Error("GitHub access token is required");
@@ -218,7 +172,39 @@ export class GitHubRepositoryService {
   }
 
   dispose() {
+    if (this.disposed) return;
+    this.disposed = true;
     clearTimeout(this.deadline);
+    this.requestCache.clear();
+  }
+
+  async resolveCommitReference(
+    ref: GitHubRepositoryRef,
+    input: { commitSha?: string; branch?: string }
+  ): Promise<ResolvedCommitReference> {
+    const base = `/repos/${encodeURIComponent(ref.owner)}/${encodeURIComponent(ref.repo)}`;
+
+    try {
+      if (input.commitSha?.trim()) {
+        const commit = await this.request<{ sha: string }>(
+          `${base}/commits/${encodeURIComponent(input.commitSha.trim())}`
+        );
+        return { sha: commit.sha, branch: input.branch?.trim() || null };
+      }
+
+      const repository = await this.request<GitHubRepo>(base);
+      const branch = input.branch?.trim() || repository.default_branch;
+      const commit = await this.request<{ sha: string }>(
+        `${base}/commits/${encodeURIComponent(branch)}`
+      );
+      return { sha: commit.sha, branch };
+    } catch (error) {
+      if (error instanceof GitHubServiceError) throw error;
+      if (this.controller.signal.aborted) {
+        throw new GitHubServiceError("GITHUB_TIMEOUT", "GitHub commit lookup timed out", 504);
+      }
+      throw error;
+    }
   }
 
   async fetchCompareSnapshot(
@@ -304,8 +290,6 @@ export class GitHubRepositoryService {
         throw new GitHubServiceError("GITHUB_TIMEOUT", "GitHub compare fetch timed out", 504);
       }
       throw error;
-    } finally {
-      this.dispose();
     }
   }
 
@@ -424,12 +408,26 @@ export class GitHubRepositoryService {
         throw new GitHubServiceError("GITHUB_TIMEOUT", "GitHub repository fetch timed out", 504);
       }
       throw error;
-    } finally {
-      this.dispose();
     }
   }
 
   private async request<T>(path: string): Promise<T> {
+    const cached = this.requestCache.get(path);
+    if (cached) {
+      return cached as Promise<T>;
+    }
+
+    const pending = this.fetchRequest<T>(path);
+    this.requestCache.set(path, pending);
+    try {
+      return await pending;
+    } catch (error) {
+      this.requestCache.delete(path);
+      throw error;
+    }
+  }
+
+  private async fetchRequest<T>(path: string): Promise<T> {
     const response = await fetch(`${GITHUB_API}${path}`, {
       headers: {
         Authorization: `Bearer ${this.accessToken}`,

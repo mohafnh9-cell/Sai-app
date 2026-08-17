@@ -138,6 +138,33 @@ export function staticFindingMatchesRule(
   return false;
 }
 
+/** Confirmation requires an explicit static rule ID match — never keyword-only. */
+export function staticFindingMatchesRuleForConfirmation(
+  finding: { ruleId?: string | null; category?: string | null; title?: string | null },
+  rule: CorrelationRule
+): boolean {
+  const ruleId = (finding.ruleId ?? "").toLowerCase();
+  if (!rule.staticRuleIds?.length) return false;
+  return rule.staticRuleIds.some((id) => ruleId === id.toLowerCase());
+}
+
+export function isHeuristicSecurityAnalysisFinding(input: {
+  ruleId?: string | null;
+  metadata?: Record<string, unknown> | null;
+}): boolean {
+  if (input.metadata?.securityAnalysis) return true;
+  const ruleId = (input.ruleId ?? "").toLowerCase();
+  return (
+    ruleId.startsWith("agent-scanner.osv.") ||
+    ruleId.startsWith("mcp.") ||
+    ruleId.startsWith("package-security.") ||
+    ruleId.startsWith("prompt-injection.") ||
+    ruleId.startsWith("agent-action.") ||
+    ruleId.startsWith("git-diff.") ||
+    ruleId.includes(".osv.")
+  );
+}
+
 export function attackFindingMatchesRule(
   finding: { adapterId?: string | null; category?: string | null; title?: string | null },
   rule: CorrelationRule

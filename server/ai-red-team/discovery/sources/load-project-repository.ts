@@ -36,36 +36,40 @@ export async function loadDiscoveryRepositoryFromProject(
     throw new Error("No GitHub token available for discovery");
   }
 
-  let commitSha = input.commitSha?.trim() || null;
-  let branch = input.branch?.trim() || null;
-
-  if (!commitSha) {
-    const head = await refreshGitHubHeadForProject(admin, {
-      organizationId: input.organizationId,
-      projectId: input.projectId,
-      githubRepo: project.github_repo as string,
-      branch,
-    });
-    if (!head?.commitSha) {
-      throw new Error("Could not resolve GitHub HEAD for discovery");
-    }
-    commitSha = head.commitSha;
-    branch = head.branch;
-  }
-
   const ref = parseGitHubRepository(project.github_repo as string);
   const service = new GitHubRepositoryService(tokenResult.token);
-  const snapshot = await service.fetchSnapshot(ref, {
-    branch: branch ?? undefined,
-    commitSha,
-  });
+  let commitSha = input.commitSha?.trim() || null;
+  let branch = input.branch?.trim() || null;
+  try {
+    if (!input.commitSha?.trim()) {
+      const head = await refreshGitHubHeadForProject(admin, {
+        organizationId: input.organizationId,
+        projectId: input.projectId,
+        githubRepo: project.github_repo as string,
+        branch,
+        githubService: service,
+      });
+      if (!head?.commitSha) {
+        throw new Error("Could not resolve GitHub HEAD for discovery");
+      }
+      commitSha = head.commitSha;
+      branch = head.branch;
+    }
 
-  return {
-    projectId: project.id as string,
-    organizationId: project.organization_id as string,
-    commitSha: snapshot.commitSha,
-    defaultBranch: snapshot.defaultBranch,
-    repositoryLabel: (project.name as string | null) ?? `${ref.owner}/${ref.repo}`,
-    files: snapshot.files.map((file) => ({ path: file.path, content: file.content })),
-  };
+    const snapshot = await service.fetchSnapshot(ref, {
+      branch: branch ?? undefined,
+      commitSha: commitSha ?? undefined,
+    });
+
+    return {
+      projectId: project.id as string,
+      organizationId: project.organization_id as string,
+      commitSha: snapshot.commitSha,
+      defaultBranch: snapshot.defaultBranch,
+      repositoryLabel: (project.name as string | null) ?? `${ref.owner}/${ref.repo}`,
+      files: snapshot.files.map((file) => ({ path: file.path, content: file.content })),
+    };
+  } finally {
+    service.dispose();
+  }
 }

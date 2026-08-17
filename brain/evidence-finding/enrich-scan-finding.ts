@@ -61,6 +61,25 @@ export function enrichScanFinding(input: {
     };
   }
 
+  const existingReport = readExistingEvidenceReport(input.finding);
+  if (existingReport && isExternalSecurityAnalysisFinding(input.finding)) {
+    return {
+      ...input.finding,
+      remediation:
+        input.finding.category === "secrets"
+          ? buildSecretRemediation(input.finding)
+          : projectAwareRecommendation({
+              genericRecommendation: input.finding.remediation,
+              context: input.projectContext,
+              adapterId: input.finding.ruleId,
+            }),
+      metadata: {
+        ...(input.finding.metadata ?? {}),
+        [EVIDENCE_REPORT_METADATA_KEY]: existingReport,
+      },
+    };
+  }
+
   const report = buildScanEvidenceReport(input.finding, input.projectContext);
   const remediation =
     input.finding.category === "secrets"
@@ -128,6 +147,24 @@ function buildSuppressedReport(finding: Finding, context: ProjectContext): Evide
   };
 }
 
+function readExistingEvidenceReport(finding: Finding): EvidenceReport | undefined {
+  const report = finding.metadata?.[EVIDENCE_REPORT_METADATA_KEY];
+  return report && typeof report === "object" ? (report as EvidenceReport) : undefined;
+}
+
+function isExternalSecurityAnalysisFinding(finding: Finding): boolean {
+  const securityAnalysis = finding.metadata?.securityAnalysis;
+  if (securityAnalysis && typeof securityAnalysis === "object") {
+    return true;
+  }
+  return (
+    finding.ruleId.startsWith("agent-scanner.") ||
+    finding.ruleId.startsWith("dependencies.") ||
+    finding.ruleId.endsWith(".security") ||
+    finding.ruleId.includes("package-security")
+  );
+}
+
 function buildScanEvidenceReport(finding: Finding, context: ProjectContext): EvidenceReport {
   const rule = lookupRuleInfo(finding.ruleId, finding.title, finding.category);
   const evidenceItems = buildStaticEvidenceItems(finding);
@@ -190,30 +227,45 @@ function buildScanEvidenceReport(finding: Finding, context: ProjectContext): Evi
 
   const reasoning = buildScanReasoning(finding, evidenceItems, secret, secretClassification);
   const nonBlockingSecret = isNonBlockingSecretClassification(secretClassification);
+  const externalFinding = isExternalSecurityAnalysisFinding(finding);
+  const adjustedConfidence = nonBlockingSecret ? Math.min(confidence, 0.35) : confidence;
+  const confirmation = externalFinding
+    ? {
+        confirmationStatus: "potential_vulnerability" as const,
+        statusLabel: "Potential issue — external scanner signal pending verification",
+      }
+    : nonBlockingSecret
+      ? {
+          confirmationStatus: "not_exploitable" as const,
+          statusLabel: "Test fixture — no production action required",
+        }
+      : confidence >= 0.75
+        ? {
+            confirmationStatus: "confirmed" as const,
+            statusLabel: "Confirmed by static analysis",
+          }
+        : {
+            confirmationStatus: "potential_vulnerability" as const,
+            statusLabel: "Potential issue — review evidence",
+          };
 
   return {
     version: 1,
     detectionMethod: "STATIC_ANALYSIS",
-    confidence: nonBlockingSecret ? Math.min(confidence, 0.35) : confidence,
-    confidencePercent: confidencePercent(nonBlockingSecret ? Math.min(confidence, 0.35) : confidence),
+    confidence: adjustedConfidence,
+    confidencePercent: confidencePercent(adjustedConfidence),
     confidenceExplanation: nonBlockingSecret
       ? "SequrAI classified this value as a test fixture or placeholder rather than a production credential."
-      : explanation,
+      : externalFinding
+        ? "External security scanner signal — SequrAI requires verification before treating this as confirmed."
+        : explanation,
     falsePositiveProbability: nonBlockingSecret ? Math.max(probability, 0.8) : probability,
     falsePositivePercent: falsePositivePercent(nonBlockingSecret ? Math.max(probability, 0.8) : probability),
     falsePositiveExplanation: nonBlockingSecret
       ? "Likely test fixture — does not block production readiness."
       : `${falsePositiveLabel(probability)} — ${fpExplanation}`,
-    confirmationStatus: nonBlockingSecret
-      ? "not_exploitable"
-      : confidence >= 0.75
-        ? "confirmed"
-        : "potential_vulnerability",
-    statusLabel: nonBlockingSecret
-      ? "Test fixture — no production action required"
-      : confidence >= 0.75
-        ? "Confirmed by static analysis"
-        : "Potential issue — review evidence",
+    confirmationStatus: confirmation.confirmationStatus,
+    statusLabel: confirmation.statusLabel,
     evidence: evidenceItems,
     counterEvidence,
     reasoning,

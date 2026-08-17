@@ -20,6 +20,8 @@ import { coerceVerdictForUi } from "@/brain/production-verdict/coerce-verdict-fo
 export type MissionControlViewOptions = {
   analysisRunId?: string | null;
   admin?: SupabaseClient | null;
+  /** When set, skips the verdict database lookup inside the loader. */
+  preloadedVerdict?: Awaited<ReturnType<typeof getCurrentProductionVerdict>> | null;
 };
 
 function emptyReviewState() {
@@ -228,9 +230,12 @@ async function loadMissionControlView(
   const completedJobsResult = { data: completedJobsData ?? [] };
   const feedRows = { data: feedRowsData ?? [] };
 
-  const rawVerdict = analysisRunId
-    ? await getProductionVerdictByScan(dataClient, analysisRunId)
-    : await getCurrentProductionVerdict(dataClient, projectId);
+  const rawVerdict =
+    options?.preloadedVerdict !== undefined
+      ? options.preloadedVerdict
+      : analysisRunId
+        ? await getProductionVerdictByScan(dataClient, analysisRunId)
+        : await getCurrentProductionVerdict(dataClient, projectId);
   const verdict = coerceVerdictForUi(rawVerdict);
 
   const scanInProgress = analysisRunId

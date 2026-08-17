@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { refreshGitHubHeadForProject } from "@/server/repository-sync/refresh-github-head";
 import { commitsMatch } from "@/lib/repository-sync/commits-match";
+import type { GitHubRepositoryService } from "@/lib/github/repository-service";
 
 export type GitHubSyncSnapshot = {
   githubHeadSha: string | null;
@@ -60,6 +61,7 @@ export async function alignScanWithRemoteHead(
     githubRepo: string;
     branch?: string | null;
     expectedCommitSha?: string | null;
+    githubService?: GitHubRepositoryService;
   }
 ): Promise<{ commitSha: string; branch: string } | null> {
   const head = await refreshGitHubHeadForProject(admin, {
@@ -67,6 +69,7 @@ export async function alignScanWithRemoteHead(
     projectId: input.projectId,
     githubRepo: input.githubRepo,
     branch: input.branch ?? null,
+    githubService: input.githubService,
   });
   if (!head) return null;
 

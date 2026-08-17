@@ -169,6 +169,63 @@ describe("evidence-finding engine", () => {
     expect(parsed?.recommendedFix).toContain("OpenAI");
   });
 
+  it("preserves external scanner trust metadata through postProcessScanFindings", () => {
+    const processed = postProcessScanFindings(
+      [
+        {
+          id: "dependencies.osv-sbom:abc",
+          ruleId: "dependencies.osv-sbom",
+          title: "Vulnerable dependency: lodash",
+          description: "Known vulnerability in installed dependency.",
+          severity: "high",
+          confidence: "high",
+          category: "supply-chain",
+          location: { path: "package-lock.json", line: 10 },
+          remediation: "Upgrade lodash",
+          fingerprint: "abc",
+          metadata: {
+            securityAnalysis: {
+              verificationStatus: "LIKELY",
+              sourceTool: "osv",
+            },
+            evidenceReport: {
+              version: 1,
+              detectionMethod: "STATIC_ANALYSIS",
+              confidence: 0.85,
+              confidencePercent: 85,
+              confidenceExplanation: "External security engine signal",
+              falsePositiveProbability: 0.25,
+              falsePositivePercent: 25,
+              falsePositiveExplanation: "External scanner findings can be noisy",
+              confirmationStatus: "potential_vulnerability",
+              statusLabel: "Likely — strong signal, pending repository verification",
+              evidence: [],
+              counterEvidence: [],
+              reasoning: "Known vulnerability in installed dependency.",
+              affectedFiles: [{ path: "package-lock.json", line: 10, matchedRule: "dependencies.osv-sbom" }],
+              matchedRules: [
+                {
+                  ruleId: "dependencies.osv-sbom",
+                  ruleName: "Vulnerable dependency: lodash",
+                  category: "supply-chain",
+                },
+              ],
+              verificationStatus: "LIKELY",
+              recommendedFix: "Upgrade lodash",
+            },
+          },
+        },
+      ],
+      ["package-lock.json"]
+    );
+
+    expect(processed).toHaveLength(1);
+    const report = parseEvidenceReport(processed[0]?.metadata?.evidenceReport);
+    expect(report?.confirmationStatus).toBe("potential_vulnerability");
+    expect(report?.confirmationStatus).not.toBe("confirmed");
+    expect(processed[0]?.metadata?.findingClassification).not.toBe("production_blocker");
+  });
+
   it("resolves affected files to paths that exist in the repository", () => {
     const context = analyzeProjectContext(["app/api/users/route.ts", "lib/auth/session.ts"]);
     const files = resolveExistingAffectedFiles(["middleware.ts", "app/api/**/route.ts"], context);

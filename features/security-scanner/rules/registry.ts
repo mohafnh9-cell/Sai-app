@@ -1,5 +1,10 @@
 import { BUILTIN_RULES } from "./builtin";
 import { EXTENDED_RULES } from "./extended-rules";
+import { agentActionRule } from "@/features/security-analysis/rules/agent-action-rule";
+import { mcpSecurityRule } from "@/features/security-analysis/rules/mcp-security-rule";
+import { packageSecurityRule } from "@/features/security-analysis/rules/package-security-rule";
+import { promptInjectionRule } from "@/features/security-analysis/rules/prompt-injection-rule";
+import { osvSbomRule } from "@/features/security-analysis/rules/osv-sbom-rule";
 import { dependencyRule } from "./dependencies";
 import { readinessAreasRule } from "./readiness-areas";
 import { securityAreaBaselineRule } from "./security-area-baseline";
@@ -28,6 +33,11 @@ export function createDefaultRegistry(): RuleRegistry {
     ...BUILTIN_RULES,
     ...EXTENDED_RULES,
     dependencyRule,
+    osvSbomRule,
+    mcpSecurityRule,
+    promptInjectionRule,
+    agentActionRule,
+    packageSecurityRule,
     readinessAreasRule,
     securityAreaBaselineRule,
   ]);

@@ -78,6 +78,70 @@ describe("correlateAuditFindings", () => {
     expect(findings.some((f) => f.verificationStatus === "FALSE_POSITIVE")).toBe(true);
   });
 
+  it("does not confirm heuristic security-analysis findings via correlation", () => {
+    const findings = correlateAuditFindings({
+      staticFindings: [
+        {
+          id: "s-heuristic",
+          ruleId: "agent-scanner.osv.cve-2024-1234",
+          title: "Cross-tenant authorization gap",
+          severity: "high",
+          category: "authorization",
+          metadata: {
+            securityAnalysis: {
+              verificationStatus: "POTENTIAL",
+            },
+          },
+        },
+      ],
+      attackFindings: [
+        {
+          id: "a1",
+          title: "Cross-tenant IDOR",
+          severity: "high",
+          category: "authorization",
+          outcome: "confirmed",
+          adapterId: "idor-cross-tenant",
+          impact: "Foreign tenant record returned",
+        },
+      ],
+      executedAdapters: ["idor-cross-tenant"],
+    });
+
+    expect(findings.some((finding) => finding.verificationStatus === "CONFIRMED" && finding.source === "both")).toBe(false);
+  });
+
+  it("does not confirm keyword-only static matches even with dynamic confirmation", () => {
+    const findings = correlateAuditFindings({
+      staticFindings: [
+        {
+          id: "s-keyword",
+          ruleId: "custom.heuristic.scanner",
+          title: "Webhook signature validation missing",
+          severity: "high",
+          category: "web",
+        },
+      ],
+      attackFindings: [
+        {
+          id: "a1",
+          title: "Webhook signature bypass",
+          severity: "high",
+          category: "web",
+          outcome: "confirmed",
+          adapterId: "webhook-signature-bypass",
+        },
+      ],
+      executedAdapters: ["webhook-signature-bypass"],
+    });
+
+    expect(findings.some((finding) => finding.source === "both")).toBe(false);
+    expect(findings.filter((finding) => finding.verificationStatus === "CONFIRMED")).toHaveLength(1);
+    expect(findings.find((finding) => finding.verificationStatus === "CONFIRMED")?.source).toBe(
+      "security_test"
+    );
+  });
+
   it("counts severities and verification buckets", () => {
     const findings = correlateAuditFindings({
       staticFindings: [

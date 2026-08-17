@@ -5,7 +5,10 @@ import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import type { MissionControlState } from "@/features/mission-control/types/mission-control-state";
 import { analysisRunKeys } from "@/features/analysis-runs/lib/query-keys";
-import { appendAnalysisRunSearchParams } from "@/features/analysis-runs/lib/build-run-query";
+import {
+  appendAnalysisRunSearchParams,
+  withAnalysisRunQuery,
+} from "@/features/analysis-runs/lib/build-run-query";
 import { startGitHubOAuth } from "@/lib/github/oauth-client";
 import { useI18n } from "@/lib/i18n/client";
 import {
@@ -21,14 +24,33 @@ function shouldPollMissionControl(state: MissionControlState | undefined): boole
   return state.status.reviewInProgress || state.status.securityRunning;
 }
 
-function navigateMissionControlToRun(projectId: string, scanId: string): boolean {
-  if (typeof window === "undefined") return false;
-  if (!window.location.pathname.includes("/mission-control")) return false;
-  const url = new URL(window.location.href);
-  url.searchParams.set("run", scanId);
-  url.searchParams.delete("reviewComplete");
-  window.location.replace(`${url.pathname}${url.search}`);
-  return true;
+type MissionControlNavigationResult = "navigating" | "reloading" | "unchanged";
+
+function goToMissionControlAfterScan(
+  projectId: string,
+  input: {
+    scanId: string;
+    missionControlHref?: string | null;
+    forceReload?: boolean;
+  }
+): MissionControlNavigationResult {
+  if (typeof window === "undefined") return "unchanged";
+
+  const href =
+    input.missionControlHref ??
+    withAnalysisRunQuery(`/projects/${projectId}/mission-control`, input.scanId);
+  const current = `${window.location.pathname}${window.location.search}`;
+
+  if (current === href) {
+    if (input.forceReload) {
+      window.location.reload();
+      return "reloading";
+    }
+    return "unchanged";
+  }
+
+  window.location.assign(href);
+  return "navigating";
 }
 
 export function useMissionControlState(
@@ -95,6 +117,7 @@ export function useMissionControlState(
         ? `/api/projects/${projectId}/analysis-runs`
         : `/api/repositories/${projectId}/scans`;
       const forceNew =
+        state.status.hasCompletedAnalysis ||
         state.actions.scan.label === "rescan" ||
         state.actions.scan.label === "retry" ||
         state.ui.isVerdictStale;
@@ -113,6 +136,7 @@ export function useMissionControlState(
         scan_id?: string;
         scanId?: string;
         scan?: { id: string };
+        missionControlHref?: string | null;
         error?: string;
         message?: string;
         needsReauth?: boolean;
@@ -156,8 +180,13 @@ export function useMissionControlState(
       const resolvedScanId = body?.runId ?? body?.scan_id ?? body?.scanId ?? body?.scan?.id;
 
       if (response.status === 409 && body?.scan?.id) {
-        if (navigateMissionControlToRun(projectId, body.scan.id)) return;
-        await refresh();
+        const navigation = goToMissionControlAfterScan(projectId, {
+          scanId: body.scan.id,
+          forceReload: true,
+        });
+        if (navigation === "unchanged") {
+          await refresh();
+        }
         return;
       }
 
@@ -165,14 +194,18 @@ export function useMissionControlState(
         throw new Error(body?.error ?? "Failed to start scan");
       }
 
-      if (body?.reused || body?.resumed) {
-        setActionError(null);
-    setReauthRequired(false);
-    setSubscriptionRequired(false);
+      if (forceNew && (body?.reused || body?.resumed)) {
+        throw new Error(tErrors("scanStart"));
       }
 
-      if (navigateMissionControlToRun(projectId, resolvedScanId)) return;
-      await refresh();
+      const navigation = goToMissionControlAfterScan(projectId, {
+        scanId: resolvedScanId,
+        missionControlHref: body?.missionControlHref,
+        forceReload: forceNew,
+      });
+      if (navigation === "unchanged") {
+        await refresh();
+      }
     } catch (cause) {
       setActionError(cause instanceof Error ? cause.message : "Failed to start scan");
     } finally {

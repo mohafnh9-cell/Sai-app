@@ -1,6 +1,7 @@
 import { resolveConfig, type ScanConfigInput } from "./config";
 import { findingFingerprint } from "./fingerprint";
 import { buildFindingCorrelationKey } from "@/lib/correlation/finding-identity";
+import { createScanSharedContext } from "@/features/security-analysis/shared/scan-context";
 import { normalizeFiles } from "./normalization";
 import { redactEvidence } from "./redaction";
 import { createDefaultRegistry, RuleRegistry } from "./rules/registry";
@@ -13,6 +14,8 @@ import type { Finding, FindingDraft, InputFile, ScanOmission, ScanResult } from 
 export interface ScanOptions extends ScanConfigInput {
   registry?: RuleRegistry;
 }
+
+const RULE_CONCURRENCY = 4;
 
 export async function scanRepository(files: readonly InputFile[], options: ScanOptions = {}): Promise<ScanResult> {
   const config = resolveConfig(options);
@@ -27,29 +30,65 @@ export async function scanRepository(files: readonly InputFile[], options: ScanO
   let timeLimited = false;
 
   const byPath = new Map(normalized.files.map((file) => [file.path, file]));
+  const shared = createScanSharedContext(normalized.files, { includeDev: true });
   const context: RuleContext = {
     files: normalized.files,
     stack,
     getFile: (path) => byPath.get(path),
+    shared,
   };
 
-  for (const rule of registry.list()) {
+  const rules = registry.list();
+  for (let index = 0; index < rules.length; index += RULE_CONCURRENCY) {
     if (config.now() - startedAt >= config.maxDurationMs) {
-      omissions.push({ reason: "time-limit", detail: `Stopped before rule ${rule.id}` });
+      omissions.push({
+        reason: "time-limit",
+        detail: `Stopped before rule batch starting at ${rules[index]?.id ?? "unknown"}`,
+      });
       timeLimited = true;
       break;
     }
-    try {
-      const output = await rule.run(context);
-      drafts.push(...output);
+
+    const batch = rules.slice(index, index + RULE_CONCURRENCY);
+    const results = await Promise.all(
+      batch.map(async (rule) => {
+        if (config.now() - startedAt >= config.maxDurationMs) {
+          return { rule, output: [] as FindingDraft[], error: null as Error | null, skipped: true };
+        }
+        try {
+          const output = await rule.run(context);
+          return { rule, output, error: null, skipped: false };
+        } catch (error) {
+          return {
+            rule,
+            output: [] as FindingDraft[],
+            error: error instanceof Error ? error : new Error("Unknown rule error"),
+            skipped: false,
+          };
+        }
+      })
+    );
+
+    for (const result of results) {
+      if (result.skipped) {
+        timeLimited = true;
+        continue;
+      }
+      if (result.error) {
+        ruleFailures += 1;
+        omissions.push({
+          reason: "rule-error",
+          ruleId: result.rule.id,
+          detail: result.error.name,
+        });
+        continue;
+      }
+      drafts.push(...result.output);
       rulesRun += 1;
-    } catch (error) {
-      ruleFailures += 1;
-      omissions.push({
-        reason: "rule-error",
-        ruleId: rule.id,
-        detail: error instanceof Error ? error.name : "Unknown rule error",
-      });
+    }
+
+    if (timeLimited) {
+      break;
     }
   }
 

@@ -1,5 +1,21 @@
 import "server-only";
 
+/**
+ * Process-local sliding-window rate limiter.
+ *
+ * Acceptable for private beta and single-instance deployments: limits apply
+ * per serverless instance / Node process, not globally across all Vercel
+ * regions. Attackers can obtain `limit × instance_count` requests per window.
+ *
+ * Before high-scale production, add distributed limiting for:
+ * - POST/GET /api/mcp (auth brute-force)
+ * - /oauth/token (credential stuffing)
+ * - /api/stripe/checkout and /api/stripe/portal
+ * - /api/repositories/[repositoryId]/scans (scan spam)
+ * - /api/webhooks/* (already protected by signatures; lower priority)
+ *
+ * Fail-safe: when the limit is exceeded the request is rejected with 429.
+ */
 import { NextResponse } from "next/server";
 
 type Bucket = {

@@ -392,13 +392,48 @@ export async function recoverScanJobToQueued(
   return { recovered: true, job: recoveredJob };
 }
 
+export async function findActiveScanJobByScanId(
+  admin: SupabaseClient,
+  scanId: string
+): Promise<ScanJobRow | null> {
+  const { data, error } = await admin
+    .from("scan_jobs")
+    .select("*")
+    .eq("scan_id", scanId)
+    .in("status", ["queued", "running"])
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw new Error(`Could not load active scan job: ${error.message}`);
+  return (data as ScanJobRow | null) ?? null;
+}
+
+export async function findLatestScanJobByScanId(
+  admin: SupabaseClient,
+  scanId: string
+): Promise<ScanJobRow | null> {
+  const { data, error } = await admin
+    .from("scan_jobs")
+    .select("*")
+    .eq("scan_id", scanId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw new Error(`Could not load scan job: ${error.message}`);
+  return (data as ScanJobRow | null) ?? null;
+}
+
 export async function findWebhookIngressJob(
   admin: SupabaseClient,
+  organizationId: string,
   deliveryId: string
 ): Promise<ScanJobRow | null> {
   const { data, error } = await admin
     .from("scan_jobs")
     .select("*")
+    .eq("organization_id", organizationId)
     .eq("github_delivery_id", deliveryId)
     .eq("job_type", "webhook_process")
     .maybeSingle();

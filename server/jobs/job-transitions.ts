@@ -28,7 +28,7 @@ export function isTerminalScanJobStatus(status: ScanJobStatus): boolean {
 }
 
 export const ALLOWED_SOURCE_STATUSES = {
-  running: ["queued", "running"] as ScanJobStatus[],
+  running: ["queued"] as ScanJobStatus[],
   completed: ["running"] as ScanJobStatus[],
   failed: ["queued", "running"] as ScanJobStatus[],
   cancelled: ["queued", "running"] as ScanJobStatus[],

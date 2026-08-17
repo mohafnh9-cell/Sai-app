@@ -22,11 +22,13 @@ import { emitOperationalEvent } from "@/server/observability/operational-events"
 import { ScanCancelledError } from "@/server/review-cancel/review-abort";
 import { beginReviewProcessing } from "./scan-execution/review-lifecycle";
 import { alignScanWithRemoteHead } from "@/server/repository-sync/github-sync-snapshot";
+import { GitHubRepositoryService } from "@/lib/github/repository-service";
 import {
   appendScanJobExecutionTrace,
   logScanExecutionTrace,
 } from "./scan-execution/scan-execution-trace";
 import { ensureProductionVerdictForCompletedScan } from "@/server/production-verdict/ensure-verdict-for-scan";
+import { startScanJobHeartbeat } from "./scan-job-heartbeat";
 
 function log(level: "info" | "error", event: string, fields: Record<string, unknown>) {
   const payload = { component: "run-scan-job", event, ...fields };
@@ -133,6 +135,15 @@ export async function executeScanRunJob(
   if (!running.updated) {
     const current = await getScanJob(admin, payload.scanJobId);
     if (current && isTerminalScanJobStatus(current.status)) return;
+    if (current?.status === "running") {
+      log("info", "scan_job_already_running", {
+        scanJobId: payload.scanJobId,
+        scanId: payload.scanId,
+        lockedBy: current.locked_by,
+        inngestRunId: current.inngest_run_id,
+      });
+      return;
+    }
   }
 
   const jobAfterClaim = (await getScanJob(admin, payload.scanJobId)) ?? existingJob;
@@ -171,76 +182,87 @@ export async function executeScanRunJob(
   }
 
   const runner = new InlineScanJobRunner(admin);
+  const github = new GitHubRepositoryService(tokenResult.token);
+  const stopHeartbeat = startScanJobHeartbeat(admin, payload.scanJobId);
 
-    try {
-      const githubRepo = await loadGithubRepo(admin, payload.projectId);
-      const aligned = await alignScanWithRemoteHead(admin, {
-        organizationId: payload.organizationId,
-        projectId: payload.projectId,
-        scanId: payload.scanId,
-        githubRepo,
-        branch: payload.branch ?? null,
-        expectedCommitSha:
-          (scanBeforeRun?.commit_sha as string | null) ?? payload.headCommitSha ?? null,
-      });
-      if (aligned) {
-        runPayload = {
-          ...runPayload,
-          headCommitSha: aligned.commitSha,
-          branch: aligned.branch,
-        };
-      } else {
-        const pinned =
-          (scanBeforeRun?.commit_sha as string | null) ?? runPayload.headCommitSha ?? null;
-        if (pinned) {
-          runPayload = { ...runPayload, headCommitSha: pinned };
-        }
+  try {
+    const githubRepo = await loadGithubRepo(admin, payload.projectId);
+    const aligned = await alignScanWithRemoteHead(admin, {
+      organizationId: payload.organizationId,
+      projectId: payload.projectId,
+      scanId: payload.scanId,
+      githubRepo,
+      branch: payload.branch ?? null,
+      expectedCommitSha:
+        (scanBeforeRun?.commit_sha as string | null) ?? payload.headCommitSha ?? null,
+      githubService: github,
+    });
+    if (aligned) {
+      runPayload = {
+        ...runPayload,
+        headCommitSha: aligned.commitSha,
+        branch: aligned.branch,
+      };
+    } else {
+      const pinned =
+        (scanBeforeRun?.commit_sha as string | null) ?? runPayload.headCommitSha ?? null;
+      if (pinned) {
+        runPayload = { ...runPayload, headCommitSha: pinned };
       }
+    }
 
-      if (!runPayload.headCommitSha) {
-        await markScanJobFailed(admin, payload.scanJobId, {
-          failureCode: "REVIEW_COMMIT_UNRESOLVED",
-          failureMessage: "Production Review has no target commit SHA",
-        });
-        throw new Error("REVIEW_COMMIT_UNRESOLVED");
-      }
-
-      await touchScanJobHeartbeat(admin, payload.scanJobId);
-      await runner.run({
-        scanId: runPayload.scanId,
-        scanJobId: runPayload.scanJobId,
-        repositoryId: runPayload.projectId,
-        organizationId: runPayload.organizationId,
-        githubRepo,
-        branch: runPayload.branch,
-        providerToken: tokenResult.token,
-        scanType: runPayload.scanType,
-        baseCommitSha: runPayload.baseCommitSha,
-        headCommitSha: runPayload.headCommitSha,
-        persistMode: runPayload.persistMode,
-      });
-    } catch (error) {
-      if (error instanceof ScanCancelledError) {
-        log("info", "scan_execution_aborted_cancelled", {
-          scanJobId: payload.scanJobId,
-          scanId: payload.scanId,
-        });
-        return;
-      }
-      const message = error instanceof Error ? error.message : "Scan execution failed";
+    if (!runPayload.headCommitSha) {
       await markScanJobFailed(admin, payload.scanJobId, {
-        failureCode: "SCAN_EXECUTION_FAILED",
-        failureMessage: message,
+        failureCode: "REVIEW_COMMIT_UNRESOLVED",
+        failureMessage: "Production Review has no target commit SHA",
       });
-      log("error", "scan_execution_failed", {
+      throw new Error("REVIEW_COMMIT_UNRESOLVED");
+    }
+
+    await touchScanJobHeartbeat(admin, payload.scanJobId);
+    await runner.run({
+      scanId: runPayload.scanId,
+      scanJobId: runPayload.scanJobId,
+      repositoryId: runPayload.projectId,
+      organizationId: runPayload.organizationId,
+      githubRepo,
+      branch: runPayload.branch,
+      providerToken: tokenResult.token,
+      scanType: runPayload.scanType,
+      baseCommitSha: runPayload.baseCommitSha,
+      headCommitSha: runPayload.headCommitSha,
+      persistMode: runPayload.persistMode,
+      githubService: github,
+    });
+  } catch (error) {
+    if (error instanceof ScanCancelledError) {
+      await markScanJobCancelled(admin, payload.scanJobId, {
+        failureCode: "USER_CANCELLED",
+        failureMessage: "Review cancelled by user",
+      });
+      log("info", "scan_execution_aborted_cancelled", {
         scanJobId: payload.scanJobId,
         scanId: payload.scanId,
-        organizationId: payload.organizationId,
-        projectId: payload.projectId,
-        message,
       });
-      throw error;
+      return;
     }
+    const message = error instanceof Error ? error.message : "Scan execution failed";
+    await markScanJobFailed(admin, payload.scanJobId, {
+      failureCode: "SCAN_EXECUTION_FAILED",
+      failureMessage: message,
+    });
+    log("error", "scan_execution_failed", {
+      scanJobId: payload.scanJobId,
+      scanId: payload.scanId,
+      organizationId: payload.organizationId,
+      projectId: payload.projectId,
+      message,
+    });
+    throw error;
+  } finally {
+    stopHeartbeat();
+    github.dispose();
+  }
   } else {
     log("info", "scan_runner_skipped_already_completed", {
       scanJobId: payload.scanJobId,
@@ -255,6 +277,10 @@ export async function executeScanRunJob(
     .single();
 
   if (completed?.status === "cancelled" || completed?.status === "cancelling") {
+    await markScanJobCancelled(admin, payload.scanJobId, {
+      failureCode: "USER_CANCELLED",
+      failureMessage: "Review cancelled by user",
+    });
     log("info", "scan_job_finished_after_cancel", {
       scanJobId: payload.scanJobId,
       scanId: payload.scanId,
