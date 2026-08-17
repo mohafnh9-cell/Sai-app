@@ -1,5 +1,4 @@
 import type { VerdictStatus } from "@/brain/production-verdict/schema";
-import { verdictStatusLabel } from "@/lib/i18n/verdict-copy";
 import type { Translator } from "@/lib/i18n/types";
 
 const VERDICT_STATUSES = new Set<string>([
@@ -30,7 +29,7 @@ export function formatAnalysisRunStatusLabel(
   }
 
   if (VERDICT_STATUSES.has(status)) {
-    return verdictStatusLabel(status as VerdictStatus, tVerdict);
+    return tVerdict(`status.${status as VerdictStatus}.label`);
   }
 
   const key = RUN_STATUS_KEYS[status];

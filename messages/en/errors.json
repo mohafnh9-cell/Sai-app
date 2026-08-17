@@ -2,7 +2,7 @@
   "repoAccess": "We could not access this repository. Reconnect GitHub and try again.",
   "reviewSlow": "The review is taking longer than expected.",
   "scanStart": "The Production Review could not be started.",
-  "scanRateLimited": "You reached the hourly scan limit for this repository. Try again later.",
+  "scanRateLimited": "You reached the limit of 5 scans per hour for this repository. Wait a few minutes or use your latest analysis.",
   "subscriptionRequired": "Subscribe to Builder Edition (€5/month) to run Production Reviews.",
   "scanLoad": "Could not load this Production Review.",
   "generic": "Something went wrong. Please try again.",

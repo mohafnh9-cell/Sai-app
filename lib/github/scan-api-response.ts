@@ -34,7 +34,7 @@ export function resolveScanErrorMessage(
     return fallbacks.reauth ?? body?.error ?? fallbacks.defaultMessage;
   }
   if (body?.code === "SCAN_RATE_LIMITED") {
-    return body.error ?? fallbacks.rateLimited ?? fallbacks.defaultMessage;
+    return fallbacks.rateLimited ?? body.error ?? fallbacks.defaultMessage;
   }
   if (body?.code === "SCAN_JOB_INFRASTRUCTURE_MISSING") {
     return fallbacks.infrastructureMissing ?? body.error ?? fallbacks.defaultMessage;

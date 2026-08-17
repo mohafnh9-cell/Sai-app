@@ -2,7 +2,7 @@
   "repoAccess": "No hemos podido acceder a este repositorio. Vuelve a conectar GitHub e inténtalo de nuevo.",
   "reviewSlow": "La revisión está tardando más de lo previsto.",
   "scanStart": "No se pudo iniciar la revisión de producción.",
-  "scanRateLimited": "Alcanzaste el límite horario de scans para este repositorio. Inténtalo más tarde.",
+  "scanRateLimited": "Has alcanzado el límite de 5 escaneos por hora en este repositorio. Espera unos minutos o usa el último análisis.",
   "subscriptionRequired": "La suscripción estará disponible próximamente para ejecutar revisiones de producción.",
   "scanLoad": "No se pudo cargar este análisis.",
   "generic": "Algo salió mal. Inténtalo de nuevo.",

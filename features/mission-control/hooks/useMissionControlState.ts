@@ -7,6 +7,7 @@ import type { MissionControlState } from "@/features/mission-control/types/missi
 import { analysisRunKeys } from "@/features/analysis-runs/lib/query-keys";
 import { appendAnalysisRunSearchParams } from "@/features/analysis-runs/lib/build-run-query";
 import { startGitHubOAuth } from "@/lib/github/oauth-client";
+import { useI18n } from "@/lib/i18n/client";
 import {
   isGitHubReauthRequired,
   isSubscriptionRequired,
@@ -38,6 +39,7 @@ export function useMissionControlState(
   }
 ) {
   const router = useRouter();
+  const { t: tErrors } = useI18n("errors");
   const analysisRunId = options.analysisRunId ?? options.initialState.analysisRunId;
   const [scanStarting, setScanStarting] = useState(false);
   const [securityStarting, setSecurityStarting] = useState(false);
@@ -145,7 +147,7 @@ export function useMissionControlState(
         setActionError(
           resolveScanErrorMessage(body, {
             defaultMessage: "Failed to start scan",
-            rateLimited: "You reached the hourly scan limit for this repository. Try again later.",
+            rateLimited: tErrors("scanRateLimited"),
           })
         );
         return;
@@ -176,7 +178,7 @@ export function useMissionControlState(
     } finally {
       setScanStarting(false);
     }
-  }, [projectId, refresh, scanStarting, state]);
+  }, [projectId, refresh, scanStarting, state, tErrors]);
 
   const startSecurityTest = useCallback(async () => {
     if (securityStarting || state.actions.security.disabled) return;
