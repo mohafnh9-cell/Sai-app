@@ -442,13 +442,27 @@ export async function findWebhookIngressJob(
   return (data as ScanJobRow | null) ?? null;
 }
 
+function dedupeScanJobsById(jobs: ScanJobRow[]): ScanJobRow[] {
+  const seen = new Set<string>();
+  const deduped: ScanJobRow[] = [];
+  for (const job of jobs) {
+    if (seen.has(job.id)) continue;
+    seen.add(job.id);
+    deduped.push(job);
+  }
+  return deduped;
+}
+
 export async function findStuckScanJobs(admin: SupabaseClient): Promise<ScanJobRow[]> {
   const queueStaleBefore = new Date(
     Date.now() - getQueueStaleMinutes() * 60 * 1000
   ).toISOString();
   const nowIso = new Date().toISOString();
+  const { getScanJobHeartbeatStaleMs } = await import("./scan-job-heartbeat");
+  const heartbeatStaleBefore = new Date(Date.now() - getScanJobHeartbeatStaleMs()).toISOString();
 
-  const [{ data: staleQueued }, { data: staleRunning }] = await Promise.all([
+  const [{ data: staleQueued }, { data: staleRunningDeadline }, { data: staleRunningHeartbeat }] =
+    await Promise.all([
     admin
       .from("scan_jobs")
       .select("*")
@@ -463,9 +477,21 @@ export async function findStuckScanJobs(admin: SupabaseClient): Promise<ScanJobR
       .lt("execution_deadline_at", nowIso)
       .order("execution_deadline_at", { ascending: true })
       .limit(100),
+    admin
+      .from("scan_jobs")
+      .select("*")
+      .eq("status", "running")
+      .not("heartbeat_at", "is", null)
+      .lt("heartbeat_at", heartbeatStaleBefore)
+      .order("heartbeat_at", { ascending: true })
+      .limit(100),
   ]);
 
-  const merged = [...((staleQueued as ScanJobRow[]) ?? []), ...((staleRunning as ScanJobRow[]) ?? [])];
+  const merged = dedupeScanJobsById([
+    ...((staleQueued as ScanJobRow[]) ?? []),
+    ...((staleRunningDeadline as ScanJobRow[]) ?? []),
+    ...((staleRunningHeartbeat as ScanJobRow[]) ?? []),
+  ]);
   incrementMetricCounter("stuck_jobs_total", merged.length);
   return merged;
 }

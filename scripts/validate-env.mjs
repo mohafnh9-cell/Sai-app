@@ -40,7 +40,13 @@ function validate() {
     if (!process.env.INTERNAL_OPS_TOKEN?.trim()) {
       warnings.push("INTERNAL_OPS_TOKEN not set — ops health endpoint will reject all requests");
     }
-    if (process.env.SCAN_SCHEDULER?.trim().toLowerCase() === "inngest") {
+    const scheduler = process.env.SCAN_SCHEDULER?.trim().toLowerCase();
+    if (scheduler !== "inngest") {
+      errors.push(
+        "Missing SCAN_SCHEDULER=inngest (required in production so scan workers do not depend on Vercel after() continuations)"
+      );
+    }
+    if (scheduler === "inngest" || production) {
       if (!process.env.INNGEST_EVENT_KEY?.trim()) {
         errors.push("Missing INNGEST_EVENT_KEY (required when SCAN_SCHEDULER=inngest)");
       }

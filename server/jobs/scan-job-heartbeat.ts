@@ -14,6 +14,11 @@ export function getScanJobHeartbeatIntervalMs(): number {
   return raw;
 }
 
+/** Running jobs without a fresh heartbeat are treated as lost workers. */
+export function getScanJobHeartbeatStaleMs(): number {
+  return getScanJobHeartbeatIntervalMs() * 2 + 30_000;
+}
+
 export function startScanJobHeartbeat(
   admin: SupabaseClient,
   scanJobId: string

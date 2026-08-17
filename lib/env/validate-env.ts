@@ -135,7 +135,12 @@ export function validateEnvironment(options?: {
   if (scheduler && scheduler !== "inline" && scheduler !== "inngest") {
     errors.push(`Invalid SCAN_SCHEDULER="${scheduler}". Use inline or inngest.`);
   }
-  if (scheduler === "inngest") {
+  if (production && scheduler !== "inngest") {
+    errors.push(
+      "SCAN_SCHEDULER=inngest is required in production so scan workers do not depend on Vercel after() continuations"
+    );
+  }
+  if (scheduler === "inngest" || production) {
     if (!process.env.INNGEST_EVENT_KEY?.trim()) {
       errors.push("INNGEST_EVENT_KEY is required when SCAN_SCHEDULER=inngest");
     }

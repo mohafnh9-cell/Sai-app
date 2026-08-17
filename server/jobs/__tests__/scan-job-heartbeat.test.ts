@@ -42,3 +42,20 @@ describe("startScanJobHeartbeat", () => {
     expect(touchScanJobHeartbeat).toHaveBeenCalled();
   });
 });
+
+describe("scan job heartbeat stale detection", () => {
+  const envBackup = { ...process.env };
+
+  afterEach(() => {
+    process.env = { ...envBackup };
+  });
+
+  it("defaults stale window to two heartbeat intervals plus buffer", async () => {
+    delete process.env.SCAN_JOB_HEARTBEAT_INTERVAL_MS;
+    const { getScanJobHeartbeatIntervalMs, getScanJobHeartbeatStaleMs } = await import(
+      "../scan-job-heartbeat"
+    );
+    expect(getScanJobHeartbeatIntervalMs()).toBe(60_000);
+    expect(getScanJobHeartbeatStaleMs()).toBe(150_000);
+  });
+});

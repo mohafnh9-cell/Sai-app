@@ -130,6 +130,7 @@ describe("enqueueScanRunExecution", () => {
     vi.clearAllMocks();
     process.env.SCAN_SCHEDULER = "inngest";
     process.env.INNGEST_EVENT_KEY = "event-key";
+    process.env.INNGEST_SIGNING_KEY = "signing-key";
   });
 
   afterEach(() => {
