@@ -29,5 +29,14 @@
   "noProjectsTitle": "No projects yet",
   "noProjectsBody": "Connect a GitHub repository to get your Production Verdict.",
   "firstVerdictWelcome": "Your first Production Verdict is ready.",
-  "portfolioOpenProject": "{name} — {status}. Open Production Verdict."
+  "portfolioOpenProject": "{name} — {status}. Open Production Verdict.",
+  "commandPaletteTitle": "Command palette",
+  "commandPaletteDescription": "Navigate SequrAI quickly",
+  "commandPaletteOpen": "Open command palette",
+  "commandSearchPlaceholder": "Search navigation and projects…",
+  "commandNoResults": "No results",
+  "commandGroupNavigate": "Navigate",
+  "commandGroupProjects": "Projects",
+  "commandGroupRecent": "Recent projects",
+  "commandGroupSecurity": "Security"
 }

@@ -12,7 +12,7 @@ export function ProjectedScorePanel({ view }: { view: VerdictExperienceView }) {
 
   return (
     <section
-      className="rounded-xl border border-border/60 bg-[#101014]/80 p-5"
+      className="rounded-xl border border-border/60 bg-surface/80 p-5"
       aria-label={t("projectedScore")}
     >
       <h3 className="text-sm font-medium">{t("scoreProjectionTitle")}</h3>
@@ -24,7 +24,7 @@ export function ProjectedScorePanel({ view }: { view: VerdictExperienceView }) {
         </div>
         <div>
           <p className="text-xs text-muted-foreground">{t("projectedAfterPriorities")}</p>
-          <p className="text-3xl font-semibold tabular-nums text-[#64D98B]">
+          <p className="text-3xl font-semibold tabular-nums text-success">
             {view.projectedScore}
           </p>
         </div>

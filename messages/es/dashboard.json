@@ -29,5 +29,14 @@
   "noProjectsTitle": "Aún no hay proyectos",
   "noProjectsBody": "Conecta un repositorio de GitHub para obtener tu veredicto de producción.",
   "firstVerdictWelcome": "Tu primer veredicto está listo.",
-  "portfolioOpenProject": "{name} — {status}. Abrir veredicto."
+  "portfolioOpenProject": "{name} — {status}. Abrir veredicto.",
+  "commandPaletteTitle": "Paleta de comandos",
+  "commandPaletteDescription": "Navega SequrAI rápidamente",
+  "commandPaletteOpen": "Abrir paleta de comandos",
+  "commandSearchPlaceholder": "Buscar navegación y proyectos…",
+  "commandNoResults": "Sin resultados",
+  "commandGroupNavigate": "Navegar",
+  "commandGroupProjects": "Proyectos",
+  "commandGroupRecent": "Proyectos recientes",
+  "commandGroupSecurity": "Seguridad"
 }

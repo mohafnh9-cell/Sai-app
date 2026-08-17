@@ -12,9 +12,9 @@ export function ScoreDeltaSummary({ view }: { view: VerdictExperienceView }) {
   const delta = view.scoreDelta ?? 0;
   const tone =
     view.deltaDirection === "up"
-      ? "text-emerald-400"
+      ? "text-success"
       : view.deltaDirection === "down"
-        ? "text-red-400"
+        ? "text-danger"
         : "text-muted-foreground";
 
   const deltaLabel =
@@ -22,7 +22,7 @@ export function ScoreDeltaSummary({ view }: { view: VerdictExperienceView }) {
 
   return (
     <section
-      className="rounded-xl border border-border/60 bg-[#101014]/80 p-4"
+      className="rounded-xl border border-border/60 bg-surface/80 p-4"
       aria-label={t("scoreDelta")}
     >
       <div className="flex flex-wrap items-start gap-3">

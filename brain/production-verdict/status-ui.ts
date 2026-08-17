@@ -1,6 +1,7 @@
 import type { VerdictStatus } from "./schema";
 import { VERDICT_STATUS_LABELS } from "./schema";
 import { recommendedAction as deterministicRecommendedAction } from "./status-rules";
+import { verdictSurfaceClass } from "@/lib/design-system/verdict";
 
 export type VerdictBadgeVariant = "default" | "secondary" | "outline" | "destructive";
 
@@ -55,19 +56,7 @@ export function verdictHeadlineDisplay(status: VerdictStatus): string {
 }
 
 export function verdictToneClass(status: VerdictStatus): string {
-  switch (status) {
-    case "ready_to_ship":
-      return "border-emerald-500/30 bg-emerald-500/5";
-    case "almost_ready":
-      return "border-amber-500/30 bg-amber-500/5";
-    case "needs_improvement":
-      return "border-orange-500/30 bg-orange-500/5";
-    case "not_ready":
-    case "analysis_failed":
-      return "border-red-500/30 bg-red-500/5";
-    case "insufficient_data":
-      return "border-border bg-card/40";
-  }
+  return verdictSurfaceClass(status);
 }
 
 export function verdictRecommendedAction(status: VerdictStatus, blockersCount: number): string {

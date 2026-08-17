@@ -87,9 +87,9 @@ export function ProductionVerdictSurface({
             return (
               <li key={area.key} className="flex items-center gap-2 text-sm">
                 {ok ? (
-                  <Check className="h-4 w-4 text-emerald-400 shrink-0" aria-hidden />
+                  <Check className="h-4 w-4 text-success shrink-0" aria-hidden />
                 ) : (
-                  <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0" aria-hidden />
+                  <AlertTriangle className="h-4 w-4 text-warning shrink-0" aria-hidden />
                 )}
                 <span className={partial ? "text-muted-foreground" : undefined}>{area.label}</span>
               </li>

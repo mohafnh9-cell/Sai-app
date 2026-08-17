@@ -2,8 +2,7 @@
 
 import { verdictExperienceFromVerdict } from "@/brain/production-verdict/experience-view";
 import type { ProductionVerdictV1 } from "@/brain/production-verdict/schema";
-import { shouldShowScore, verdictToneClass } from "@/brain/production-verdict/status-ui";
-import { VerdictStatusBadge } from "@/features/production-verdict/components/VerdictStatusBadge";
+import { ProductionVerdictCard } from "@/components/sequrai";
 import { useI18n } from "@/lib/i18n/client";
 import { verdictStatusMessage } from "@/lib/i18n/verdict-copy";
 import { formatPriorityTitleForLocale } from "@/lib/i18n/priority-display";
@@ -36,66 +35,36 @@ export function MissionControlHero({
           ? "verdict.canIDeploy.insufficient"
           : "verdict.canIDeploy.no";
 
-  const tone = verdictToneClass(view.status);
   const topBlocker = verdict.topPriorities?.[0] ?? null;
-  const showScore = shouldShowScore(verdict.score, verdict.status);
 
   return (
-    <section
+    <ProductionVerdictCard
       id="production-verdict-detail"
-      className={`rounded-3xl border p-8 sm:p-10 surface-premium ${tone}`}
-      aria-labelledby="mission-control-verdict-heading"
-    >
-      <div className="flex flex-wrap items-center gap-3">
-        <p className="text-sm uppercase tracking-[0.24em] text-muted-foreground">
-          {t("verdict.productionVerdict")}
-        </p>
+      headingId="mission-control-verdict-heading"
+      eyebrow={t("verdict.productionVerdict")}
+      headline={t(canDeployKey)}
+      status={view.status}
+      score={verdict.score}
+      scoreLabel={tm("projectHome.verdictSummary.score")}
+      sourceBadge={
         <span className="inline-flex items-center rounded-full border border-border/60 bg-muted/30 px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
           {tm("verdictSource.github")}
         </span>
-      </div>
-      <div className="mt-4 flex flex-wrap items-end gap-6">
-        {showScore && verdict.score != null ? (
-          <div>
-            <p className="text-6xl sm:text-7xl font-semibold tabular-nums tracking-tighter leading-none">
-              {verdict.score}
-            </p>
-            <p className="mt-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">
-              {tm("projectHome.verdictSummary.score")}
-            </p>
-          </div>
-        ) : null}
-        <div className="space-y-3 pb-1">
-          <p
-            id="mission-control-verdict-heading"
-            className="text-3xl sm:text-4xl font-semibold tracking-tight leading-none"
-          >
-            {t(canDeployKey)}
-          </p>
-          <VerdictStatusBadge status={view.status} />
-        </div>
-      </div>
-      {topBlocker ? (
-        <div className="mt-8 pt-6 border-t border-border/40 space-y-1">
-          <p className="text-sm font-medium text-muted-foreground">
-            {tm("projectHome.verdictSummary.mainBlocker")}
-          </p>
-          <p className="text-lg font-medium leading-snug">
-            {formatPriorityTitleForLocale(topBlocker, locale)}
-          </p>
-          {topBlocker.reason ? (
-            <p className="text-sm text-muted-foreground leading-relaxed">{topBlocker.reason}</p>
-          ) : null}
-        </div>
-      ) : null}
-      {showViewReportLink ? (
-        <a
-          href="#mission-control-full-report"
-          className="mt-6 inline-flex text-sm font-medium text-primary underline-offset-4 hover:underline"
-        >
-          {tm("fullReport.viewLink")}
-        </a>
-      ) : null}
-    </section>
+      }
+      blocker={
+        topBlocker
+          ? {
+              eyebrow: tm("projectHome.verdictSummary.mainBlocker"),
+              title: formatPriorityTitleForLocale(topBlocker, locale),
+              description: topBlocker.reason,
+            }
+          : null
+      }
+      footerLink={
+        showViewReportLink
+          ? { href: "#mission-control-full-report", label: tm("fullReport.viewLink") }
+          : null
+      }
+    />
   );
 }

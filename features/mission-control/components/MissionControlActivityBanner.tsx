@@ -33,30 +33,26 @@ export function MissionControlActivityBanner({
 
   return (
     <div
-      className="relative overflow-hidden rounded-3xl border border-primary/25 bg-gradient-to-b from-primary/10 via-primary/5 to-transparent p-6 sm:p-8 shadow-[0_0_60px_-24px_rgba(var(--primary-rgb,99,102,241),0.45)]"
+      className="rounded-xl border border-border/60 bg-muted/20 p-5 sm:p-6"
       role="status"
       aria-live="polite"
       aria-busy="true"
     >
-      <div
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(var(--primary-rgb,99,102,241),0.14),transparent_55%)]"
-        aria-hidden
-      />
-      <div className="relative flex items-start gap-4">
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/15">
-          <Icon className="h-6 w-6 text-primary animate-pulse" aria-hidden />
+      <div className="flex items-start gap-4">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+          <Icon className="h-5 w-5 text-primary" aria-hidden />
         </div>
-        <div className="min-w-0 flex-1 space-y-4">
+        <div className="min-w-0 flex-1 space-y-3">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <Loader2 className="h-4 w-4 animate-spin text-primary shrink-0" aria-hidden />
-              <p className="text-base font-semibold tracking-tight">{title}</p>
+              <p className="text-sm font-semibold tracking-tight">{title}</p>
             </div>
             <p className="text-sm text-muted-foreground leading-relaxed">{subtitle}</p>
           </div>
           <div className="space-y-2">
-            <Progress value={barValue} aria-label={title} />
-            <p className="text-xs text-muted-foreground animate-pulse">{detail}</p>
+            <Progress value={barValue} aria-label={title} className="h-1" />
+            <p className="text-xs text-muted-foreground">{detail}</p>
           </div>
         </div>
       </div>

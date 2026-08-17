@@ -39,5 +39,15 @@
   "filterAll": "Todos ({label})",
   "filterByAria": "Filtrar por {label}",
   "technicalSeverity": "Severidad técnica: {severity}",
-  "unknown": "Desconocido"
+  "unknown": "Desconocido",
+  "verification": {
+    "confirmed": "Confirmado",
+    "likely": "Probable",
+    "potential": "Potencial",
+    "unverified": "Sin verificar",
+    "not_reproduced": "No reproducido",
+    "false_positive": "Falso positivo",
+    "not_applicable": "No aplicable",
+    "ariaLabel": "Estado de verificación: {status}"
+  }
 }

@@ -105,7 +105,7 @@ export function McpApiKeysPanel() {
         </div>
       ) : (
         <div className="space-y-2">
-          <p className="text-sm font-medium text-emerald-400">✓ {t("mcpStep1Done")}</p>
+          <p className="text-sm font-medium text-success">✓ {t("mcpStep1Done")}</p>
           <McpConnectGuide apiKey={newKey} apiUrl={apiUrl} />
         </div>
       )}

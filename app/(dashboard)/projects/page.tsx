@@ -8,8 +8,8 @@ import { ProjectCard } from "@/features/projects/components/ProjectCard";
 import { buildOrgBrain } from "@/server/brain/build-org-brain";
 import { getCachedServerAuthContext } from "@/lib/server/request-cache";
 import { getTranslator } from "@/lib/i18n/server";
+import { projectNeedsAttention } from "@/lib/dashboard/filter-portfolio-projects";
 import type { ProjectRow } from "@/types/database";
-import type { VerdictStatus } from "@/brain/production-verdict/schema";
 import type { Metadata } from "next";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -33,47 +33,66 @@ export default async function ProjectsPage() {
     buildOrgBrain(auth.supabase, auth.organizationId),
   ]);
 
-  const statusByProject = new Map(
-    brain.projects.map((item) => [item.projectId, item.status])
-  );
-
+  const summaryByProject = new Map(brain.projects.map((item) => [item.projectId, item]));
   const projectList = (projects ?? []) as ProjectRow[];
 
-  return (
-    <div className="app-cinematic-bg min-h-full">
-      <div className="mx-auto max-w-5xl px-4 sm:px-8 py-10 sm:py-14 space-y-10">
-      <PageHeader
-        title={t("title")}
-        description={t("subtitle", { count: projectList.length })}
-        action={
-          <Button size="sm" className="rounded-xl" asChild>
-            <Link href="/integrations">
-              <Plus className="mr-2 h-4 w-4" />
-              {t("connectRepository")}
-            </Link>
-          </Button>
-        }
-      />
+  const sorted = [...projectList].sort((a, b) => {
+    const aAttention = projectNeedsAttention(
+      summaryByProject.get(a.id),
+      a.last_scan_at ?? a.created_at
+    );
+    const bAttention = projectNeedsAttention(
+      summaryByProject.get(b.id),
+      b.last_scan_at ?? b.created_at
+    );
+    if (aAttention !== bAttention) return aAttention ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
 
-      {projectList.length === 0 ? (
-        <EmptyState
-          icon={FolderGit2}
-          title={t("noProjectsTitle")}
-          description={t("noProjectsBody")}
-          action={{ label: t("connectRepository"), href: "/integrations" }}
-          className="py-20"
+  return (
+    <div className="min-h-full">
+      <div className="mx-auto max-w-4xl px-4 sm:px-8 py-8 sm:py-12 space-y-8">
+        <PageHeader
+          title={t("title")}
+          description={t("subtitle", { count: projectList.length })}
+          action={
+            <Button size="sm" asChild>
+              <Link href="/integrations">
+                <Plus className="mr-2 h-4 w-4" />
+                {t("connectRepository")}
+              </Link>
+            </Button>
+          }
         />
-      ) : (
-        <div className="space-y-3 max-w-2xl">
-          {projectList.map((project) => (
-            <ProjectCard
-              key={project.id}
-              project={project}
-              verdictStatus={(statusByProject.get(project.id) ?? "insufficient_data") as VerdictStatus}
-            />
-          ))}
-        </div>
-      )}
+
+        {projectList.length === 0 ? (
+          <EmptyState
+            icon={FolderGit2}
+            title={t("noProjectsTitle")}
+            description={t("noProjectsBody")}
+            action={{ label: t("connectRepository"), href: "/integrations" }}
+            className="py-16"
+          />
+        ) : (
+          <div className="space-y-1">
+            <p className="text-label-caps px-1 pb-2">{t("portfolioEyebrow")}</p>
+            {sorted.map((project) => {
+              const summary = summaryByProject.get(project.id);
+              const needsAttention = projectNeedsAttention(
+                summary,
+                project.last_scan_at ?? project.created_at
+              );
+              return (
+                <ProjectCard
+                  key={project.id}
+                  project={project}
+                  summary={summary}
+                  needsAttention={needsAttention}
+                />
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );

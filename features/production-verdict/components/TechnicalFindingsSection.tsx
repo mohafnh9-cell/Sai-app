@@ -1,9 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { FileCode2, Search, ShieldAlert } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Search, ShieldAlert } from "lucide-react";
+import { SecurityFindingCard } from "@/components/sequrai";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { CollapsibleSection } from "@/components/shared/CollapsibleSection";
 import {
@@ -14,21 +14,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { trackEvent } from "@/lib/analytics/track";
-import { fixPromptInputFromFinding } from "@/brain/fix-prompt";
 import type { FixPromptContext } from "../fix-prompt-context";
-import { CopySafeFixPromptButton } from "./CopySafeFixPromptButton";
-import { SafeFixMetrics } from "./SafeFixMetrics";
 import {
-  findingConfidence,
-  findingEvidence,
-  findingEvidenceReport,
   findingFile,
-  findingLine,
-  findingSnippet,
-  findingStatus,
   type ScanFinding,
 } from "@/features/security-scanner/components/types";
-import { EvidenceReportPanel } from "@/features/evidence-finding/components/EvidenceReportPanel";
 import { useI18n } from "@/lib/i18n/client";
 import type { Translator } from "@/lib/i18n/types";
 
@@ -39,7 +29,6 @@ const SEVERITY_ORDER: Record<string, number> = {
   LOW: 3,
   INFO: 4,
 };
-
 type FindingGroup = "blockers" | "warnings" | "improvements" | "informational";
 
 function findingGroup(severity?: string): FindingGroup {
@@ -60,26 +49,6 @@ function groupLabel(group: FindingGroup, t: Translator) {
       return t("improvements");
     case "informational":
       return t("informational");
-  }
-}
-
-function severityDisplay(severity: string | undefined, group: FindingGroup | undefined, t: Translator) {
-  if (group === "blockers") return t("productionBlocker");
-  return severity ?? t("unknown");
-}
-
-function severityStyle(severity?: string) {
-  switch (severity?.toUpperCase()) {
-    case "CRITICAL":
-      return "border-[#FF5C6C]/30 bg-[#FF5C6C]/10 text-[#FF5C6C]";
-    case "HIGH":
-      return "border-orange-500/30 bg-orange-500/10 text-orange-400";
-    case "MEDIUM":
-      return "border-[#F7C65F]/30 bg-[#F7C65F]/10 text-[#F7C65F]";
-    case "LOW":
-      return "border-blue-500/30 bg-blue-500/10 text-blue-400";
-    default:
-      return "border-border bg-muted text-muted-foreground";
   }
 }
 
@@ -124,121 +93,6 @@ function FilterSelect({
         ))}
       </SelectContent>
     </Select>
-  );
-}
-
-function FindingCard({
-  finding,
-  index,
-  fixPromptContext,
-}: {
-  finding: ScanFinding;
-  index: number;
-  fixPromptContext?: FixPromptContext;
-}) {
-  const { t } = useI18n("technicalDetails");
-  const path = findingFile(finding);
-  const line = findingLine(finding);
-  const snippet = findingSnippet(finding);
-  const group = findingGroup(finding.severity);
-  const isBlocker = group === "blockers";
-  const fixPromptInput = isBlocker
-    ? fixPromptInputFromFinding(finding, {
-        projectName: fixPromptContext?.projectName,
-        stack: fixPromptContext?.stack,
-        currentVerdictStatus: fixPromptContext?.currentVerdictStatus,
-        currentScore: fixPromptContext?.currentScore,
-      })
-    : null;
-  const evidenceReport = findingEvidenceReport(finding);
-
-  return (
-    <Card key={finding.id || `${finding.rule_id}-${path}-${line}-${index}`}>
-      <CardHeader className="space-y-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="outline" className={severityStyle(finding.severity)}>
-            {severityDisplay(finding.severity, group, t)}
-          </Badge>
-          {group === "blockers" && finding.severity && (
-            <span className="text-xs text-muted-foreground">
-              {t("technicalSeverity", { severity: finding.severity })}
-            </span>
-          )}
-          {finding.category && <Badge variant="secondary">{finding.category}</Badge>}
-          {findingStatus(finding) && <Badge variant="outline">{findingStatus(finding)}</Badge>}
-        </div>
-        <CardTitle className="text-base">{finding.title || t("untitledFinding")}</CardTitle>
-        {(finding.rule_id || finding.rule) && (
-          <code className="text-xs text-muted-foreground">{finding.rule_id ?? finding.rule}</code>
-        )}
-      </CardHeader>
-      <CardContent className="space-y-4 text-sm">
-        {evidenceReport ? (
-          <div className="grid gap-2 sm:grid-cols-3 text-xs">
-            <div>
-              <p className="text-muted-foreground">{t("confidenceLabel")}</p>
-              <p className="font-semibold tabular-nums">{evidenceReport.confidencePercent}%</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground">{t("falsePositiveLabel")}</p>
-              <p className="font-semibold tabular-nums">{evidenceReport.falsePositivePercent}%</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground">{t("detectionLabel")}</p>
-              <p className="font-medium">{evidenceReport.detectionMethod.replaceAll("_", " ")}</p>
-            </div>
-          </div>
-        ) : null}
-        {finding.description && <p>{finding.description}</p>}
-        {path && (
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <FileCode2 className="h-3.5 w-3.5" aria-hidden />
-            <code className="overflow-x-auto">
-              {path}
-              {line !== undefined ? `:${line}` : ""}
-            </code>
-          </div>
-        )}
-        {findingEvidence(finding) && (
-          <div>
-            <h3 className="mb-1 text-xs font-semibold uppercase text-muted-foreground">
-              {t("evidenceLabel")}
-            </h3>
-            <p>{findingEvidence(finding)}</p>
-          </div>
-        )}
-        {snippet && (
-          <pre className="overflow-x-auto rounded-lg border bg-muted/50 p-4 text-xs">
-            <code>{snippet}</code>
-          </pre>
-        )}
-        {finding.impact && (
-          <div>
-            <h3 className="mb-1 text-xs font-semibold uppercase text-muted-foreground">{t("impactLabel")}</h3>
-            <p>{finding.impact}</p>
-          </div>
-        )}
-        {finding.recommendation && (
-          <div>
-            <h3 className="mb-1 text-xs font-semibold uppercase text-muted-foreground">
-              {t("recommendationLabel")}
-            </h3>
-            <p>{finding.recommendation}</p>
-          </div>
-        )}
-        {evidenceReport ? <EvidenceReportPanel report={evidenceReport} /> : null}
-        {fixPromptInput && (
-          <div className="space-y-3 border-t border-border/50 pt-3">
-            <SafeFixMetrics input={fixPromptInput} />
-            <CopySafeFixPromptButton
-              input={fixPromptInput}
-              source="finding"
-              findingId={finding.id}
-            />
-          </div>
-        )}
-      </CardContent>
-    </Card>
   );
 }
 
@@ -404,10 +258,9 @@ export function TechnicalFindingsSection({
             <div key={group} className="space-y-3">
               <h3 className="text-sm font-medium text-muted-foreground">{groupLabel(group, t)}</h3>
               {items.map((finding, index) => (
-                <FindingCard
+                <SecurityFindingCard
                   key={finding.id ?? index}
                   finding={finding}
-                  index={index}
                   fixPromptContext={fixPromptContext}
                 />
               ))}

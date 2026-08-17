@@ -116,9 +116,9 @@ export function ProductionVerdictHero({
             </ul>
           )}
           {view.status === "analysis_failed" && (
-            <div className="rounded-lg border border-[#FF5C6C]/30 bg-[#FF5C6C]/5 p-4 text-sm space-y-3">
+            <div className="rounded-lg border border-danger/30 bg-danger/5 p-4 text-sm space-y-3">
               <p className="flex items-start gap-2">
-                <AlertTriangle className="h-4 w-4 text-[#FF5C6C] shrink-0 mt-0.5" aria-hidden />
+                <AlertTriangle className="h-4 w-4 text-danger shrink-0 mt-0.5" aria-hidden />
                 {view.executiveSummary || "The analysis did not complete successfully."}
               </p>
               {retryHref && (

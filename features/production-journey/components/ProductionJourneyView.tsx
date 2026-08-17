@@ -14,8 +14,8 @@ import { trackEvent } from "@/lib/analytics/track";
 import { useDemoNavigation } from "@/features/demo/use-demo-navigation";
 
 function TrendIcon({ trend }: { trend: ProductionJourney["trend"] }) {
-  if (trend === "improving") return <TrendingUp className="h-4 w-4 text-[#64D98B]" aria-hidden />;
-  if (trend === "declining") return <TrendingDown className="h-4 w-4 text-[#FF5C6C]" aria-hidden />;
+  if (trend === "improving") return <TrendingUp className="h-4 w-4 text-success" aria-hidden />;
+  if (trend === "declining") return <TrendingDown className="h-4 w-4 text-danger" aria-hidden />;
   return <Minus className="h-4 w-4 text-muted-foreground" aria-hidden />;
 }
 

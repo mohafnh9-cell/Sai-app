@@ -10,11 +10,11 @@ export function CoverageBreakdown({ verdict }: { verdict: ProductionVerdictV1 })
   const [methodologyOpen, setMethodologyOpen] = useState(false);
 
   const groups = [
-    { title: t("evaluated"), areas: verdict.evaluatedAreas, tone: "text-[#64D98B]" },
+    { title: t("evaluated"), areas: verdict.evaluatedAreas, tone: "text-success" },
     {
       title: t("partiallyEvaluated"),
       areas: verdict.partiallyEvaluatedAreas,
-      tone: "text-[#F7C65F]",
+      tone: "text-warning",
     },
     {
       title: t("notEvaluated"),
@@ -25,7 +25,7 @@ export function CoverageBreakdown({ verdict }: { verdict: ProductionVerdictV1 })
 
   return (
     <section
-      className="rounded-xl border border-border/60 bg-[#101014]/50 p-5"
+      className="rounded-xl border border-border/60 bg-surface/50 p-5"
       aria-labelledby="coverage-heading"
     >
       <h2 id="coverage-heading" className="text-sm font-medium">

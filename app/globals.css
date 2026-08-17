@@ -31,10 +31,32 @@
   --color-brand-success: #6ee7a8;
   --color-brand-warning: #fbbf7a;
   --color-brand-danger: #ff6b7a;
+  --color-success: #6ee7a8;
+  --color-warning: #fbbf7a;
+  --color-danger: #ff6b7a;
+  --color-info: #5b6cff;
   --color-surface: rgb(16 16 22 / 0.72);
   --color-surface-elevated: rgb(21 21 30 / 0.85);
+  --color-surface-hover: rgb(255 255 255 / 0.06);
   --color-background-deep: #030308;
   --color-text-muted: #71717a;
+
+  /* Security severity */
+  --color-severity-critical: #ff5c6c;
+  --color-severity-high: #fb923c;
+  --color-severity-medium: #f7c65f;
+  --color-severity-low: #60a5fa;
+
+  /* Verification trust states */
+  --color-verification-confirmed: #6ee7a8;
+  --color-verification-likely: #a3e635;
+  --color-verification-potential: #fbbf7a;
+
+  /* Production readiness */
+  --color-readiness-ready: #6ee7a8;
+  --color-readiness-attention: #fbbf7a;
+  --color-readiness-caution: #fb923c;
+  --color-readiness-blocked: #ff6b7a;
 
   --shadow-premium: 0 1px 2px rgb(0 0 0 / 0.24), 0 12px 40px rgb(0 0 0 / 0.35);
   --shadow-premium-lg: 0 2px 4px rgb(0 0 0 / 0.2), 0 24px 64px rgb(0 0 0 / 0.45);
@@ -287,6 +309,32 @@
 
   .product-section {
     animation: product-reveal 0.2s ease-out both;
+  }
+
+  .seq-transition {
+    transition-property: color, background-color, border-color, opacity, transform, box-shadow;
+    transition-duration: 200ms;
+    transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .seq-focus-ring {
+    @apply outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background;
+  }
+
+  .text-display-score {
+    @apply text-6xl sm:text-7xl font-semibold tabular-nums tracking-tighter leading-none;
+  }
+
+  .text-display-headline {
+    @apply text-3xl sm:text-4xl font-semibold tracking-tight leading-none;
+  }
+
+  .text-eyebrow {
+    @apply text-xs uppercase tracking-[0.24em] text-muted-foreground;
+  }
+
+  .text-label-caps {
+    @apply text-[11px] uppercase tracking-[0.14em] text-muted-foreground;
   }
 }
 

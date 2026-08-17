@@ -39,5 +39,15 @@
   "filterAll": "All {label}",
   "filterByAria": "Filter by {label}",
   "technicalSeverity": "Technical severity: {severity}",
-  "unknown": "Unknown"
+  "unknown": "Unknown",
+  "verification": {
+    "confirmed": "Confirmed",
+    "likely": "Likely",
+    "potential": "Potential",
+    "unverified": "Unverified",
+    "not_reproduced": "Not reproduced",
+    "false_positive": "False positive",
+    "not_applicable": "Not applicable",
+    "ariaLabel": "Verification status: {status}"
+  }
 }

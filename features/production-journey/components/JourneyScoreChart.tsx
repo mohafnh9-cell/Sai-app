@@ -147,7 +147,7 @@ export function JourneyScoreChart({
               <p>
                 Score: <strong>{hovered.point.score}</strong>
                 {hovered.point.scoreDelta != null && (
-                  <span className={hovered.point.scoreDelta >= 0 ? " text-[#64D98B]" : " text-[#FF5C6C]"}>
+                  <span className={hovered.point.scoreDelta >= 0 ? " text-success" : " text-danger"}>
                     {" "}
                     ({hovered.point.scoreDelta > 0 ? "+" : ""}
                     {hovered.point.scoreDelta})

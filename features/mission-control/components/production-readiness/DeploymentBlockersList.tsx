@@ -1,12 +1,8 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
 import type { ProductionPriority } from "@/brain/production-verdict/schema";
+import { SecuritySeverityBadge } from "@/components/sequrai";
 import { useI18n } from "@/lib/i18n/client";
-
-function severityLabel(severity: ProductionPriority["severity"], t: (key: string) => string) {
-  return t(`severity.${severity}`);
-}
 
 export function DeploymentBlockersList({
   blockers,
@@ -26,26 +22,14 @@ export function DeploymentBlockersList({
         <p className="mt-1 text-sm text-muted-foreground">{t("blockers.subtitleReadOnly")}</p>
       </div>
 
-      <ul className="space-y-3 list-none">
+      <ul className="space-y-3 list-none divide-y divide-border/50">
         {blockers.map((blocker) => (
-          <li
-            key={blocker.id}
-            className="rounded-2xl border border-border/70 bg-[#101014]/50 px-5 py-4 space-y-2"
-          >
+          <li key={blocker.id} className="py-4 first:pt-0 space-y-2">
             <p className="font-medium leading-snug">{blocker.title}</p>
             {blocker.reason ? (
               <p className="text-sm text-muted-foreground leading-relaxed">{blocker.reason}</p>
             ) : null}
-            <Badge
-              variant="outline"
-              className={
-                blocker.severity === "critical"
-                  ? "border-red-500/40 text-red-400"
-                  : "border-amber-500/40 text-amber-400"
-              }
-            >
-              {severityLabel(blocker.severity, t)}
-            </Badge>
+            <SecuritySeverityBadge severity={blocker.severity.toUpperCase()} />
           </li>
         ))}
       </ul>

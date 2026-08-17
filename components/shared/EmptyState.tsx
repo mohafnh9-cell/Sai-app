@@ -1,6 +1,7 @@
 import { type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { radius } from "@/lib/design-system/tokens";
 
 interface EmptyStateProps {
   icon?: LucideIcon;
@@ -26,9 +27,10 @@ export function EmptyState({
   return (
     <div
       className={cn(
-        "flex flex-col items-center justify-center rounded-xl border border-dashed py-14 px-6 text-center",
+        "flex flex-col items-center justify-center border border-dashed py-14 px-6 text-center",
+        radius.md,
         variant === "success"
-          ? "border-green-500/20 bg-green-500/5"
+          ? "border-success/20 bg-success/5"
           : "border-border",
         className
       )}
@@ -37,13 +39,13 @@ export function EmptyState({
         <div
           className={cn(
             "mb-4 flex h-12 w-12 items-center justify-center rounded-xl",
-            variant === "success" ? "bg-green-500/10" : "bg-secondary"
+            variant === "success" ? "bg-success/10" : "bg-secondary"
           )}
         >
           <Icon
             className={cn(
               "h-6 w-6",
-              variant === "success" ? "text-green-500" : "text-muted-foreground"
+              variant === "success" ? "text-success" : "text-muted-foreground"
             )}
             aria-hidden
           />
@@ -52,7 +54,7 @@ export function EmptyState({
       <h3
         className={cn(
           "text-sm font-semibold",
-          variant === "success" ? "text-green-600" : "text-foreground"
+          variant === "success" ? "text-success" : "text-foreground"
         )}
       >
         {title}

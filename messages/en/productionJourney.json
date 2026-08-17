@@ -85,5 +85,12 @@
   "areaStatus": {
     "partial": "Partial coverage",
     "not_evaluated": "Not evaluated"
+  },
+  "steps": {
+    "repository": "Repository",
+    "analysis": "Analysis",
+    "security": "Security",
+    "verification": "Verification",
+    "verdict": "Production Verdict"
   }
 }

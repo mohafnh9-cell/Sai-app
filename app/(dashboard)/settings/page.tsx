@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/shared/PageHeader";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { SettingsSection } from "@/components/shared/SettingsSection";
 import { LanguageSelector } from "@/components/shared/LanguageSelector";
 import { getTranslator } from "@/lib/i18n/server";
 import type { Metadata } from "next";
@@ -32,61 +32,44 @@ export default async function SettingsPage() {
     : true;
 
   return (
-    <div className="p-4 sm:p-6 space-y-6 max-w-2xl">
-      <PageHeader title={t("title")} description={t("subtitle")} />
+    <div className="mx-auto max-w-2xl px-4 sm:px-8 py-8 sm:py-12">
+      <PageHeader title={t("title")} description={t("subtitle")} className="mb-4" />
 
-      {org && (
-        <Card className="border-border/50">
-          <CardHeader className="pb-4">
-            <CardTitle className="text-base">{ta("settings.title")}</CardTitle>
-            <CardDescription>{ta("settings.subtitle")}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
+      {org ? (
+        <SettingsSection title={ta("settings.title")} description={ta("settings.subtitle")}>
+          <div className="space-y-3">
             <VerdictAutopilotToggle enabled={autopilotEnabled} />
             <p className="text-xs text-muted-foreground">
               {autopilotEnabled ? ta("settings.enabledHelp") : ta("settings.disabledHelp")}
             </p>
-          </CardContent>
-        </Card>
-      )}
+          </div>
+        </SettingsSection>
+      ) : null}
 
-      {org && (
-        <Card className="border-border/50">
-          <CardHeader className="pb-4">
-            <CardTitle className="text-base">{t("workspaceManageLink")}</CardTitle>
-            <CardDescription>{t("workspaceManageDescription")}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <a href="/settings/workspaces" className="text-sm text-primary hover:underline">
-              {t("workspaceManageCta")}
-            </a>
-          </CardContent>
-        </Card>
-      )}
+      {org ? (
+        <SettingsSection
+          title={t("workspaceManageLink")}
+          description={t("workspaceManageDescription")}
+        >
+          <a href="/settings/workspaces" className="text-sm font-medium text-primary hover:underline">
+            {t("workspaceManageCta")}
+          </a>
+        </SettingsSection>
+      ) : null}
 
-      {org && (
-        <Card className="border-border/50" id="mcp-setup">
-          <CardHeader className="pb-4">
-            <CardTitle className="text-base">{t("mcpTitle")}</CardTitle>
-            <CardDescription>{t("mcpSubtitle")}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <McpApiKeysPanel />
-          </CardContent>
-        </Card>
-      )}
+      {org ? (
+        <SettingsSection id="mcp-setup" title={t("mcpTitle")} description={t("mcpSubtitle")}>
+          <McpApiKeysPanel />
+        </SettingsSection>
+      ) : null}
 
-      <Card className="border-border/50">
-        <CardHeader className="pb-4">
-          <CardTitle className="text-base">{t("languageTitle")}</CardTitle>
-          <CardDescription>{t("languageSubtitle")}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <LanguageSelector variant="settings" />
-        </CardContent>
-      </Card>
+      <SettingsSection title={t("languageTitle")} description={t("languageSubtitle")}>
+        <LanguageSelector variant="settings" />
+      </SettingsSection>
 
-      <DeleteAccountPanel />
+      <SettingsSection title={t("deleteAccountTitle")} variant="danger">
+        <DeleteAccountPanel />
+      </SettingsSection>
     </div>
   );
 }

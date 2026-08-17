@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { GitBranch, Webhook, Zap, RefreshCw, Check, Lock, Star } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { IntegrationStatusBadge } from "@/components/sequrai";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,7 +11,9 @@ import { startGitHubOAuth } from "@/lib/github/oauth-client";
 import { projectVerdictHref } from "@/lib/navigation/project-hrefs";
 import type { GitHubRepo } from "@/lib/github";
 import { useI18n } from "@/lib/i18n/client";
+import { PageHeader } from "@/components/shared/PageHeader";
 import { McpPromoBanner } from "@/features/mcp/components/McpPromoBanner";
+import type { IntegrationConnectionState } from "@/lib/design-system/integration";
 
 type Step = "idle" | "loading" | "selecting" | "saving" | "done" | "error";
 
@@ -32,6 +34,23 @@ type ConnectionPayload = {
   workspaceId: string;
   workspaceName: string | null;
 };
+
+function mapGitHubConnectionStatus(
+  status: ConnectionPayload["connection"]["status"] | undefined
+): IntegrationConnectionState {
+  switch (status) {
+    case "connected":
+      return "connected";
+    case "migration_reconnection_required":
+    case "insufficient_scope":
+      return "warning";
+    case "revoked":
+    case "expired":
+      return "error";
+    default:
+      return "not_connected";
+  }
+}
 
 type WebhookHealthProject = {
   projectId: string;
@@ -324,11 +343,8 @@ export default function IntegrationsPage() {
   );
 
   return (
-    <div className="p-6 space-y-6 max-w-4xl">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">{t("title")}</h1>
-        <p className="text-muted-foreground text-sm mt-1">{t("subtitle")}</p>
-      </div>
+    <div className="p-6 space-y-8 max-w-4xl">
+      <PageHeader title={t("title")} description={t("subtitle")} />
 
       {connectionState === "ready" && connection?.connection.status === "connected" ? (
         <McpPromoBanner />
@@ -345,18 +361,16 @@ export default function IntegrationsPage() {
                   fallback.
                 </CardDescription>
               </div>
-              <Badge
-                variant="outline"
-                className={`text-xs ${
+              <IntegrationStatusBadge
+                status={
+                  githubAppStatus.installation?.status === "active" ? "connected" : "not_connected"
+                }
+                label={
                   githubAppStatus.installation?.status === "active"
-                    ? "text-emerald-400 border-emerald-400/30 bg-emerald-400/10"
-                    : "text-muted-foreground"
-                }`}
-              >
-                {githubAppStatus.installation?.status === "active"
-                  ? "Installed"
-                  : "Not installed"}
-              </Badge>
+                    ? "Installed"
+                    : "Not installed"
+                }
+              />
             </div>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
@@ -402,7 +416,7 @@ export default function IntegrationsPage() {
               ) : null}
             </div>
             {githubAppInstallSuccess && (
-              <p className="text-xs text-emerald-400">GitHub App installation saved successfully.</p>
+              <p className="text-xs text-success">GitHub App installation saved successfully.</p>
             )}
           </CardContent>
         </Card>
@@ -421,20 +435,16 @@ export default function IntegrationsPage() {
                 <CardDescription className="text-xs">{t("githubSubtitle")}</CardDescription>
               </div>
             </div>
-            <Badge
-              variant="outline"
-              className={`text-xs ${
+            <IntegrationStatusBadge
+              status={mapGitHubConnectionStatus(connection?.connection.status)}
+              label={
                 connection?.connection.status === "connected"
-                  ? "text-emerald-400 border-emerald-400/30 bg-emerald-400/10"
-                  : "text-muted-foreground"
-              }`}
-            >
-              {connection?.connection.status === "connected"
-                ? t("statusConnected")
-                : connection?.connection.status === "migration_reconnection_required"
-                  ? t("statusReconnectRequired")
-                  : t("statusNotConnected")}
-            </Badge>
+                  ? t("statusConnected")
+                  : connection?.connection.status === "migration_reconnection_required"
+                    ? t("statusReconnectRequired")
+                    : t("statusNotConnected")
+              }
+            />
           </div>
         </CardHeader>
 
@@ -521,7 +531,7 @@ export default function IntegrationsPage() {
 
           {step === "done" && (
             <div className="space-y-3">
-              <div className="flex items-center gap-3 text-sm text-emerald-400">
+              <div className="flex items-center gap-3 text-sm text-success">
                 <Check className="h-4 w-4" />
                 <span>{savedCount} repositories connected successfully.</span>
                 <Button
@@ -544,7 +554,7 @@ export default function IntegrationsPage() {
                     {webhookSummary.skipped > 0 ? ` · ${webhookSummary.skipped} skipped` : ""}
                   </p>
                   {webhookSummary.warnings.length > 0 && (
-                    <ul className="text-amber-500 space-y-0.5 list-disc pl-4">
+                    <ul className="text-warning space-y-0.5 list-disc pl-4">
                       {webhookSummary.warnings.map((warning) => (
                         <li key={warning}>{warning}</li>
                       ))}
@@ -684,19 +694,15 @@ export default function IntegrationsPage() {
                             {project.githubRepo ?? "—"}
                           </p>
                           {project.lastError && (
-                            <p className="text-xs text-amber-500 mt-1">{project.lastError}</p>
+                            <p className="text-xs text-warning mt-1">{project.lastError}</p>
                           )}
                         </div>
-                        <Badge
-                          variant="outline"
-                          className={`shrink-0 text-[10px] ${
-                            project.healthy
-                              ? "text-emerald-400 border-emerald-400/30 bg-emerald-400/10"
-                              : "text-amber-500 border-amber-500/30 bg-amber-500/10"
-                          }`}
-                        >
-                          {project.healthy ? t("webhookHealthHealthy") : t("webhookHealthDegraded")}
-                        </Badge>
+                        <IntegrationStatusBadge
+                          status={project.healthy ? "connected" : "warning"}
+                          label={
+                            project.healthy ? t("webhookHealthHealthy") : t("webhookHealthDegraded")
+                          }
+                        />
                       </li>
                     ))}
                   </ul>
@@ -760,7 +766,7 @@ export default function IntegrationsPage() {
                 <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary">
                   <item.icon className="h-4 w-4 text-muted-foreground" />
                 </div>
-                <Badge variant="outline" className="text-xs text-muted-foreground">Soon</Badge>
+                <IntegrationStatusBadge status="inactive" label="Soon" />
               </div>
               <CardTitle className="text-sm mt-3">{item.name}</CardTitle>
               <CardDescription className="text-xs">{item.description}</CardDescription>

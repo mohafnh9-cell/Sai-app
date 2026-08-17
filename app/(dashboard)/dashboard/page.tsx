@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { PortfolioVerdictCard } from "@/features/production-verdict/components/PortfolioVerdictCard";
 import { ProductionControlCenter } from "@/features/dashboard/components/ProductionControlCenter";
-import { McpPromoBanner } from "@/features/mcp/components/McpPromoBanner";
 import { buildOrgBrain } from "@/server/brain/build-org-brain";
 import { organizationHasProductionVerdict } from "@/server/onboarding/has-production-verdict";
 import { getLatestVerdictsByOrganization } from "@/server/production-verdict/service";
@@ -39,7 +38,7 @@ export default async function DashboardPage({
 
   if (!organizationId) {
     return (
-      <div className="app-cinematic-bg min-h-full flex flex-col items-center justify-center p-12">
+      <div className="min-h-full flex flex-col items-center justify-center p-12">
         <EmptyState
           icon={FolderGit2}
           title={t("welcomeTitle")}
@@ -80,7 +79,7 @@ export default async function DashboardPage({
           : t("firstVerdictCta");
 
     return (
-      <div className="app-cinematic-bg min-h-full flex flex-col items-center justify-center p-12">
+      <div className="min-h-full flex flex-col items-center justify-center p-12">
         <EmptyState
           icon={FolderGit2}
           title={t("workspaceEmptyTitle")}
@@ -103,13 +102,12 @@ export default async function DashboardPage({
   const showPortfolio = projects.length > 1;
   const { needsAttention } = partitionPortfolioProjects(projects, projectReadiness);
   const showNeedsAttention = showPortfolio && needsAttention.length > 0;
+  const needsAttentionIds = new Set(needsAttention.map((p) => p.id));
 
   return (
-    <div className="app-cinematic-bg min-h-full">
-      <div className="mx-auto max-w-5xl px-4 sm:px-8 py-10 sm:py-14 pb-20 space-y-10">
-        <McpPromoBanner />
-
-        {focus && (
+    <div className="min-h-full">
+      <div className="mx-auto max-w-4xl px-4 sm:px-8 py-8 sm:py-12 pb-20 space-y-12">
+        {focus ? (
           <ProductionControlCenter
             greeting={greeting}
             focus={focus}
@@ -126,33 +124,34 @@ export default async function DashboardPage({
               firstVerdictWelcome: t("firstVerdictWelcome"),
             }}
           />
-        )}
+        ) : null}
 
-        {showPortfolio && (
+        {showPortfolio ? (
           <>
-            {showNeedsAttention && (
+            {showNeedsAttention ? (
               <section className="space-y-4">
                 <div>
-                  <h2 className="text-lg font-medium tracking-tight">{t("needsAttentionTitle")}</h2>
+                  <p className="text-label-caps">{t("needsAttentionTitle")}</p>
                   <p className="text-sm text-muted-foreground mt-1">{t("needsAttentionSubtitle")}</p>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-1">
                   {needsAttention.map((project) => (
                     <PortfolioVerdictCard
                       key={project.id}
                       projectId={project.id}
                       projectName={project.name}
                       summary={projectReadiness.get(project.id)}
+                      needsAttention
                     />
                   ))}
                 </div>
               </section>
-            )}
+            ) : null}
 
             <section className="space-y-4">
               <div className="flex items-end justify-between gap-4">
                 <div>
-                  <h2 className="text-lg font-medium tracking-tight">{t("yourAppsTitle")}</h2>
+                  <p className="text-label-caps">{t("yourAppsTitle")}</p>
                   <p className="text-sm text-muted-foreground mt-1">{t("yourAppsSubtitle")}</p>
                 </div>
                 <Button variant="ghost" size="sm" asChild className="text-muted-foreground">
@@ -170,20 +169,21 @@ export default async function DashboardPage({
                   action={{ label: t("connectRepository"), href: "/integrations" }}
                 />
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-1">
                   {projects.map((project) => (
                     <PortfolioVerdictCard
                       key={project.id}
                       projectId={project.id}
                       projectName={project.name}
                       summary={projectReadiness.get(project.id)}
+                      needsAttention={needsAttentionIds.has(project.id)}
                     />
                   ))}
                 </div>
               )}
             </section>
           </>
-        )}
+        ) : null}
       </div>
     </div>
   );

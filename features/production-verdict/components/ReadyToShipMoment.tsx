@@ -31,11 +31,11 @@ export function ReadyToShipMoment({
 
   return (
     <section
-      className="relative overflow-hidden rounded-2xl border border-[#64D98B]/30 bg-gradient-to-br from-[#64D98B]/10 via-[#101014] to-[#101014] p-8 md:p-10"
+      className="relative overflow-hidden rounded-2xl border border-success/30 bg-gradient-to-br from-success/10 via-background to-background p-8 md:p-10"
       aria-labelledby="ready-to-ship-heading"
     >
       <div className="absolute top-4 right-4">
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-[#64D98B]/20 px-3 py-1 text-xs font-medium text-[#64D98B]">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-success/20 px-3 py-1 text-xs font-medium text-success">
           <Award className="h-3.5 w-3.5" aria-hidden />
           {t("readyMoment.badge")}
         </span>
@@ -43,7 +43,7 @@ export function ReadyToShipMoment({
 
       <div className="space-y-6 max-w-2xl">
         <div>
-          <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-[#64D98B]">
+          <p className="text-label-caps text-success">
             {t("productionVerdict")}
           </p>
           <h2 id="ready-to-ship-heading" className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight">
@@ -67,7 +67,7 @@ export function ReadyToShipMoment({
               {formatLocalizedDate(locale, view.generatedAt)}
             </p>
             {view.resolvedBlockers > 0 && (
-              <p className="text-[#64D98B]">
+              <p className="text-success">
                 {t("readyMoment.blockersResolved", { count: view.resolvedBlockers })}
               </p>
             )}

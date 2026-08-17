@@ -1,7 +1,4 @@
 import { redirect, notFound } from "next/navigation";
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { MissionControlExperience } from "@/features/mission-control/components/MissionControlExperience";
 import { ProjectWorkflowNav } from "@/features/mission-control/components/ProjectWorkflowNav";
 import { shouldShowSecurityTestNav } from "@/features/mission-control/lib/navigation";
@@ -17,6 +14,8 @@ import { getTranslator } from "@/lib/i18n/server";
 import { toRscSafe } from "@/lib/rsc/to-rsc-safe";
 import { findNonSerializablePaths } from "@/lib/rsc/find-non-serializable-path";
 import { missionControlTrace, traceAwait } from "@/lib/debug/mission-control-trace";
+import { getProductionIntelligence } from "@/server/production-intelligence/get-production-intelligence";
+import { getProductionJourneyByProject } from "@/server/production-journey/get-production-journey";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -189,18 +188,18 @@ export default async function MissionControlPage({ params, searchParams }: PageP
     hasVerdict: Boolean(missionControlState.productionVerdict),
   });
 
-  const { t } = await getTranslator("missionControl");
+  const [productionIntelligence, journey] = await Promise.all([
+    getProductionIntelligence(auth.supabase, projectId, auth.user.id).catch(() => null),
+    getProductionJourneyByProject(auth.supabase, projectId, auth.user.id, { limit: 50 }).catch(
+      () => null
+    ),
+  ]);
+
   const showSecurityTest = shouldShowSecurityTestNav({ attackCenterEnabled });
 
   return (
-    <div className="app-cinematic-bg min-h-full">
-      <div className="mx-auto max-w-4xl px-4 sm:px-8 pb-24 pt-6 sm:pt-10">
-        <Button variant="ghost" size="sm" asChild className="gap-1.5 -ml-2 text-muted-foreground mb-8">
-          <Link href="/dashboard">
-            <ArrowLeft className="h-4 w-4" />
-            {t("page.backToMissionControl")}
-          </Link>
-        </Button>
+    <div className="min-h-full">
+      <div className="mx-auto max-w-4xl px-4 sm:px-8 pb-24 pt-6 sm:pt-8">
         <ProjectWorkflowNav
           projectId={projectId}
           analysisRunId={
@@ -211,7 +210,11 @@ export default async function MissionControlPage({ params, searchParams }: PageP
           showSecurityTest={showSecurityTest}
         />
 
-        <MissionControlExperience initialState={safeMissionControlState} />
+        <MissionControlExperience
+          initialState={safeMissionControlState}
+          productionIntelligence={productionIntelligence}
+          areasProgress={journey?.areasProgress ?? []}
+        />
       </div>
     </div>
   );
