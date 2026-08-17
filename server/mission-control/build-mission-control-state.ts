@@ -139,7 +139,6 @@ export function buildMissionControlState(input: BuildMissionControlStateInput): 
       }),
       security: deriveSecurityAction({
         phase: securityPhase,
-        reviewInProgress,
         attackCenterEnabled: input.flags.attackCenterEnabled,
       }),
       primary: {

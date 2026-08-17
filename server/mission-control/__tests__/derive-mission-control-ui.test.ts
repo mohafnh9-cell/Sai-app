@@ -3,6 +3,7 @@ import {
   deriveHasCompletedAnalysis,
   deriveLastAnalysisAt,
   deriveScanAction,
+  deriveSecurityAction,
 } from "@/server/mission-control/derive-mission-control-ui";
 import type { AnalysisRunListItem } from "@/server/analysis-runs/list-analysis-runs";
 
@@ -97,5 +98,27 @@ describe("deriveScanAction", () => {
     });
     expect(action.label).toBe("rescan");
     expect(action.disabled).toBe(false);
+  });
+});
+
+describe("deriveSecurityAction", () => {
+  it("stays idle while a code scan is running", () => {
+    const action = deriveSecurityAction({
+      phase: "needs_review",
+      attackCenterEnabled: true,
+    });
+    expect(action.label).toBe("cta");
+    expect(action.disabled).toBe(false);
+    expect(action.showSpinner).toBe(false);
+  });
+
+  it("shows running only when security tests are active", () => {
+    const action = deriveSecurityAction({
+      phase: "running",
+      attackCenterEnabled: true,
+    });
+    expect(action.label).toBe("running");
+    expect(action.disabled).toBe(true);
+    expect(action.showSpinner).toBe(true);
   });
 });

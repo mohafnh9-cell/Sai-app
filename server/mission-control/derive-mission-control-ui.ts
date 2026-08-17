@@ -131,7 +131,6 @@ export function deriveScanAction(input: {
 
 export function deriveSecurityAction(input: {
   phase: SecurityTestPhase;
-  reviewInProgress: boolean;
   attackCenterEnabled: boolean;
 }): {
   label: MissionControlSecurityButtonLabel;
@@ -142,10 +141,7 @@ export function deriveSecurityAction(input: {
     return { label: "cta", disabled: true, showSpinner: false };
   }
 
-  const running =
-    input.phase === "preparing" ||
-    input.phase === "running" ||
-    (input.phase === "needs_review" && input.reviewInProgress);
+  const running = input.phase === "preparing" || input.phase === "running";
 
   return {
     label: running ? "running" : "cta",

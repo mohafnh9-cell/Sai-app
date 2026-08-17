@@ -6,7 +6,6 @@ import { useQuery } from "@tanstack/react-query";
 import type { MissionControlState } from "@/features/mission-control/types/mission-control-state";
 import { analysisRunKeys } from "@/features/analysis-runs/lib/query-keys";
 import { appendAnalysisRunSearchParams } from "@/features/analysis-runs/lib/build-run-query";
-import { DEFAULT_SECURITY_TEST_IDS } from "@/features/security-testing/user-test-catalog";
 import { startGitHubOAuth } from "@/lib/github/oauth-client";
 import {
   isGitHubReauthRequired,
@@ -182,46 +181,18 @@ export function useMissionControlState(
   const startSecurityTest = useCallback(async () => {
     if (securityStarting || state.actions.security.disabled) return;
     setActionError(null);
-    setReauthRequired(false);
-    setSubscriptionRequired(false);
     setSecurityStarting(true);
     try {
       const params = new URLSearchParams();
       appendAnalysisRunSearchParams(params, analysisRunId);
       const qs = params.toString();
-      const response = await fetch(
-        `/api/projects/${projectId}/security-tests${qs ? `?${qs}` : ""}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            testIds: DEFAULT_SECURITY_TEST_IDS.slice(0, 4),
-            analysisRunId: analysisRunId ?? undefined,
-          }),
-        }
-      );
-      const body = (await response.json().catch(() => null)) as {
-        ok?: boolean;
-        error?: string;
-        code?: string;
-        attackCenterHref?: string;
-      } | null;
-
-      if (body?.code === "needs_review") {
-        throw new Error(body.error ?? "Complete a code scan first");
-      }
-      if (!response.ok || !body?.ok) {
-        throw new Error(body?.error ?? "Failed to start security test");
-      }
-
-      router.push(body.attackCenterHref ?? state.ui.attackCenterHref ?? `/projects/${projectId}/attack-center`);
-      await refresh();
-    } catch (cause) {
-      setActionError(cause instanceof Error ? cause.message : "Failed to start security test");
+      const baseHref =
+        state.ui.attackCenterHref ?? `/projects/${projectId}/attack-center`;
+      router.push(qs ? `${baseHref}?${qs}` : baseHref);
     } finally {
       setSecurityStarting(false);
     }
-  }, [analysisRunId, projectId, refresh, router, securityStarting, state]);
+  }, [analysisRunId, projectId, router, securityStarting, state.actions.security.disabled, state.ui.attackCenterHref]);
 
   const scanAction = {
     ...state.actions.scan,
@@ -234,7 +205,6 @@ export function useMissionControlState(
     ...state.actions.security,
     disabled: state.actions.security.disabled || securityStarting,
     showSpinner: state.actions.security.showSpinner || securityStarting,
-    label: securityStarting ? ("running" as const) : state.actions.security.label,
   };
 
   return {

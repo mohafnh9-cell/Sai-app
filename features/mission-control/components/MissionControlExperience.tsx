@@ -183,6 +183,17 @@ export function MissionControlExperience({
         </div>
       ) : null}
 
+      <ProjectHomeActions
+        state={state}
+        scanAction={scanAction}
+        securityAction={securityAction}
+        actionError={actionError}
+        reauthRequired={reauthRequired}
+        subscriptionRequired={subscriptionRequired}
+        onStartScan={() => void startScan()}
+        onStartSecurityTest={() => void startSecurityTest()}
+      />
+
       {showScanActivity ? (
         <MissionControlActivityBanner
           kind="scan"
@@ -196,17 +207,6 @@ export function MissionControlExperience({
       ) : null}
 
       {verdictSection}
-
-      <ProjectHomeActions
-        state={state}
-        scanAction={scanAction}
-        securityAction={securityAction}
-        actionError={actionError}
-        reauthRequired={reauthRequired}
-        subscriptionRequired={subscriptionRequired}
-        onStartScan={() => void startScan()}
-        onStartSecurityTest={() => void startSecurityTest()}
-      />
 
       {!verdict && !showScanActivity ? (
         <div
