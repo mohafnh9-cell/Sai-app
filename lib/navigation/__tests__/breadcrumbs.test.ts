@@ -3,9 +3,15 @@ import { buildBreadcrumbsFromPathname } from "@/lib/navigation/breadcrumbs";
 
 const PROJECT_ID = "11111111-1111-1111-1111-111111111111";
 
+const TEST_LABELS = {
+  missionControl: "Mission Control",
+  projects: "Projects",
+  productionIntelligence: "Production Intelligence",
+};
+
 describe("buildBreadcrumbsFromPathname", () => {
   it("maps dashboard root", () => {
-    expect(buildBreadcrumbsFromPathname("/dashboard")).toEqual([
+    expect(buildBreadcrumbsFromPathname("/dashboard", { labels: TEST_LABELS })).toEqual([
       { label: "Mission Control", href: undefined },
     ]);
   });
@@ -15,6 +21,7 @@ describe("buildBreadcrumbsFromPathname", () => {
       `/projects/${PROJECT_ID}/mission-control`,
       {
         projectName: () => "My App",
+        labels: TEST_LABELS,
       }
     );
     expect(items).toEqual([
