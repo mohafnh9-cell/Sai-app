@@ -9,6 +9,10 @@ import {
 } from "./secret-classification";
 import type { ScanRule } from "./types";
 import type { FindingDraft, NormalizedFile } from "../types";
+import {
+  firstServiceRoleReferenceLine,
+  isSupabaseServiceRoleClientExposure,
+} from "./client-exposure";
 
 const TEST_OR_EXAMPLE = /(?:^|\/)(?:test|tests|__tests__|fixtures?|examples?)(?:\/|$)|\.(?:test|spec)\./i;
 const ROUTE_PATH = /(?:^|\/)(?:api|routes?|controllers?|handlers?)(?:\/|$)|route\.[jt]s$/i;
@@ -180,12 +184,7 @@ const serviceRoleInClient: ScanRule = {
   title: "Supabase service role exposed to client code",
   run: ({ files }) =>
     files
-      .filter(
-        (file) =>
-          (/^\s*["']use client["'];?/m.test(file.content) ||
-            /(?:^|\/)(?:components?|app)\/.*\.[jt]sx?$/.test(file.path)) &&
-          /SUPABASE_SERVICE_ROLE_KEY|service[_-]?role/i.test(file.content)
-      )
+      .filter(isSupabaseServiceRoleClientExposure)
       .map((file) => ({
         ruleId: "supabase.service-role-client",
         title: "Supabase service role referenced in client code",
@@ -195,12 +194,11 @@ const serviceRoleInClient: ScanRule = {
         category: "secrets",
         location: {
           path: file.path,
-          line: file.lines.findIndex((line) =>
-            /SUPABASE_SERVICE_ROLE_KEY|service[_-]?role/i.test(line)
-          ) + 1,
+          line: firstServiceRoleReferenceLine(file),
         },
         evidence: "SUPABASE_SERVICE_ROLE_KEY=[REDACTED]",
-        remediation: "Remove the service-role key from client code, rotate it, and use it only in a protected server environment.",
+        remediation:
+          "Remove the service-role key from client code, rotate it, and use it only in a protected server environment.",
         fingerprintMaterial: "supabase-service-role-client",
       })),
 };
