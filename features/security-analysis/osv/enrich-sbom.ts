@@ -15,6 +15,7 @@ import {
   mapOsvExternalSeverity,
 } from "./map-vulnerability";
 import type { OsvBatchResult, OsvMappedVulnerability } from "./types";
+import { guardUntrustedInput } from "@/server/mcp/security";
 
 export const OSV_SBOM_RULE_ID = "dependencies.osv-sbom";
 export const OSV_SBOM_EXTERNAL_RULE_ID = "dependency-vulnerability";
@@ -57,7 +58,12 @@ function buildRemediation(component: SbomComponent, vuln: OsvMappedVulnerability
 
 function buildMessage(component: SbomComponent, vuln: OsvMappedVulnerability): string {
   const severityLabel = vuln.severity === "unknown" ? "unknown severity" : `${vuln.severity} severity`;
-  return `[${vuln.advisoryId}] ${component.name}@${component.version} — ${severityLabel}. ${vuln.description || "Known vulnerability in installed dependency."}`;
+  const description = guardUntrustedInput(vuln.description || "Known vulnerability in installed dependency.", {
+    source: "dependency_metadata",
+    path: `${component.name}@${component.version}`,
+    forceWrap: true,
+  }).forPrompt;
+  return `[${vuln.advisoryId}] ${component.name}@${component.version} — ${severityLabel}. ${description}`;
 }
 
 function resolveLocation(

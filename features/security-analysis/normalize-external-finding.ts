@@ -48,6 +48,7 @@ const RULE_CATEGORY_MAP: Record<string, string> = {
   logging: "info-exposure",
   secrets: "secrets",
   prompt: "prompt-injection",
+  prompt_injection_attempt: "prompt_injection_attempt",
   exfiltration: "exfiltration",
   supply: "supply-chain",
   command: "injection",

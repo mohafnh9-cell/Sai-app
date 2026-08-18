@@ -21,6 +21,7 @@ import {
   formatSafeFixNoBlockers,
   formatSafeFixPromptReady,
 } from "../personality";
+import { assertFixPromptOutputSafe } from "@/server/mcp/security";
 
 export type SafeFixInput = ProjectSelector & {
   blockerId?: string;
@@ -248,7 +249,7 @@ export async function safeFix(
     status: "prompt_ready",
     project,
     blocker: { ...blockerSummary, evidence },
-    safeFixPrompt: fixResult.prompt,
+    safeFixPrompt: assertFixPromptOutputSafe(fixResult.prompt),
     safeFixConfidence: fixResult.assessment.safeFixConfidence,
     implementationRisk: fixResult.assessment.implementationRisk,
     estimatedFixTime,
