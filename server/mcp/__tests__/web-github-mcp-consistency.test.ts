@@ -59,7 +59,7 @@ describe("web / GitHub / MCP consistency", () => {
 
     // All three surfaces read the persisted verdict through the same service
     // used in production — this is the single source of truth.
-    const retrieved = await getCurrentProductionVerdict(admin as never, PROJECT_1);
+    const retrieved = await getCurrentProductionVerdict(admin as never, ORG_A, PROJECT_1);
     expect(retrieved).not.toBeNull();
     if (!retrieved) return;
 
@@ -106,7 +106,7 @@ describe("web / GitHub / MCP consistency", () => {
     });
     const admin = createFakeAdmin(baseTables({ production_verdicts: [verdictRow(PROJECT_1, verdict)] }));
 
-    const retrieved = await getCurrentProductionVerdict(admin as never, PROJECT_1);
+    const retrieved = await getCurrentProductionVerdict(admin as never, ORG_A, PROJECT_1);
     expect(retrieved).not.toBeNull();
     if (!retrieved) return;
 
@@ -131,7 +131,7 @@ describe("web / GitHub / MCP consistency", () => {
     });
     const admin = createFakeAdmin(baseTables({ production_verdicts: [verdictRow(PROJECT_1, verdict)] }));
 
-    const retrieved = await getCurrentProductionVerdict(admin as never, PROJECT_1);
+    const retrieved = await getCurrentProductionVerdict(admin as never, ORG_A, PROJECT_1);
     expect(retrieved).not.toBeNull();
     if (!retrieved) return;
 

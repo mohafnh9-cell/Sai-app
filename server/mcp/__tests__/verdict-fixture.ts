@@ -8,10 +8,16 @@ let rowCounter = 0;
  * and `getCurrentProductionVerdict` expect), derived entirely from an already
  * built verdict so every test fixture stays internally consistent.
  */
-export function verdictRow(projectId: string, verdict: ProductionVerdictV1, id?: string) {
+export function verdictRow(
+  projectId: string,
+  verdict: ProductionVerdictV1,
+  id?: string,
+  organizationId = "org-a"
+) {
   rowCounter += 1;
   return {
     id: id ?? `33333333-3333-4333-8333-33333333${String(rowCounter).padStart(4, "0")}`,
+    organization_id: organizationId,
     project_id: projectId,
     repository_id: projectId,
     scan_id: verdict.scanId,

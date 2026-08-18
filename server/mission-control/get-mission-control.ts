@@ -234,8 +234,8 @@ async function loadMissionControlView(
     options?.preloadedVerdict !== undefined
       ? options.preloadedVerdict
       : analysisRunId
-        ? await getProductionVerdictByScan(dataClient, analysisRunId)
-        : await getCurrentProductionVerdict(dataClient, projectId);
+        ? await getProductionVerdictByScan(dataClient, organizationId, analysisRunId)
+        : await getCurrentProductionVerdict(dataClient, organizationId, projectId);
   const verdict = coerceVerdictForUi(rawVerdict);
 
   const scanInProgress = analysisRunId

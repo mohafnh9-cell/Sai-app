@@ -85,7 +85,7 @@ export async function getAutopilotDashboardView(
             .in("repository_id", projectIds)
             .in("status", [...ACTIVE_SCAN_STATUSES])
         : Promise.resolve({ data: [] as Array<{ id: string; repository_id: string }>, error: null }),
-      getCurrentProductionVerdictsForProjects(dataClient, projectIds),
+      getCurrentProductionVerdictsForProjects(dataClient, organizationId, projectIds),
     ]);
 
   const webhooksByProject = new Map(
@@ -101,7 +101,11 @@ export async function getAutopilotDashboardView(
   const completedReviewScanIds = [...latestReviewByProject.values()]
     .filter((review) => mapScanStatusToReviewStatus(review.status) === "completed")
     .map((review) => review.id);
-  const verdictScanIds = await getProductionVerdictScanIds(dataClient, completedReviewScanIds);
+  const verdictScanIds = await getProductionVerdictScanIds(
+    dataClient,
+    organizationId,
+    completedReviewScanIds
+  );
 
   const projectInputs = projects.map((project) => {
     const webhookRow = webhooksByProject.get(project.id);

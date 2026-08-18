@@ -44,7 +44,12 @@ export function createFullProductAuditE2EAdmin(options?: {
     score: 58,
     findingsCount: 1,
   });
-  const verdictDbRow = verdictRow(E2E_PROJECT_ID, verdict, "99999999-9999-4999-8999-999999999999");
+  const verdictDbRow = verdictRow(
+    E2E_PROJECT_ID,
+    verdict,
+    "99999999-9999-4999-8999-999999999999",
+    E2E_ORG_ID
+  );
 
   const tables: FakeTables = {
     projects: [

@@ -99,7 +99,7 @@ export async function buildProjectBrain(
         .order("completed_at", { ascending: false })
         .limit(1)
         .maybeSingle(),
-      getCurrentProductionVerdict(supabase, projectId).catch((error) => {
+      getCurrentProductionVerdict(supabase, project.organization_id, projectId).catch((error) => {
         log("verdict_read_failed", { projectId, error: String(error) });
         return null;
       }),

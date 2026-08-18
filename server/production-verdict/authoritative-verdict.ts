@@ -35,9 +35,10 @@ function verdictsDiverge(
  */
 export async function getAuthoritativeProductionVerdict(
   admin: SupabaseClient,
+  organizationId: string,
   projectId: string
 ): Promise<AuthoritativeProductionVerdict | null> {
-  const persisted = await getCurrentProductionVerdict(admin, projectId);
+  const persisted = await getCurrentProductionVerdict(admin, organizationId, projectId);
   if (!persisted) return null;
 
   const liveVerdict = await computeLiveProductionVerdict(admin, {

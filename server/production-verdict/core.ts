@@ -66,11 +66,13 @@ async function insertVerdictIfAbsent(
   maxAttempts = 3
 ): Promise<{ data: { id: string } | null; error: { message: string } | null; reused: boolean }> {
   const scanId = row.scan_id as string;
-  const existing = await getProductionVerdictByScan(admin, scanId);
+  const organizationId = row.organization_id as string;
+  const existing = await getProductionVerdictByScan(admin, organizationId, scanId);
   if (existing) {
     const { data } = await admin
       .from("production_verdicts")
       .select("id")
+      .eq("organization_id", organizationId)
       .eq("scan_id", scanId)
       .maybeSingle();
     return { data: data ? { id: data.id as string } : null, error: null, reused: true };
@@ -93,6 +95,7 @@ async function insertVerdictIfAbsent(
       const { data: raced } = await admin
         .from("production_verdicts")
         .select("id")
+        .eq("organization_id", organizationId)
         .eq("scan_id", scanId)
         .maybeSingle();
       return { data: raced ? { id: raced.id as string } : null, error: null, reused: true };
@@ -146,7 +149,11 @@ export async function generateAndPersistProductionVerdict(
     return null;
   }
 
-  const existingRunVerdict = await getProductionVerdictByScan(admin, input.scanId);
+  const existingRunVerdict = await getProductionVerdictByScan(
+    admin,
+    input.organizationId,
+    input.scanId
+  );
   if (
     existingRunVerdict &&
     isAnalysisRunImmutable({
@@ -166,7 +173,7 @@ export async function generateAndPersistProductionVerdict(
     operationType: "production_verdict",
   });
   if (await hasCompletedSideEffect(admin, verdictKey)) {
-    const existing = await getProductionVerdictByScan(admin, input.scanId);
+    const existing = await getProductionVerdictByScan(admin, input.organizationId, input.scanId);
     if (existing) return existing;
   }
 
@@ -187,6 +194,7 @@ export async function generateAndPersistProductionVerdict(
     admin
       .from("production_verdicts")
       .select("verdict, blockers_count")
+      .eq("organization_id", input.organizationId)
       .eq("project_id", input.projectId)
       .order("generated_at", { ascending: false })
       .limit(1)
@@ -312,7 +320,7 @@ export async function generateAndPersistProductionVerdict(
 
   if (verdictReused) {
     log("verdict_insert_skipped_immutable", { scanId: input.scanId });
-    const existing = await getProductionVerdictByScan(admin, input.scanId);
+    const existing = await getProductionVerdictByScan(admin, input.organizationId, input.scanId);
     if (!existing) {
       throw new Error(
         `VERDICT_INSERT_REUSED_WITHOUT_ROW: scan=${input.scanId} project=${input.projectId}`
@@ -386,11 +394,13 @@ export async function generateAndPersistProductionVerdict(
 
 export async function getProductionVerdictByScan(
   admin: SupabaseClient,
+  organizationId: string,
   scanId: string
 ): Promise<ProductionVerdictV1 | null> {
   const { data } = await admin
     .from("production_verdicts")
     .select("verdict")
+    .eq("organization_id", organizationId)
     .eq("scan_id", scanId)
     .maybeSingle();
 
@@ -405,13 +415,15 @@ export async function getProductionVerdictByScan(
 
 export async function getCurrentProductionVerdict(
   admin: SupabaseClient,
+  organizationId: string,
   projectId: string
 ): Promise<ProductionVerdictV1 | null> {
-  log("verdict_read_started", { projectId });
+  log("verdict_read_started", { organizationId, projectId });
 
   const { data: state } = await admin
     .from("repository_scan_state")
     .select("current_verdict_id")
+    .eq("organization_id", organizationId)
     .eq("repository_id", projectId)
     .maybeSingle();
 
@@ -419,6 +431,7 @@ export async function getCurrentProductionVerdict(
     const { data, error } = await admin
       .from("production_verdicts")
       .select("verdict")
+      .eq("organization_id", organizationId)
       .eq("id", state.current_verdict_id)
       .maybeSingle();
 
@@ -441,6 +454,7 @@ export async function getCurrentProductionVerdict(
   const { data, error } = await admin
     .from("production_verdicts")
     .select("verdict")
+    .eq("organization_id", organizationId)
     .eq("project_id", projectId)
     .order("generated_at", { ascending: false })
     .limit(1)
@@ -471,6 +485,7 @@ export async function getCurrentProductionVerdict(
 
 export async function compareProductionVerdicts(
   admin: SupabaseClient,
+  organizationId: string,
   previousScanId: string,
   currentScanId: string
 ): Promise<{
@@ -480,8 +495,8 @@ export async function compareProductionVerdicts(
   blockersDelta: number | null;
 } | null> {
   const [previous, current] = await Promise.all([
-    getProductionVerdictByScan(admin, previousScanId),
-    getProductionVerdictByScan(admin, currentScanId),
+    getProductionVerdictByScan(admin, organizationId, previousScanId),
+    getProductionVerdictByScan(admin, organizationId, currentScanId),
   ]);
 
   if (!previous && !current) return null;

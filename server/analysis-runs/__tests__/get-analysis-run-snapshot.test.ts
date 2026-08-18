@@ -86,7 +86,7 @@ describe("getAnalysisRunSnapshot", () => {
       branch: "main",
       verdict,
     });
-    expect(getProductionVerdictByScan).toHaveBeenCalledWith(admin, RUN);
+    expect(getProductionVerdictByScan).toHaveBeenCalledWith(admin, ORG, RUN);
   });
 
   it("throws AnalysisRunNotFoundError when scan missing", async () => {

@@ -45,7 +45,7 @@ function createReadyToShipAuditAdmin() {
     topPriorities: [],
     findingsCount: 1,
   });
-  const verdictDbRow = verdictRow(E2E_PROJECT_ID, verdict, VERDICT_ROW_ID);
+  const verdictDbRow = verdictRow(E2E_PROJECT_ID, verdict, VERDICT_ROW_ID, E2E_ORG_ID);
 
   const { admin, tables } = createFullProductAuditE2EAdmin({
     scanFindings: infoFindings,
@@ -86,7 +86,7 @@ function createDualScanAuditAdmin() {
     topPriorities: [],
     findingsCount: 1,
   });
-  const verdictDbRow = verdictRow(E2E_PROJECT_ID, verdict, VERDICT_ROW_ID);
+  const verdictDbRow = verdictRow(E2E_PROJECT_ID, verdict, VERDICT_ROW_ID, E2E_ORG_ID);
 
   const { admin, tables } = createFullProductAuditE2EAdmin({
     scanFindings: infoFindings,
@@ -147,7 +147,7 @@ function createFreshReadAuditAdmin() {
     topPriorities: [],
     findingsCount: 1,
   });
-  const verdictDbRow = verdictRow(E2E_PROJECT_ID, verdict, VERDICT_ROW_ID);
+  const verdictDbRow = verdictRow(E2E_PROJECT_ID, verdict, VERDICT_ROW_ID, E2E_ORG_ID);
 
   const { tables } = createFullProductAuditE2EAdmin({
     scanFindings: infoFindings,
@@ -312,7 +312,7 @@ describe("full_product_audit dual scan regression", () => {
       topPriorities: [],
       findingsCount: 1,
     });
-    const verdictDbRow = verdictRow(E2E_PROJECT_ID, verdict, VERDICT_ROW_ID);
+    const verdictDbRow = verdictRow(E2E_PROJECT_ID, verdict, VERDICT_ROW_ID, E2E_ORG_ID);
 
     const tables: FakeTables = {
       projects: [

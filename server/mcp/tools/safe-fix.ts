@@ -104,7 +104,7 @@ export async function safeFix(
 ): Promise<SafeFixResult> {
   const project = await resolveMcpProject(ctx, input, t);
 
-  const verdict = await getCurrentProductionVerdict(ctx.admin, project.id);
+  const verdict = await getCurrentProductionVerdict(ctx.admin, ctx.organizationId, project.id);
   if (!verdict) {
     throw new McpError(404, "no_verdict_available", t("errors.no_verdict_available"));
   }

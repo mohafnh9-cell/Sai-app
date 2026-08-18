@@ -89,7 +89,11 @@ export async function getAutomaticReviewPanelView(
   } else if (reviewStatus === "failed") {
     errorCode = "review_failed";
   } else if (review && reviewStatus === "completed") {
-    const verdict = await getProductionVerdictByScan(supabase, review.id);
+    const verdict = await getProductionVerdictByScan(
+      supabase,
+      project.organization_id,
+      review.id
+    );
     verdictUpdated = Boolean(verdict);
     if (!verdict) {
       errorCode = "review_failed";

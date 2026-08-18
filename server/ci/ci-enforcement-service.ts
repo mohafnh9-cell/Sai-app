@@ -140,7 +140,7 @@ export async function getCiEnforcementStatus(
       scanPhase = scanStatusToPhase(String(bySha.scan.status));
       source = "github";
       if (bySha.state === "completed") {
-        productionVerdict = await getProductionVerdictByScan(admin, scanId);
+        productionVerdict = await getProductionVerdictByScan(admin, input.organizationId, scanId);
       }
     }
   }

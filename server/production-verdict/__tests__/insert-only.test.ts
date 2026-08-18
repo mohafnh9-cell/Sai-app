@@ -133,8 +133,50 @@ function buildAdmin(input: {
           return {
             select: () => ({
               eq: (col: string, val: string) => {
+                const chain = {
+                  eq: (col2: string, val2: string) => {
+                    if (
+                      col === "organization_id" &&
+                      val === ORG_ID &&
+                      col2 === "scan_id" &&
+                      val2 === SCAN_ID &&
+                      input.existingVerdict
+                    ) {
+                      return {
+                        maybeSingle: async () => ({
+                          data: { id: "verdict-row", verdict: input.existingVerdict },
+                          error: null,
+                        }),
+                      };
+                    }
+                    if (col === "organization_id" && col2 === "project_id") {
+                      return {
+                        order: () => ({
+                          limit: () => ({
+                            maybeSingle: async () => ({ data: null, error: null }),
+                          }),
+                        }),
+                      };
+                    }
+                    return {
+                      maybeSingle: async () => ({ data: null, error: null }),
+                    };
+                  },
+                  order: () => ({
+                    limit: () => ({
+                      maybeSingle: async () => ({ data: null, error: null }),
+                    }),
+                  }),
+                  maybeSingle: async () => ({ data: null, error: null }),
+                };
                 if (col === "scan_id" && val === SCAN_ID && input.existingVerdict) {
                   return {
+                    eq: () => ({
+                      maybeSingle: async () => ({
+                        data: { id: "verdict-row", verdict: input.existingVerdict },
+                        error: null,
+                      }),
+                    }),
                     maybeSingle: async () => ({
                       data: { id: "verdict-row", verdict: input.existingVerdict },
                       error: null,
@@ -142,17 +184,9 @@ function buildAdmin(input: {
                   };
                 }
                 if (col === "project_id") {
-                  return {
-                    order: () => ({
-                      limit: () => ({
-                        maybeSingle: async () => ({ data: null, error: null }),
-                      }),
-                    }),
-                  };
+                  return chain;
                 }
-                return {
-                  maybeSingle: async () => ({ data: null, error: null }),
-                };
+                return chain;
               },
             }),
             insert: () => {

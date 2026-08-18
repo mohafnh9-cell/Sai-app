@@ -36,7 +36,7 @@ export async function buildScanProductionVerdict(
     persist?: boolean;
   }
 ): Promise<LegacyProductionVerdict> {
-  const existing = await getProductionVerdictByScan(admin, input.scanId);
+  const existing = await getProductionVerdictByScan(admin, input.organizationId, input.scanId);
   if (existing) return toLegacyVerdict(existing);
 
   const persist = input.persist !== false;

@@ -33,7 +33,7 @@ export async function getAnalysisRunSnapshot(
     throw new AnalysisRunNotFoundError();
   }
 
-  const verdict = await getProductionVerdictByScan(admin, input.runId);
+  const verdict = await getProductionVerdictByScan(admin, input.organizationId, input.runId);
 
   return {
     runId: scan.id as string,

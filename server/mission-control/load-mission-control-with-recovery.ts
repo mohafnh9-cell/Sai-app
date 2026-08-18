@@ -63,7 +63,7 @@ export async function loadMissionControlWithRecovery(
     };
   }
 
-  const scopedVerdict = await getProductionVerdictByScan(dataClient, scopedRunId);
+  const scopedVerdict = await getProductionVerdictByScan(dataClient, organizationId, scopedRunId);
   if (scopedVerdict) {
     const scoped = await getMissionControlView(supabase, projectId, organizationId, {
       analysisRunId: scopedRunId,
@@ -79,7 +79,7 @@ export async function loadMissionControlWithRecovery(
     };
   }
 
-  const currentVerdict = await getCurrentProductionVerdict(dataClient, projectId);
+  const currentVerdict = await getCurrentProductionVerdict(dataClient, organizationId, projectId);
   if (currentVerdict) {
     console.info({
       component: "mission-control-recovery",
