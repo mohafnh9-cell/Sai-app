@@ -1,6 +1,7 @@
 import type { Finding, FindingDraft, FindingLocation } from "@/features/security-scanner/types";
 import type { UntrustedContentSource } from "./delimiters";
 import type { InjectionPatternMatch } from "./input-guard";
+import { platformInjectionLegacyConfidenceBand } from "./platform-confidence";
 
 export const PLATFORM_INJECTION_RULE_ID = "platform.prompt_injection_attempt";
 export const PLATFORM_INJECTION_CATEGORY = "prompt_injection_attempt";
@@ -36,7 +37,7 @@ export function platformInjectionToFindingDraft(
       detection.message,
     ].join("\n"),
     severity: detection.action === "BLOCK" ? "high" : "medium",
-    confidence: "low",
+    confidence: platformInjectionLegacyConfidenceBand(),
     category: PLATFORM_INJECTION_CATEGORY,
     location,
     evidence: detection.matchedText,

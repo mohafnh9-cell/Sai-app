@@ -8,9 +8,11 @@ import {
   guardFixPromptOutput,
   guardUntrustedInput,
   PLATFORM_INJECTION_CATEGORY,
+  derivePlatformInjectionConfidenceLevel,
   scanInjectionPatterns,
   wrapUntrustedRepositoryData,
 } from "@/server/mcp/security";
+import { EVIDENCE_REPORT_METADATA_KEY } from "@/brain/evidence-finding/schema";
 
 const BENIGN_SECURITY_README = `# Security guide
 
@@ -99,6 +101,14 @@ describe("output-guard", () => {
   });
 });
 
+describe("platform injection confidence contract", () => {
+  it("derives SPECULATIVE and never VERIFIED for platform injection attempts", () => {
+    const level = derivePlatformInjectionConfidenceLevel();
+    expect(level).toBe("SPECULATIVE");
+    expect(level).not.toBe("VERIFIED");
+  });
+});
+
 describe("platform injection findings", () => {
   it("emits prompt_injection_attempt findings during post-processing", () => {
     const maliciousFinding: Finding = {
@@ -116,8 +126,14 @@ describe("platform injection findings", () => {
     };
 
     const processed = postProcessScanFindings([maliciousFinding], ["app/route.ts"]);
-    expect(processed.some((f) => f.category === PLATFORM_INJECTION_CATEGORY)).toBe(true);
-    expect(processed.find((f) => f.category === PLATFORM_INJECTION_CATEGORY)?.confidence).toBe("low");
+    const platformFinding = processed.find((f) => f.category === PLATFORM_INJECTION_CATEGORY);
+    expect(platformFinding).toBeDefined();
+    expect(platformFinding?.confidence).toBe("low");
+    const report = platformFinding?.metadata?.[EVIDENCE_REPORT_METADATA_KEY] as
+      | { confidenceLevel?: string }
+      | undefined;
+    expect(report?.confidenceLevel).toBe("SPECULATIVE");
+    expect(report?.confidenceLevel).not.toBe("VERIFIED");
   });
 });
 

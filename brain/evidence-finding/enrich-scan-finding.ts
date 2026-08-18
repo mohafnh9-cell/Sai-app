@@ -27,6 +27,8 @@ import {
 } from "@/brain/repository-model";
 import { collectPlatformInjectionFindings } from "@/server/mcp/security";
 import { isPlatformInjectionFinding } from "@/server/mcp/security/platform-finding";
+import { derivePlatformInjectionConfidenceLevel } from "@/server/mcp/security/platform-confidence";
+import { legacyBandFromConfidenceLevel } from "@/brain/confidence";
 import { detectStack } from "@/features/security-scanner/stack";
 import { stubNormalizedFile } from "@/features/security-scanner/normalization";
 import type { NormalizedFile } from "@/features/security-scanner/types";
@@ -54,13 +56,15 @@ export function enrichScanFinding(input: {
 }): Finding {
   if (isPlatformInjectionFinding(input.finding)) {
     const report = buildScanEvidenceReport(input.finding, input.projectContext);
+    const confidenceLevel = derivePlatformInjectionConfidenceLevel();
     return {
       ...input.finding,
-      confidence: "low",
+      confidence: legacyBandFromConfidenceLevel(confidenceLevel),
       metadata: {
         ...(input.finding.metadata ?? {}),
         [EVIDENCE_REPORT_METADATA_KEY]: {
           ...report,
+          confidenceLevel,
           confidence: Math.min(report.confidence, 0.35),
           confidencePercent: Math.min(report.confidencePercent, 35),
           confirmationStatus: "UNVERIFIED",

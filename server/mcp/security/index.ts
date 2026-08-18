@@ -39,3 +39,8 @@ export {
 } from "./platform-scan";
 
 export { sanitizeProductionFixPromptInput } from "./safe-fix-input";
+
+export {
+  derivePlatformInjectionConfidenceLevel,
+  platformInjectionLegacyConfidenceBand,
+} from "./platform-confidence";
