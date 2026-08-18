@@ -44,11 +44,11 @@ ${getAnalysisEngineV2NarrativeSupplement(locale)}`;
 }
 
 function guardFindingField(
-  value: string | undefined,
+  value: string | null | undefined,
   path: string,
   field: string
 ): string | undefined {
-  if (!value?.trim()) return value;
+  if (value == null || !value.trim()) return value ?? undefined;
   return guardUntrustedInput(value, {
     source: "finding_field",
     path: `${path}#${field}`,
