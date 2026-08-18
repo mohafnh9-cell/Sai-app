@@ -10,7 +10,7 @@ export const processGitHubWebhookFunction = inngest.createFunction(
     id: "github-webhook-process",
     name: "Process GitHub webhook delivery",
     retries: 3,
-    concurrency: { limit: 20 },
+    concurrency: { limit: 5 },
     onFailure: async ({ event, error }) => {
       const scanJobId = scanJobIdFromInngestFailure(event);
       if (!scanJobId) return;
