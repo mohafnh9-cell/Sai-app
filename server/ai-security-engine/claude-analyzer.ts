@@ -7,6 +7,7 @@ import {
   ANALYSIS_ENGINE_V2_VERSION,
   getAnalysisEngineV2NarrativeSupplement,
 } from "@/brain/prompts/analysis-engine-v2";
+import { guardUntrustedInput } from "@/server/mcp/security";
 
 const PROMPT_VERSION = `2.0.0-ae-narrative+${ANALYSIS_ENGINE_V2_VERSION}`;
 const MODEL = "claude-sonnet-4-20250514";
@@ -42,6 +43,19 @@ Rules:
 ${getAnalysisEngineV2NarrativeSupplement(locale)}`;
 }
 
+function guardFindingField(
+  value: string | undefined,
+  path: string,
+  field: string
+): string | undefined {
+  if (!value?.trim()) return value;
+  return guardUntrustedInput(value, {
+    source: "finding_field",
+    path: `${path}#${field}`,
+    forceWrap: true,
+  }).forPrompt;
+}
+
 function buildUserPrompt(context: ProjectSecurityContext, topFindingIds: string[]) {
   return JSON.stringify(
     {
@@ -58,16 +72,28 @@ function buildUserPrompt(context: ProjectSecurityContext, topFindingIds: string[
       findings: context.findings.map((finding) => ({
         id: finding.id,
         ruleId: finding.ruleId,
-        title: finding.title,
+        title: guardFindingField(finding.title, finding.filePath ?? "finding", "title"),
         severity: finding.severity,
         confidence: finding.confidence,
         category: finding.category,
         filePath: finding.filePath,
         startLine: finding.startLine,
-        description: finding.description,
-        recommendation: finding.recommendation,
-        evidence: finding.evidence,
-        codeSnippet: finding.codeSnippet,
+        description: guardFindingField(
+          finding.description,
+          finding.filePath ?? "finding",
+          "description"
+        ),
+        recommendation: guardFindingField(
+          finding.recommendation,
+          finding.filePath ?? "finding",
+          "recommendation"
+        ),
+        evidence: guardFindingField(finding.evidence, finding.filePath ?? "finding", "evidence"),
+        codeSnippet: guardFindingField(
+          finding.codeSnippet,
+          finding.filePath ?? "finding",
+          "codeSnippet"
+        ),
       })),
       topFindingIdsForFixes: topFindingIds,
       requiredOutput: {

@@ -9,6 +9,10 @@ import { assessSafeFix, formatEstimatedFixTime } from "./assessment";
 import { guidanceForCategory } from "./category-guidance";
 import { formatStackLines } from "./format-stack";
 import type { FixPromptStack, ProductionFixPromptInput, ProductionFixPromptResult } from "./types";
+import {
+  assertFixPromptOutputSafe,
+  sanitizeProductionFixPromptInput,
+} from "@/server/mcp/security";
 
 function bulletList(items: string[]): string {
   return items.map((item) => `- ${item}`).join("\n");
@@ -75,27 +79,28 @@ export function projectedVerdictAfterFix(input: ProductionFixPromptInput): strin
 export function buildProductionFixPrompt(
   input: ProductionFixPromptInput
 ): ProductionFixPromptResult {
-  const guidance = guidanceForCategory(input.category);
-  const buildCommands = input.buildCommands ?? guidance.buildRequirements;
-  const projectedVerdictLabel = projectedVerdictAfterFix(input);
-  const currentVerdictLabel = input.currentVerdictStatus
-    ? VERDICT_STATUS_LABELS[input.currentVerdictStatus]
+  const guardedInput = sanitizeProductionFixPromptInput(input);
+  const guidance = guidanceForCategory(guardedInput.category);
+  const buildCommands = guardedInput.buildCommands ?? guidance.buildRequirements;
+  const projectedVerdictLabel = projectedVerdictAfterFix(guardedInput);
+  const currentVerdictLabel = guardedInput.currentVerdictStatus
+    ? VERDICT_STATUS_LABELS[guardedInput.currentVerdictStatus]
     : "Not Ready to Ship";
-  const assessment = assessSafeFix(input);
+  const assessment = assessSafeFix(guardedInput);
 
   const files =
-    input.affectedFiles.length > 0
-      ? bulletList(input.affectedFiles)
+    guardedInput.affectedFiles.length > 0
+      ? bulletList(guardedInput.affectedFiles)
       : "- Review the codebase area related to this issue during implementation.";
 
-  const stackLines = formatStackLines(input.stack).join("\n");
-  const severityLabel = input.severity.charAt(0).toUpperCase() + input.severity.slice(1);
+  const stackLines = formatStackLines(guardedInput.stack).join("\n");
+  const severityLabel = guardedInput.severity.charAt(0).toUpperCase() + guardedInput.severity.slice(1);
 
-  const prompt = [
+  const promptBody = [
     section(
       "PROJECT CONTEXT",
       [
-        input.projectName ? `Project: ${input.projectName}` : null,
+        guardedInput.projectName ? `Project: ${guardedInput.projectName}` : null,
         "Detected stack:",
         stackLines,
       ]
@@ -105,13 +110,13 @@ export function buildProductionFixPrompt(
     section(
       "PRODUCTION BLOCKER",
       [
-        `Title: ${input.issueTitle}`,
+        `Title: ${guardedInput.issueTitle}`,
         `Severity: ${severityLabel}`,
-        input.affectedFiles[0] ? `Location: ${input.affectedFiles[0]}` : null,
+        guardedInput.affectedFiles[0] ? `Location: ${guardedInput.affectedFiles[0]}` : null,
         "",
-        input.issueDescription,
+        guardedInput.issueDescription,
         "",
-        `Estimated impact: ${input.estimatedImpact ?? severityImpact(input.severity)}`,
+        `Estimated impact: ${guardedInput.estimatedImpact ?? severityImpact(guardedInput.severity)}`,
       ]
         .filter(Boolean)
         .join("\n")
@@ -119,7 +124,7 @@ export function buildProductionFixPrompt(
     section(
       "WHY THIS MATTERS",
       [
-        input.whyItMatters,
+        guardedInput.whyItMatters,
         "",
         `Production risk: ${assessment.riskReason}`,
         `Implementation risk: ${assessment.implementationRisk}`,
@@ -128,8 +133,8 @@ export function buildProductionFixPrompt(
     section(
       "GOAL",
       [
-        `Fix this ${input.category.replace(/_/g, " ")} production blocker with the smallest possible safe change.`,
-        input.recommendedAction,
+        `Fix this ${guardedInput.category.replace(/_/g, " ")} production blocker with the smallest possible safe change.`,
+        guardedInput.recommendedAction,
       ].join("\n")
     ),
     section("FILES TO REVIEW", files),
@@ -139,7 +144,7 @@ export function buildProductionFixPrompt(
       "Apply the minimum required code changes using the safest possible approach.",
       "Match existing project conventions, naming, and file structure.",
       "",
-      input.recommendedAction,
+      guardedInput.recommendedAction,
     ].join("\n")),
     section("SAFE IMPLEMENTATION PRINCIPLES", bulletList(SAFE_IMPLEMENTATION_PRINCIPLES)),
     section("REGRESSION TESTS", bulletList(guidance.regressionTests)),
@@ -162,7 +167,7 @@ export function buildProductionFixPrompt(
       "",
       assessment.riskReason,
     ].join("\n")),
-    section("ESTIMATED FIX TIME", formatEstimatedFixTime(input.estimatedFixMinutes)),
+    section("ESTIMATED FIX TIME", formatEstimatedFixTime(guardedInput.estimatedFixMinutes)),
     section("ESTIMATED SCOPE", [
       `Files expected to change: ${assessment.estimatedScope.filesExpected}`,
       `Estimated LOC modifications: ${assessment.estimatedScope.estimatedLocMin}–${assessment.estimatedScope.estimatedLocMax}`,
@@ -176,14 +181,16 @@ export function buildProductionFixPrompt(
         "",
         "Projected:",
         projectedVerdictLabel,
-        input.projectedScoreImpact
-          ? `(Estimated score improvement: +${input.projectedScoreImpact} points)`
+        guardedInput.projectedScoreImpact
+          ? `(Estimated score improvement: +${guardedInput.projectedScoreImpact} points)`
           : null,
       ]
         .filter(Boolean)
         .join("\n")
     ),
   ].join("\n\n------------------------------------------------------------\n\n");
+
+  const prompt = assertFixPromptOutputSafe(promptBody);
 
   return { prompt, projectedVerdictLabel, assessment };
 }
