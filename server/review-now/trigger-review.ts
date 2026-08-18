@@ -243,7 +243,7 @@ export async function triggerProductionReview(
       await recoverStaleActiveReviewsForProject(admin, input.projectId);
       return hasActiveRepositoryReview(admin, input.projectId);
     })(),
-    getCurrentProductionVerdict(admin, input.projectId),
+    getCurrentProductionVerdict(admin, input.organizationId, input.projectId),
   ]);
   const activeReviewId = hasActiveReview ? await loadActiveScanId(admin, input.projectId) : null;
 

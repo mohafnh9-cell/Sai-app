@@ -6,6 +6,7 @@ import type { ProductionVerdictV1 } from "@/brain/production-verdict/schema";
 
 export async function getCurrentProductionVerdictsForProjects(
   admin: SupabaseClient,
+  organizationId: string,
   projectIds: string[]
 ): Promise<Map<string, ProductionVerdictV1>> {
   const result = new Map<string, ProductionVerdictV1>();
@@ -16,6 +17,7 @@ export async function getCurrentProductionVerdictsForProjects(
   const { data: states } = await admin
     .from("repository_scan_state")
     .select("repository_id, current_verdict_id")
+    .eq("organization_id", organizationId)
     .in("repository_id", projectIds);
 
   const verdictIds = [
@@ -30,6 +32,7 @@ export async function getCurrentProductionVerdictsForProjects(
     const { data: rows } = await admin
       .from("production_verdicts")
       .select("id, project_id, verdict")
+      .eq("organization_id", organizationId)
       .in("id", verdictIds);
 
     for (const row of rows ?? []) {
@@ -45,6 +48,7 @@ export async function getCurrentProductionVerdictsForProjects(
     const { data: rows } = await admin
       .from("production_verdicts")
       .select("project_id, verdict, generated_at")
+      .eq("organization_id", organizationId)
       .in("project_id", missingProjectIds)
       .order("generated_at", { ascending: false });
 
@@ -63,6 +67,7 @@ export async function getCurrentProductionVerdictsForProjects(
 
 export async function getProductionVerdictScanIds(
   admin: SupabaseClient,
+  organizationId: string,
   scanIds: string[]
 ): Promise<Set<string>> {
   if (scanIds.length === 0) {
@@ -72,6 +77,7 @@ export async function getProductionVerdictScanIds(
   const { data } = await admin
     .from("production_verdicts")
     .select("scan_id")
+    .eq("organization_id", organizationId)
     .in("scan_id", scanIds);
 
   return new Set(

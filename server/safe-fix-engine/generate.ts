@@ -60,8 +60,8 @@ async function generateSafeFixInner(
 > {
   const requestedId = input.blockerId?.trim() || input.priorityId?.trim() || input.findingId?.trim();
   const verdict = input.analysisRunId
-    ? await getProductionVerdictByScan(admin, input.analysisRunId)
-    : await getCurrentProductionVerdict(admin, input.projectId);
+    ? await getProductionVerdictByScan(admin, input.organizationId, input.analysisRunId)
+    : await getCurrentProductionVerdict(admin, input.organizationId, input.projectId);
   if (!verdict) throw new Error("no_verdict");
 
   if (verdict.blockersCount === 0 && verdict.topPriorities.length === 0) {

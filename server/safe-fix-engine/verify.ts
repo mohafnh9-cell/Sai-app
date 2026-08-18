@@ -77,8 +77,8 @@ async function verifySafeFixInner(
 
   const verdictScanId = input.analysisRunId ?? record.reviewId ?? null;
   const verdict = verdictScanId
-    ? await getProductionVerdictByScan(admin, verdictScanId)
-    : await getCurrentProductionVerdict(admin, input.projectId);
+    ? await getProductionVerdictByScan(admin, input.organizationId, verdictScanId)
+    : await getCurrentProductionVerdict(admin, input.organizationId, input.projectId);
   const ctx = await loadProtectionContext(admin, input.projectId);
 
   const baselineScore = (baselineSnap?.score as number) ?? null;

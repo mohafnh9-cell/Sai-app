@@ -36,11 +36,12 @@ export async function ensureProductionVerdictForCompletedScan(
     );
   }
 
-  let existing = await getProductionVerdictByScan(admin, input.scanId);
+  let existing = await getProductionVerdictByScan(admin, input.organizationId, input.scanId);
   if (existing) {
     const { data: row } = await admin
       .from("production_verdicts")
       .select("id")
+      .eq("organization_id", input.organizationId)
       .eq("scan_id", input.scanId)
       .maybeSingle();
     if (row?.id) {

@@ -43,7 +43,11 @@ export async function finalizeProjectStateAfterAutomaticReview(
     return buildFinalizeFailure(decision.errorCode, scan?.id ?? input.scanId);
   }
 
-  const existingVerdict = await getProductionVerdictByScan(admin, input.scanId);
+  const existingVerdict = await getProductionVerdictByScan(
+    admin,
+    input.organizationId,
+    input.scanId
+  );
   if (existingVerdict) {
     log("verdict_already_current", { scanId: input.scanId, projectId: input.projectId });
     return buildFinalizeSuccess(input.scanId);

@@ -125,7 +125,11 @@ export async function finalizeWebhookAutomationScan(
           ? `${input.appUrl}/projects/${input.projectId}/pull-requests/${input.pullRequestNumber}?head=${input.statusSha}`
           : `${input.appUrl}/projects/${input.projectId}/scans/${input.scanId}`
         : undefined;
-      const persistedVerdict = await getProductionVerdictByScan(admin, input.scanId);
+      const persistedVerdict = await getProductionVerdictByScan(
+        admin,
+        input.organizationId,
+        input.scanId
+      );
       const idempotencyKey = buildIdempotencyKey({
         organizationId: input.organizationId,
         projectId: input.projectId,
@@ -210,7 +214,7 @@ export async function finalizeWebhookAutomationScan(
     }
   }
 
-  const persisted = await getProductionVerdictByScan(admin, input.scanId);
+  const persisted = await getProductionVerdictByScan(admin, input.organizationId, input.scanId);
   const { data: verdictRow } = await admin
     .from("production_verdicts")
     .select("id")

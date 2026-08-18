@@ -84,7 +84,7 @@ export async function loadProtectionContext(
     admin.from("project_continuous_protection").select("*").eq("project_id", projectId).maybeSingle(),
     admin.from("repository_sync_status").select("connection_status, commit_sha").eq("project_id", projectId).maybeSingle(),
     admin.from("project_memory_profile").select("first_protected_at").eq("project_id", projectId).maybeSingle(),
-    getCurrentProductionVerdict(admin, projectId),
+    getCurrentProductionVerdict(admin, organizationId, projectId),
     admin
       .from("protection_snapshots")
       .select("*")

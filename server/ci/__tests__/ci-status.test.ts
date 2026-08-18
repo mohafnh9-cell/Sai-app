@@ -187,6 +187,6 @@ describe("getCiEnforcementStatus", () => {
 
     expect(status.source).toBe("github");
     expect(status.checkRun.conclusion).toBe("failure");
-    expect(getProductionVerdictByScan).toHaveBeenCalledWith(admin, "scan-push");
+    expect(getProductionVerdictByScan).toHaveBeenCalledWith(admin, ORG, "scan-push");
   });
 });

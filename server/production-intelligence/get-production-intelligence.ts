@@ -8,6 +8,7 @@ import {
   type ProductionIntelligencePreview,
 } from "@/brain/production-intelligence";
 import { getProductionJourneyByProject } from "@/server/production-journey/service";
+import { getProjectAccessForUser } from "@/server/projects/project-access";
 import { getCurrentProductionVerdict } from "@/server/production-verdict/service";
 
 function log(event: string, fields: Record<string, unknown>) {
@@ -22,6 +23,12 @@ export async function getProductionIntelligence(
   log("intelligence_requested", { projectId, userId });
 
   try {
+    const project = await getProjectAccessForUser(client, projectId, userId);
+    if (!project) {
+      log("intelligence_access_denied", { projectId });
+      return null;
+    }
+
     const journey = await getProductionJourneyByProject(client, projectId, userId, {
       limit: 50,
     });
@@ -30,7 +37,11 @@ export async function getProductionIntelligence(
       return null;
     }
 
-    const verdict = await getCurrentProductionVerdict(client, projectId);
+    const verdict = await getCurrentProductionVerdict(
+      client,
+      project.organization_id,
+      projectId
+    );
     const intelligence = buildProductionIntelligence({ journey, verdict });
 
     log("intelligence_built", {

@@ -91,7 +91,11 @@ export async function runFullProductAudit(
       organizationId: input.organizationId,
       projectId: input.projectId,
     });
-    const currentVerdict = await getCurrentProductionVerdict(admin, input.projectId);
+    const currentVerdict = await getCurrentProductionVerdict(
+      admin,
+      input.organizationId,
+      input.projectId
+    );
     if (currentVerdict?.scanId) {
       const currentCampaign = await getAttackCampaignByScanId(
         admin,
@@ -288,7 +292,11 @@ export async function runFullProductAudit(
           )
         : [];
 
-  const persistedVerdict = await getCurrentProductionVerdict(admin, input.projectId);
+  const persistedVerdict = await getCurrentProductionVerdict(
+    admin,
+    input.organizationId,
+    input.projectId
+  );
   const { data: freshScanRow } = await admin
     .from("scans")
     .select(`${LIVE_VERDICT_SCAN_SELECT}, metrics`)

@@ -76,7 +76,11 @@ export async function canIDeploy(
 ): Promise<CanIDeployResult> {
   const project = await resolveMcpProject(ctx, input, t);
 
-  const authoritative = await getAuthoritativeProductionVerdict(ctx.admin, project.id);
+  const authoritative = await getAuthoritativeProductionVerdict(
+    ctx.admin,
+    ctx.organizationId,
+    project.id
+  );
   if (!authoritative) {
     throw new McpError(404, "no_verdict_available", t("errors.no_verdict_available"));
   }

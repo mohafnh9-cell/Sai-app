@@ -64,7 +64,11 @@ export async function getLatestPullRequestScan(
       ? safeParseProductionVerdict(verdictRow.verdict)
       : null;
   } else if (row.scan_id) {
-    productionVerdict = await getProductionVerdictByScan(admin, row.scan_id);
+    productionVerdict = await getProductionVerdictByScan(
+      admin,
+      row.organization_id as string,
+      row.scan_id
+    );
   }
 
   let scanStatus: PullRequestScanView["scanStatus"] = "missing";

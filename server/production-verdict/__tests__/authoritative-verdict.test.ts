@@ -4,13 +4,20 @@ import { createFakeAdmin } from "@/server/mcp/__tests__/fake-admin";
 import { buildVerdictFixture, verdictRow } from "@/server/mcp/__tests__/verdict-fixture";
 
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
+const ORG_ID = "33333333-3333-4333-8333-333333333333";
 
 describe("getAuthoritativeProductionVerdict", () => {
   it("returns persisted verdict as authoritative", async () => {
     const verdict = buildVerdictFixture({ status: "ready_to_ship", score: 88, blockersCount: 0 });
-    const row = verdictRow(PROJECT_ID, verdict);
+    const row = verdictRow(PROJECT_ID, verdict, undefined, ORG_ID);
     const admin = createFakeAdmin({
-      repository_scan_state: [{ repository_id: PROJECT_ID, current_verdict_id: row.id }],
+      repository_scan_state: [
+        {
+          repository_id: PROJECT_ID,
+          organization_id: ORG_ID,
+          current_verdict_id: row.id,
+        },
+      ],
       production_verdicts: [row],
       scans: [
         {
@@ -28,7 +35,7 @@ describe("getAuthoritativeProductionVerdict", () => {
       scan_findings: [],
     });
 
-    const result = await getAuthoritativeProductionVerdict(admin as never, PROJECT_ID);
+    const result = await getAuthoritativeProductionVerdict(admin as never, ORG_ID, PROJECT_ID);
     expect(result?.authoritative).toBe("persisted");
     expect(result?.verdict.status).toBe("ready_to_ship");
     expect(result?.consistency).toBe("consistent");

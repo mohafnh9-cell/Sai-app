@@ -84,7 +84,7 @@ export async function loadMissionControlReviewSignals(
 
   const [syncStatus, currentVerdict] = await Promise.all([
     getRepositorySyncStatus(supabase, projectId),
-    adminClient ? getCurrentProductionVerdict(adminClient, projectId) : Promise.resolve(null),
+    adminClient ? getCurrentProductionVerdict(adminClient, organizationId, projectId) : Promise.resolve(null),
   ]);
 
   let productionReviewState = IDLE_REVIEW_STATE;
