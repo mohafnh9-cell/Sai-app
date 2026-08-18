@@ -1,5 +1,6 @@
 import type { VerdictStatus } from "@/brain/production-verdict/schema";
 import type { SecretEvidenceClassification } from "@/features/security-scanner/rules/secret-classification";
+import type { ConfidenceLevel } from "@/brain/confidence/types";
 
 export type FindingVerificationStatus =
   | "CONFIRMED"
@@ -50,6 +51,7 @@ export type ConsolidatedAuditFinding = {
   verificationStatus: FindingVerificationStatus;
   evidence: string[];
   confidence: "high" | "medium" | "low";
+  confidenceLevel: ConfidenceLevel;
   affectedComponent: string | null;
   line?: number;
   recommendation: string | null;

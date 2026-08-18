@@ -9,7 +9,25 @@ import type {
   FindingVerificationStatus,
 } from "./types";
 
-function confidenceLabel(
+import type { ConfidenceLevel } from "@/brain/confidence/types";
+import { CONFIDENCE_LEVEL_LABELS } from "@/brain/confidence/derive";
+
+function confidenceLabelFromLevel(level: ConfidenceLevel): string {
+  switch (level) {
+    case "VERIFIED":
+      return "Verificado";
+    case "PROBABLE":
+      return "Probable";
+    case "INFERRED":
+      return "Inferido";
+    case "SPECULATIVE":
+      return "Especulativo";
+    default:
+      return CONFIDENCE_LEVEL_LABELS.PROBABLE;
+  }
+}
+
+function confidenceLabelFromVerification(
   verificationStatus: FindingVerificationStatus,
   secretClassification?: SecretEvidenceClassification
 ): string {
@@ -116,7 +134,9 @@ export function buildAuditFindingUserFacing(
       : finding.verificationStatus === "CONFIRMED"
         ? "Este problema puede explotarse en la aplicación autorizada."
         : "Si fuera una credencial real y alguien accediera al código, podría usarla para acceder a un servicio externo.",
-    confidenceLabel: confidenceLabel(finding.verificationStatus, finding.secretClassification),
+    confidenceLabel: finding.confidenceLevel
+      ? confidenceLabelFromLevel(finding.confidenceLevel)
+      : confidenceLabelFromVerification(finding.verificationStatus, finding.secretClassification),
     dynamicVerificationStatus: dynamic.status,
     dynamicVerificationReason: dynamic.reason,
     whatToDo: whatToDoCopy(finding),

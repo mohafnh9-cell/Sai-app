@@ -12,6 +12,11 @@ import {
   staticFindingMatchesRule,
   staticFindingMatchesRuleForConfirmation,
 } from "./correlation-rules";
+import {
+  deriveConfidenceLevel,
+  legacyBandFromConfidenceLevel,
+} from "@/brain/confidence/derive";
+import type { ConfidenceLevel } from "@/brain/confidence/types";
 import type { ConsolidatedAuditFinding, FindingVerificationStatus } from "./types";
 
 export type StaticFindingInput = {
@@ -40,6 +45,24 @@ export type AttackFindingInput = {
   adapterId?: string | null;
   confidence?: number | null;
 };
+
+function resolveAuditFindingConfidence(input: {
+  legacyBand: "high" | "medium" | "low";
+  verificationStatus: FindingVerificationStatus;
+  hasRuntimeEvidence?: boolean;
+  numericScore?: number | null;
+}): { confidence: "high" | "medium" | "low"; confidenceLevel: ConfidenceLevel } {
+  const confidenceLevel = deriveConfidenceLevel({
+    legacyBand: input.legacyBand,
+    numericScore: input.numericScore ?? undefined,
+    verificationStatus: input.verificationStatus,
+    hasRuntimeEvidence: input.hasRuntimeEvidence,
+  });
+  return {
+    confidence: legacyBandFromConfidenceLevel(confidenceLevel),
+    confidenceLevel,
+  };
+}
 
 function normalizeConfidence(value: string | number | null | undefined): "high" | "medium" | "low" {
   if (typeof value === "number") {
@@ -157,6 +180,13 @@ export function correlateAuditFindings(input: {
 
       const confirmed = attackFinding.outcome === "confirmed";
       const verificationStatus = mapCorrelatedVerification(attackFinding.outcome, confirmed);
+      const legacyBand = confirmed ? "high" : normalizeConfidence(staticFinding.confidence);
+      const { confidence, confidenceLevel } = resolveAuditFindingConfidence({
+        legacyBand,
+        verificationStatus,
+        hasRuntimeEvidence: confirmed,
+        numericScore: attackFinding.confidence,
+      });
 
       consolidated.push({
         id: `confirmed:${staticFinding.id}:${attackFinding.id}`,
@@ -172,7 +202,8 @@ export function correlateAuditFindings(input: {
             : `Static rule ${staticFinding.ruleId ?? "unknown"} at ${staticFinding.filePath ?? "unknown"}`,
           `Dynamic (${attackFinding.adapterId ?? "test"}): ${attackFinding.outcome} — ${attackFinding.impact ?? attackFinding.title}`,
         ],
-        confidence: confirmed ? "high" : normalizeConfidence(staticFinding.confidence),
+        confidence,
+        confidenceLevel,
         affectedComponent: staticFinding.filePath ?? attackFinding.adapterId ?? null,
         line: staticFinding.startLine ?? undefined,
         recommendation: staticFinding.recommendation ?? attackFinding.impact ?? null,
@@ -193,6 +224,11 @@ export function correlateAuditFindings(input: {
     if (matchedStaticIds.has(staticFinding.id)) continue;
 
     if (isInformationalPass(staticFinding)) {
+      const legacyBand = normalizeConfidence(staticFinding.confidence);
+      const { confidence, confidenceLevel } = resolveAuditFindingConfidence({
+        legacyBand,
+        verificationStatus: "NOT_APPLICABLE",
+      });
       consolidated.push({
         id: `static:${staticFinding.id}`,
         severity: presentStaticSeverity(staticFinding),
@@ -206,7 +242,8 @@ export function correlateAuditFindings(input: {
             ? `Static: ${staticFinding.evidence}`
             : `Static rule ${staticFinding.ruleId ?? "unknown"} at ${staticFinding.filePath ?? "unknown"}`,
         ],
-        confidence: normalizeConfidence(staticFinding.confidence),
+        confidence,
+        confidenceLevel,
         affectedComponent: staticFinding.filePath ?? null,
         line: staticFinding.startLine ?? undefined,
         recommendation: staticFinding.recommendation ?? null,
@@ -219,6 +256,11 @@ export function correlateAuditFindings(input: {
     }
 
     const runnable = staticHasRunnableTest(staticFinding, executedAdapterSet);
+    const staticLegacyBand = normalizeConfidence(staticFinding.confidence);
+    const staticConfidence = resolveAuditFindingConfidence({
+      legacyBand: staticLegacyBand,
+      verificationStatus: "POTENTIAL",
+    });
     consolidated.push({
       id: `static:${staticFinding.id}`,
       severity: presentStaticSeverity(staticFinding),
@@ -235,7 +277,8 @@ export function correlateAuditFindings(input: {
           ? "Dynamic test available — run Full Product Audit with security tests to attempt confirmation."
           : "Static analysis only — no matching attack adapter executed for this category.",
       ],
-      confidence: normalizeConfidence(staticFinding.confidence),
+      confidence: staticConfidence.confidence,
+      confidenceLevel: staticConfidence.confidenceLevel,
       affectedComponent: staticFinding.filePath ?? null,
       line: staticFinding.startLine ?? undefined,
       recommendation: staticFinding.recommendation ?? null,
@@ -263,6 +306,14 @@ export function correlateAuditFindings(input: {
       continue;
     }
 
+    const dynamicLegacyBand = normalizeConfidence(attackFinding.confidence);
+    const dynamicConfidence = resolveAuditFindingConfidence({
+      legacyBand: dynamicLegacyBand,
+      verificationStatus,
+      hasRuntimeEvidence: verificationStatus === "CONFIRMED",
+      numericScore: attackFinding.confidence,
+    });
+
     consolidated.push({
       id: `dynamic:${attackFinding.id}`,
       severity: attackFinding.severity,
@@ -274,7 +325,8 @@ export function correlateAuditFindings(input: {
       evidence: [
         `Dynamic (${attackFinding.adapterId ?? "test"}): ${attackFinding.outcome} — ${attackFinding.impact ?? attackFinding.title}`,
       ],
-      confidence: normalizeConfidence(attackFinding.confidence),
+      confidence: dynamicConfidence.confidence,
+      confidenceLevel: dynamicConfidence.confidenceLevel,
       affectedComponent: attackFinding.adapterId ?? null,
       recommendation: attackFinding.impact ?? null,
       safeFixAvailable: severityRank(attackFinding.severity) >= 4,

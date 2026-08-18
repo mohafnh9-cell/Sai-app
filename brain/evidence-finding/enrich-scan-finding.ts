@@ -3,6 +3,7 @@ import { analyzeProjectContext, projectAwareRecommendation, type ProjectContext 
 import type { EvidenceReport, EvidenceItem } from "./schema";
 import { lookupRuleInfo } from "./rule-catalog";
 import { computeConfidenceScore, confidencePercent } from "./compute-confidence";
+import { deriveConfidenceFromEvidenceScore } from "@/brain/confidence/derive";
 import {
   computeFalsePositiveProbability,
   falsePositiveLabel,
@@ -124,6 +125,7 @@ function buildSuppressedReport(finding: Finding, context: ProjectContext): Evide
     version: 1,
     detectionMethod: "STATIC_ANALYSIS",
     confidence: 0.2,
+    confidenceLevel: "SPECULATIVE",
     confidencePercent: 20,
     confidenceExplanation: "Finding suppressed because the project appears to be a public marketing site.",
     falsePositiveProbability: 0.85,
@@ -213,6 +215,27 @@ function buildScanEvidenceReport(finding: Finding, context: ProjectContext): Evi
     hasReplayEvidence: false,
   });
 
+  const reasoning = buildScanReasoning(finding, evidenceItems, secret, secretClassification);
+  const nonBlockingSecret = isNonBlockingSecretClassification(secretClassification);
+  const externalFinding = isExternalSecurityAnalysisFinding(finding);
+  const adjustedConfidence = nonBlockingSecret ? Math.min(confidence, 0.35) : confidence;
+  const verificationStatusForConfidence =
+    externalFinding || nonBlockingSecret
+      ? ("POTENTIAL" as const)
+      : adjustedConfidence >= 0.75
+        ? ("CONFIRMED" as const)
+        : ("POTENTIAL" as const);
+  const { level: confidenceLevel } = deriveConfidenceFromEvidenceScore({
+    detectionMethod: "STATIC_ANALYSIS",
+    evidenceItems,
+    severity: finding.severity,
+    hasRuntimeEvidence: false,
+    hasReplayEvidence: false,
+    verificationStatus: verificationStatusForConfidence,
+    suppressed: false,
+    llmOnly: externalFinding,
+  });
+
   const { probability, explanation: fpExplanation } = computeFalsePositiveProbability({
     detectionMethod: "STATIC_ANALYSIS",
     evidenceItems,
@@ -225,10 +248,6 @@ function buildScanEvidenceReport(finding: Finding, context: ProjectContext): Evi
     hasRuntimeUsage: false,
   });
 
-  const reasoning = buildScanReasoning(finding, evidenceItems, secret, secretClassification);
-  const nonBlockingSecret = isNonBlockingSecretClassification(secretClassification);
-  const externalFinding = isExternalSecurityAnalysisFinding(finding);
-  const adjustedConfidence = nonBlockingSecret ? Math.min(confidence, 0.35) : confidence;
   const confirmation = externalFinding
     ? {
         confirmationStatus: "potential_vulnerability" as const,
@@ -253,6 +272,7 @@ function buildScanEvidenceReport(finding: Finding, context: ProjectContext): Evi
     version: 1,
     detectionMethod: "STATIC_ANALYSIS",
     confidence: adjustedConfidence,
+    confidenceLevel,
     confidencePercent: confidencePercent(adjustedConfidence),
     confidenceExplanation: nonBlockingSecret
       ? "SequrAI classified this value as a test fixture or placeholder rather than a production credential."

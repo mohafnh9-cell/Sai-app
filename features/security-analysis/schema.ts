@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { FindingVerificationStatus } from "@/server/full-product-audit/types";
+import { CONFIDENCE_LEVELS } from "@/brain/confidence/types";
 import {
   AGENT_SECURITY_SCANNER_ID,
   EXTERNAL_SECURITY_SOURCE_TOOLS,
@@ -28,6 +29,7 @@ export const securityAnalysisFindingSchema = z.object({
   originalSeverity: z.string().nullable(),
   severityRank: z.number().int().min(0).max(4),
   confidence: externalConfidenceSchema,
+  confidenceLevel: z.enum(CONFIDENCE_LEVELS),
   file: z.string().nullable(),
   line: z.number().int().positive().nullable(),
   column: z.number().int().positive().nullable().optional(),

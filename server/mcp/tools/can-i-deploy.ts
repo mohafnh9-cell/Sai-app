@@ -21,6 +21,8 @@ import { getStalenessInfo } from "../staleness";
 import { applyLatestSecurityDecisionToVerdict } from "../security-decision-overlay";
 import type { VerdictConsistency } from "@/server/production-verdict/authoritative-verdict";
 import { resolveVerdictSourceForScan } from "../verdict-source";
+import type { ConfidenceLevel } from "@/brain/confidence/types";
+import { deriveConfidenceLevel } from "@/brain/confidence/derive";
 
 export type CanIDeployInput = ProjectSelector;
 
@@ -29,6 +31,7 @@ export type CanIDeployBlocker = {
   title: string;
   severity: string;
   category: string;
+  confidence: ConfidenceLevel;
 };
 
 export type CanIDeployResult = {
@@ -112,6 +115,9 @@ export async function canIDeploy(
     title: priority.title,
     severity: priority.severity,
     category: priority.category,
+    confidence:
+      priority.confidenceLevel ??
+      deriveConfidenceLevel({ legacyBand: priority.confidence }),
   }));
 
   const worries = topBlockers.map((b) => b.title);

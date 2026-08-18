@@ -1,5 +1,11 @@
 import type { EvidenceReport } from "@/brain/evidence-finding/schema";
-import { evidenceReportFromMetadata, parseEvidenceReport } from "@/brain/evidence-finding/schema";
+import { evidenceReportFromMetadata, parseEvidenceReport, resolveEvidenceReportConfidenceLevel } from "@/brain/evidence-finding/schema";
+import {
+  deriveConfidenceLevel,
+  isHighConfidenceLevel,
+  legacyBandFromConfidenceLevel,
+} from "@/brain/confidence/derive";
+import type { ConfidenceLevel } from "@/brain/confidence/types";
 import {
   isNonBlockingSecretFinding,
   resolveSecretClassification,
@@ -21,6 +27,7 @@ export type NormalizedFinding = {
   column?: number;
   recommendation?: string;
   confidence: "high" | "medium" | "low";
+  confidenceLevel: ConfidenceLevel;
   confidencePercent?: number;
   falsePositivePercent?: number;
   detectionMethod?: string;
@@ -79,28 +86,34 @@ export function normalizeFinding(input: {
     severity = severityForSecretClassification(secretClassification);
   }
 
-  let confidence: NormalizedFinding["confidence"] = "medium";
+  let confidenceLevel: ConfidenceLevel = "INFERRED";
   if (isNonBlockingSecretFinding({
     ruleId,
     file_path: input.file_path,
     evidence: input.evidence,
     metadata: input.metadata ?? null,
   })) {
-    confidence = "low";
+    confidenceLevel = "SPECULATIVE";
   } else if (embeddedReport) {
-    confidence =
-      embeddedReport.confidence >= 0.8 ? "high" : embeddedReport.confidence >= 0.55 ? "medium" : "low";
+    confidenceLevel = resolveEvidenceReportConfidenceLevel(embeddedReport);
   } else if (ruleId && HIGH_CONFIDENCE_RULES.has(ruleId.toLowerCase())) {
-    confidence = "high";
+    confidenceLevel = "PROBABLE";
   } else if (severity === "critical") {
-    confidence = "high";
+    confidenceLevel = "PROBABLE";
   } else if (severity === "info") {
-    confidence = "low";
+    confidenceLevel = "SPECULATIVE";
   }
 
   if (!embeddedReport && typeof input.confidence === "number" && input.confidence >= 0.8) {
-    confidence = "high";
+    confidenceLevel = deriveConfidenceLevel({
+      numericScore: input.confidence,
+      legacyBand: "high",
+    });
+  } else if (!embeddedReport && typeof input.confidence === "string") {
+    confidenceLevel = deriveConfidenceLevel({ legacyBand: input.confidence });
   }
+
+  const confidence = legacyBandFromConfidenceLevel(confidenceLevel);
 
   return {
     id: input.id ?? `${ruleId ?? "finding"}-${input.file_path ?? "unknown"}`,
@@ -112,6 +125,7 @@ export function normalizeFinding(input: {
     line: input.start_line ?? undefined,
     recommendation: input.recommendation ?? embeddedReport?.recommendedFix ?? undefined,
     confidence,
+    confidenceLevel,
     confidencePercent: embeddedReport?.confidencePercent,
     falsePositivePercent: embeddedReport?.falsePositivePercent,
     detectionMethod: embeddedReport?.detectionMethod,
@@ -130,7 +144,7 @@ export function isCriticalSignal(finding: NormalizedFinding): boolean {
   return (
     finding.severity === "critical" ||
     (finding.severity === "high" &&
-      finding.confidence === "high" &&
+      isHighConfidenceLevel(finding.confidenceLevel) &&
       (haystack.includes("secret") ||
         haystack.includes("credential") ||
         haystack.includes("admin") ||

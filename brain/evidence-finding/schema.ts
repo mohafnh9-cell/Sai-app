@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { CONFIDENCE_LEVELS, type ConfidenceLevel } from "@/brain/confidence/types";
+import { deriveConfidenceLevel } from "@/brain/confidence/derive";
 
 export const DETECTION_METHODS = [
   "STATIC_ANALYSIS",
@@ -58,6 +60,7 @@ export const evidenceReportSchema = z.object({
   version: z.literal(1),
   detectionMethod: z.enum(DETECTION_METHODS),
   confidence: z.number().min(0).max(1),
+  confidenceLevel: z.enum(CONFIDENCE_LEVELS).optional(),
   confidencePercent: z.number().int().min(0).max(100),
   confidenceExplanation: z.string(),
   falsePositiveProbability: z.number().min(0).max(1),
@@ -82,9 +85,41 @@ export type EvidenceReport = z.infer<typeof evidenceReportSchema>;
 
 export const EVIDENCE_REPORT_METADATA_KEY = "evidenceReport";
 
+export function resolveEvidenceReportConfidenceLevel(
+  report: Pick<
+    EvidenceReport,
+    "confidence" | "confidenceLevel" | "detectionMethod" | "confirmationStatus"
+  > & {
+    runtimeEvidence?: EvidenceItem[];
+    replayEvidence?: EvidenceItem[];
+  }
+): ConfidenceLevel {
+  if (report.confidenceLevel) return report.confidenceLevel;
+  return deriveConfidenceLevel({
+    numericScore: report.confidence,
+    detectionMethod: report.detectionMethod,
+    hasRuntimeEvidence: Boolean(report.runtimeEvidence?.length),
+    hasReplayEvidence: Boolean(report.replayEvidence?.length),
+    suppressed: report.confirmationStatus === "suppressed",
+    verificationStatus:
+      report.confirmationStatus === "confirmed"
+        ? "CONFIRMED"
+        : report.confirmationStatus === "suppressed"
+          ? "UNVERIFIED"
+          : "POTENTIAL",
+  });
+}
+
+export function withEvidenceReportConfidenceLevel(report: EvidenceReport): EvidenceReport {
+  return {
+    ...report,
+    confidenceLevel: resolveEvidenceReportConfidenceLevel(report),
+  };
+}
+
 export function parseEvidenceReport(value: unknown): EvidenceReport | null {
   const parsed = evidenceReportSchema.safeParse(value);
-  return parsed.success ? parsed.data : null;
+  return parsed.success ? withEvidenceReportConfidenceLevel(parsed.data) : null;
 }
 
 export function evidenceReportFromMetadata(

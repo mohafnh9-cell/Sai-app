@@ -6,6 +6,7 @@ import type { EvidenceCaptureBuffer } from "@/server/attack-simulation/evidence/
 import type { DetectionMethod, EvidenceItem, EvidenceReport } from "./schema";
 import { lookupRuleInfo } from "./rule-catalog";
 import { computeConfidenceScore, confidencePercent } from "./compute-confidence";
+import { deriveConfidenceFromEvidenceScore } from "@/brain/confidence/derive";
 import {
   computeFalsePositiveProbability,
   falsePositiveLabel,
@@ -128,6 +129,18 @@ export function buildAttackEvidenceReport(input: {
     signalHits: input.evaluation.exploitSignalHits,
   });
 
+  const verificationStatusForConfidence =
+    confirmationStatus === "confirmed" ? ("CONFIRMED" as const) : ("POTENTIAL" as const);
+  const { level: confidenceLevel } = deriveConfidenceFromEvidenceScore({
+    detectionMethod,
+    evidenceItems,
+    severity: input.evaluation.severity,
+    hasRuntimeEvidence: runtimeEvidence.length > 0,
+    hasReplayEvidence: Boolean(input.hasReplayEvidence),
+    signalHits: input.evaluation.exploitSignalHits,
+    verificationStatus: verificationStatusForConfidence,
+  });
+
   const { probability, explanation: fpExplanation } = computeFalsePositiveProbability({
     detectionMethod,
     evidenceItems,
@@ -154,6 +167,7 @@ export function buildAttackEvidenceReport(input: {
     version: 1,
     detectionMethod,
     confidence,
+    confidenceLevel,
     confidencePercent: confidencePercent(confidence),
     confidenceExplanation: explanation,
     falsePositiveProbability: probability,

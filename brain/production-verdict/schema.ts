@@ -1,4 +1,6 @@
 import { z } from "zod";
+import type { ConfidenceLevel } from "@/brain/confidence/types";
+import { CONFIDENCE_LEVELS } from "@/brain/confidence/types";
 import { normalizeProductionVerdictPayload } from "./normalize-verdict-payload";
 
 export const PRODUCTION_VERDICT_VERSION = "1.0.0";
@@ -63,6 +65,7 @@ export const ProductionPrioritySchema = z.object({
   reason: z.string(),
   severity: z.enum(["critical", "high", "medium", "low", "info"]),
   confidence: z.enum(["high", "medium", "low"]),
+  confidenceLevel: z.enum(CONFIDENCE_LEVELS).optional(),
   estimatedMinutes: z.number().int().min(0),
   estimatedTimeLabel: z.string(),
   projectedScoreImpact: z.number().min(0).max(100),

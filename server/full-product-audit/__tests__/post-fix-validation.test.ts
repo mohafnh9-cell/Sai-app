@@ -13,6 +13,7 @@ function finding(
     verificationStatus: "CONFIRMED",
     evidence: [],
     confidence: "high",
+    confidenceLevel: partial.confidenceLevel ?? "VERIFIED",
     affectedComponent: null,
     recommendation: null,
     safeFixAvailable: true,

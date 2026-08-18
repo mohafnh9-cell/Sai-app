@@ -2,6 +2,7 @@ import { VERDICT_THRESHOLDS } from "./config";
 import type { NormalizedFinding } from "./normalize-finding";
 import { isCriticalSignal as checkCriticalSignal } from "./normalize-finding";
 import { isNonBlockingSecretClassification } from "@/features/security-scanner/rules/secret-classification";
+import { isHighConfidenceLevel } from "@/brain/confidence/derive";
 import type { VerdictStatus } from "./schema";
 
 export type StatusRuleInput = {
@@ -37,7 +38,7 @@ export function determineVerdictStatus(input: StatusRuleInput): VerdictStatus {
     const hay = `${f.title} ${f.category} ${f.ruleId ?? ""}`.toLowerCase();
     return (
       f.severity === "critical" &&
-      f.confidence === "high" &&
+      isHighConfidenceLevel(f.confidenceLevel) &&
       (hay.includes("secret") || hay.includes("credential") || hay.includes("api key"))
     );
   });

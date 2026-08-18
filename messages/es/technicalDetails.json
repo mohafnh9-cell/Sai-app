@@ -50,6 +50,13 @@
     "not_applicable": "No aplicable",
     "ariaLabel": "Estado de verificación: {status}"
   },
+  "confidenceLevels": {
+    "verified": "Verificado",
+    "probable": "Probable",
+    "inferred": "Inferido",
+    "speculative": "Especulativo",
+    "ariaLabel": "Nivel de confianza: {level}"
+  },
   "codeSnippet": "Fragmento de código",
   "diffContext": {
     "introduced": "Introducido por este cambio",

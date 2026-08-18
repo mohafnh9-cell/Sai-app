@@ -38,6 +38,7 @@ function auditFinding(
     verificationStatus: "POTENTIAL",
     evidence: ["Static: token=[REDACTED]"],
     confidence: "medium",
+    confidenceLevel: overrides.confidenceLevel ?? "INFERRED",
     affectedComponent: "app/route.ts",
     recommendation: "Rotate",
     safeFixAvailable: false,
@@ -113,9 +114,10 @@ describe("secret classification production verdict impact", () => {
         id: "1",
         title: "Hard-coded secret",
         verificationStatus: "POTENTIAL",
+        confidenceLevel: "INFERRED",
       })
     );
-    expect(copy.confidenceLabel).toContain("Potencial");
+    expect(copy.confidenceLabel).toBe("Inferido");
   });
 
   it("labels CONFIRMED clearly in user-facing copy", () => {
@@ -124,10 +126,11 @@ describe("secret classification production verdict impact", () => {
         id: "1",
         title: "IDOR",
         verificationStatus: "CONFIRMED",
+        confidenceLevel: "VERIFIED",
         source: "both",
       })
     );
-    expect(copy.confidenceLabel).toBe("Confirmado");
+    expect(copy.confidenceLabel).toBe("Verificado");
   });
 
   it("explains dynamic not tested", () => {

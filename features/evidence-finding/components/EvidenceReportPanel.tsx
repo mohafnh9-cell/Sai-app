@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import type { EvidenceItem, EvidenceReport, RuleInfo } from "@/brain/evidence-finding/schema";
+import { resolveEvidenceReportConfidenceLevel } from "@/brain/evidence-finding/schema";
+import { ConfidenceLevelBadge } from "@/components/sequrai/ConfidenceLevelBadge";
 import { useI18n } from "@/lib/i18n/client";
 
 function EvidenceList({ title, items }: { title: string; items: EvidenceItem[] }) {
@@ -61,13 +63,17 @@ function RuleBlock({ rule }: { rule: RuleInfo }) {
 export function EvidenceReportPanel({ report }: { report: EvidenceReport }) {
   const { t } = useI18n("evidenceFinding");
   const [showTechnical, setShowTechnical] = useState(false);
+  const confidenceLevel = resolveEvidenceReportConfidenceLevel(report);
 
   return (
     <div className="space-y-6">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-sm">
         <div className="rounded-xl border border-border/60 px-4 py-3">
           <p className="text-xs text-muted-foreground uppercase tracking-wider">{t("confidence")}</p>
-          <p className="mt-1 font-semibold tabular-nums">{report.confidencePercent}%</p>
+          <div className="mt-2">
+            <ConfidenceLevelBadge level={confidenceLevel} />
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground tabular-nums">{report.confidencePercent}% score</p>
         </div>
         <div className="rounded-xl border border-border/60 px-4 py-3">
           <p className="text-xs text-muted-foreground uppercase tracking-wider">{t("falsePositive")}</p>
