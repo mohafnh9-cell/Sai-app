@@ -1,8 +1,10 @@
 "use client";
 
 import type { EvidenceReport } from "@/brain/evidence-finding/schema";
+import { resolveEvidenceReportConfidenceLevel } from "@/brain/evidence-finding/schema";
 import { EvidenceReportPanel } from "@/features/evidence-finding/components/EvidenceReportPanel";
 import { VerificationStatusBadge } from "./VerificationStatusBadge";
+import { ConfidenceLevelBadge } from "./ConfidenceLevelBadge";
 import type { VerificationStatus } from "@/lib/design-system/verification";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n/client";
@@ -38,7 +40,12 @@ export function EvidencePanel({
     <details className={cn("group rounded-xl border border-border/60", className)} open={defaultOpen}>
       <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium seq-focus-ring rounded-xl flex items-center justify-between gap-3">
         <span>{t("evidenceLabel")}</span>
-        {verificationStatus ? <VerificationStatusBadge status={verificationStatus} /> : null}
+        <div className="flex items-center gap-2">
+          {report ? (
+            <ConfidenceLevelBadge level={resolveEvidenceReportConfidenceLevel(report)} />
+          ) : null}
+          {verificationStatus ? <VerificationStatusBadge status={verificationStatus} /> : null}
+        </div>
       </summary>
       <div className="border-t border-border/40 px-4 py-4 space-y-4">
         {impact ? (

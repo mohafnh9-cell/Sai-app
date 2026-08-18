@@ -33,6 +33,7 @@ describe("securityAnalysisFindingToDraft", () => {
     expect(draft.metadata?.evidenceReport).toMatchObject({
       confirmationStatus: "potential_vulnerability",
       verificationStatus: "POTENTIAL",
+      confidenceLevel: "PROBABLE",
     });
   });
 

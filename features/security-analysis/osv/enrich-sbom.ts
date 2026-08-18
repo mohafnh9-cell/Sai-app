@@ -1,5 +1,6 @@
 import { AGENT_SECURITY_SCANNER_ID } from "../constants";
 import { deriveInitialVerificationStatus } from "../derive-verification-status";
+import { deriveConfidenceLevel } from "@/brain/confidence/derive";
 import type { SecurityAnalysisFinding } from "../schema";
 import { packageIdentity } from "../sbom/purl";
 import {
@@ -92,6 +93,10 @@ export function osvVulnerabilityToFinding(
     confidence,
     action: null,
   });
+  const confidenceLevel = deriveConfidenceLevel({
+    legacyExternal: confidence,
+    verificationStatus,
+  });
   const location = resolveLocation(files, component);
   const message = buildMessage(component, vuln);
 
@@ -108,6 +113,7 @@ export function osvVulnerabilityToFinding(
     originalSeverity: vuln.severity,
     severityRank: severity.severityRank,
     confidence,
+    confidenceLevel,
     file: location.file,
     line: location.line,
     column: null,
@@ -124,6 +130,7 @@ export function osvVulnerabilityToFinding(
         sourceTool: "osv",
         externalRuleId: OSV_SBOM_EXTERNAL_RULE_ID,
         verificationStatus,
+        confidenceLevel,
         evidenceSource: "osv.dev",
       },
       osv: {
@@ -142,6 +149,7 @@ export function osvVulnerabilityToFinding(
         sourceUrl: vuln.sourceUrl,
         evidenceSource: "osv.dev",
         confidence,
+        confidenceLevel,
         verificationStatus,
       },
       sbom: {

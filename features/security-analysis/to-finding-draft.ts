@@ -1,5 +1,7 @@
 import type { FindingDraft, Confidence, Severity } from "@/features/security-scanner/types";
 import type { FindingConfirmationStatus } from "@/brain/evidence-finding/schema";
+import { legacyBandFromConfidenceLevel } from "@/brain/confidence/derive";
+import type { ConfidenceLevel } from "@/brain/confidence/types";
 import type { FindingVerificationStatus } from "@/server/full-product-audit/types";
 import type { SecurityAnalysisFinding } from "./schema";
 
@@ -70,6 +72,23 @@ function confidenceForTrustModel(finding: SecurityAnalysisFinding): Confidence {
   return CONFIDENCE_TO_SEQURAI[finding.confidence];
 }
 
+function confidencePercentFromLevel(level: ConfidenceLevel): number {
+  switch (level) {
+    case "VERIFIED":
+      return 92;
+    case "PROBABLE":
+      return 78;
+    case "INFERRED":
+      return 62;
+    default:
+      return 35;
+  }
+}
+
+function confidenceScoreFromLevel(level: ConfidenceLevel): number {
+  return confidencePercentFromLevel(level) / 100;
+}
+
 function defaultRemediation(finding: SecurityAnalysisFinding): string {
   if (finding.remediation?.trim()) {
     return finding.remediation.trim();
@@ -86,6 +105,9 @@ function defaultRemediation(finding: SecurityAnalysisFinding): string {
  */
 export function securityAnalysisFindingToDraft(finding: SecurityAnalysisFinding): FindingDraft {
   const confidence = confidenceForTrustModel(finding);
+  const reportConfidenceLevel = finding.confidenceLevel;
+  const reportConfidenceBand = legacyBandFromConfidenceLevel(reportConfidenceLevel);
+  const reportConfidenceScore = confidenceScoreFromLevel(reportConfidenceLevel);
   const confirmationStatus = mapVerificationToConfirmationStatus(finding.verificationStatus);
   const path = finding.file ?? "repository";
   const line = finding.line ?? 1;
@@ -124,12 +146,15 @@ export function securityAnalysisFindingToDraft(finding: SecurityAnalysisFinding)
       evidenceReport: {
         version: 1 as const,
         detectionMethod: "STATIC_ANALYSIS" as const,
-        confidence: confidence === "high" ? 0.85 : confidence === "medium" ? 0.6 : 0.35,
-        confidencePercent: confidence === "high" ? 85 : confidence === "medium" ? 60 : 35,
+        confidence: reportConfidenceScore,
+        confidenceLevel: reportConfidenceLevel,
+        confidencePercent: confidencePercentFromLevel(reportConfidenceLevel),
         confidenceExplanation:
           finding.verificationStatus === "UNVERIFIED"
             ? "Heuristic scanner signal — requires repository verification before affecting Production Verdict as confirmed."
-            : "External security engine signal — SequrAI will verify before treating as production-blocking.",
+            : reportConfidenceBand === "high"
+              ? "External security engine signal — SequrAI will verify before treating as production-blocking."
+              : "External scanner signal with limited structural verification.",
         falsePositiveProbability:
           finding.verificationStatus === "UNVERIFIED" ? 0.55 : 0.25,
         falsePositivePercent:

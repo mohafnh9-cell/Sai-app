@@ -1,7 +1,10 @@
+import { formatConfidenceDistribution, summarizeConfidenceDistribution } from "@/brain/confidence/derive";
+import type { ConfidenceDistribution } from "@/brain/confidence/types";
 import { VERDICT_STATUS_LABELS, type ProductionVerdictV1, type VerdictStatus } from "./schema";
 import { verdictHeadline } from "./status-rules";
 
-export function buildDeterministicSummary(verdict: Pick<
+export function buildDeterministicSummary(
+  verdict: Pick<
   ProductionVerdictV1,
   | "status"
   | "score"
@@ -11,7 +14,9 @@ export function buildDeterministicSummary(verdict: Pick<
   | "topPriorities"
   | "evaluatedAreas"
   | "unevaluatedAreas"
->): string {
+>,
+  blockerConfidence?: ConfidenceDistribution
+): string {
   const label = VERDICT_STATUS_LABELS[verdict.status];
   const scorePart =
     verdict.score != null ? `Production Ready Score is ${verdict.score}/100.` : "Score unavailable due to limited coverage.";
@@ -30,7 +35,11 @@ export function buildDeterministicSummary(verdict: Pick<
 
   const blockerPart =
     verdict.blockersCount > 0
-      ? `${verdict.blockersCount} production blocker${verdict.blockersCount === 1 ? "" : "s"} (${verdict.criticalBlockersCount} critical, ${verdict.highBlockersCount} high) prevent safe deployment.`
+      ? `${verdict.blockersCount} production blocker${verdict.blockersCount === 1 ? "" : "s"} (${verdict.criticalBlockersCount} critical, ${verdict.highBlockersCount} high) prevent safe deployment.${
+          blockerConfidence && formatConfidenceDistribution(blockerConfidence)
+            ? ` Evidence strength: ${formatConfidenceDistribution(blockerConfidence)}.`
+            : ""
+        }`
       : "No critical blockers, but improvements remain before shipping.";
 
   const priorityPart =

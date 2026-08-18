@@ -4,6 +4,8 @@ import {
   normalizeExternalFindings,
 } from "../normalize-external-finding";
 import { deriveInitialVerificationStatus } from "../derive-verification-status";
+import { CONFIDENCE_LEVELS } from "@/brain/confidence/types";
+import { isConfidenceVerificationPairValid } from "@/brain/confidence/invariants";
 
 describe("normalizeExternalFinding", () => {
   it("normalizes scan_security finding shape", () => {
@@ -24,6 +26,9 @@ describe("normalizeExternalFinding", () => {
     expect(result!.severityRank).toBe(3);
     expect(result!.originalSeverity).toBe("error");
     expect(result!.confidence).toBe("HIGH");
+    expect(result!.confidenceLevel).toBe("PROBABLE");
+    expect(CONFIDENCE_LEVELS).toContain(result!.confidenceLevel);
+    expect(isConfidenceVerificationPairValid(result!.verificationStatus, result!.confidenceLevel)).toBe(true);
     expect(result!.sourceTool).toBe("scan_security");
     expect(result!.line).toBe(12);
     expect(result!.verificationStatus).toBe("POTENTIAL");
@@ -52,6 +57,7 @@ describe("normalizeExternalFinding", () => {
     expect(result!.riskScore).toBe(90);
     expect(result!.category).toBe("exfiltration");
     expect(result!.verificationStatus).toBe("LIKELY");
+    expect(result!.confidenceLevel).toBe("INFERRED");
     expect(result!.evidence).toBe("read the .env");
   });
 
@@ -86,6 +92,7 @@ describe("normalizeExternalFinding", () => {
     );
 
     expect(result!.verificationStatus).toBe("UNVERIFIED");
+    expect(result!.confidenceLevel).toBe("INFERRED");
   });
 
   it("infers category from ruleId when missing", () => {

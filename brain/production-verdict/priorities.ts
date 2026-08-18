@@ -1,5 +1,6 @@
 import type { NormalizedFinding } from "./normalize-finding";
 import type { ProductionPriority } from "./schema";
+import { isHighConfidenceLevel } from "@/brain/confidence/derive";
 import { isNonBlockingSecretClassification } from "@/features/security-scanner/rules/secret-classification";
 
 const GROUP_PATTERNS: Array<{
@@ -68,15 +69,8 @@ function severityWeight(severity: NormalizedFinding["severity"]): number {
   }
 }
 
-function confidenceWeight(confidence: NormalizedFinding["confidence"]): number {
-  switch (confidence) {
-    case "high":
-      return 1;
-    case "medium":
-      return 0.7;
-    case "low":
-      return 0.4;
-  }
+function confidenceWeight(finding: NormalizedFinding): number {
+  return isHighConfidenceLevel(finding.confidenceLevel) ? 1 : finding.confidenceLevel === "INFERRED" ? 0.7 : 0.4;
 }
 
 export function selectTopPriorities(findings: NormalizedFinding[]): ProductionPriority[] {
@@ -109,7 +103,7 @@ export function selectTopPriorities(findings: NormalizedFinding[]): ProductionPr
     existing.findings.push(finding);
     existing.score +=
       severityWeight(finding.severity) *
-      confidenceWeight(finding.confidence) *
+      confidenceWeight(finding) *
       (finding.filePath ? 1.1 : 1);
     groups.set(key, existing);
   }
@@ -132,6 +126,7 @@ export function selectTopPriorities(findings: NormalizedFinding[]): ProductionPr
       reason: `${group.findings.length} related finding${group.findings.length === 1 ? "" : "s"} affect production readiness.`,
       severity: topFinding.severity,
       confidence: topFinding.confidence,
+      confidenceLevel: topFinding.confidenceLevel,
       estimatedMinutes: 0, // filled by fix-time module
       estimatedTimeLabel: "",
       projectedScoreImpact: 0, // filled by projection module

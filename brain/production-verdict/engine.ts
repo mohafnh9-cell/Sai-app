@@ -8,6 +8,7 @@ import {
   projectScoreAfterPriorities,
 } from "./projection";
 import { isNonBlockingSecretClassification } from "@/features/security-scanner/rules/secret-classification";
+import { summarizeConfidenceDistribution } from "@/brain/confidence/derive";
 import {
   PRODUCTION_VERDICT_VERSION,
   ProductionVerdictSchema,
@@ -139,6 +140,16 @@ export function generateProductionVerdict(input: VerdictEngineInput): {
     input.previousBlockersCount
   );
 
+  const blockerConfidence = summarizeConfidenceDistribution(
+    normalized
+      .filter(
+        (finding) =>
+          (finding.severity === "critical" || finding.severity === "high") &&
+          !isNonBlockingSecretClassification(finding.secretClassification)
+      )
+      .map((finding) => finding.confidenceLevel)
+  );
+
   const baseVerdict: ProductionVerdictV1 = {
     version: PRODUCTION_VERDICT_VERSION,
     projectId: input.projectId,
@@ -177,7 +188,7 @@ export function generateProductionVerdict(input: VerdictEngineInput): {
   };
 
   baseVerdict.executiveSummary =
-    input.aiExecutiveSummary?.trim() || buildDeterministicSummary(baseVerdict);
+    input.aiExecutiveSummary?.trim() || buildDeterministicSummary(baseVerdict, blockerConfidence);
   baseVerdict.methodologyNote = buildMethodologyNote(baseVerdict);
 
   const verdict = ProductionVerdictSchema.parse(baseVerdict);

@@ -3,6 +3,7 @@ import {
   type ExternalSecuritySourceTool,
 } from "./constants";
 import { deriveInitialVerificationStatus } from "./derive-verification-status";
+import { deriveConfidenceLevel } from "@/brain/confidence/derive";
 import type {
   AgentAction,
   ExternalConfidence,
@@ -53,9 +54,11 @@ const RULE_CATEGORY_MAP: Record<string, string> = {
   sql: "injection",
 };
 
-export type NormalizeExternalFindingOptions = {
-  includeRaw?: boolean;
-};
+const HEURISTIC_SOURCE_TOOLS = new Set<ExternalSecuritySourceTool>([
+  "scan_agent_prompt",
+  "scan_skill",
+  "scan_agent_action",
+]);
 
 function asRecord(value: unknown): RawExternalFinding | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -104,13 +107,17 @@ function inferCategory(ruleId: string | null): string | null {
   return null;
 }
 
-function normalizeConfidence(confidence: unknown): ExternalConfidence {
+function normalizeExternalConfidence(confidence: unknown): ExternalConfidence {
   const upper = String(confidence ?? "MEDIUM").toUpperCase();
   if (upper === "HIGH" || upper === "MEDIUM" || upper === "LOW") {
     return upper;
   }
   return "MEDIUM";
 }
+
+export type NormalizeExternalFindingOptions = {
+  includeRaw?: boolean;
+};
 
 function normalizeAction(action: unknown): AgentAction | null {
   if (!action) return null;
@@ -207,7 +214,7 @@ export function normalizeExternalFinding(
   const resolvedSourceTool = resolveSourceTool(finding, sourceTool);
   const originalSeverity = readString(finding.severity);
   const mapped = (originalSeverity && SEVERITY_MAP[originalSeverity]) || DEFAULT_SEVERITY;
-  const confidence = normalizeConfidence(finding.confidence ?? readMetadataField(finding, "confidence"));
+  const confidence = normalizeExternalConfidence(finding.confidence ?? readMetadataField(finding, "confidence"));
   const action = normalizeAction(finding.action);
   const message = readString(finding.message) ?? "";
   const category =
@@ -221,6 +228,11 @@ export function normalizeExternalFinding(
     sourceTool: resolvedSourceTool,
     confidence,
     action,
+  });
+  const confidenceLevel = deriveConfidenceLevel({
+    legacyExternal: confidence,
+    verificationStatus,
+    llmOnly: HEURISTIC_SOURCE_TOOLS.has(resolvedSourceTool),
   });
 
   const normalized: SecurityAnalysisFinding = {
@@ -236,6 +248,7 @@ export function normalizeExternalFinding(
     originalSeverity,
     severityRank: mapped.severityRank,
     confidence,
+    confidenceLevel,
     file,
     line,
     column: column ?? null,
@@ -252,6 +265,7 @@ export function normalizeExternalFinding(
         sourceTool: resolvedSourceTool,
         externalRuleId,
         verificationStatus,
+        confidenceLevel,
         originalSeverity,
         action,
         riskScore: readNumber(finding.risk_score),
