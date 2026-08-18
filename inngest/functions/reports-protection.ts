@@ -28,7 +28,7 @@ export const reportsWeeklyBatchFunction = inngest.createFunction(
 );
 
 export const reportsWeeklyProjectFunction = inngest.createFunction(
-  { id: "reports-weekly-project", name: "Protection weekly report", retries: 2, concurrency: { limit: 8 } },
+  { id: "reports-weekly-project", name: "Protection weekly report", retries: 2, concurrency: { limit: 5 } },
   { event: "reports/weekly.project" },
   async ({ event, step }) => {
     const admin = createAdminClient();
@@ -55,7 +55,7 @@ export const reportsMonthlyBatchFunction = inngest.createFunction(
 );
 
 export const reportsMonthlyProjectFunction = inngest.createFunction(
-  { id: "reports-monthly-project", name: "Protection monthly report", retries: 2, concurrency: { limit: 8 } },
+  { id: "reports-monthly-project", name: "Protection monthly report", retries: 2, concurrency: { limit: 5 } },
   { event: "reports/monthly.project" },
   async ({ event, step }) => {
     const admin = createAdminClient();

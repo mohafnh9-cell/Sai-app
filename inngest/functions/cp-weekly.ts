@@ -32,7 +32,7 @@ export const cpWeeklyProjectFunction = inngest.createFunction(
     id: "cp-weekly-project",
     name: "Continuous protection weekly review",
     retries: 2,
-    concurrency: { limit: 10 },
+    concurrency: { limit: 5 },
   },
   { event: "cp/weekly.project" },
   async ({ event, step }) => {

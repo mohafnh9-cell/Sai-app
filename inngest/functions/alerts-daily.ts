@@ -29,7 +29,7 @@ export const alertsProjectEvaluateFunction = inngest.createFunction(
     id: "alerts-project-evaluate",
     name: "Security alerts project evaluation",
     retries: 2,
-    concurrency: { limit: 10 },
+    concurrency: { limit: 5 },
   },
   { event: "alerts/project.evaluate" },
   async ({ event, step }) => {

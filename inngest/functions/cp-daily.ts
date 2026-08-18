@@ -32,7 +32,7 @@ export const cpDailyProjectFunction = inngest.createFunction(
     id: "cp-daily-project",
     name: "Continuous protection daily review",
     retries: 2,
-    concurrency: { limit: 10 },
+    concurrency: { limit: 5 },
   },
   { event: "cp/daily.project" },
   async ({ event, step }) => {
