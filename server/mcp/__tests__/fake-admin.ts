@@ -7,7 +7,7 @@
  * builders also support).
  */
 type Row = Record<string, unknown>;
-type Filter = { col: string; op: "eq" | "neq" | "in" | "gte" | "gt"; value: unknown };
+type Filter = { col: string; op: "eq" | "neq" | "in" | "gte" | "gt" | "lt" | "lte"; value: unknown };
 
 function matches(row: Row, filters: Filter[]): boolean {
   return filters.every((f) => {
@@ -23,6 +23,16 @@ function matches(row: Row, filters: Filter[]): boolean {
       const rowValue = row[f.col];
       if (typeof rowValue === "string" && typeof f.value === "string") return rowValue > f.value;
       return (rowValue as number) > (f.value as number);
+    }
+    if (f.op === "lt") {
+      const rowValue = row[f.col];
+      if (typeof rowValue === "string" && typeof f.value === "string") return rowValue < f.value;
+      return (rowValue as number) < (f.value as number);
+    }
+    if (f.op === "lte") {
+      const rowValue = row[f.col];
+      if (typeof rowValue === "string" && typeof f.value === "string") return rowValue <= f.value;
+      return (rowValue as number) <= (f.value as number);
     }
     return true;
   });
@@ -65,6 +75,14 @@ class FakeQuery
   }
   gt(col: string, value: unknown) {
     this.filters.push({ col, op: "gt", value });
+    return this;
+  }
+  lt(col: string, value: unknown) {
+    this.filters.push({ col, op: "lt", value });
+    return this;
+  }
+  lte(col: string, value: unknown) {
+    this.filters.push({ col, op: "lte", value });
     return this;
   }
   is(col: string, value: unknown) {

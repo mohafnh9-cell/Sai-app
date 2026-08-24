@@ -530,7 +530,8 @@ export async function initiateDynamicTargetVerification(
     .eq("organization_id", input.organizationId)
     .eq("project_id", input.projectId)
     .eq("target_origin", targetOrigin)
-    .eq("status", "pending");
+    .in("status", ["pending", "verified"])
+    .lt("expires_at", new Date().toISOString());
 
   const { data, error } = await admin
     .from("dynamic_target_verifications")
