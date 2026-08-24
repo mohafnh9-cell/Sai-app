@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { PortfolioVerdictCard } from "@/features/production-verdict/components/PortfolioVerdictCard";
 import { ProductionControlCenter } from "@/features/dashboard/components/ProductionControlCenter";
-import { buildOrgBrain } from "@/server/brain/build-org-brain";
+import { getCachedOrgBrain } from "@/server/brain/build-org-brain";
 import { organizationHasProductionVerdict } from "@/server/onboarding/has-production-verdict";
 import { getLatestVerdictsByOrganization } from "@/server/production-verdict/service";
 import { getCachedServerAuthContext } from "@/lib/server/request-cache";
@@ -59,7 +59,7 @@ export default async function DashboardPage({
         .eq("organization_id", organizationId)
         .order("created_at", { ascending: false })
         .limit(8),
-      buildOrgBrain(supabase, organizationId),
+      getCachedOrgBrain(supabase, organizationId),
       getLatestVerdictsByOrganization(supabase, organizationId),
       getWorkspaceGitHubConnectionView(supabase, organizationId),
     ]);

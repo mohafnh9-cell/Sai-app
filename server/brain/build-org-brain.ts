@@ -12,6 +12,7 @@ import { buildProductionRoadmap } from "@/brain/production-experience/roadmap";
 import { getLatestVerdictsByOrganization } from "@/server/production-verdict/service";
 import { productionReadyFromVerdict } from "./verdict-view-model";
 import { mergeProjectActivity } from "./build-project-brain";
+import { cachedRead } from "@/server/cache/read-cache";
 
 const DIMENSION_KEYS: ReadinessDimensionKey[] = [
   "security",
@@ -143,4 +144,13 @@ export async function buildOrgBrain(
     snapshotAt: new Date().toISOString(),
     brainVersion: BRAIN_VERSION,
   };
+}
+
+export async function getCachedOrgBrain(
+  supabase: SupabaseClient,
+  organizationId: string
+): Promise<OrgBrainSnapshot> {
+  return cachedRead("org_brain_snapshot", organizationId, () =>
+    buildOrgBrain(supabase, organizationId)
+  );
 }

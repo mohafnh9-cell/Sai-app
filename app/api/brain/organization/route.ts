@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getServerAuthContext } from "@/lib/auth/dev-bypass";
-import { buildOrgBrain } from "@/server/brain/build-org-brain";
+import { getCachedOrgBrain } from "@/server/brain/build-org-brain";
 import { enforceRateLimit } from "@/server/http/rate-limit";
 
 export const runtime = "nodejs";
@@ -15,7 +15,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "No organization" }, { status: 404 });
   }
 
-  const brain = await buildOrgBrain(auth.supabase, auth.organizationId);
+  const brain = await getCachedOrgBrain(auth.supabase, auth.organizationId);
 
   return NextResponse.json(
     { brain },

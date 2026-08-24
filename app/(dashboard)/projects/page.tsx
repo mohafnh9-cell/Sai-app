@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { ProjectCard } from "@/features/projects/components/ProjectCard";
-import { buildOrgBrain } from "@/server/brain/build-org-brain";
+import { getCachedOrgBrain } from "@/server/brain/build-org-brain";
 import { getCachedServerAuthContext } from "@/lib/server/request-cache";
 import { getTranslator } from "@/lib/i18n/server";
 import { projectNeedsAttention } from "@/lib/dashboard/filter-portfolio-projects";
@@ -30,7 +30,7 @@ export default async function ProjectsPage() {
       .select("*")
       .eq("organization_id", auth.organizationId)
       .order("created_at", { ascending: false }),
-    buildOrgBrain(auth.supabase, auth.organizationId),
+    getCachedOrgBrain(auth.supabase, auth.organizationId),
   ]);
 
   const summaryByProject = new Map(brain.projects.map((item) => [item.projectId, item]));
