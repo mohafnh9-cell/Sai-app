@@ -39,13 +39,15 @@ export async function GET(request: Request) {
   const rateLimited = enforceRateLimit(request);
   if (rateLimited) return rateLimited;
 
+  const trustedBase = process.env.NEXT_PUBLIC_APP_URL?.trim() || request.url;
+
   if (!isGitHubAppConfigured()) {
-    return NextResponse.redirect(new URL("/integrations?githubApp=not_configured", request.url));
+    return NextResponse.redirect(new URL("/integrations?githubApp=not_configured", trustedBase));
   }
 
   const auth = await getServerAuthContext();
   if (!auth) {
-    return NextResponse.redirect(new URL("/login", request.url));
+    return NextResponse.redirect(new URL("/login", trustedBase));
   }
 
   const url = new URL(request.url);
@@ -59,12 +61,12 @@ export async function GET(request: Request) {
 
   const state = stateParam ?? cookieState;
   if (!installationIdRaw || !state) {
-    return NextResponse.redirect(new URL("/integrations?githubApp=invalid_setup", request.url));
+    return NextResponse.redirect(new URL("/integrations?githubApp=invalid_setup", trustedBase));
   }
 
   const githubInstallationId = Number.parseInt(installationIdRaw, 10);
   if (!Number.isFinite(githubInstallationId)) {
-    return NextResponse.redirect(new URL("/integrations?githubApp=invalid_installation", request.url));
+    return NextResponse.redirect(new URL("/integrations?githubApp=invalid_installation", trustedBase));
   }
 
   const secret =
@@ -72,12 +74,12 @@ export async function GET(request: Request) {
     process.env.GITHUB_OAUTH_STATE_SECRET?.trim() ??
     process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
   if (!secret) {
-    return NextResponse.redirect(new URL("/integrations?githubApp=internal_error", request.url));
+    return NextResponse.redirect(new URL("/integrations?githubApp=internal_error", trustedBase));
   }
 
   const verified = verifySignedState(state, secret);
   if (!verified || verified.userId !== auth.user.id) {
-    return NextResponse.redirect(new URL("/integrations?githubApp=state_mismatch", request.url));
+    return NextResponse.redirect(new URL("/integrations?githubApp=state_mismatch", trustedBase));
   }
 
   const allowed = await assertWorkspaceMembership(
@@ -86,7 +88,7 @@ export async function GET(request: Request) {
     verified.organizationId
   );
   if (!allowed || verified.organizationId !== auth.organizationId) {
-    return NextResponse.redirect(new URL("/integrations?githubApp=workspace_denied", request.url));
+    return NextResponse.redirect(new URL("/integrations?githubApp=workspace_denied", trustedBase));
   }
 
   const admin = createAdminClient();
@@ -98,11 +100,11 @@ export async function GET(request: Request) {
 
   if (!result.ok) {
     return NextResponse.redirect(
-      new URL(`/integrations?githubApp=${encodeURIComponent(result.code)}`, request.url)
+      new URL(`/integrations?githubApp=${encodeURIComponent(result.code)}`, trustedBase)
     );
   }
 
-  const redirect = new URL("/integrations", request.url);
+  const redirect = new URL("/integrations", trustedBase);
   redirect.searchParams.set("githubApp", "installed");
   redirect.searchParams.set("repoCount", String(result.repositoryCount));
   if (setupAction) redirect.searchParams.set("setupAction", setupAction);
