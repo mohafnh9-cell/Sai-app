@@ -10,10 +10,14 @@ import { logOAuthEvent, clientIp } from "@/server/mcp/oauth/audit";
 import { SCOPE_DESCRIPTIONS } from "@/server/mcp/oauth/scopes";
 import type { McpScope } from "@/server/mcp/oauth/scopes";
 import { OAuthError, oauthErrorResponse } from "@/server/mcp/oauth/errors";
+import { enforceRateLimit } from "@/server/http/rate-limit";
 
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
+  const rateLimited = enforceRateLimit(request, { keyPrefix: "oauth-consent-get", limit: 30 });
+  if (rateLimited) return rateLimited;
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -53,6 +57,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const rateLimited = enforceRateLimit(request, { keyPrefix: "oauth-consent-post", limit: 20 });
+  if (rateLimited) return rateLimited;
+
   const supabase = await createClient();
   const {
     data: { user },
