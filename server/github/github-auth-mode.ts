@@ -26,7 +26,7 @@ export const GITHUB_APP_TARGET_PERMISSIONS = {
   pull_requests: "read",
   statuses: "write",
   checks: "write",
-  webhooks: "write",
+  repository_hooks: "write",
 } as const;
 
 export function isLegacyOAuthMode(mode: GitHubAuthMode | null | undefined): boolean {

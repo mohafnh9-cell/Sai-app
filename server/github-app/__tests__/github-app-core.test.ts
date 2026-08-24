@@ -24,7 +24,7 @@ describe("validateInstallationPermissions", () => {
       pull_requests: "read",
       statuses: "write",
       checks: "write",
-      webhooks: "write",
+      repository_hooks: "write",
     });
     expect(result.ok).toBe(true);
   });
@@ -36,7 +36,7 @@ describe("validateInstallationPermissions", () => {
       pull_requests: "read",
       statuses: "read",
       checks: "read",
-      webhooks: "read",
+      repository_hooks: "read",
     });
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -46,7 +46,7 @@ describe("validateInstallationPermissions", () => {
 
   it("documents every target permission key", () => {
     expect(Object.keys(GITHUB_APP_TARGET_PERMISSIONS).sort()).toEqual(
-      ["checks", "contents", "metadata", "pull_requests", "statuses", "webhooks"].sort()
+      ["checks", "contents", "metadata", "pull_requests", "repository_hooks", "statuses"].sort()
     );
   });
 });
