@@ -517,12 +517,6 @@ export async function initiateDynamicTargetVerification(
   }
 ) {
   const targetOrigin = normalizeOrigin(input.targetOrigin);
-  const token = generateVerificationToken({
-    organizationId: input.organizationId,
-    projectId: input.projectId,
-    targetOrigin,
-  });
-  const expiresAt = verificationExpiryIso();
 
   await admin
     .from("dynamic_target_verifications")
@@ -532,6 +526,38 @@ export async function initiateDynamicTargetVerification(
     .eq("target_origin", targetOrigin)
     .in("status", ["pending", "verified"])
     .lt("expires_at", new Date().toISOString());
+
+  const existing = await loadLatestVerification(admin, {
+    organizationId: input.organizationId,
+    projectId: input.projectId,
+    targetOrigin,
+  });
+  if (
+    existing &&
+    existing.status === "pending" &&
+    existing.verificationMethod === input.verificationMethod &&
+    Date.parse(existing.expiresAt) > Date.now()
+  ) {
+    const instructions =
+      input.verificationMethod === "dns"
+        ? buildDnsVerificationInstructions(targetOrigin, existing.verificationToken)
+        : buildHttpVerificationInstructions(targetOrigin, existing.verificationToken);
+    return { verification: existing, instructions };
+  }
+
+  if (existing) {
+    await admin
+      .from("dynamic_target_verifications")
+      .update({ status: "expired", updated_at: new Date().toISOString() })
+      .eq("id", existing.id);
+  }
+
+  const token = generateVerificationToken({
+    organizationId: input.organizationId,
+    projectId: input.projectId,
+    targetOrigin,
+  });
+  const expiresAt = verificationExpiryIso();
 
   const { data, error } = await admin
     .from("dynamic_target_verifications")
