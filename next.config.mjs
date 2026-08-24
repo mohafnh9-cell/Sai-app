@@ -21,6 +21,9 @@ if (deployedProduction && skipTargetVerificationEnabled) {
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  typescript: {
+    tsconfigPath: "./tsconfig.typecheck.json",
+  },
   experimental: {
     optimizePackageImports: ["lucide-react"],
   },
