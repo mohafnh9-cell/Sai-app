@@ -2,6 +2,7 @@ import "server-only";
 
 import { createGitHubAppJwt } from "./jwt";
 import { getGitHubAppConfig } from "./config";
+import { fetchInstallationAccessToken } from "./installation-token-service";
 import { GITHUB_APP_TARGET_PERMISSIONS } from "@/server/github/github-auth-mode";
 
 const GITHUB_API = "https://api.github.com";
@@ -58,17 +59,21 @@ export type GitHubInstallationRepo = {
 export async function listInstallationRepositories(
   githubInstallationId: number
 ): Promise<GitHubInstallationRepo[]> {
-  const config = getGitHubAppConfig();
-  if (!config) return [];
+  const installationToken = await fetchInstallationAccessToken(githubInstallationId);
+  if (!installationToken) return [];
 
-  const jwt = createGitHubAppJwt(config.appId, config.privateKey);
+  const headers = {
+    Authorization: `Bearer ${installationToken.token}`,
+    Accept: "application/vnd.github+json",
+    "X-GitHub-Api-Version": API_VERSION,
+  };
   const repos: GitHubInstallationRepo[] = [];
   let page = 1;
 
   while (page <= 10) {
     const response = await fetch(
-      `${GITHUB_API}/app/installations/${githubInstallationId}/repositories?per_page=100&page=${page}`,
-      { headers: appHeaders(jwt), cache: "no-store" }
+      `${GITHUB_API}/installation/repositories?per_page=100&page=${page}`,
+      { headers, cache: "no-store" }
     );
     if (!response.ok) break;
 
