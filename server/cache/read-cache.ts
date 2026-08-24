@@ -8,15 +8,13 @@ export type CacheNamespace =
   | "production_memory_summary"
   | "protection_center_model"
   | "report_summary"
-  | "mcp_context"
-  | "org_brain_snapshot";
+  | "mcp_context";
 
 const DEFAULT_TTL_MS: Record<CacheNamespace, number> = {
   production_memory_summary: 60_000,
   protection_center_model: 45_000,
   report_summary: 120_000,
   mcp_context: 30_000,
-  org_brain_snapshot: 20_000,
 };
 
 function key(namespace: CacheNamespace, projectId: string, suffix = ""): string {

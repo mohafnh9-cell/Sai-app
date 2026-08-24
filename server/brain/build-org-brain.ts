@@ -12,7 +12,9 @@ import { buildProductionRoadmap } from "@/brain/production-experience/roadmap";
 import { getLatestVerdictsByOrganization } from "@/server/production-verdict/service";
 import { productionReadyFromVerdict } from "./verdict-view-model";
 import { mergeProjectActivity } from "./build-project-brain";
-import { cachedRead } from "@/server/cache/read-cache";
+import { createAdminClient } from "@/server/security-scanner/admin-client";
+
+const ORG_BRAIN_CACHE_TTL_MS = 20_000;
 
 const DIMENSION_KEYS: ReadinessDimensionKey[] = [
   "security",
@@ -150,7 +152,29 @@ export async function getCachedOrgBrain(
   supabase: SupabaseClient,
   organizationId: string
 ): Promise<OrgBrainSnapshot> {
-  return cachedRead("org_brain_snapshot", organizationId, () =>
-    buildOrgBrain(supabase, organizationId)
+  const admin = createAdminClient();
+
+  const { data: cached } = await admin
+    .from("org_brain_cache")
+    .select("payload, expires_at")
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+
+  if (cached && new Date(cached.expires_at as string).getTime() > Date.now()) {
+    return cached.payload as OrgBrainSnapshot;
+  }
+
+  const snapshot = await buildOrgBrain(supabase, organizationId);
+
+  await admin.from("org_brain_cache").upsert(
+    {
+      organization_id: organizationId,
+      payload: snapshot,
+      expires_at: new Date(Date.now() + ORG_BRAIN_CACHE_TTL_MS).toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "organization_id" }
   );
+
+  return snapshot;
 }
