@@ -363,14 +363,6 @@ export async function runFullProductAudit(
   }
 
   return {
-    _debugCommitResolution: {
-      scanId,
-      reviewOutcomeOutcome: reviewOutcome.outcome,
-      scanRowCommitSha: (scanRow?.commit_sha as string | null) ?? null,
-      freshScanRowCommitSha: (freshScanRow?.commit_sha as string | null) ?? null,
-      persistedVerdictCommitSha: persistedVerdict?.commitSha ?? null,
-      persistedVerdictScanId: persistedVerdict?.scanId ?? null,
-    },
     mode: "full_product_audit",
     phase,
     project: {
