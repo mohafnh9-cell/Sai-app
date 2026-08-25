@@ -1,0 +1,180 @@
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { isAppAdminEmail } from "@/lib/auth/is-app-admin";
+import { percentileSummary } from "@/server/observability/metrics";
+import { PageHeader } from "@/components/shared/PageHeader";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import type { Metadata } from "next";
+
+export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "Admin | SequrAI",
+};
+
+const CONNECTION_STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
+  active: "default",
+  migration_reconnection_required: "destructive",
+  revoked: "destructive",
+  expired: "destructive",
+  insufficient_scope: "destructive",
+};
+
+function StatCard({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardDescription>{label}</CardDescription>
+        <CardTitle className="text-3xl tabular-nums">{value}</CardTitle>
+      </CardHeader>
+      {hint && (
+        <CardContent className="pt-0 text-xs text-muted-foreground">{hint}</CardContent>
+      )}
+    </Card>
+  );
+}
+
+export default async function AdminPage() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) redirect("/login");
+  if (!isAppAdminEmail(user.email)) redirect("/dashboard");
+
+  const admin = createAdminClient();
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+  const [usersResult, connectionsResult, orgsResult, projectsCountResult, scansResult] =
+    await Promise.all([
+      admin.auth.admin.listUsers({ perPage: 200 }),
+      admin
+        .from("workspace_github_connections")
+        .select("organization_id, github_login, status, connected_at, connected_by_user_id")
+        .order("connected_at", { ascending: false }),
+      admin.from("organizations").select("id, name"),
+      admin.from("projects").select("id", { count: "exact", head: true }),
+      admin
+        .from("scans")
+        .select("status, created_at, completed_at")
+        .gte("created_at", thirtyDaysAgo),
+    ]);
+
+  const users = usersResult.data?.users ?? [];
+  const totalUsers = users.length;
+  const signupsLast7d = users.filter((u) => u.created_at && u.created_at > sevenDaysAgo).length;
+
+  const orgNameById = new Map((orgsResult.data ?? []).map((o) => [o.id, o.name as string]));
+  const userEmailById = new Map(users.map((u) => [u.id, u.email ?? "—"]));
+  const connections = connectionsResult.data ?? [];
+
+  const scans = scansResult.data ?? [];
+  const completedDurations = scans
+    .filter((s) => s.status === "completed" && s.completed_at)
+    .map((s) => (new Date(s.completed_at as string).getTime() - new Date(s.created_at).getTime()) / 1000);
+  const p95 = percentileSummary(completedDurations);
+  const failedCount = scans.filter((s) => s.status === "failed").length;
+  const failureRate = scans.length ? ((failedCount / scans.length) * 100).toFixed(1) : "0.0";
+
+  return (
+    <div className="mx-auto max-w-6xl space-y-8 px-6 py-10">
+      <PageHeader
+        title="Admin"
+        description="Métricas internas de usuarios, conexiones de GitHub y salud de scans. Visible solo para administradores."
+      />
+
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        <StatCard label="Usuarios totales" value={totalUsers} />
+        <StatCard label="Registros últimos 7 días" value={signupsLast7d} />
+        <StatCard label="Proyectos conectados" value={projectsCountResult.count ?? 0} />
+        <StatCard
+          label="Scans últimos 30 días"
+          value={scans.length}
+          hint={`${failureRate}% de fallos`}
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
+        <StatCard label="P50 veredicto" value={p95.p50 !== null ? `${p95.p50.toFixed(0)}s` : "—"} />
+        <StatCard label="P95 veredicto" value={p95.p95 !== null ? `${p95.p95.toFixed(0)}s` : "—"} hint="Objetivo: <120s" />
+        <StatCard label="P99 veredicto" value={p95.p99 !== null ? `${p95.p99.toFixed(0)}s` : "—"} />
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Conexiones de GitHub</CardTitle>
+          <CardDescription>Quién conectó su cuenta de GitHub a un workspace y el estado actual.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {connections.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Sin conexiones registradas todavía.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border/70 text-left text-muted-foreground">
+                    <th className="pb-2 pr-4 font-medium">Usuario</th>
+                    <th className="pb-2 pr-4 font-medium">Workspace</th>
+                    <th className="pb-2 pr-4 font-medium">GitHub</th>
+                    <th className="pb-2 pr-4 font-medium">Estado</th>
+                    <th className="pb-2 font-medium">Conectado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {connections.map((c, i) => (
+                    <tr key={`${c.organization_id}-${i}`} className="border-b border-border/40 last:border-0">
+                      <td className="py-2 pr-4">{userEmailById.get(c.connected_by_user_id) ?? "—"}</td>
+                      <td className="py-2 pr-4">{orgNameById.get(c.organization_id) ?? c.organization_id}</td>
+                      <td className="py-2 pr-4">{c.github_login ?? "—"}</td>
+                      <td className="py-2 pr-4">
+                        <Badge variant={CONNECTION_STATUS_VARIANT[c.status] ?? "outline"}>{c.status}</Badge>
+                      </td>
+                      <td className="py-2 text-muted-foreground">
+                        {c.connected_at ? new Date(c.connected_at).toLocaleString() : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Usuarios</CardTitle>
+          <CardDescription>Todas las cuentas registradas, ordenadas por fecha de registro.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border/70 text-left text-muted-foreground">
+                  <th className="pb-2 pr-4 font-medium">Email</th>
+                  <th className="pb-2 font-medium">Registrado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...users]
+                  .sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""))
+                  .map((u) => (
+                    <tr key={u.id} className="border-b border-border/40 last:border-0">
+                      <td className="py-2 pr-4">{u.email ?? "—"}</td>
+                      <td className="py-2 text-muted-foreground">
+                        {u.created_at ? new Date(u.created_at).toLocaleString() : "—"}
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
