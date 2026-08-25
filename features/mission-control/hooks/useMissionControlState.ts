@@ -21,7 +21,13 @@ const POLL_INTERVAL_MS = 4000;
 
 function shouldPollMissionControl(state: MissionControlState | undefined): boolean {
   if (!state) return false;
-  return state.status.reviewInProgress || state.status.securityRunning;
+  // Verdict generation lags a few seconds behind the scan flipping to "completed" — keep
+  // polling through that gap instead of freezing on the "no verdict yet" recovery banner.
+  return (
+    state.status.reviewInProgress ||
+    state.status.securityRunning ||
+    state.recoveryReason === "scoped_verdict_missing"
+  );
 }
 
 type MissionControlNavigationResult = "navigating" | "reloading" | "unchanged";
