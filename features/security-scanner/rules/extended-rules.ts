@@ -4,6 +4,10 @@ import type { ScanRule } from "./types";
 import type { FindingDraft } from "../types";
 
 const TEST_OR_EXAMPLE = /(?:^|\/)(?:test|tests|__tests__|fixtures?|examples?)(?:\/|$)|\.(?:test|spec)\./i;
+// Machine-to-machine endpoints outside app/api/: OAuth token/DCR/revocation
+// (protected by PKCE/client credentials, not browser CSRF), public
+// well-known metadata, and webhook receivers (protected by signature).
+const MACHINE_ENDPOINT_PATH = /\/oauth\/|\/\.well-known\/|\/auth\/callback\/|\/webhooks\//i;
 const ROUTE_PATH = /(?:^|\/)(?:api|routes?|controllers?|handlers?)(?:\/|$)|route\.[jt]s$/i;
 const CODE_PATH = /\.(?:[cm]?[jt]sx?|py|rb|go|java|php)$/i;
 const SERVER_SIDE_PATH = /(?:^|\/)(?:server\/|app\/api\/|pages\/api\/|lib\/.*(?:server|api))/i;
@@ -129,7 +133,7 @@ const webExtended = [
     category: "web",
     remediation: "Validate CSRF tokens or use SameSite cookies with anti-CSRF patterns for browser clients.",
     path: /(?:^|\/)app\/(?!api\/)/i,
-    excludePath: TEST_OR_EXAMPLE,
+    excludePath: new RegExp(`${TEST_OR_EXAMPLE.source}|${MACHINE_ENDPOINT_PATH.source}`, "i"),
   }]),
   patternRule("frontend.client-authz", "Client-side authorization check", [{
     pattern: /(?:if\s*\(\s*(?:user\.role|session\.user\.role|isAdmin|permissions))[\s\S]{0,200}(?:return|null|<Redirect)/i,
