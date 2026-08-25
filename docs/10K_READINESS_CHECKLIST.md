@@ -8,11 +8,15 @@
 
 ## P0 — Antes de aceptar usuarios reales
 
-- [ ] **Cerrar el STAGING GO.** Levantar un entorno de staging propio y correr al menos una vez el flujo completo en vivo: GitHub App → webhook → scan → veredicto. Hoy solo hay tests unitarios, cero E2E real. Ver `docs/GITHUB_APP_STAGING_RUNBOOK.md`.
+- [x] **Cerrar el STAGING GO.** ~~Levantar un entorno de staging propio y correr al menos una vez el flujo completo en vivo~~ → **cerrado 2026-08-25**: proyecto Supabase (`dfjpzbqtdxtmfsuwsigj`), GitHub App y GitHub OAuth App propios, deploy Preview de Vercel bajo `sequrai-app-staging.vercel.app`. Flujo real corrido de punta a punta:
+  - Signup real vía GitHub OAuth → onboarding → conectar repo `mohafnh9-cell/sequrai-app` → scan real → veredicto **"Ready to Ship" · 100/100**.
+  - PR real (#6, cerrado tras la prueba) en `sequrai-app`: el webhook del GitHub App entregó el evento (`POST /api/webhooks/github-app`), disparó un `webhook_pr_scan` real (15.3s), y creó el status `sequrai/production` — `pending` → `success` (`SequrAI — Ready to Ship · 100/100 · 0 blockers`), igual que el mapeo esperado del runbook.
+  - Segundo commit en la misma rama: se creó un status **nuevo e independiente** para el nuevo SHA sin sobrescribir el status del commit anterior (verificado con `gh api .../statuses` en ambos SHAs).
+  - Bugs reales encontrados y arreglados en el camino (no solo config): `SUPABASE_SERVICE_ROLE_KEY` de Preview compartía la clave de producción (rechazaba el admin client de staging con error sin código Postgres); `NEXT_PUBLIC_SUPABASE_URL`/`ANON_KEY` de Preview se perdieron accidentalmente durante la corrección anterior; `SCAN_SCHEDULER=inngest` fallaba en staging con `404 Branch environment does not exist` (sin integración Git de Vercel no hay branch environment de Inngest) → cambiado a `SCAN_SCHEDULER=inline` solo en Preview.
 - [ ] **Verificar las 50 migraciones en la base de datos conectada.** ~~La última auditoría (D.10, 14 ago) no pudo conectar~~ → verificado en sesión 1: sí están aplicadas (`github_app_installations`, `protection_events` con 672 filas reales, etc.).
 - [ ] **Validar Cohorte 0** (equipo + 3–5 founders amigos) contra sus propias métricas de salida: setup MCP <60s, veredicto P95 <2min, 0 incidentes P0. Ver `docs/roadmap/05-beta-milestones.md`.
 - [x] **Añadir `GITHUB_WEBHOOK_SECRET` a `.env.local`.** ~~Única variable ausente~~ → no se tocó esta sesión, revisar si sigue pendiente.
-- [ ] **Arreglar los 17 archivos de test que fallan.** Mismo baseline exacto al cerrar la sesión (17 archivos / 35 tests) — ninguno de los fixes de hoy los tocó ni los empeoró. Concentrados en `server/ai-red-team/` y `server/attack-simulation/`.
+- [x] **Arreglar los 17 archivos de test que fallan.** ~~Concentrados en `server/ai-red-team/` y `server/attack-simulation/`~~ → **arreglado** (`3110216`): reparados los 17 archivos, con bugs reales de correlación/scanner corregidos en el proceso. Verificado 2026-08-25: `npx vitest run` → 308 archivos / 1778 tests, 0 fallos.
 
 ## P1 — Para aguantar 10,000 usuarios
 
@@ -63,4 +67,4 @@ Los dos pendientes que quedaron abiertos al final de la sesión 2 **se investiga
 | + redirect de confianza | 37/100 | Safe Fix aplicado |
 | + fix de raíz del commit obsoleto + mejoras del detector | **63/100** | Score real, consistente entre `can_i_deploy` y `full_product_audit` |
 
-- [ ] **17 archivos de test en `ai-red-team`/`attack-simulation` siguen fallando** — no resultaron ser la misma causa raíz que el bug del commit obsoleto (ese ya está arreglado). Deuda de tipos genuina entre fixtures y contratos, sigue pendiente.
+- [x] **17 archivos de test en `ai-red-team`/`attack-simulation` siguen fallando** — ~~deuda de tipos genuina entre fixtures y contratos~~ → **arreglado** (`3110216`, sesión posterior). Suite completa verde: 308 archivos / 1778 tests, 0 fallos (2026-08-25).
