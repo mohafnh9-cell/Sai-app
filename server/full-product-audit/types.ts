@@ -125,6 +125,14 @@ export type FullProductAuditResult = {
   project: { id: string; name: string; repositoryFullName: string | null };
   reviewId: string | null;
   commitSha: string | null;
+  _debugCommitResolution?: {
+    scanId: string | null;
+    reviewOutcomeOutcome: string;
+    scanRowCommitSha: string | null;
+    freshScanRowCommitSha: string | null;
+    persistedVerdictCommitSha: string | null;
+    persistedVerdictScanId: string | null;
+  };
   verdictStatus: VerdictStatus | null;
   score: number | null;
   counts: FullProductAuditCounts;
