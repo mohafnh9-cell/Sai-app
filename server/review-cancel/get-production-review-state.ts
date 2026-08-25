@@ -107,11 +107,13 @@ export async function getProductionReviewState(
     if (scan) {
       const scanStatus = String(scan.status ?? "");
       let jobStatus = String(activeJob.status ?? "");
+      let wasOrphanedJob = false;
 
       if (
         (jobStatus === "queued" || jobStatus === "running") &&
         ["completed", "failed", "cancelled"].includes(scanStatus)
       ) {
+        wasOrphanedJob = true;
         await reconcileOrphanScanJobWithTerminalScan(admin, {
           jobId: activeJob.id as string,
           scan: scan as Record<string, unknown>,
@@ -126,40 +128,48 @@ export async function getProductionReviewState(
         }
       }
 
-      let uiStatus = mapScanStatusToProductionReviewUiStatus(scanStatus);
-      let failureMessage: string | null = null;
+      // An orphaned job (stuck queued/running while its scan already
+      // finished) can be arbitrarily old and unrelated to the project's
+      // actual current scan — reconciling it fixes scan_jobs bookkeeping,
+      // but its scan must not be reported as "the" review state. Fall
+      // through to the repository_scan_state / latest-scan lookups below,
+      // which track the real current scan.
+      if (!wasOrphanedJob) {
+        let uiStatus = mapScanStatusToProductionReviewUiStatus(scanStatus);
+        let failureMessage: string | null = null;
 
-      if (
-        isStaleActiveReviewScan({
-          status: scanStatus,
-          created_at: scan.created_at as string,
-          updated_at: scan.updated_at as string,
-          started_at: scan.started_at as string | null,
-          queued_at: scan.queued_at as string | null,
-        })
-      ) {
-        uiStatus = "stale";
-        failureMessage = "Review timed out";
-      }
+        if (
+          isStaleActiveReviewScan({
+            status: scanStatus,
+            created_at: scan.created_at as string,
+            updated_at: scan.updated_at as string,
+            started_at: scan.started_at as string | null,
+            queued_at: scan.queued_at as string | null,
+          })
+        ) {
+          uiStatus = "stale";
+          failureMessage = "Review timed out";
+        }
 
-      const terminal = ["cancelled", "completed", "failed", "stale"].includes(uiStatus);
-      const hasActiveReview = !terminal && uiStatus !== "idle";
-      const isCancellable =
-        hasActiveReview &&
-        uiStatus !== "cancelling" &&
-        isProductionReviewCancellable({
-          scanStatus,
-          scanJobStatus: jobStatus,
+        const terminal = ["cancelled", "completed", "failed", "stale"].includes(uiStatus);
+        const hasActiveReview = !terminal && uiStatus !== "idle";
+        const isCancellable =
+          hasActiveReview &&
+          uiStatus !== "cancelling" &&
+          isProductionReviewCancellable({
+            scanStatus,
+            scanJobStatus: jobStatus,
+          });
+
+        return buildState({
+          scan,
+          job: activeJob,
+          status: uiStatus,
+          hasActiveReview,
+          isCancellable,
+          failureMessage,
         });
-
-      return buildState({
-        scan,
-        job: activeJob,
-        status: uiStatus,
-        hasActiveReview,
-        isCancellable,
-        failureMessage,
-      });
+      }
     }
   }
 
