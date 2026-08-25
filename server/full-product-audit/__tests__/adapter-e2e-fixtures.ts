@@ -35,6 +35,8 @@ export const ADAPTER_E2E_FIXTURES: Record<string, AdapterE2EFixture> = {
     }),
     vulnerableLabEnv: { SEQURAI_LAB_WEBHOOK_UNPROTECTED: "1" },
     protectedLabEnv: {},
+    vulnerableFixtureEnv: { SEQURAI_DYNAMIC_LAB_WEBHOOK_PATH: "/api/webhook" },
+    protectedFixtureEnv: { SEQURAI_DYNAMIC_LAB_WEBHOOK_PATH: "/api/webhook" },
   },
   "idempotency-replay": {
     adapterId: "idempotency-replay",
@@ -51,6 +53,7 @@ export const ADAPTER_E2E_FIXTURES: Record<string, AdapterE2EFixture> = {
     }),
     vulnerableFixtureEnv: { SEQURAI_DYNAMIC_LAB_IDEMPOTENCY_PATH: "/api/idempotent-vulnerable" },
     protectedLabEnv: {},
+    protectedFixtureEnv: { SEQURAI_DYNAMIC_LAB_IDEMPOTENCY_PATH: "/api/idempotent" },
   },
   "mass-assignment-probe": {
     adapterId: "mass-assignment-probe",

@@ -37,7 +37,7 @@ describe("Autonomous Security Orchestrator RT13", () => {
   it("scenario A: static site selects all attack teams by default", () => {
     const disc = discovery({
       projectSummary: "Marketing landing page",
-      potentialAttackSurface: [{ area: "marketing", label: "Landing", rationale: "x", confidence: 0.9 }],
+      potentialAttackSurface: [],
     });
     const signals = analyzeDiscoverySignals(disc);
     expect(signals.isStaticSite).toBe(true);

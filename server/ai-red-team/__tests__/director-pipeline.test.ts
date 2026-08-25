@@ -7,8 +7,21 @@ import {
   SECURITY_DIRECTOR_LLM_DOMAIN,
 } from "../director/pipeline";
 import { createAuthenticationTeam } from "../teams/authentication/authentication-team";
+import { withFeatureFlagOverrides } from "./test-support/feature-flag-override";
 
 const INTERNAL_ORG = "org-internal-pipeline";
+
+function resolveDirectorPipelineDomainsWithTeamsGatedInternal(
+  ...args: Parameters<typeof resolveDirectorPipelineDomains>
+) {
+  return withFeatureFlagOverrides(
+    { business_logic_team: "internal", llm_team: "internal" },
+    async () => {
+      const { resolveDirectorPipelineDomains: resolveFresh } = await import("../director/pipeline");
+      return resolveFresh(...args);
+    }
+  );
+}
 
 describe("Security Director pipeline", () => {
   const prevInternal = process.env.SEQURAI_INTERNAL_ORG_IDS;
@@ -39,9 +52,9 @@ describe("Security Director pipeline", () => {
     expect(plan.phases[4]?.dependsOn).toContain("phase-authorization");
   });
 
-  it("excludes payments from director scope when business_logic_team is disabled", () => {
+  it("excludes payments from director scope when business_logic_team is disabled", async () => {
     delete process.env.SEQURAI_INTERNAL_ORG_IDS;
-    const domains = resolveDirectorPipelineDomains({
+    const domains = await resolveDirectorPipelineDomainsWithTeamsGatedInternal({
       requestId: "r",
       context: { projectId: "p", organizationId: "org-public" },
       directorPipeline: true,
@@ -59,9 +72,9 @@ describe("Security Director pipeline", () => {
     expect(domains).toEqual([...SECURITY_DIRECTOR_TEAM_ORDER, SECURITY_DIRECTOR_LLM_DOMAIN]);
   });
 
-  it("excludes llm from director scope when llm_team is disabled", () => {
+  it("excludes llm from director scope when llm_team is disabled", async () => {
     delete process.env.SEQURAI_INTERNAL_ORG_IDS;
-    const domains = resolveDirectorPipelineDomains({
+    const domains = await resolveDirectorPipelineDomainsWithTeamsGatedInternal({
       requestId: "r",
       context: { projectId: "p", organizationId: "org-public" },
       directorPipeline: true,

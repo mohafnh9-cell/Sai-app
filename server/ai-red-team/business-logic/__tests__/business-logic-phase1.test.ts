@@ -10,6 +10,7 @@ import {
   BUSINESS_LOGIC_PIPELINE_COMPLETE_DEFERRAL,
 } from "../index";
 import { createDefaultRedTeamEngine } from "../../index";
+import { withFeatureFlagOverrides } from "../../__tests__/test-support/feature-flag-override";
 
 const INTERNAL_ORG = "org-internal-rt9";
 
@@ -66,19 +67,27 @@ describe("RT9 Business Logic Team — Phase 1", () => {
   });
 
   it("feature flag disables canRun for non-internal organizations", async () => {
-    const agent = new BusinessLogicTeamAgent(createBusinessLogicTeamCoordinator());
-    const enabled = await agent.canRun({
-      projectId: "p",
-      organizationId: "org-public",
-      declaredCapabilities: ["payments"],
-      metadata: {
-        businessLogicAttack: { discovery: discovery(), plan: emptyPlan },
-      },
+    await withFeatureFlagOverrides({ business_logic_team: "internal" }, async () => {
+      const { isFeatureEnabled: isFeatureEnabledFresh } = await import("@/server/feature-flags");
+      const {
+        BusinessLogicTeamAgent: BusinessLogicTeamAgentFresh,
+        createBusinessLogicTeamCoordinator: createBusinessLogicTeamCoordinatorFresh,
+      } = await import("../index");
+
+      const agent = new BusinessLogicTeamAgentFresh(createBusinessLogicTeamCoordinatorFresh());
+      const enabled = await agent.canRun({
+        projectId: "p",
+        organizationId: "org-public",
+        declaredCapabilities: ["payments"],
+        metadata: {
+          businessLogicAttack: { discovery: discovery(), plan: emptyPlan },
+        },
+      });
+      expect(enabled).toBe(false);
+      expect(
+        isFeatureEnabledFresh("business_logic_team", { organizationId: "org-public" })
+      ).toBe(false);
     });
-    expect(enabled).toBe(false);
-    expect(
-      isFeatureEnabled("business_logic_team", { organizationId: "org-public" })
-    ).toBe(false);
   });
 
   it("coordinator completes RT9 pipeline with finding collection", async () => {

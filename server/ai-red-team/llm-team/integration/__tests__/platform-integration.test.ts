@@ -21,6 +21,7 @@ import {
 import { buildMissionControlView } from "@/features/mission-control/lib/build-mission-control-view";
 import { getLlmTeamOperatingMode } from "../feature-gate";
 import { runRt10FindingsPipeline } from "../../pipeline/rt10-coordinator";
+import { withFeatureFlagOverrides } from "../../../__tests__/test-support/feature-flag-override";
 
 const INTERNAL_ORG = "org-internal-rt10";
 
@@ -224,20 +225,28 @@ describe("RT10 Platform Integration — Slice 8", () => {
   });
 
   it("feature flag disables agent canRun", async () => {
-    const agent = new LlmTeamAgent(createLlmTeamCoordinator());
-    const enabled = await agent.canRun({
-      projectId: "p",
-      organizationId: "org-public",
-      declaredCapabilities: ["llm"],
-      metadata: {
-        llmAttack: {
-          discovery: aiDiscovery(),
-          plan: { planId: "p", createdAt: new Date().toISOString(), phases: [], notes: [] },
+    await withFeatureFlagOverrides({ llm_team: "internal" }, async () => {
+      const { isFeatureEnabled: isFeatureEnabledFresh } = await import("@/server/feature-flags");
+      const { createLlmTeamCoordinator: createLlmTeamCoordinatorFresh } = await import(
+        "../../coordinator"
+      );
+      const { LlmTeamAgent: LlmTeamAgentFresh } = await import("../../llm-team-agent");
+
+      const agent = new LlmTeamAgentFresh(createLlmTeamCoordinatorFresh());
+      const enabled = await agent.canRun({
+        projectId: "p",
+        organizationId: "org-public",
+        declaredCapabilities: ["llm"],
+        metadata: {
+          llmAttack: {
+            discovery: aiDiscovery(),
+            plan: { planId: "p", createdAt: new Date().toISOString(), phases: [], notes: [] },
+          },
         },
-      },
+      });
+      expect(enabled).toBe(false);
+      expect(isFeatureEnabledFresh("llm_team", { organizationId: "org-public" })).toBe(false);
     });
-    expect(enabled).toBe(false);
-    expect(isFeatureEnabled("llm_team", { organizationId: "org-public" })).toBe(false);
   });
 
   it("attack preconditions propagate without recomputation", async () => {

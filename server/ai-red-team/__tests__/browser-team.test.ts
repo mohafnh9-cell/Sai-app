@@ -3,6 +3,10 @@ import { randomUUID } from "node:crypto";
 import {
   createBrowserEnabledRedTeamEngine,
   validateAttackAuthorization,
+  InMemoryRedTeamRunStore,
+  executeQueuedRedTeamRun,
+} from "../index";
+import {
   ExecutionBudget,
   DEFAULT_BROWSER_TEAM_BUDGET,
   redactSecrets,
@@ -15,9 +19,7 @@ import {
   createBrowserSpecialistRegistry,
   createDefaultBrowserSpecialists,
   mockSafeBrowserRuntimeFactory,
-  InMemoryRedTeamRunStore,
-  executeQueuedRedTeamRun,
-} from "../index";
+} from "../teams/browser";
 import { createSecurityDirector } from "../director/security-director";
 import { createAgentRegistry, registerRedTeamAgents } from "../agents";
 import type { DiscoveryRepositoryInput } from "../discovery/types";

@@ -22,6 +22,7 @@ import { createUniversalEngineeringEngine } from "../../../engineering/uee-engin
 import { planBusinessLogicOrchestrationMetadata } from "../../../autonomous-orchestrator/business-logic-orchestration";
 import { buildMissionControlView } from "@/features/mission-control/lib/build-mission-control-view";
 import { BusinessLogicTeamAgent as AgentClass } from "../../business-logic-team-agent";
+import { withFeatureFlagOverrides } from "../../../__tests__/test-support/feature-flag-override";
 
 class InjectedFailingCheckoutSpecialist extends CheckoutIntegritySpecialist {
   readonly id = "logic.checkout_integrity";
@@ -177,21 +178,39 @@ describe("RT9 acceptance suite — Slice 10", () => {
 
   describe("Scenario K — RT9 disabled", () => {
     it("agent cannot run and pipeline omits payments domain", async () => {
-      const agent = new AgentClass(createBusinessLogicTeamCoordinator());
-      const can = await agent.canRun({
-        projectId: "p",
-        organizationId: "org-public-no-rt9",
-        declaredCapabilities: ["payments"],
-        metadata: { businessLogicAttack: { discovery: discoveryFullBillingStack(), plan: emptyAttackPlan() } },
-      });
-      expect(can).toBe(false);
-      expect(isFeatureEnabled("business_logic_team", { organizationId: "org-public-no-rt9" })).toBe(false);
+      // business_logic_team is "ga" (enabled for every org) by default now —
+      // it was "internal"-gated when this scenario was written. Demote it
+      // via a fresh module evaluation to exercise the disabled path.
+      await withFeatureFlagOverrides({ business_logic_team: "internal" }, async () => {
+        const { isFeatureEnabled: isFeatureEnabledFresh } = await import("@/server/feature-flags");
+        const { createBusinessLogicTeamCoordinator: createCoordinatorFresh } = await import(
+          "../../coordinator"
+        );
+        const { BusinessLogicTeamAgent: AgentClassFresh } = await import(
+          "../../business-logic-team-agent"
+        );
+        const { resolveDirectorPipelineDomains: resolveFresh } = await import(
+          "../../../director/pipeline"
+        );
 
-      const request = {
-        context: { organizationId: "org-public-no-rt9", projectId: "p" },
-        directorPipeline: true,
-      } as AttackRequest;
-      expect(resolveDirectorPipelineDomains(request)).not.toContain("payments");
+        const agent = new AgentClassFresh(createCoordinatorFresh());
+        const can = await agent.canRun({
+          projectId: "p",
+          organizationId: "org-public-no-rt9",
+          declaredCapabilities: ["payments"],
+          metadata: { businessLogicAttack: { discovery: discoveryFullBillingStack(), plan: emptyAttackPlan() } },
+        });
+        expect(can).toBe(false);
+        expect(
+          isFeatureEnabledFresh("business_logic_team", { organizationId: "org-public-no-rt9" })
+        ).toBe(false);
+
+        const request = {
+          context: { organizationId: "org-public-no-rt9", projectId: "p" },
+          directorPipeline: true,
+        } as AttackRequest;
+        expect(resolveFresh(request)).not.toContain("payments");
+      });
     });
   });
 

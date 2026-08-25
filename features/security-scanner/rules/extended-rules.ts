@@ -17,7 +17,7 @@ const RECOGNIZED_RATE_LIMIT =
 
 const injectionExtended = [
   patternRule("injection.ssrf", "Server-side request forgery", [{
-    pattern: /\b(?:fetch|axios|got|request|http\.get|https\.get)\s*\(\s*(?:`[^`]*\$\{|[^)]*(?:req\.|request\.|params|query|body|searchParams))/i,
+    pattern: /\b(?:fetch|axios|got|request|http\.get|https\.get)\s*\(\s*(?:`[^`]*\$\{[^}]*(?:req\.|request\.|params|query|body|searchParams)[^}]*\}|[^)]*(?:req\.|request\.|params|query|body|searchParams))/i,
     title: "User-controlled outbound request URL",
     description: "A request value may determine the destination of a server-side HTTP call (SSRF risk).",
     severity: "high",
@@ -36,7 +36,8 @@ const injectionExtended = [
     category: "injection",
     remediation: "Use JSON with explicit schemas; never deserialize executable payloads.",
     path: CODE_PATH,
-    excludePath: /(?:test|spec|features\/security-scanner|server\/ai-red-team\/teams\/browser)/i,
+    excludePath:
+      /(?:test|spec|features\/security-scanner|features\/security-analysis|server\/ai-red-team\/teams\/browser|server\/ai-red-team\/llm-team\/runtime\/simulation-engines)/i,
   }]),
 ];
 

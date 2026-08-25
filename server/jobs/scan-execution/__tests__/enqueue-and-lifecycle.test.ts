@@ -18,10 +18,10 @@ vi.mock("@/server/jobs/run-scan-job", () => ({
 }));
 
 const baseJob = {
-  id: "job-1",
-  organization_id: "org-1",
-  project_id: "project-1",
-  scan_id: "scan-1",
+  id: "00000000-0000-4000-8000-000000000001",
+  organization_id: "00000000-0000-4000-8000-000000000004",
+  project_id: "00000000-0000-4000-8000-000000000003",
+  scan_id: "00000000-0000-4000-8000-000000000002",
   github_delivery_id: null,
   job_type: "mcp_review" as const,
   status: "queued" as const,
@@ -75,10 +75,10 @@ function buildAdmin(options?: {
                 eq: () => ({
                   in: () => ({
                     select: () => ({
-                      maybeSingle: () => Promise.resolve({ data: { id: "scan-1" }, error: null }),
+                      maybeSingle: () => Promise.resolve({ data: { id: "00000000-0000-4000-8000-000000000002" }, error: null }),
                     }),
                   }),
-                  maybeSingle: () => Promise.resolve({ data: { id: "scan-1" }, error: null }),
+                  maybeSingle: () => Promise.resolve({ data: { id: "00000000-0000-4000-8000-000000000002" }, error: null }),
                 }),
               };
             },
@@ -149,9 +149,9 @@ describe("enqueueScanRunExecution", () => {
       baseJob,
       {
         scanJobId: baseJob.id,
-        scanId: "scan-1",
-        organizationId: "org-1",
-        projectId: "project-1",
+        scanId: "00000000-0000-4000-8000-000000000002",
+        organizationId: "00000000-0000-4000-8000-000000000004",
+        projectId: "00000000-0000-4000-8000-000000000003",
         userId: "user-1",
       },
       { commitSha: "abc123" }
@@ -159,7 +159,7 @@ describe("enqueueScanRunExecution", () => {
 
     expect(inngest.send).toHaveBeenCalledWith({
       name: INNGEST_EVENTS.SCAN_RUN,
-      data: expect.objectContaining({ scanJobId: "job-1", scanId: "scan-1" }),
+      data: expect.objectContaining({ scanJobId: "00000000-0000-4000-8000-000000000001", scanId: "00000000-0000-4000-8000-000000000002" }),
     });
     expect(result.executor).toBe("inngest");
     expect(result.inngestEventId).toBe("evt-123");
@@ -178,9 +178,9 @@ describe("enqueueScanRunExecution", () => {
         baseJob,
         {
           scanJobId: baseJob.id,
-          scanId: "scan-1",
-          organizationId: "org-1",
-          projectId: "project-1",
+          scanId: "00000000-0000-4000-8000-000000000002",
+          organizationId: "00000000-0000-4000-8000-000000000004",
+          projectId: "00000000-0000-4000-8000-000000000003",
           userId: "user-1",
         }
       )
@@ -204,9 +204,9 @@ describe("enqueueScanRunExecution", () => {
         baseJob,
         {
           scanJobId: baseJob.id,
-          scanId: "scan-1",
-          organizationId: "org-1",
-          projectId: "project-1",
+          scanId: "00000000-0000-4000-8000-000000000002",
+          organizationId: "00000000-0000-4000-8000-000000000004",
+          projectId: "00000000-0000-4000-8000-000000000003",
           userId: "user-1",
         }
       )
@@ -228,9 +228,9 @@ describe("enqueueScanRunExecution", () => {
         baseJob,
         {
           scanJobId: baseJob.id,
-          scanId: "scan-1",
-          organizationId: "org-1",
-          projectId: "project-1",
+          scanId: "00000000-0000-4000-8000-000000000002",
+          organizationId: "00000000-0000-4000-8000-000000000004",
+          projectId: "00000000-0000-4000-8000-000000000003",
           userId: "user-1",
         }
       )
@@ -254,9 +254,9 @@ describe("enqueueScanRunExecution", () => {
       baseJob,
       {
         scanJobId: baseJob.id,
-        scanId: "scan-1",
-        organizationId: "org-1",
-        projectId: "project-1",
+        scanId: "00000000-0000-4000-8000-000000000002",
+        organizationId: "00000000-0000-4000-8000-000000000004",
+        projectId: "00000000-0000-4000-8000-000000000003",
         userId: "user-1",
       },
       { scheduler }
@@ -280,7 +280,7 @@ describe("beginReviewProcessing", () => {
                 eq: () => ({
                   eq: () => ({
                     select: () => ({
-                      maybeSingle: () => Promise.resolve({ data: { id: "scan-1" }, error: null }),
+                      maybeSingle: () => Promise.resolve({ data: { id: "00000000-0000-4000-8000-000000000002" }, error: null }),
                     }),
                   }),
                 }),
@@ -306,10 +306,10 @@ describe("beginReviewProcessing", () => {
 
     const { beginReviewProcessing } = await import("../review-lifecycle");
     const started = await beginReviewProcessing(admin as never, {
-      reviewId: "scan-1",
-      scanJobId: "job-1",
-      organizationId: "org-1",
-      projectId: "project-1",
+      reviewId: "00000000-0000-4000-8000-000000000002",
+      scanJobId: "00000000-0000-4000-8000-000000000001",
+      organizationId: "00000000-0000-4000-8000-000000000004",
+      projectId: "00000000-0000-4000-8000-000000000003",
     });
 
     expect(started).toBe(true);

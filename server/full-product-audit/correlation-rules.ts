@@ -64,11 +64,13 @@ export const AUDIT_CORRELATION_RULES: readonly CorrelationRule[] = [
   },
   {
     adapterIds: ["webhook-signature-bypass"],
+    staticRuleIds: ["web.webhook"],
     categoryKeywords: ["web", "webhook"],
     titleKeywords: ["webhook", "signature"],
   },
   {
     adapterIds: ["idempotency-replay"],
+    staticRuleIds: ["reliability.idempotency"],
     categoryKeywords: ["reliability", "availability"],
     titleKeywords: ["idempotency", "replay", "duplicate"],
   },

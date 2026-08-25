@@ -55,7 +55,7 @@ describe("live-test-copy", () => {
     const display = deriveLiveTestDisplay(view, t);
     expect(display.progressPercent).toBe(25);
     expect(display.testsDone).toBe(1);
-    expect(display.primaryAction?.label).toBe("Protect my application");
+    expect(display.primaryAction?.label).toBe("Fix with AI");
     expect(display.primaryAction?.findingId).toBe("finding-1");
   });
 

@@ -38,4 +38,4 @@ export const TEST_OR_EXAMPLE_PATH =
  * and must stay subject to auth/CSRF checks.
  */
 export const MACHINE_ENDPOINT_PATH =
-  /\/oauth\/(?:register|revoke|token)(?:\/|$)|\/\.well-known\/|\/auth\/callback\/|\/webhooks\/|\/api\/internal\//i;
+  /\/oauth\/(?:register|revoke|token)(?:\/|$)|\/\.well-known\/|\/auth\/callback\/|\/webhooks?\/|\/api\/internal\//i;

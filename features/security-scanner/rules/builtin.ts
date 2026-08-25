@@ -22,6 +22,10 @@ import {
 const TEST_OR_EXAMPLE = /(?:^|\/)(?:test|tests|__tests__|fixtures?|examples?)(?:\/|$)|\.(?:test|spec)\./i;
 const ROUTE_PATH = /(?:^|\/)(?:api|routes?|controllers?|handlers?)(?:\/|$)|route\.[jt]s$/i;
 const CODE_PATH = /\.(?:[cm]?[jt]sx?|py|rb|go|java|php)$/i;
+const MOCK_OR_TEST_PATH = new RegExp(
+  `${TEST_OR_EXAMPLE.source}|(?:^|\\/)mock-|mock-api-runtime`,
+  "i"
+);
 
 export function patternRule(id: string, title: string, specs: PatternSpec[]): ScanRule {
   return { id, title, run: ({ files }) => patternFindings(id, files, specs) };
@@ -239,12 +243,12 @@ const configurationRules = [
     pattern: /(?:Access-Control-Allow-Origin["']?\s*[:,]\s*["']\*|cors\s*\(\s*(?:\)|\{[^}]*origin\s*:\s*(?:true|["']\*)))/i,
     title: "Permissive cross-origin policy", description: "The application allows requests from any origin.",
     severity: "medium", confidence: "high", category: "configuration",
-    remediation: "Allow only explicitly trusted origins and avoid credentialed wildcard policies.", path: CODE_PATH, excludePath: /(?:\/mock-|\/fixtures?\/|\/__tests__\/|mock-api-runtime)/i,
+    remediation: "Allow only explicitly trusted origins and avoid credentialed wildcard policies.", path: CODE_PATH, excludePath: MOCK_OR_TEST_PATH,
   }, {
     pattern: /origin\s*:\s*\([^)]*\)\s*=>\s*(?:true|callback\s*\(\s*null\s*,\s*true)/i,
     title: "CORS origin reflected without an allowlist", description: "The origin callback appears to approve every requesting origin.",
     severity: "high", confidence: "high", category: "configuration",
-    remediation: "Compare the origin against an explicit allowlist before approving it.", path: CODE_PATH, excludePath: /(?:\/mock-|\/fixtures?\/|\/__tests__\/|mock-api-runtime)/i,
+    remediation: "Compare the origin against an explicit allowlist before approving it.", path: CODE_PATH, excludePath: MOCK_OR_TEST_PATH,
   }]),
   patternRule("auth.insecure-cookie", "Insecure cookies", [{
     pattern: /\.cookie\s*\([^)]*,[^)]*,\s*\{(?:(?!secure\s*:\s*true).)*\}/i,

@@ -12,6 +12,7 @@ import { createSecurityDirector } from "../director/security-director";
 import { createDefaultRedTeamEngine } from "../index";
 import type { ApplicationContext, AttackResult } from "../types";
 import type { DiscoveryRepositoryInput } from "../discovery/types";
+import { withFeatureFlagOverrides } from "./test-support/feature-flag-override";
 
 const sampleDiscoveryRepository = (): DiscoveryRepositoryInput => ({
   projectId: "project-1",
@@ -88,58 +89,81 @@ describe("AgentRegistry", () => {
 
 describe("AttackResult serialization", () => {
   it("round-trips through JSON", async () => {
-    const registry = createAgentRegistry();
-    registerDefaultPlaceholderAgents(registry);
-    const director = createSecurityDirector({ registry });
-    const report = await director.run({
-      requestId: randomUUID(),
-      context: baseContext,
-      scope: ["authentication"],
-      discoveryRepository: sampleDiscoveryRepository(),
+    // autonomous_orchestrator is "ga" (enabled unconditionally) by default now —
+    // it was gated when this test was written to exercise an explicit `scope`.
+    // Demote it via a fresh module evaluation so the explicit scope is honored
+    // instead of being overridden by the orchestrator's own domain selection.
+    await withFeatureFlagOverrides({ autonomous_orchestrator: "internal" }, async () => {
+      const { createAgentRegistry: createAgentRegistryFresh, registerDefaultPlaceholderAgents: registerDefaultPlaceholderAgentsFresh } =
+        await import("../agents");
+      const { createSecurityDirector: createSecurityDirectorFresh } = await import(
+        "../director/security-director"
+      );
+
+      const registry = createAgentRegistryFresh();
+      registerDefaultPlaceholderAgentsFresh(registry);
+      const director = createSecurityDirectorFresh({ registry });
+      const report = await director.run({
+        requestId: randomUUID(),
+        context: baseContext,
+        scope: ["authentication"],
+        discoveryRepository: sampleDiscoveryRepository(),
+      });
+      const serialized = JSON.stringify(report.results[0]);
+      const parsed = JSON.parse(serialized) as AttackResult;
+      expect(parsed.agentId).toBe("auth.authentication");
+      expect(parsed.status).toBe("completed");
     });
-    const serialized = JSON.stringify(report.results[0]);
-    const parsed = JSON.parse(serialized) as AttackResult;
-    expect(parsed.agentId).toBe("auth.authentication");
-    expect(parsed.status).toBe("completed");
   });
 });
 
 describe("SecurityDirector", () => {
   it("runs placeholder agents and returns a unified report", async () => {
-    const logs: string[] = [];
-    const registry = createAgentRegistry();
-    registerDefaultPlaceholderAgents(registry);
-    const director = createSecurityDirector({
-      registry,
-      logger: {
-        log(entry) {
-          logs.push(entry.event);
+    // Same autonomous_orchestrator GA-promotion issue as the serialization
+    // test above — demote it so the explicit ["authentication", "api"] scope
+    // is what actually runs, which is what this test asserts on.
+    await withFeatureFlagOverrides({ autonomous_orchestrator: "internal" }, async () => {
+      const { createAgentRegistry: createAgentRegistryFresh, registerDefaultPlaceholderAgents: registerDefaultPlaceholderAgentsFresh } =
+        await import("../agents");
+      const { createSecurityDirector: createSecurityDirectorFresh } = await import(
+        "../director/security-director"
+      );
+
+      const logs: string[] = [];
+      const registry = createAgentRegistryFresh();
+      registerDefaultPlaceholderAgentsFresh(registry);
+      const director = createSecurityDirectorFresh({
+        registry,
+        logger: {
+          log(entry) {
+            logs.push(entry.event);
+          },
         },
-      },
+      });
+
+      const report = await director.run({
+        requestId: "req-1",
+        context: baseContext,
+        scope: ["authentication", "api"],
+        options: { maxParallel: 2 },
+        discoveryRepository: sampleDiscoveryRepository(),
+      });
+
+      expect(report.discovery.detectedTechnologies.length).toBeGreaterThan(0);
+
+      expect(report.results).toHaveLength(2);
+      expect(report.summary.completed).toBe(2);
+      expect(logs).toContain("director_started");
+      expect(logs).toContain("planning_completed");
+      expect(logs).toContain("agents_selected");
+      expect(logs).toContain("director_completed");
+      expect(report.intelligence).toBeDefined();
+      expect(report.securityDecision).toBeDefined();
+      expect(report.productionVerdict).toBeDefined();
+      expect(logs).toContain("intelligence_completed");
+      expect(logs).toContain("decision_completed");
+      expect(logs).toContain("production_verdict_completed");
     });
-
-    const report = await director.run({
-      requestId: "req-1",
-      context: baseContext,
-      scope: ["authentication", "api"],
-      options: { maxParallel: 2 },
-      discoveryRepository: sampleDiscoveryRepository(),
-    });
-
-    expect(report.discovery.detectedTechnologies.length).toBeGreaterThan(0);
-
-    expect(report.results).toHaveLength(2);
-    expect(report.summary.completed).toBe(2);
-    expect(logs).toContain("director_started");
-    expect(logs).toContain("planning_completed");
-    expect(logs).toContain("agents_selected");
-    expect(logs).toContain("director_completed");
-    expect(report.intelligence).toBeDefined();
-    expect(report.securityDecision).toBeDefined();
-    expect(report.productionVerdict).toBeDefined();
-    expect(logs).toContain("intelligence_completed");
-    expect(logs).toContain("decision_completed");
-    expect(logs).toContain("production_verdict_completed");
   });
 });
 

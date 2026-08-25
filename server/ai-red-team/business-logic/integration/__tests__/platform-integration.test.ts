@@ -17,6 +17,7 @@ import {
   mergeTeamExecutionFromMetadata,
 } from "@/features/mission-control/lib/parse-business-logic-metrics";
 import { buildMissionControlView } from "@/features/mission-control/lib/build-mission-control-view";
+import { withFeatureFlagOverrides } from "../../../__tests__/test-support/feature-flag-override";
 
 const INTERNAL_ORG = "org-internal-rt9";
 
@@ -200,20 +201,31 @@ describe("RT9 Platform Integration — Slice 8", () => {
   });
 
   it("feature flag disables agent canRun", async () => {
-    const agent = new BusinessLogicTeamAgent(createBusinessLogicTeamCoordinator());
-    const enabled = await agent.canRun({
-      projectId: "p",
-      organizationId: "org-public",
-      declaredCapabilities: ["payments"],
-      metadata: {
-        businessLogicAttack: {
-          discovery: richDiscovery(),
-          plan: { planId: "p", createdAt: new Date().toISOString(), phases: [], notes: [] },
+    await withFeatureFlagOverrides({ business_logic_team: "internal" }, async () => {
+      const { isFeatureEnabled: isFeatureEnabledFresh } = await import("@/server/feature-flags");
+      const { createBusinessLogicTeamCoordinator: createBusinessLogicTeamCoordinatorFresh } =
+        await import("../../coordinator");
+      const { BusinessLogicTeamAgent: BusinessLogicTeamAgentFresh } = await import(
+        "../../business-logic-team-agent"
+      );
+
+      const agent = new BusinessLogicTeamAgentFresh(createBusinessLogicTeamCoordinatorFresh());
+      const enabled = await agent.canRun({
+        projectId: "p",
+        organizationId: "org-public",
+        declaredCapabilities: ["payments"],
+        metadata: {
+          businessLogicAttack: {
+            discovery: richDiscovery(),
+            plan: { planId: "p", createdAt: new Date().toISOString(), phases: [], notes: [] },
+          },
         },
-      },
+      });
+      expect(enabled).toBe(false);
+      expect(
+        isFeatureEnabledFresh("business_logic_team", { organizationId: "org-public" })
+      ).toBe(false);
     });
-    expect(enabled).toBe(false);
-    expect(isFeatureEnabled("business_logic_team", { organizationId: "org-public" })).toBe(false);
   });
 
   it("replay plans collected for fix strategy bridge", async () => {

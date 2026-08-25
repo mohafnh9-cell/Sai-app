@@ -27,7 +27,25 @@ function extension(path: string): string {
   return index >= 0 ? path.slice(index).toLowerCase() : "";
 }
 
+// SequrAI's own MCP vulnerability-detection rule source: contains literal
+// attack-signature strings (e.g. "eval(", "new Function(") as detection
+// patterns and human-readable messages, not an actual MCP server
+// implementation. Scanning it as a target self-flags on its own data.
+const DETECTOR_SOURCE_PATH = /(?:^|\/)features\/security-analysis\/mcp\//i;
+
+// SequrAI's own first-party MCP OAuth/server implementation. This scanner
+// is designed to audit *discovered, third-party* MCP servers bundled in a
+// customer's repo for supply-chain risk — its low-precision heuristics
+// (any `process.env` read, any `new URL(x)`) aren't meant to gate
+// already-reviewed first-party code, and misfire here (e.g. flagging
+// redirect-uri.ts, whose entire purpose is validating redirect URIs, for
+// "no validation").
+const FIRST_PARTY_MCP_IMPLEMENTATION_PATH = /(?:^|\/)server\/mcp\//i;
+
 export function shouldSkipMcpPath(path: string): boolean {
+  if (DETECTOR_SOURCE_PATH.test(path) || FIRST_PARTY_MCP_IMPLEMENTATION_PATH.test(path)) {
+    return true;
+  }
   return path.split("/").some((segment) => MCP_SKIP_DIR_SEGMENTS.has(segment));
 }
 

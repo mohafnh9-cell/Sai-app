@@ -11,6 +11,12 @@ import { SCOPE_DESCRIPTIONS } from "@/server/mcp/oauth/scopes";
 import type { McpScope } from "@/server/mcp/oauth/scopes";
 import { OAuthError, oauthErrorResponse } from "@/server/mcp/oauth/errors";
 import { enforceRateLimit } from "@/server/http/rate-limit";
+import { z } from "zod";
+
+const consentBodySchema = z.object({
+  request_id: z.string().trim().min(1),
+  action: z.enum(["approve", "deny"]),
+});
 
 export const runtime = "nodejs";
 
@@ -68,17 +74,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const body = (await request.json().catch(() => null)) as {
-    request_id?: string;
-    action?: "approve" | "deny";
-  } | null;
-
-  const requestId = body?.request_id?.trim();
-  const action = body?.action;
-
-  if (!requestId || (action !== "approve" && action !== "deny")) {
+  const rawBody = await request.json().catch(() => null);
+  const parsed = consentBodySchema.safeParse(rawBody);
+  if (!parsed.success) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
+  const { request_id: requestId, action } = parsed.data;
 
   const authRequest = await getAuthorizationRequest(requestId, user.id);
   if (!authRequest) {

@@ -40,6 +40,19 @@ export function classifyFileContext(path: string, content: string): FileContext 
     };
   }
 
+  // SequrAI's own AI Red Team payload library: it legitimately embeds
+  // prompt-injection strings ("ignore previous instructions", etc.) to
+  // attack scanned *targets* during simulation. Flagging it here is a
+  // self-referential false positive, not a vulnerability in this app.
+  if (/(^|\/)server\/ai-red-team\/llm-team\/runtime\//i.test(lowerPath)) {
+    return {
+      kind: "fixture",
+      isLlmRelated: hasLlmIntegration(content),
+      suppressContentRules: true,
+      confidenceMultiplier: 0.1,
+    };
+  }
+
   const llmRelated = hasLlmIntegration(content);
   return {
     kind: llmRelated ? "llm-construction" : "source",

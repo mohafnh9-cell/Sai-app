@@ -3,8 +3,15 @@ import { enforceRateLimit } from "@/server/http/rate-limit";
 import { registerOAuthClient, isDcrEnabled } from "@/server/mcp/oauth/clients";
 import { OAuthError, oauthErrorResponse } from "@/server/mcp/oauth/errors";
 import { logOAuthEvent, clientIp } from "@/server/mcp/oauth/audit";
+import { z } from "zod";
 
 export const runtime = "nodejs";
+
+const registerBodySchema = z.object({
+  client_name: z.string().trim().min(1).max(120).optional(),
+  redirect_uris: z.array(z.string()).optional(),
+  client_type: z.enum(["public", "confidential"]).optional(),
+});
 
 const OAUTH_REGISTER_RATE_LIMIT = {
   keyPrefix: "oauth-register",
@@ -24,15 +31,12 @@ export async function POST(request: Request) {
   if (rateLimited) return rateLimited;
 
   try {
-    const body = (await request.json().catch(() => null)) as {
-      client_name?: string;
-      redirect_uris?: string[];
-      client_type?: "public" | "confidential";
-    } | null;
-
-    if (!body) {
+    const rawBody = await request.json().catch(() => null);
+    const parsed = registerBodySchema.safeParse(rawBody);
+    if (!rawBody || !parsed.success) {
       throw new OAuthError("invalid_request", "Invalid JSON body");
     }
+    const body = parsed.data;
 
     const client = await registerOAuthClient({
       client_name: body.client_name ?? "",

@@ -18,6 +18,7 @@ import { buildMissionControlView } from "@/features/mission-control/lib/build-mi
 import { parseBusinessLogicMetricsFromMetadata } from "@/features/mission-control/lib/parse-business-logic-metrics";
 import { parseLlmMetricsFromMetadata } from "@/features/mission-control/lib/parse-llm-metrics";
 import { isFeatureEnabled } from "@/server/feature-flags";
+import { withFeatureFlagOverrides } from "../../__tests__/test-support/feature-flag-override";
 import { validateRedTeamManifest } from "../../core/declarative/manifest-validator";
 import { RT9_BUSINESS_LOGIC_MANIFEST } from "../../business-logic/declarative/manifest";
 import { createBusinessLogicCapabilityRegistry } from "../../business-logic/capabilities/register-business-logic-capabilities";
@@ -170,10 +171,18 @@ describe("Platform E2E — feature flags and team modes", () => {
     else process.env.SEQURAI_LLM_TEAM_MODE = prevLlmMode;
   });
 
-  it("disables RT9/RT10 for public org when flags require internal", () => {
+  it("disables RT9/RT10 for public org when flags require internal", async () => {
     delete process.env.SEQURAI_INTERNAL_ORG_IDS;
-    expect(isFeatureEnabled("business_logic_team", { organizationId: "org-public" })).toBe(false);
-    expect(isFeatureEnabled("llm_team", { organizationId: "org-public" })).toBe(false);
+    await withFeatureFlagOverrides(
+      { business_logic_team: "internal", llm_team: "internal" },
+      async () => {
+        const { isFeatureEnabled: isFeatureEnabledFresh } = await import("@/server/feature-flags");
+        expect(
+          isFeatureEnabledFresh("business_logic_team", { organizationId: "org-public" })
+        ).toBe(false);
+        expect(isFeatureEnabledFresh("llm_team", { organizationId: "org-public" })).toBe(false);
+      }
+    );
   });
 
   it("analysis-only LLM mode still enables team when flag on", () => {

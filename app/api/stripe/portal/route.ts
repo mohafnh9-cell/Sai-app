@@ -4,6 +4,10 @@ import { getStripe, isStripeConfigured } from "@/lib/stripe";
 import { enforceRateLimit } from "@/server/http/rate-limit";
 import { getOrganizationSubscription } from "@/server/billing/subscription-status";
 
+function validateStripeCustomerId(value: string): boolean {
+  return /^cus_[A-Za-z0-9]+$/.test(value);
+}
+
 export async function POST(request: Request) {
   const rateLimited = enforceRateLimit(request, {
     limit: 20,
@@ -22,7 +26,7 @@ export async function POST(request: Request) {
   }
 
   const subscription = await getOrganizationSubscription(auth.supabase, auth.organizationId);
-  if (!subscription?.stripeCustomerId) {
+  if (!subscription?.stripeCustomerId || !validateStripeCustomerId(subscription.stripeCustomerId)) {
     return NextResponse.json({ error: "No billing account found" }, { status: 404 });
   }
 

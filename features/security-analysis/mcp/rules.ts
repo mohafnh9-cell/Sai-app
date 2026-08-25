@@ -17,7 +17,7 @@ export const MCP_SECURITY_RULES: McpSecurityRule[] = [
     category: "overly-broad-permissions",
     message:
       "Direct use of exec/execSync with potential string concatenation. Prefer execFile/execFileSync with explicit argument arrays and shell:false.",
-    pattern: /\bchild_process\b.*\b(exec|execSync)\b|\b(exec|execSync)\s*\(/g,
+    pattern: /\bchild_process\b.*\b(exec|execSync)\b|(?<!\.)\b(exec|execSync)\s*\(/g,
     fileTypes: [".js", ".ts"],
   },
   {
@@ -121,7 +121,11 @@ export const MCP_SECURITY_RULES: McpSecurityRule[] = [
     category: "missing-input-validation",
     message:
       "URL used without validation. Validate URL scheme and host to prevent SSRF and open redirect vulnerabilities.",
-    pattern: /new\s+URL\s*\(\s*[a-zA-Z_$][\w$.]*\s*\)|url\.parse\s*\(\s*[a-zA-Z_$][\w$.]*\s*\)/g,
+    // Parsing the framework's own incoming request URL (request.url /
+    // req.url / request.nextUrl) is a standard, safe idiom, not an
+    // outbound-destination SSRF risk — exclude it explicitly.
+    pattern:
+      /new\s+URL\s*\(\s*(?!(?:request|req)\.(?:url|nextUrl)\b)[a-zA-Z_$][\w$.]*\s*\)|url\.parse\s*\(\s*(?!(?:request|req)\.(?:url|nextUrl)\b)[a-zA-Z_$][\w$.]*\s*\)/g,
     fileTypes: [".js", ".ts"],
     contextCheck: (_line, lines, lineIndex) => {
       const lookahead = lines.slice(lineIndex, lineIndex + 5).join("\n");

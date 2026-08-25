@@ -116,11 +116,19 @@ export function classifySecretDetection(input: SecretClassificationInput): Secre
 
   if (
     /^[a-zA-Z_$][\w$]*\(\)$/.test(value) ||
-    (/^[a-z][a-zA-Z0-9_$]*$/.test(value) && value.length < 32 && shannonEntropy(value) < 0.5)
+    (/^[a-z][a-zA-Z0-9_$]*$/.test(value) && value.length < 32 && !/\d{4,}/.test(value))
   ) {
     return {
       classification: "FALSE_POSITIVE",
       signals: ["identifier_not_literal"],
+      confidence: "high",
+    };
+  }
+
+  if (variableName && /_PREFIX$/i.test(variableName)) {
+    return {
+      classification: "FALSE_POSITIVE",
+      signals: ["prefix_constant_name"],
       confidence: "high",
     };
   }

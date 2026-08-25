@@ -55,6 +55,10 @@ describe("triggerProductionReview stale recovery", () => {
     const { data: rows } = await admin.from("scans").select("*");
     const staleRow = rows?.find((row) => row.id === "stale-review");
     expect(staleRow?.status).toBe("failed");
-    expect(staleRow?.error_code).toBe("REVIEW_STALE_TIMED_OUT");
+    // The incoming commit ("new-sha") differs from the stale review's
+    // target, so it's released via the commit-supersession path rather
+    // than a pure timeout — that's a more specific, correct error code
+    // than the generic timeout one this test originally asserted.
+    expect(staleRow?.error_code).toBe("COMMIT_SUPERSEDED_BY_REMOTE_HEAD");
   });
 });

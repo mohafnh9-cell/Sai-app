@@ -94,13 +94,13 @@ describe("protection alert candidates", () => {
       ],
       snapshots48h: [
         {
-          snapshot_date: "2026-07-24",
+          snapshot_date: new Date().toISOString().slice(0, 10),
           production_confidence: 82,
           security_confidence: 90,
           protection_status: "requires_attention",
         },
         {
-          snapshot_date: "2026-07-23",
+          snapshot_date: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
           production_confidence: 94,
           security_confidence: 90,
           protection_status: "protected",
