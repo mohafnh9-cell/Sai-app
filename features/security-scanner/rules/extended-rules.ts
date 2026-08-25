@@ -2,12 +2,9 @@ import { patternFindings, type PatternSpec } from "./helpers";
 import { patternRule, contextualRouteRule } from "./builtin";
 import type { ScanRule } from "./types";
 import type { FindingDraft } from "../types";
+import { MACHINE_ENDPOINT_PATH, TEST_OR_EXAMPLE_PATH } from "./known-safe-patterns";
 
-const TEST_OR_EXAMPLE = /(?:^|\/)(?:test|tests|__tests__|fixtures?|examples?)(?:\/|$)|\.(?:test|spec)\./i;
-// Machine-to-machine endpoints outside app/api/: OAuth token/DCR/revocation
-// (protected by PKCE/client credentials, not browser CSRF), public
-// well-known metadata, and webhook receivers (protected by signature).
-const MACHINE_ENDPOINT_PATH = /\/oauth\/|\/\.well-known\/|\/auth\/callback\/|\/webhooks\//i;
+const TEST_OR_EXAMPLE = TEST_OR_EXAMPLE_PATH;
 const ROUTE_PATH = /(?:^|\/)(?:api|routes?|controllers?|handlers?)(?:\/|$)|route\.[jt]s$/i;
 const CODE_PATH = /\.(?:[cm]?[jt]sx?|py|rb|go|java|php)$/i;
 const SERVER_SIDE_PATH = /(?:^|\/)(?:server\/|app\/api\/|pages\/api\/|lib\/.*(?:server|api))/i;

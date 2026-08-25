@@ -13,6 +13,11 @@ import {
   firstServiceRoleReferenceLine,
   isSupabaseServiceRoleClientExposure,
 } from "./client-exposure";
+import {
+  MACHINE_ENDPOINT_PATH,
+  RECOGNIZED_AUTH_PATTERN,
+  RECOGNIZED_AUTHZ_PATTERN,
+} from "./known-safe-patterns";
 
 const TEST_OR_EXAMPLE = /(?:^|\/)(?:test|tests|__tests__|fixtures?|examples?)(?:\/|$)|\.(?:test|spec)\./i;
 const ROUTE_PATH = /(?:^|\/)(?:api|routes?|controllers?|handlers?)(?:\/|$)|route\.[jt]s$/i;
@@ -358,16 +363,13 @@ export function contextualRouteRule(
   };
 }
 
-const RECOGNIZED_AUTH =
-  /(?:auth\(|getServerSession|getServerAuthContext|getCachedServerAuthContext|getScanRequestContext|getScanAccessContext|resolveMcpAuth|assertInternalOpsAuthorized|verifyInternalOpsRequest|serve\s*\(|signingKey|verifyGitHubWebhookSignature|verifyStripeWebhookSignature|constructEvent|webhookSecret|exchangeCodeForSession|currentUser|getUser|verifyToken|requireAuth|Authorization|supabase\.auth\.getUser|requireCiProjectAccess|requireProjectApiAccess)/i;
-const RECOGNIZED_AUTHZ =
-  /(?:authorize|permission|role|ownerId|organizationId|organization_id|userId\s*[=!]==?|can\w+\(|policy|getServerAuthContext|getCachedServerAuthContext|getScanRequestContext|getScanAccessContext|resolveMcpAuth|assertInternalOpsAuthorized|verifyInternalOpsRequest|requireProjectApiAccess|getProjectAccessForUser|canAccessRepository|verifyGitHubWebhookSignature|verifyStripeWebhookSignature|constructEvent|requireCiProjectAccess)/i;
+const RECOGNIZED_AUTH = RECOGNIZED_AUTH_PATTERN;
+const RECOGNIZED_AUTHZ = RECOGNIZED_AUTHZ_PATTERN;
 const DEPRECATED_PUBLIC_ROUTE = /const\s+deprecated\s*=[\s\S]*?status:\s*410/i;
 const UNIMPLEMENTED_STUB_ROUTE = /not\s+yet\s+implemented/i;
 const MUTATING_ROUTE_HANDLER = /export\s+async\s+function\s+(?:POST|PUT|PATCH|DELETE)\b/i;
 const ROUTE_RULE_EXCLUSIONS = {
-  excludePath:
-    /(?:\/auth\/callback\/|\/webhooks\/|\/api\/internal\/|\/\.well-known\/|\/oauth\/register|\/oauth\/revoke|\/oauth\/token)/,
+  excludePath: MACHINE_ENDPOINT_PATH,
   excludeContent: new RegExp(
     `${DEPRECATED_PUBLIC_ROUTE.source}|${UNIMPLEMENTED_STUB_ROUTE.source}`,
     "i",
