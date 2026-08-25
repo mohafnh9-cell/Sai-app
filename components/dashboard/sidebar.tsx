@@ -10,6 +10,7 @@ import {
   LogOut,
   Puzzle,
   Terminal,
+  ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -49,6 +50,7 @@ export function DashboardSidebar({
   orgName,
   workspaces,
   activeWorkspaceId,
+  isAdmin,
   onNavigate,
   headerAction,
   className,
@@ -57,6 +59,7 @@ export function DashboardSidebar({
   orgName?: string;
   workspaces?: WorkspacePresentation[];
   activeWorkspaceId?: string | null;
+  isAdmin?: boolean;
   onNavigate?: () => void;
   headerAction?: React.ReactNode;
   className?: string;
@@ -137,6 +140,15 @@ export function DashboardSidebar({
             onNavigate={onNavigate}
           />
         ))}
+        {isAdmin && !isDemo && (
+          <NavLink
+            href="/admin"
+            label="Admin"
+            icon={ShieldCheck}
+            active={isActive("/admin")}
+            onNavigate={onNavigate}
+          />
+        )}
       </nav>
 
       <div className="border-t border-border/40 p-2 space-y-1">

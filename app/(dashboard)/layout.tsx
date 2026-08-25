@@ -3,6 +3,7 @@ import { DashboardShell } from "@/components/dashboard/DashboardShell";
 import { QueryProvider } from "@/lib/query/provider";
 import { I18nShell } from "@/components/shared/I18nShell";
 import { getCachedServerAuthContext } from "@/lib/server/request-cache";
+import { isAppAdminEmail } from "@/lib/auth/is-app-admin";
 import {
   listAccessibleWorkspaces,
 } from "@/server/workspaces/service";
@@ -42,6 +43,7 @@ export default async function DashboardLayout({
   }
 
   const activeWorkspaceId = auth.organizationId;
+  const isAdmin = isAppAdminEmail(auth.user.email);
 
   return (
     <I18nShell userId={auth.user.id}>
@@ -52,6 +54,7 @@ export default async function DashboardLayout({
           workspaces={workspaces}
           activeWorkspaceId={activeWorkspaceId}
           bypass={auth.bypass}
+          isAdmin={isAdmin}
         >
           {children}
         </DashboardShell>

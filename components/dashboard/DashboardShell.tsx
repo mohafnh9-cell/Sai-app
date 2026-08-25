@@ -26,6 +26,7 @@ export function DashboardShell({
   workspaces,
   activeWorkspaceId,
   bypass,
+  isAdmin,
   children,
 }: {
   user: DashboardUser;
@@ -33,6 +34,7 @@ export function DashboardShell({
   workspaces?: WorkspacePresentation[];
   activeWorkspaceId?: string | null;
   bypass?: boolean;
+  isAdmin?: boolean;
   children: React.ReactNode;
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -72,6 +74,7 @@ export function DashboardShell({
           orgName={orgName}
           workspaces={workspaces}
           activeWorkspaceId={activeWorkspaceId}
+          isAdmin={isAdmin}
         />
       </div>
 
@@ -89,6 +92,7 @@ export function DashboardShell({
               orgName={orgName}
               workspaces={workspaces}
               activeWorkspaceId={activeWorkspaceId}
+              isAdmin={isAdmin}
               onNavigate={() => setMobileOpen(false)}
               headerAction={
                 <Button

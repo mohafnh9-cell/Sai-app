@@ -88,7 +88,7 @@ export default async function AdminPage() {
   const failureRate = scans.length ? ((failedCount / scans.length) * 100).toFixed(1) : "0.0";
 
   return (
-    <div className="mx-auto max-w-6xl space-y-8 px-6 py-10">
+    <div className="p-6 space-y-8 max-w-6xl">
       <PageHeader
         title="Admin"
         description="Métricas internas de usuarios, conexiones de GitHub y salud de scans. Visible solo para administradores."
