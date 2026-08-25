@@ -303,6 +303,16 @@ export async function runFullProductAudit(
     .eq("id", scanId)
     .maybeSingle();
   const verdictScanRow = freshScanRow ?? scanRow;
+  console.info({
+    component: "full-product-audit",
+    event: "commit_resolution_debug",
+    scanId,
+    reviewOutcomeOutcome: reviewOutcome.outcome,
+    scanRowCommitSha: scanRow?.commit_sha ?? null,
+    freshScanRowCommitSha: freshScanRow?.commit_sha ?? null,
+    persistedVerdictCommitSha: persistedVerdict?.commitSha ?? null,
+    persistedVerdictScanId: persistedVerdict?.scanId ?? null,
+  });
   const liveVerdict = await computeLiveProductionVerdict(admin, {
     projectId: input.projectId,
     scan: verdictScanRow,
