@@ -33,7 +33,7 @@
 
 ## Bugs reales encontrados y arreglados en vivo (sesión 2, 25 ago)
 
-Todos verificados contra producción real (`sequrai-app.vercel.app`), no solo en local. Production Ready Score de `sequrai-app` subió de **6/100 → 37/100** en el proceso.
+Todos verificados contra producción real (`sequrai-app.vercel.app`), no solo en local. Production Ready Score de `sequrai-app` subió de **6/100 → 63/100** en el proceso (ver progresión abajo).
 
 - [x] **Permiso `webhooks` vs `repository_hooks`** (`84feb8b`) — la clave de permiso que pedía el código no coincidía con la que devuelve la API real de GitHub. Ninguna instalación de la GitHub App se registraba nunca, aunque GitHub la mostrara instalada.
 - [x] **`next build` no compilaba en Vercel** (`86fcfbc`) — tipaba contra archivos de test rotos en vez de `tsconfig.typecheck.json`. Bloqueaba *todos* los deploys, no solo los de esta sesión.
@@ -42,11 +42,25 @@ Todos verificados contra producción real (`sequrai-app.vercel.app`), no solo en
 - [x] **Redirect abierto en `/api/github/app/setup`** (`8597077`) — Safe Fix real de SequrAI aplicado: todos los redirects usaban `request.url` como base en vez de un origen de confianza fijo.
 - [x] **Rate limiting ausente en 3 rutas OAuth** (`ff112d4`) — Safe Fix real de SequrAI aplicado.
 - [x] **Verificaciones de dominio viejas nunca expiraban** (`2fa3979`, `28e57da`) — reintentar `authorize_dynamic_target` crasheaba con `duplicate key value violates unique constraint` en vez de reutilizar o limpiar la verificación anterior.
+- [x] **Rate limiting real ausente en el webhook de Stripe** (`cee92d5`) — hallazgo genuino del Red Team, no falso positivo: la firma autentica el payload pero no protege contra flood de requests.
+- [x] **Bug de raíz del commit obsoleto en `full_product_audit`** (`210fe0e`) — un job huérfano de `scan_jobs` del **18 de agosto**, atascado en `status: "running"` desde hace una semana, era encontrado primero por `getProductionReviewState` en cada llamada y devuelto como "la revisión actual", ignorando el mecanismo separado (`repository_scan_state.active_scan_id`) que sí trackeaba correctamente la revisión fresca. Confirmado con inspección directa de la base de datos, no solo lectura de código. Fix: cuando se reconcilia un job huérfano, ahora cae al lookup correcto en vez de devolver el scan reconciliado como si fuera el actual.
+- [x] **Falsos positivos del detector estático, 3 causas separadas** (`cee92d5`, `52461f4`) — regex de auth sin reconocer `requireCiProjectAccess`; rutas públicas por RFC (`.well-known/*`, OAuth DCR/revoke) sin excluir; y un bug real de correlación donde concatenar `category + title` generaba coincidencias de substring por accidente entre reglas distintas.
+- [x] **Refactor estructural del detector** (`fcc9159`) — las exclusiones de rutas estaban duplicadas en 3 reglas distintas, por eso se repitió el mismo tipo de falso positivo 3 veces. Centralizado en `features/security-scanner/rules/known-safe-patterns.ts` + 6 tests de regresión (incluyendo 2 controles negativos) para que esto no vuelva a pasar sin que lo atrape el CI.
 
-## Pendiente — AI Red Team / pruebas dinámicas (sin resolver, no seguir a ciegas)
+## AI Red Team — confirmado funcionando de punta a punta
 
-Encontrado al final de la sesión 2, requiere entender el diseño antes de tocar código:
+Los dos pendientes que quedaron abiertos al final de la sesión 2 **se investigaron y arreglaron** (no quedaron pendientes):
 
-- [ ] **`full_product_audit` resuelve mal el commit por defecto.** Sin pasar `branch` explícito, auditó un commit de semanas atrás (`13d65c8`) en vez del HEAD real. Con `branch: "main"` sí toma el commit correcto. Bug de resolución de commit, no de caché (confirmado: mismo resultado en dos llamadas separadas).
-- [ ] **Las pruebas dinámicas del Red Team no se activan aunque haya una autorización válida.** Se completó el flujo entero (`authorize_dynamic_target` → `verify` → fila `approved` real en `attack_authorizations`, confirmada por consulta directa a la base de datos), pero `full_product_audit` sigue reportando `"Pruebas dinámicas de seguridad: Bloqueado"` justo después. Hay una desconexión entre el estado de autorización persistido y lo que el orquestador del audit comprueba — no investigado más a fondo, requiere leer el código del orquestador (`server/ai-red-team/autonomous-orchestrator/` o donde se decide el gate) antes de intentar un fix.
-- [ ] **17 archivos de test en `ai-red-team`/`attack-simulation` siguen fallando** (ver P0) — probablemente relacionado con lo anterior; vale la pena revisar si son la misma causa raíz antes de tratarlos como deuda de tipos aislada.
+- [x] **Resolución de commit en `full_product_audit`** — era el mismo bug de raíz del job huérfano de arriba, no un problema de caché ni de parámetros. Arreglado.
+- [x] **Pruebas dinámicas bloqueadas pese a autorización válida** — no era un bug: faltaba pasar `dynamicVerificationDecision: "authorize"` explícito en cada llamada (paso de confirmación por diseño, no implícito). Con ese parámetro, el Red Team ejecutó 23 comprobaciones dinámicas reales contra la app en producción y confirmó hallazgos con evidencia dinámica real (`CONFIANZA: Verificado`).
+
+### Progresión del Production Ready Score de `sequrai-app` (mismo repo, sesión 2)
+
+| Momento | Score | Qué cambió |
+|---|---|---|
+| Antes de empezar | 6/100 | — |
+| + rate limiting auth | 25/100 | Safe Fix aplicado |
+| + redirect de confianza | 37/100 | Safe Fix aplicado |
+| + fix de raíz del commit obsoleto + mejoras del detector | **63/100** | Score real, consistente entre `can_i_deploy` y `full_product_audit` |
+
+- [ ] **17 archivos de test en `ai-red-team`/`attack-simulation` siguen fallando** — no resultaron ser la misma causa raíz que el bug del commit obsoleto (ese ya está arreglado). Deuda de tipos genuina entre fixtures y contratos, sigue pendiente.
