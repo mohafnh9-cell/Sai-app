@@ -130,11 +130,20 @@ export function staticFindingMatchesRule(
   const ruleId = (finding.ruleId ?? "").toLowerCase();
   const category = (finding.category ?? "").toLowerCase();
   const title = (finding.title ?? "").toLowerCase();
-  const haystack = `${ruleId} ${category} ${title}`;
 
   if (rule.staticRuleIds?.some((id) => ruleId === id.toLowerCase())) return true;
   if (rule.categoryKeywords?.some((kw) => category.includes(kw.toLowerCase()))) return true;
-  if (rule.titleKeywords?.some((kw) => haystack.includes(kw.toLowerCase()))) return true;
+  // Match title keywords against ruleId/title only — never a joined "category title"
+  // string, which can accidentally contain a keyword spanning the field boundary
+  // (e.g. category "authentication" + title "Route has no visible authentication"
+  // joined as "...authentication route has no visible authentication" falsely
+  // matches a keyword like "authentication route" meant for a different rule).
+  if (
+    rule.titleKeywords?.some(
+      (kw) => ruleId.includes(kw.toLowerCase()) || title.includes(kw.toLowerCase())
+    )
+  )
+    return true;
   return false;
 }
 
@@ -175,8 +184,15 @@ export function attackFindingMatchesRule(
   }
   const category = (finding.category ?? "").toLowerCase();
   const title = (finding.title ?? "").toLowerCase();
-  const haystack = `${adapterId} ${category} ${title}`;
-  if (rule.categoryKeywords?.some((kw) => haystack.includes(kw.toLowerCase()))) return true;
-  if (rule.titleKeywords?.some((kw) => haystack.includes(kw.toLowerCase()))) return true;
+  // Check each field independently — see staticFindingMatchesRule for why a
+  // joined "adapterId category title" string is unsafe (accidental cross-field
+  // substring matches at the join boundary).
+  if (rule.categoryKeywords?.some((kw) => category.includes(kw.toLowerCase()))) return true;
+  if (
+    rule.titleKeywords?.some(
+      (kw) => adapterId.includes(kw.toLowerCase()) || title.includes(kw.toLowerCase())
+    )
+  )
+    return true;
   return false;
 }

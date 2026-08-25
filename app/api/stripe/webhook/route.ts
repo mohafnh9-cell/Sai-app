@@ -11,6 +11,7 @@ import {
   syncSubscriptionFromCheckoutSession,
   syncSubscriptionFromStripe,
 } from "@/server/billing/sync-subscription";
+import { enforceRateLimit } from "@/server/http/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -39,6 +40,9 @@ async function processStripeEvent(
 }
 
 export async function POST(request: Request) {
+  const rateLimited = enforceRateLimit(request, { keyPrefix: "stripe-webhook", limit: 60 });
+  if (rateLimited) return rateLimited;
+
   if (!isStripeConfigured()) {
     return NextResponse.json({ error: "Billing is not configured" }, { status: 503 });
   }
