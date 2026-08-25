@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { getCachedServerAuthContext } from "@/lib/server/request-cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isAppAdminEmail } from "@/lib/auth/is-app-admin";
@@ -32,6 +33,20 @@ const CONNECTION_STATUS_LABEL: Record<string, string> = {
   not_connected: "Sin conectar",
 };
 
+const USERS_PAGE_SIZE = 200;
+
+/** Supabase's admin listUsers only returns one page — loop until it stops filling up. */
+async function listAllUsers(admin: SupabaseClient): Promise<User[]> {
+  const users: User[] = [];
+  for (let page = 1; ; page++) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: USERS_PAGE_SIZE });
+    if (error || !data?.users?.length) break;
+    users.push(...data.users);
+    if (data.users.length < USERS_PAGE_SIZE) break;
+  }
+  return users;
+}
+
 function StatCard({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
   return (
     <Card>
@@ -56,9 +71,9 @@ export default async function AdminPage() {
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
-  const [usersResult, connectionsResult, orgsResult, projectsCountResult, scansResult] =
+  const [users, connectionsResult, orgsResult, projectsCountResult, scansResult] =
     await Promise.all([
-      admin.auth.admin.listUsers({ perPage: 200 }),
+      listAllUsers(admin),
       admin
         .from("workspace_github_connections")
         .select("organization_id, github_login, status, connected_at, connected_by_user_id")
@@ -71,7 +86,6 @@ export default async function AdminPage() {
         .gte("created_at", thirtyDaysAgo),
     ]);
 
-  const users = usersResult.data?.users ?? [];
   const totalUsers = users.length;
   const signupsLast7d = users.filter((u) => u.created_at && u.created_at > sevenDaysAgo).length;
 
