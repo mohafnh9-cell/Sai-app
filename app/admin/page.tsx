@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { getCachedServerAuthContext } from "@/lib/server/request-cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isAppAdminEmail } from "@/lib/auth/is-app-admin";
 import { percentileSummary } from "@/server/observability/metrics";
@@ -12,6 +12,7 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Admin | SequrAI",
+  robots: { index: false, follow: false },
 };
 
 const CONNECTION_STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
@@ -20,6 +21,15 @@ const CONNECTION_STATUS_VARIANT: Record<string, "default" | "secondary" | "destr
   revoked: "destructive",
   expired: "destructive",
   insufficient_scope: "destructive",
+};
+
+const CONNECTION_STATUS_LABEL: Record<string, string> = {
+  active: "Activa",
+  migration_reconnection_required: "Reconectar",
+  revoked: "Revocada",
+  expired: "Expirada",
+  insufficient_scope: "Faltan permisos",
+  not_connected: "Sin conectar",
 };
 
 function StatCard({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
@@ -37,13 +47,10 @@ function StatCard({ label, value, hint }: { label: string; value: string | numbe
 }
 
 export default async function AdminPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/login");
-  if (!isAppAdminEmail(user.email)) redirect("/dashboard");
+  const auth = await getCachedServerAuthContext();
+  if (!auth) redirect("/login");
+  const emailVerified = auth.bypass || Boolean(auth.user.email_confirmed_at);
+  if (!emailVerified || !isAppAdminEmail(auth.user.email)) redirect("/dashboard");
 
   const admin = createAdminClient();
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -117,24 +124,26 @@ export default async function AdminPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border/70 text-left text-muted-foreground">
-                    <th className="pb-2 pr-4 font-medium">Usuario</th>
-                    <th className="pb-2 pr-4 font-medium">Workspace</th>
-                    <th className="pb-2 pr-4 font-medium">GitHub</th>
-                    <th className="pb-2 pr-4 font-medium">Estado</th>
-                    <th className="pb-2 font-medium">Conectado</th>
+                    <th className="pb-2 pr-3 font-medium">Usuario</th>
+                    <th className="pb-2 pr-3 font-medium">Workspace</th>
+                    <th className="pb-2 pr-3 font-medium">GitHub</th>
+                    <th className="pb-2 pr-3 font-medium whitespace-nowrap">Estado</th>
+                    <th className="pb-2 font-medium whitespace-nowrap">Conectado</th>
                   </tr>
                 </thead>
                 <tbody>
                   {connections.map((c, i) => (
                     <tr key={`${c.organization_id}-${i}`} className="border-b border-border/40 last:border-0">
-                      <td className="py-2 pr-4">{userEmailById.get(c.connected_by_user_id) ?? "—"}</td>
-                      <td className="py-2 pr-4">{orgNameById.get(c.organization_id) ?? c.organization_id}</td>
-                      <td className="py-2 pr-4">{c.github_login ?? "—"}</td>
-                      <td className="py-2 pr-4">
-                        <Badge variant={CONNECTION_STATUS_VARIANT[c.status] ?? "outline"}>{c.status}</Badge>
+                      <td className="py-2 pr-3 max-w-[160px] truncate">{userEmailById.get(c.connected_by_user_id) ?? "—"}</td>
+                      <td className="py-2 pr-3 max-w-[120px] truncate">{orgNameById.get(c.organization_id) ?? c.organization_id}</td>
+                      <td className="py-2 pr-3">{c.github_login ?? "—"}</td>
+                      <td className="py-2 pr-3 whitespace-nowrap">
+                        <Badge variant={CONNECTION_STATUS_VARIANT[c.status] ?? "outline"}>
+                          {CONNECTION_STATUS_LABEL[c.status] ?? c.status}
+                        </Badge>
                       </td>
-                      <td className="py-2 text-muted-foreground">
-                        {c.connected_at ? new Date(c.connected_at).toLocaleString() : "—"}
+                      <td className="py-2 text-muted-foreground whitespace-nowrap">
+                        {c.connected_at ? new Date(c.connected_at).toLocaleDateString() : "—"}
                       </td>
                     </tr>
                   ))}
