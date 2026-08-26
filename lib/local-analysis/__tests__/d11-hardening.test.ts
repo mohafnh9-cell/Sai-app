@@ -84,10 +84,10 @@ describe("D.11 credential and ignore rules", () => {
 });
 
 describe("D.11 snapshot limits", () => {
-  it("uses GitHub-aligned limits", () => {
-    expect(LOCAL_SCAN_LIMITS.maxFiles).toBe(200);
-    expect(LOCAL_SCAN_LIMITS.maxFileBytes).toBe(256_000);
-    expect(LOCAL_SCAN_LIMITS.maxTotalBytes).toBe(5_000_000);
+  it("uses limits aligned with the GitHub tarball fetch and the scanner", () => {
+    expect(LOCAL_SCAN_LIMITS.maxFiles).toBe(8_000);
+    expect(LOCAL_SCAN_LIMITS.maxFileBytes).toBe(1024 * 1024);
+    expect(LOCAL_SCAN_LIMITS.maxTotalBytes).toBe(40 * 1024 * 1024);
     expect(LOCAL_SCAN_LIMITS.maxDepth).toBe(18);
   });
 
@@ -104,11 +104,12 @@ describe("D.11 snapshot limits", () => {
 
   it("respects max file count", () => {
     const root = mkdtempSync(join(tmpdir(), "seq-d11-many-files-"));
-    for (let index = 0; index < LOCAL_SCAN_LIMITS.maxFiles + 5; index += 1) {
+    const maxFiles = 5;
+    for (let index = 0; index < maxFiles + 5; index += 1) {
       writeFileSync(join(root, `file-${index}.ts`), `export const v${index} = ${index};\n`);
     }
-    const listing = listWorkspaceFiles(root);
-    expect(listing.files.length).toBeLessThanOrEqual(LOCAL_SCAN_LIMITS.maxFiles);
+    const listing = listWorkspaceFiles(root, { maxFiles });
+    expect(listing.files.length).toBeLessThanOrEqual(maxFiles);
     expect(listing.truncated).toBe(true);
   });
 

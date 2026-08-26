@@ -31,11 +31,16 @@ export const DEFAULT_IGNORED_DIRS = new Set([
   ".vercel",
 ]);
 
-/** Aligned with lib/github/repository-service.ts GITHUB_SCAN_LIMITS. */
+/**
+ * Aligned with lib/github/repository-service.ts GITHUB_SCAN_LIMITS and
+ * features/security-scanner/config.ts DEFAULT_SCAN_CONFIG — local reads have
+ * no network cost, so there's no reason for these to be tighter than a
+ * GitHub-connected scan.
+ */
 export const LOCAL_SCAN_LIMITS = {
-  maxFiles: 200,
-  maxFileBytes: 256_000,
-  maxTotalBytes: 5_000_000,
+  maxFiles: 8_000,
+  maxFileBytes: 1024 * 1024,
+  maxTotalBytes: 40 * 1024 * 1024,
   maxDepth: 18,
 } as const;
 

@@ -81,6 +81,7 @@
     "server-only": "^0.0.1",
     "stripe": "^22.3.0",
     "tailwind-merge": "^3.6.0",
+    "tar-stream": "^3.2.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {
