@@ -20,6 +20,15 @@ export const GITHUB_SCAN_LIMITS = {
   maxTotalBytes: 40 * 1024 * 1024,
   maxDepth: 18,
   timeoutMs: 90_000,
+  /**
+   * fetchCompareSnapshot still fetches one blob per changed file (the
+   * compare API has no bulk-content equivalent to the tarball endpoint), so
+   * it keeps its own, smaller file cap and concurrency rather than reusing
+   * maxFiles — a diff realistically never approaches repo-wide file counts,
+   * and each file is still a full HTTP round trip.
+   */
+  maxCompareFiles: 1_000,
+  fetchConcurrency: 8,
 } as const;
 
 export type GitHubRepositoryRef = { owner: string; repo: string };
@@ -192,9 +201,7 @@ export class GitHubRepositoryService {
         (file) => file.previous_filename ?? file.filename
       );
       const omissions: RepositorySnapshot["omissions"] = [];
-      const files: RepositoryFile[] = [];
-      let totalBytes = 0;
-
+      const candidates: Array<{ path: string; sha: string }> = [];
       for (const entry of changedEntries) {
         const path = entry.previous_filename ?? entry.filename;
         const relevance = isRelevantPath(path);
@@ -202,31 +209,70 @@ export class GitHubRepositoryService {
           omissions.push({ path, reason: relevance.reason ?? "unsupported_format" });
           continue;
         }
+        const depth = path.split("/").length;
+        if (depth > GITHUB_SCAN_LIMITS.maxDepth) {
+          omissions.push({ path, reason: "max_depth" });
+          continue;
+        }
         if (CRITICAL_FILE_PATTERN.test(path)) {
           omissions.push({ path, reason: "critical_file_detected" });
         }
-        const blob = await this.request<GitHubBlob>(
-          `${base}/git/blobs/${encodeURIComponent(entry.sha)}`
-        );
-        if (blob.size > GITHUB_SCAN_LIMITS.maxFileBytes) {
-          omissions.push({ path, reason: "max_file_size" });
-          continue;
+        candidates.push({ path, sha: entry.sha });
+      }
+
+      const selected = candidates.slice(0, GITHUB_SCAN_LIMITS.maxCompareFiles);
+      if (candidates.length > selected.length) {
+        omissions.push({ reason: "max_file_count", count: candidates.length - selected.length });
+      }
+
+      const files: RepositoryFile[] = [];
+      let totalBytes = 0;
+      for (
+        let offset = 0;
+        offset < selected.length;
+        offset += GITHUB_SCAN_LIMITS.fetchConcurrency
+      ) {
+        if (totalBytes >= GITHUB_SCAN_LIMITS.maxTotalBytes) {
+          const remaining = selected.slice(offset);
+          omissions.push(
+            ...remaining.map((entry) => ({ path: entry.path, reason: "max_total_size" }))
+          );
+          break;
         }
-        const bytes = Buffer.from(
-          blob.content.replace(/\s/g, ""),
-          blob.encoding === "base64" ? "base64" : "utf8"
+        const batch = selected.slice(offset, offset + GITHUB_SCAN_LIMITS.fetchConcurrency);
+        const fetched = await Promise.all(
+          batch.map(async (entry) => ({
+            entry,
+            blob: await this.request<GitHubBlob>(
+              `${base}/git/blobs/${encodeURIComponent(entry.sha)}`
+            ),
+          }))
         );
-        if (bytes.includes(0)) {
-          omissions.push({ path, reason: "binary_file" });
-          continue;
+        for (const { entry, blob } of fetched) {
+          if (blob.size > GITHUB_SCAN_LIMITS.maxFileBytes) {
+            omissions.push({ path: entry.path, reason: "max_file_size" });
+            continue;
+          }
+          const bytes = Buffer.from(
+            blob.content.replace(/\s/g, ""),
+            blob.encoding === "base64" ? "base64" : "utf8"
+          );
+          if (bytes.includes(0)) {
+            omissions.push({ path: entry.path, reason: "binary_file" });
+            continue;
+          }
+          if (totalBytes + bytes.byteLength > GITHUB_SCAN_LIMITS.maxTotalBytes) {
+            omissions.push({ path: entry.path, reason: "max_total_size" });
+            continue;
+          }
+          files.push({
+            path: entry.path,
+            content: bytes.toString("utf8"),
+            size: bytes.byteLength,
+            sha: blob.sha,
+          });
+          totalBytes += bytes.byteLength;
         }
-        files.push({
-          path,
-          content: bytes.toString("utf8"),
-          size: bytes.byteLength,
-          sha: blob.sha,
-        });
-        totalBytes += bytes.byteLength;
       }
 
       return {
