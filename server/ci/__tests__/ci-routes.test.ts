@@ -43,7 +43,7 @@ describe("CI route rate limiting", () => {
     const url = `https://example.com/api/projects/${PROJECT}/ci/status?commitSha=${COMMIT}`;
     for (let i = 0; i < 120; i++) {
       const probe = new NextRequest(url, { headers: { "x-forwarded-for": "10.0.0.99" } });
-      enforceRateLimit(probe);
+      await enforceRateLimit(probe);
     }
 
     const request = new NextRequest(url, { headers: { "x-forwarded-for": "10.0.0.99" } });

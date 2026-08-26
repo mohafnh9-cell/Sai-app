@@ -24,7 +24,7 @@ function redirectOrigin(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
-  const rateLimited = enforceRateLimit(request);
+  const rateLimited = await enforceRateLimit(request);
   if (rateLimited) return rateLimited;
 
   const { searchParams } = new URL(request.url);

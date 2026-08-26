@@ -2,15 +2,15 @@ import { describe, expect, it } from "vitest";
 import { enforceRateLimit, resetRateLimitStateForTests } from "../rate-limit";
 
 describe("enforceRateLimit", () => {
-  it("returns 429 after the configured limit is exceeded", () => {
+  it("returns 429 after the configured limit is exceeded", async () => {
     resetRateLimitStateForTests();
     const request = new Request("https://example.com/api/projects", {
       headers: { "x-forwarded-for": "203.0.113.10" },
     });
 
-    expect(enforceRateLimit(request, { limit: 2, windowMs: 60_000, keyPrefix: "test" })).toBeNull();
-    expect(enforceRateLimit(request, { limit: 2, windowMs: 60_000, keyPrefix: "test" })).toBeNull();
-    const blocked = enforceRateLimit(request, {
+    expect(await enforceRateLimit(request, { limit: 2, windowMs: 60_000, keyPrefix: "test" })).toBeNull();
+    expect(await enforceRateLimit(request, { limit: 2, windowMs: 60_000, keyPrefix: "test" })).toBeNull();
+    const blocked = await enforceRateLimit(request, {
       limit: 2,
       windowMs: 60_000,
       keyPrefix: "test",
@@ -32,8 +32,8 @@ describe("enforceRateLimit", () => {
       errorMessage: "Too many requests. Wait a moment before trying again.",
     };
 
-    expect(enforceRateLimit(request, options)).toBeNull();
-    const blocked = enforceRateLimit(request, options);
+    expect(await enforceRateLimit(request, options)).toBeNull();
+    const blocked = await enforceRateLimit(request, options);
 
     expect(blocked?.status).toBe(429);
     const body = await blocked?.json();

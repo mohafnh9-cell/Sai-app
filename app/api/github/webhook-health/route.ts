@@ -5,7 +5,7 @@ import { getWorkspaceWebhookHealth } from "@/server/github/webhook-health";
 import { enforceRateLimit } from "@/server/http/rate-limit";
 
 export async function GET(request: Request) {
-  const rateLimited = enforceRateLimit(request);
+  const rateLimited = await enforceRateLimit(request);
   if (rateLimited) return rateLimited;
 
   const supabase = await createClient();

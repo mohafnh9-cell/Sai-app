@@ -9,7 +9,7 @@ function validateStripeCustomerId(value: string): boolean {
 }
 
 export async function POST(request: Request) {
-  const rateLimited = enforceRateLimit(request, {
+  const rateLimited = await enforceRateLimit(request, {
     limit: 20,
     windowMs: 60_000,
     keyPrefix: "stripe-portal",

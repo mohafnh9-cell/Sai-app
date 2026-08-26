@@ -21,7 +21,7 @@ const consentBodySchema = z.object({
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
-  const rateLimited = enforceRateLimit(request, { keyPrefix: "oauth-consent-get", limit: 30 });
+  const rateLimited = await enforceRateLimit(request, { keyPrefix: "oauth-consent-get", limit: 30 });
   if (rateLimited) return rateLimited;
 
   const supabase = await createClient();
@@ -63,7 +63,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const rateLimited = enforceRateLimit(request, { keyPrefix: "oauth-consent-post", limit: 20 });
+  const rateLimited = await enforceRateLimit(request, { keyPrefix: "oauth-consent-post", limit: 20 });
   if (rateLimited) return rateLimited;
 
   const supabase = await createClient();

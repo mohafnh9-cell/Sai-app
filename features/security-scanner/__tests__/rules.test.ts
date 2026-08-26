@@ -253,7 +253,7 @@ describe("critical deterministic rules", () => {
       {
         path: "app/api/projects/route.ts",
         content:
-          'import { enforceRateLimit } from "@/server/http/rate-limit";\nexport async function GET(request) {\n  const rateLimited = enforceRateLimit(request);\n}',
+          'import { enforceRateLimit } from "@/server/http/rate-limit";\nexport async function GET(request) {\n  const rateLimited = await enforceRateLimit(request);\n}',
       },
     ]);
     const rateLimitMissing = result.findings.filter((finding) => finding.ruleId === "rate-limit.missing");

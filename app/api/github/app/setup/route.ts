@@ -36,7 +36,7 @@ function verifySignedState(state: string, secret: string): { organizationId: str
 }
 
 export async function GET(request: Request) {
-  const rateLimited = enforceRateLimit(request);
+  const rateLimited = await enforceRateLimit(request);
   if (rateLimited) return rateLimited;
 
   const trustedBase = process.env.NEXT_PUBLIC_APP_URL?.trim() || request.url;

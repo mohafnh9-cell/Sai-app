@@ -19,7 +19,7 @@ const OAUTH_AUTHORIZE_RATE_LIMIT = {
 };
 
 export async function GET(request: Request) {
-  const rateLimited = enforceRateLimit(request, OAUTH_AUTHORIZE_RATE_LIMIT);
+  const rateLimited = await enforceRateLimit(request, OAUTH_AUTHORIZE_RATE_LIMIT);
   if (rateLimited) return rateLimited;
 
   const url = new URL(request.url);

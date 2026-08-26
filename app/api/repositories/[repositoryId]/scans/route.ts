@@ -106,7 +106,7 @@ export async function POST(
   { params }: { params: Promise<{ repositoryId: string }> }
 ) {
   try {
-    const rateLimited = enforceRateLimit(request);
+    const rateLimited = await enforceRateLimit(request);
     if (rateLimited) return rateLimited;
 
     const parsedParams = paramsSchema.safeParse(await params);
@@ -148,7 +148,7 @@ export async function GET(
   { params }: { params: Promise<{ repositoryId: string }> }
 ) {
   try {
-    const rateLimited = enforceRateLimit(request);
+    const rateLimited = await enforceRateLimit(request);
     if (rateLimited) return rateLimited;
 
     const parsedParams = paramsSchema.safeParse(await params);

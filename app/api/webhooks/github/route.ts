@@ -11,7 +11,7 @@ function webhookSecret(): string | null {
 }
 
 export async function POST(request: Request) {
-  const rateLimited = enforceRateLimit(request);
+  const rateLimited = await enforceRateLimit(request);
   if (rateLimited) return rateLimited;
 
   const secret = webhookSecret();

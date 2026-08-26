@@ -8,7 +8,7 @@ import { enforceRateLimit } from "@/server/http/rate-limit";
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
-  const rateLimited = enforceRateLimit(request);
+  const rateLimited = await enforceRateLimit(request);
   if (rateLimited) return rateLimited;
 
   const auth = await getServerAuthContext();

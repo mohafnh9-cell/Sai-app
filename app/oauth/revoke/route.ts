@@ -14,7 +14,7 @@ const OAUTH_REVOKE_RATE_LIMIT = {
 };
 
 export async function POST(request: Request) {
-  const rateLimited = enforceRateLimit(request, OAUTH_REVOKE_RATE_LIMIT);
+  const rateLimited = await enforceRateLimit(request, OAUTH_REVOKE_RATE_LIMIT);
   if (rateLimited) return rateLimited;
 
   try {

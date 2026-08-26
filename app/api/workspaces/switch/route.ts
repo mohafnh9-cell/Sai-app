@@ -11,7 +11,7 @@ const switchSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const rateLimited = enforceRateLimit(request);
+  const rateLimited = await enforceRateLimit(request);
   if (rateLimited) return rateLimited;
 
   const auth = await getServerAuthContext();

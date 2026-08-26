@@ -7,14 +7,14 @@ const deprecated = {
 };
 
 export async function GET(request: Request) {
-  const rateLimited = enforceRateLimit(request);
+  const rateLimited = await enforceRateLimit(request);
   if (rateLimited) return rateLimited;
 
   return NextResponse.json(deprecated, { status: 410 });
 }
 
 export async function POST(request: Request) {
-  const rateLimited = enforceRateLimit(request);
+  const rateLimited = await enforceRateLimit(request);
   if (rateLimited) return rateLimited;
 
   return NextResponse.json(deprecated, { status: 410 });

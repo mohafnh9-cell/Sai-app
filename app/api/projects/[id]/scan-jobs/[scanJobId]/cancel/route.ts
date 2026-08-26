@@ -19,7 +19,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string; scanJobId: string }> }
 ) {
   try {
-    const rateLimited = enforceRateLimit(request);
+    const rateLimited = await enforceRateLimit(request);
     if (rateLimited) return rateLimited;
 
     const parsed = paramsSchema.safeParse(await params);

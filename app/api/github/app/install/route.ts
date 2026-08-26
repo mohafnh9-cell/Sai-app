@@ -16,7 +16,7 @@ function signState(payload: string, secret: string): string {
 }
 
 export async function GET(request: Request) {
-  const rateLimited = enforceRateLimit(request);
+  const rateLimited = await enforceRateLimit(request);
   if (rateLimited) return rateLimited;
 
   if (!isGitHubAppConfigured()) {

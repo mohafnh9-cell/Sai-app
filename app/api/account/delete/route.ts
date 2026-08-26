@@ -15,7 +15,7 @@ const bodySchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const rateLimited = enforceRateLimit(request, {
+  const rateLimited = await enforceRateLimit(request, {
     limit: 5,
     windowMs: 60_000,
     keyPrefix: "account-delete",

@@ -16,7 +16,7 @@ function ensureLocaleCookie(request: NextRequest, response: NextResponse) {
 
 export async function proxy(request: NextRequest) {
   if (request.nextUrl.pathname === "/admin") {
-    const limited = enforceRateLimit(request, {
+    const limited = await enforceRateLimit(request, {
       limit: 20,
       windowMs: 5 * 60_000,
       keyPrefix: "admin-page",

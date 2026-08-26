@@ -40,7 +40,7 @@ export async function GET(
   { params }: { params: Promise<{ scanId: string }> }
 ) {
   try {
-    const rateLimited = enforceRateLimit(request);
+    const rateLimited = await enforceRateLimit(request);
     if (rateLimited) return rateLimited;
 
     const parsed = paramsSchema.safeParse(await params);
@@ -61,7 +61,7 @@ export async function POST(
   { params }: { params: Promise<{ scanId: string }> }
 ) {
   try {
-    const rateLimited = enforceRateLimit(request);
+    const rateLimited = await enforceRateLimit(request);
     if (rateLimited) return rateLimited;
 
     const parsed = paramsSchema.safeParse(await params);

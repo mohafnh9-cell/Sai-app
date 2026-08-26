@@ -20,7 +20,7 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string; campaignId: string }> }
 ) {
-  const rateLimited = enforceRateLimit(request);
+  const rateLimited = await enforceRateLimit(request);
   if (rateLimited) return rateLimited;
 
   const parsed = paramsSchema.safeParse(await params);

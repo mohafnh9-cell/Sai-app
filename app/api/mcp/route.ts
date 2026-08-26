@@ -144,7 +144,7 @@ const MCP_RATE_LIMIT_OPTIONS = {
 };
 
 export async function GET(request: Request) {
-  const rateLimited = enforceRateLimit(request, MCP_RATE_LIMIT_OPTIONS);
+  const rateLimited = await enforceRateLimit(request, MCP_RATE_LIMIT_OPTIONS);
   if (rateLimited) return rateLimited;
 
   const auth = await resolveMcpAuth(request);
@@ -158,7 +158,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const rateLimited = enforceRateLimit(request, MCP_RATE_LIMIT_OPTIONS);
+  const rateLimited = await enforceRateLimit(request, MCP_RATE_LIMIT_OPTIONS);
   if (rateLimited) return rateLimited;
 
   const auth = await resolveMcpAuth(request);

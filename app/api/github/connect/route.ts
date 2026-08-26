@@ -157,7 +157,7 @@ async function upsertConnectedProject(
 }
 
 async function connectRepositories(request: Request) {
-  const rateLimited = enforceRateLimit(request);
+  const rateLimited = await enforceRateLimit(request);
   if (rateLimited) return rateLimited;
 
   const supabase = await createClient();

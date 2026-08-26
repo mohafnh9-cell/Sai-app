@@ -6,7 +6,7 @@ import { enforceRateLimit } from "@/server/http/rate-limit";
 const bodySchema = z.object({}).strict();
 
 export async function POST(request: Request) {
-  const rateLimited = enforceRateLimit(request);
+  const rateLimited = await enforceRateLimit(request);
   if (rateLimited) return rateLimited;
 
   const parsedBody = bodySchema.safeParse(await request.json().catch(() => ({})));

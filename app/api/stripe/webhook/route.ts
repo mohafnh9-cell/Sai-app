@@ -40,7 +40,7 @@ async function processStripeEvent(
 }
 
 export async function POST(request: Request) {
-  const rateLimited = enforceRateLimit(request, { keyPrefix: "stripe-webhook", limit: 60 });
+  const rateLimited = await enforceRateLimit(request, { keyPrefix: "stripe-webhook", limit: 60 });
   if (rateLimited) return rateLimited;
 
   if (!isStripeConfigured()) {

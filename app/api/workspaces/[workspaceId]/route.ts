@@ -15,7 +15,7 @@ type RouteContext = {
 };
 
 export async function DELETE(request: Request, context: RouteContext) {
-  const rateLimited = enforceRateLimit(request);
+  const rateLimited = await enforceRateLimit(request);
   if (rateLimited) return rateLimited;
 
   const auth = await getServerAuthContext();
