@@ -13,6 +13,7 @@ const SIZE_REASONS = new Set([
   "file-too-large",
   "max_file_size",
   "max_total_size",
+  "max_file_count",
   "max_depth",
 ]);
 const TIME_REASONS = new Set(["time-limit"]);
