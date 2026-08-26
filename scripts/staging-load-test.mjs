@@ -24,6 +24,7 @@ const args = Object.fromEntries(
 
 const STAGING_BASE_URL = process.env.STAGING_BASE_URL ?? process.env.NEXT_PUBLIC_APP_URL;
 const WEBHOOK_SECRET = process.env.GITHUB_WEBHOOK_SECRET ?? "";
+const PROTECTION_BYPASS = process.env.VERCEL_AUTOMATION_BYPASS_SECRET ?? "";
 
 if (!STAGING_BASE_URL) {
   throw new Error("STAGING_BASE_URL is required");
@@ -60,6 +61,7 @@ async function postWebhook(deliveryId) {
       "x-github-event": "push",
       "x-github-delivery": deliveryId,
       "x-hub-signature-256": sign(body),
+      ...(PROTECTION_BYPASS ? { "x-vercel-protection-bypass": PROTECTION_BYPASS } : {}),
     },
     body,
   });
