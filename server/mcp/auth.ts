@@ -57,16 +57,20 @@ async function resolveLegacyApiKey(rawKey: string): Promise<McpAuthContext | nul
   const keyHash = hashMcpApiKey(rawKey);
   const { data: row } = await admin
     .from("mcp_api_keys")
-    .select("id, organization_id, created_by_user_id")
+    .select("id, organization_id, created_by_user_id, first_used_at")
     .eq("key_hash", keyHash)
     .is("revoked_at", null)
     .maybeSingle();
 
   if (!row) return null;
 
+  const now = new Date().toISOString();
   void admin
     .from("mcp_api_keys")
-    .update({ last_used_at: new Date().toISOString() })
+    .update({
+      last_used_at: now,
+      ...(row.first_used_at ? {} : { first_used_at: now }),
+    })
     .eq("id", row.id);
 
   return {

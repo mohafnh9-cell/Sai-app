@@ -71,7 +71,7 @@ export default async function AdminPage() {
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
-  const [users, connectionsResult, orgsResult, projectsCountResult, scansResult] =
+  const [users, connectionsResult, orgsResult, projectsCountResult, scansResult, mcpKeysResult] =
     await Promise.all([
       listAllUsers(admin),
       admin
@@ -83,6 +83,10 @@ export default async function AdminPage() {
       admin
         .from("scans")
         .select("status, created_at, completed_at")
+        .gte("created_at", thirtyDaysAgo),
+      admin
+        .from("mcp_api_keys")
+        .select("created_at, first_used_at")
         .gte("created_at", thirtyDaysAgo),
     ]);
 
@@ -100,6 +104,13 @@ export default async function AdminPage() {
   const p95 = percentileSummary(completedDurations);
   const failedCount = scans.filter((s) => s.status === "failed").length;
   const failureRate = scans.length ? ((failedCount / scans.length) * 100).toFixed(1) : "0.0";
+
+  const mcpKeys = mcpKeysResult.data ?? [];
+  const mcpSetupDurations = mcpKeys
+    .filter((k) => k.first_used_at)
+    .map((k) => (new Date(k.first_used_at as string).getTime() - new Date(k.created_at).getTime()) / 1000);
+  const mcpSetupP = percentileSummary(mcpSetupDurations);
+  const mcpKeysNeverUsed = mcpKeys.filter((k) => !k.first_used_at).length;
 
   return (
     <div className="p-6 space-y-8 max-w-6xl">
@@ -123,6 +134,23 @@ export default async function AdminPage() {
         <StatCard label="P50 veredicto" value={p95.p50 !== null ? `${p95.p50.toFixed(0)}s` : "—"} />
         <StatCard label="P95 veredicto" value={p95.p95 !== null ? `${p95.p95.toFixed(0)}s` : "—"} hint="Objetivo: <120s" />
         <StatCard label="P99 veredicto" value={p95.p99 !== null ? `${p95.p99.toFixed(0)}s` : "—"} />
+      </div>
+
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
+        <StatCard
+          label="P50 setup MCP"
+          value={mcpSetupP.p50 !== null ? `${mcpSetupP.p50.toFixed(0)}s` : "—"}
+        />
+        <StatCard
+          label="P95 setup MCP"
+          value={mcpSetupP.p95 !== null ? `${mcpSetupP.p95.toFixed(0)}s` : "—"}
+          hint="Objetivo: <60s"
+        />
+        <StatCard
+          label="Keys MCP sin usar"
+          value={mcpKeysNeverUsed}
+          hint={`de ${mcpKeys.length} generadas en 30 días`}
+        />
       </div>
 
       <Card>
