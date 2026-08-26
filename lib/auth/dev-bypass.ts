@@ -3,12 +3,16 @@ import "server-only";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { isAuthBypassAllowed } from "@/lib/env/production-guard";
+import { isAuthBypassAllowed, isRunningOnVercel } from "@/lib/env/production-guard";
 import {
   resolveActiveWorkspaceIdForUser,
 } from "@/server/workspaces/service";
 
 export function isAuthBypassEnabled(): boolean {
+  // Redundant, independent of isAuthBypassAllowed()'s own guard — this
+  // function fabricates an authenticated admin-capable session, so it must
+  // never activate on a real deployment even if the shared guard has a bug.
+  if (isRunningOnVercel()) return false;
   return isAuthBypassAllowed();
 }
 

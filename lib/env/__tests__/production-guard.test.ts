@@ -3,6 +3,7 @@ import {
   assertProductionSafe,
   isAuthBypassAllowed,
   isBypassFlagSet,
+  isRunningOnVercel,
 } from "@/lib/env/production-guard";
 import { validateEnvironment } from "@/lib/env/validate-env";
 
@@ -39,6 +40,30 @@ describe("production guard", () => {
     vi.stubEnv("NODE_ENV", "development");
     vi.stubEnv("SEQURAI_BYPASS_AUTH", "true");
     expect(isAuthBypassAllowed()).toBe(true);
+  });
+
+  it("detects any Vercel-hosted deployment via VERCEL or VERCEL_ENV", () => {
+    vi.stubEnv("VERCEL", "1");
+    expect(isRunningOnVercel()).toBe(true);
+    vi.unstubAllEnvs();
+
+    vi.stubEnv("VERCEL_ENV", "preview");
+    expect(isRunningOnVercel()).toBe(true);
+  });
+
+  it("blocks bypass on Vercel even if NODE_ENV isn't exactly production", () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("VERCEL", "1");
+    vi.stubEnv("VERCEL_ENV", "preview");
+    expect(isAuthBypassAllowed()).toBe(false);
+  });
+
+  it("throws when bypass is enabled on a Vercel preview deployment", () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("VERCEL", "1");
+    vi.stubEnv("VERCEL_ENV", "preview");
+    vi.stubEnv("SEQURAI_BYPASS_AUTH", "true");
+    expect(() => assertProductionSafe()).toThrow(/SEQURAI_BYPASS_AUTH/);
   });
 });
 
