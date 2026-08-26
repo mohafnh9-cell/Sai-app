@@ -274,8 +274,12 @@ export class GitHubRepositoryService {
         maxDepth: GITHUB_SCAN_LIMITS.maxDepth,
       });
 
-      const explicitOmissions = omissions.filter((item) => item.path != null).length;
-      const aggregatedOmissions = omissions
+      // "critical_file_detected" flags a file for visibility without dropping
+      // it (it's still pushed into `files`), so it must not be double-counted
+      // as a discovered-but-excluded file here.
+      const droppedOmissions = omissions.filter((item) => item.reason !== "critical_file_detected");
+      const explicitOmissions = droppedOmissions.filter((item) => item.path != null).length;
+      const aggregatedOmissions = droppedOmissions
         .filter((item) => item.path == null)
         .reduce((sum, item) => sum + (item.count ?? 1), 0);
 
