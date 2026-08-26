@@ -203,6 +203,7 @@ export function ScanDetailView({
           scanCompleted={scanCompleted}
           onReviewPriority={scrollToFindings}
           fixPromptContext={fixPromptContext}
+          scan={scan}
         />
       )}
 

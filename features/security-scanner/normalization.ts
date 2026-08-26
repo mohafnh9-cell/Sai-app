@@ -7,6 +7,40 @@ function looksBinary(content: string): boolean {
   return content.includes("\0");
 }
 
+/**
+ * Lower tier numbers are consumed first against maxFiles/maxTotalBytes, so
+ * auth/api/config survive truncation before generic app code or tests.
+ */
+function priorityOf(path: string): number {
+  const lower = path.toLowerCase();
+  if (/(?:auth|middleware|session|jwt|rbac|permission)/.test(lower)) return 1;
+  if (lower.includes("api/") || lower.includes("routes/")) return 2;
+  if (
+    lower.includes("config") ||
+    lower.endsWith(".env.example") ||
+    lower.includes("vercel.json")
+  ) {
+    return 3;
+  }
+  if (
+    lower.includes("__tests__") ||
+    lower.includes("tests/") ||
+    lower.includes("fixtures/") ||
+    /\.(?:test|spec)\./.test(lower)
+  ) {
+    return 5;
+  }
+  if (lower.includes("lib/") || lower.includes("features/") || lower.includes("components/")) {
+    return 4;
+  }
+  return 6;
+}
+
+function byPriority(a: InputFile, b: InputFile): number {
+  const priorityDiff = priorityOf(a.path) - priorityOf(b.path);
+  return priorityDiff !== 0 ? priorityDiff : a.path.localeCompare(b.path);
+}
+
 export function normalizeFiles(
   files: InputFile[],
   config: ScanConfig,
@@ -16,7 +50,7 @@ export function normalizeFiles(
   let bytes = 0;
   let truncated = false;
 
-  for (const input of [...files].sort((a, b) => a.path.localeCompare(b.path))) {
+  for (const input of [...files].sort(byPriority)) {
     const path = sanitizePath(input.path);
     if (!path) {
       omissions.push({ path: input.path, reason: "invalid-path" });

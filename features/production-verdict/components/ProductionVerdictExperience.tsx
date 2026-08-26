@@ -7,11 +7,13 @@ import { FastestPathForward } from "./FastestPathForward";
 import { ProjectedScorePanel } from "./ProjectedScorePanel";
 import { ScoreDeltaSummary } from "./ScoreDeltaSummary";
 import { CoverageBreakdown } from "./CoverageBreakdown";
+import { ScanCoverageBanner } from "./ScanCoverageBanner";
 import { ProductionEngineerSummary } from "./ProductionEngineerSummary";
 import { trackEvent } from "@/lib/analytics/track";
 import { useEffect } from "react";
 import { useDemoNavigation } from "@/features/demo/use-demo-navigation";
 import type { FixPromptContext } from "../fix-prompt-context";
+import type { ScanRecord } from "@/features/security-scanner/components/types";
 
 export function ProductionVerdictExperience({
   verdict,
@@ -21,6 +23,7 @@ export function ProductionVerdictExperience({
   showEngineer = true,
   onReviewPriority,
   fixPromptContext,
+  scan,
 }: {
   verdict: ProductionVerdictV1;
   projectId: string;
@@ -29,6 +32,7 @@ export function ProductionVerdictExperience({
   showEngineer?: boolean;
   onReviewPriority?: () => void;
   fixPromptContext?: FixPromptContext;
+  scan?: ScanRecord;
 }) {
   const { href } = useDemoNavigation();
   const view = verdictExperienceFromVerdict(verdict);
@@ -82,6 +86,7 @@ export function ProductionVerdictExperience({
         />
       )}
 
+      {scan && <ScanCoverageBanner scan={scan} />}
       <CoverageBreakdown verdict={verdict} />
     </div>
   );

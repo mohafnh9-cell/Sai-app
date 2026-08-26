@@ -57,6 +57,33 @@
     "speculative": "Especulativo",
     "ariaLabel": "Nivel de confianza: {level}"
   },
+  "coverageBanner": {
+    "summary": "Analizamos {analyzed} de {total} archivos. {omitted} quedaron fuera por {reason}.",
+    "sizeLimit": "límite de tamaño",
+    "timeLimit": "límite de tiempo",
+    "mixedLimits": "límites del análisis",
+    "otherLimits": "reglas del análisis",
+    "viewDetail": "Ver detalle",
+    "hideDetail": "Ocultar detalle",
+    "reasonHeading": "Archivos excluidos por motivo",
+    "reasons": {
+      "total-limit": "Límite total de archivos/tamaño alcanzado",
+      "time-limit": "Límite de tiempo de análisis alcanzado",
+      "file-too-large": "Archivo demasiado grande",
+      "binary": "Archivo binario",
+      "ignored": "Ignorado por reglas del análisis",
+      "invalid-path": "Ruta inválida",
+      "rule-error": "Error de regla",
+      "max_file_size": "Archivo demasiado grande",
+      "max_total_size": "Límite de tamaño total alcanzado",
+      "max_depth": "Límite de profundidad de directorio alcanzado",
+      "binary_file": "Archivo binario",
+      "unsupported_format": "Formato no soportado",
+      "critical_file_detected": "Archivo sensible omitido",
+      "github_tree_truncated": "Árbol del repositorio truncado",
+      "unknown": "Otro"
+    }
+  },
   "codeSnippet": "Fragmento de código",
   "diffContext": {
     "introduced": "Introducido por este cambio",

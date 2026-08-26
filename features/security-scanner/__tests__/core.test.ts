@@ -42,6 +42,34 @@ describe("path and file normalization", () => {
     expect(result.truncated).toBe(true);
   });
 
+  it("prioritizes auth/api/config files over app code and tests when maxFiles is exceeded", () => {
+    const result = normalizeFiles(
+      [
+        { path: "src/features/checkout/cart.ts", content: "export const cart = 1;" },
+        { path: "src/lib/auth/session.ts", content: "export const session = 1;" },
+        { path: "src/app/api/users/route.ts", content: "export const route = 1;" },
+        { path: "src/config/next.config.ts", content: "export const config = 1;" },
+        { path: "src/features/checkout/__tests__/cart.test.ts", content: "test('x', () => {});" },
+        { path: "src/features/checkout/fixtures/cart.fixture.ts", content: "export const fixture = 1;" },
+      ],
+      resolveConfig({ maxFiles: 4, maxTotalBytes: 10 * 1024 * 1024 }),
+    );
+
+    expect(result.files.map((file) => file.path)).toEqual([
+      "src/lib/auth/session.ts",
+      "src/app/api/users/route.ts",
+      "src/config/next.config.ts",
+      "src/features/checkout/cart.ts",
+    ]);
+    expect(result.truncated).toBe(true);
+    const omittedPaths = result.omissions.map((item) => item.path);
+    expect(omittedPaths).toEqual([
+      "src/features/checkout/__tests__/cart.test.ts",
+      "src/features/checkout/fixtures/cart.fixture.ts",
+    ]);
+    expect(result.omissions.every((item) => item.reason === "total-limit")).toBe(true);
+  });
+
   it("omits unsupported, generated, minified, mapped, and asset files", () => {
     const result = normalizeFiles([
       { path: "notes.txt", content: "text" },

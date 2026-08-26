@@ -21,6 +21,7 @@ export type AnalyticsEvent =
   | "retry_scan_clicked"
   | "ready_to_ship_reached"
   | "coverage_methodology_opened"
+  | "coverage_omissions_opened"
   | "production_journey_viewed"
   | "journey_range_changed"
   | "milestone_viewed"

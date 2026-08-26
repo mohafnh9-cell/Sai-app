@@ -57,6 +57,33 @@
     "speculative": "Speculative",
     "ariaLabel": "Confidence level: {level}"
   },
+  "coverageBanner": {
+    "summary": "We analyzed {analyzed} of {total} files. {omitted} were left out due to {reason}.",
+    "sizeLimit": "size limits",
+    "timeLimit": "the time limit",
+    "mixedLimits": "scan limits",
+    "otherLimits": "scan rules",
+    "viewDetail": "View detail",
+    "hideDetail": "Hide detail",
+    "reasonHeading": "Files excluded by reason",
+    "reasons": {
+      "total-limit": "Total file/size limit reached",
+      "time-limit": "Scan time limit reached",
+      "file-too-large": "File too large",
+      "binary": "Binary file",
+      "ignored": "Ignored by scan rules",
+      "invalid-path": "Invalid path",
+      "rule-error": "Rule error",
+      "max_file_size": "File too large",
+      "max_total_size": "Total size limit reached",
+      "max_depth": "Directory depth limit reached",
+      "binary_file": "Binary file",
+      "unsupported_format": "Unsupported format",
+      "critical_file_detected": "Sensitive file skipped",
+      "github_tree_truncated": "Repository tree truncated",
+      "unknown": "Other"
+    }
+  },
   "codeSnippet": "Code snippet",
   "diffContext": {
     "introduced": "Introduced by this change",

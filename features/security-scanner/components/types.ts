@@ -26,6 +26,14 @@ export type ScanRecord = {
   severity_counts?: Partial<Record<ScanSeverity | Lowercase<ScanSeverity>, number>>;
   error?: string;
   error_message?: string | null;
+  omissions?: Array<{ path?: string; reason?: string; detail?: string }>;
+  metrics?: {
+    truncated?: boolean;
+    omittedFiles?: number;
+    scannedFiles?: number;
+    inputFiles?: number;
+    [key: string]: unknown;
+  };
 };
 
 export type ScanFinding = {

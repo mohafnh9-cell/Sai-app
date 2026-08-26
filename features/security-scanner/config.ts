@@ -12,11 +12,17 @@ export interface ScanConfig {
 
 export type ScanConfigInput = Partial<Omit<ScanConfig, "now">> & { now?: () => number };
 
+/**
+ * Sized for medium/large repos (this repo itself is ~1,850 scannable files /
+ * ~7.5MB and must fit comfortably with room to grow). maxDurationMs stays
+ * well under the 300s route budget in app/api/repositories/.../scans routes,
+ * leaving headroom for fetch, scoring, and persistence.
+ */
 export const DEFAULT_SCAN_CONFIG: ScanConfig = {
-  maxFileBytes: 512 * 1024,
-  maxTotalBytes: 10 * 1024 * 1024,
-  maxFiles: 2_000,
-  maxDurationMs: 5_000,
+  maxFileBytes: 1024 * 1024,
+  maxTotalBytes: 40 * 1024 * 1024,
+  maxFiles: 8_000,
+  maxDurationMs: 120_000,
   ignoredSegments: DEFAULT_IGNORED_SEGMENTS,
   includeExtensions: [...SOURCE_EXTENSIONS],
   now: () => Date.now(),
