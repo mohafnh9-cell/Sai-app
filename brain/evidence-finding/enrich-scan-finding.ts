@@ -424,7 +424,19 @@ export function postProcessScanFindings(
 
   const platformFindings = collectPlatformInjectionFindings(findings, normalizedFiles);
 
-  const enriched = [...findings, ...platformFindings]
+  // platformFindings is deduplicated against itself but not against `findings` --
+  // a platform-injection detection can land on the same location/pattern a static
+  // rule already flagged, producing two findings with the same fingerprint. That
+  // collides on the DB's unique (scan_id, fingerprint) constraint and fails the
+  // whole scan, so keep the first occurrence (static rule findings win).
+  const seenFingerprints = new Set<string>();
+  const combined = [...findings, ...platformFindings].filter((finding) => {
+    if (seenFingerprints.has(finding.fingerprint)) return false;
+    seenFingerprints.add(finding.fingerprint);
+    return true;
+  });
+
+  const enriched = combined
     .map((finding) => enrichScanFinding({ finding, projectContext: context, repositoryModel: model }))
     .filter((finding) => !finding.metadata?.suppressed);
 
