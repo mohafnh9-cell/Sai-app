@@ -615,7 +615,18 @@ export class InlineScanJobRunner implements ScanJobRunner {
           })) ?? [];
     }
 
-    const mergedFindings = [...retained, ...newFindings];
+    // Rules that aggregate content across files (e.g. database.rls-assessment reads every
+    // .sql file to resolve RLS status) can re-emit a finding located in an unchanged file.
+    // That collides with the same finding already carried over in `retained`, so dedupe by
+    // fingerprint with new findings winning -- otherwise the unique (scan_id, fingerprint)
+    // constraint on scan_findings rejects the insert and fails the whole scan.
+    const seenFingerprints = new Set<string>();
+    const mergedFindings: typeof newFindings = [];
+    for (const finding of [...newFindings, ...retained]) {
+      if (seenFingerprints.has(finding.fingerprint)) continue;
+      seenFingerprints.add(finding.fingerprint);
+      mergedFindings.push(finding);
+    }
     const rows = mergedFindings.map((finding) => findingRow(context, finding));
     return { findings: mergedFindings, rows };
   }
