@@ -23,6 +23,7 @@ export type FullProductAuditMcpResponse = Omit<
 > & {
   source: "github";
   findings: PublicAuditFinding[];
+  findingsOmittedCount: number;
   topRisks: PublicAuditFinding[];
   codeAnalysis: {
     findingsCount: number;
@@ -40,6 +41,27 @@ export type FullProductAuditMcpResponse = Omit<
     statusDetail: string | null;
   };
 };
+
+// Inlining every finding in the MCP tool response blows past a few MB on a
+// repo of even moderate size (789 raw findings measured ~2.1M characters on
+// this repo), which times out the calling client well before the server's
+// own response is even slow. topRisks/whatToFixFirst already carry the
+// curated view; cap the full list and point to reportUrl for the rest.
+const MAX_INLINE_FINDINGS = 40;
+const SEVERITY_RANK: Record<string, number> = {
+  critical: 0,
+  high: 1,
+  medium: 2,
+  low: 3,
+  info: 4,
+};
+
+function capFindingsForInlineResponse(findings: ConsolidatedAuditFinding[]): ConsolidatedAuditFinding[] {
+  if (findings.length <= MAX_INLINE_FINDINGS) return findings;
+  return [...findings]
+    .sort((a, b) => (SEVERITY_RANK[a.severity] ?? 5) - (SEVERITY_RANK[b.severity] ?? 5))
+    .slice(0, MAX_INLINE_FINDINGS);
+}
 
 function publicFinding(finding: ConsolidatedAuditFinding): PublicAuditFinding {
   const {
@@ -306,7 +328,8 @@ export function formatFullProductAuditResponse(
   return {
     ...publicResult,
     source: "github" as const,
-    findings: result.findings.map(publicFinding),
+    findings: capFindingsForInlineResponse(result.findings).map(publicFinding),
+    findingsOmittedCount: Math.max(0, result.findings.length - MAX_INLINE_FINDINGS),
     topRisks: result.topRisks.map(publicFinding),
     codeAnalysis: {
       findingsCount: result.engines.codeReview.findingsCount,

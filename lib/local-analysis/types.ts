@@ -55,6 +55,7 @@ export type LocalProductionVerdictResult = {
   score: number | null;
   blockersCount: number;
   findings: LocalFindingPublic[];
+  findingsOmittedCount: number;
   productionVerdict: Record<string, unknown>;
   snapshot: LocalSnapshotMetadata;
   git: LocalGitMetadata;

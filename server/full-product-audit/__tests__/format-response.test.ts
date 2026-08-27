@@ -166,6 +166,33 @@ describe("formatFullProductAuditResponse", () => {
     expect(JSON.stringify(formatted)).not.toMatch(/allowedPaths|Gate 3|authorizationId/);
   });
 
+  it("caps the inline findings array so large repos don't blow up the response size", () => {
+    const manyFindings = Array.from({ length: 500 }, (_, index) => ({
+      id: `f-${index}`,
+      severity: index < 50 ? "high" : "medium",
+      category: "dependencies",
+      title: `Finding ${index}`,
+      description: "A finding.",
+      source: "static" as const,
+      verificationStatus: "not_reproduced" as const,
+      evidence: [],
+      confidence: "medium" as const,
+      confidenceLevel: "medium" as const,
+      affectedComponent: null,
+      recommendation: null,
+      safeFixAvailable: false,
+    }));
+    const formatted = formatFullProductAuditResponse(
+      baseResult({ findings: manyFindings }),
+      t
+    );
+    expect(formatted.findings.length).toBeLessThan(manyFindings.length);
+    expect(formatted.findings.length).toBeLessThanOrEqual(40);
+    expect(formatted.findingsOmittedCount).toBe(manyFindings.length - formatted.findings.length);
+    // Higher-severity findings must survive the cap, not get cut off arbitrarily.
+    expect(formatted.findings.every((finding) => finding.severity === "high")).toBe(true);
+  });
+
   it("does not show secret rotation steps when there are zero findings", () => {
     const formatted = formatFullProductAuditResponse(
       baseResult({

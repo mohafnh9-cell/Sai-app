@@ -19,6 +19,7 @@ import {
   mapScanFindingToVerdictInput,
 } from "./map-findings";
 import type {
+  LocalFindingPublic,
   LocalGitMetadata,
   LocalProductionVerdictResult,
   LocalSnapshotMetadata,
@@ -26,6 +27,28 @@ import type {
 } from "./types";
 import { buildLocalStatusSummary } from "./format-local-response";
 import { listWorkspaceFiles, normalizeWorkspaceRoot } from "./workspace";
+
+// Inlining every finding in the stdio-bridge response is the same mistake
+// the GitHub-connected full_product_audit tool made: fine for a handful of
+// findings, but a large local workspace (or one with a lot of noise) can
+// balloon the JSON-RPC response past what the calling MCP client will wait
+// for. buildLocalStatusSummary's narrative already only surfaces the top 6;
+// cap the structured array the same way instead of sending everything.
+const MAX_INLINE_LOCAL_FINDINGS = 40;
+const LOCAL_SEVERITY_RANK: Record<string, number> = {
+  critical: 0,
+  high: 1,
+  medium: 2,
+  low: 3,
+  info: 4,
+};
+
+function capLocalFindingsForResponse(findings: LocalFindingPublic[]): LocalFindingPublic[] {
+  if (findings.length <= MAX_INLINE_LOCAL_FINDINGS) return findings;
+  return [...findings]
+    .sort((a, b) => (LOCAL_SEVERITY_RANK[a.severity] ?? 5) - (LOCAL_SEVERITY_RANK[b.severity] ?? 5))
+    .slice(0, MAX_INLINE_LOCAL_FINDINGS);
+}
 
 function buildGitMetadata(git: ReturnType<typeof getGitContext>): LocalGitMetadata {
   const counts = parseGitFileCounts(git.status);
@@ -72,6 +95,7 @@ function buildInsufficientDataResult(input: {
     score: verdict.score,
     blockersCount: verdict.blockersCount,
     findings: [],
+    findingsOmittedCount: 0,
     productionVerdict: verdict as unknown as Record<string, unknown>,
     snapshot: input.snapshot,
     git: buildGitMetadata(input.git),
@@ -184,6 +208,7 @@ export async function runLocalProductionVerdict(
 
   const publicFindings = mapFindingsToPublic(scan.findings);
   const actionableFindings = publicFindings.filter((finding) => !finding.safeToIgnore);
+  const inlineFindings = capLocalFindingsForResponse(publicFindings);
 
   return {
     source: "local",
@@ -196,7 +221,8 @@ export async function runLocalProductionVerdict(
     verdictStatus: verdict.status,
     score: verdict.score,
     blockersCount: verdict.blockersCount,
-    findings: publicFindings,
+    findings: inlineFindings,
+    findingsOmittedCount: Math.max(0, publicFindings.length - inlineFindings.length),
     productionVerdict: verdict as unknown as Record<string, unknown>,
     snapshot,
     git: buildGitMetadata(git),
