@@ -30,9 +30,19 @@ const ERROR_STATUS: Record<string, number> = {
   internal_error: 500,
 };
 
-/** MCP clients should receive a structured response before platform timeouts. */
-export const MCP_FULL_PRODUCT_AUDIT_REVIEW_WAIT_MS = 50_000;
-export const MCP_FULL_PRODUCT_AUDIT_SECURITY_WAIT_MS = 50_000;
+/**
+ * MCP clients should receive a structured response before platform timeouts.
+ * Combined budget must stay under 120s (HTTP tool response ceiling for MCP
+ * clients -- see the "sized for HTTP tool responses" test). An even 50/50
+ * split undershot real scan durations on repos of even moderate size
+ * (observed 33-56s for a ~1900-file repo), causing the review to legitimately
+ * still be running server-side when the client gave up and reported a
+ * partial/timed-out result on nearly every call. Security tests only run
+ * when the caller explicitly authorizes dynamic verification, so the review
+ * -- which every call goes through -- gets the larger share.
+ */
+export const MCP_FULL_PRODUCT_AUDIT_REVIEW_WAIT_MS = 85_000;
+export const MCP_FULL_PRODUCT_AUDIT_SECURITY_WAIT_MS = 30_000;
 
 export async function fullProductAudit(
   ctx: McpAuthContext,

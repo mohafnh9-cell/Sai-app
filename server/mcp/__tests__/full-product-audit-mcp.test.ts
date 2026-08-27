@@ -119,8 +119,8 @@ describe("MCP full_product_audit integration", () => {
   });
 
   it("exports MCP wait budgets sized for HTTP tool responses", () => {
-    expect(MCP_FULL_PRODUCT_AUDIT_REVIEW_WAIT_MS).toBe(50_000);
-    expect(MCP_FULL_PRODUCT_AUDIT_SECURITY_WAIT_MS).toBe(50_000);
+    expect(MCP_FULL_PRODUCT_AUDIT_REVIEW_WAIT_MS).toBe(85_000);
+    expect(MCP_FULL_PRODUCT_AUDIT_SECURITY_WAIT_MS).toBe(30_000);
     expect(MCP_FULL_PRODUCT_AUDIT_REVIEW_WAIT_MS + MCP_FULL_PRODUCT_AUDIT_SECURITY_WAIT_MS).toBeLessThan(
       120_000
     );
