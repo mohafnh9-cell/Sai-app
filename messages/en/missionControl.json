@@ -232,6 +232,11 @@
       "SAFE_WITH_CAUTION": "Safe with caution",
       "REQUIRES_ATTENTION": "Requires attention",
       "NOT_PROTECTED": "Not protected"
+    },
+    "toggle": {
+      "label": "Continuous Protection",
+      "on": "Daily checks on",
+      "off": "Daily checks off"
     }
   },
   "history": {

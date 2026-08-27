@@ -15,6 +15,8 @@ import { AnalysisRunSelector } from "@/features/analysis-runs/components/Analysi
 import { ProjectOnboardedBanner } from "@/features/projects/components/ProjectOnboardedBanner";
 import { McpPromoBanner } from "@/features/mcp/components/McpPromoBanner";
 import { MissionControlActivityBanner } from "./MissionControlActivityBanner";
+import { MissionControlProtectionStatus } from "./MissionControlProtectionStatus";
+import { useProtectionCenter } from "@/features/continuous-protection/hooks/useProtectionCenter";
 
 export function MissionControlExperience({
   initialState,
@@ -40,6 +42,7 @@ export function MissionControlExperience({
     initialState,
     analysisRunId: initialState.analysisRunId,
   });
+  const { data: protectionCenter } = useProtectionCenter(initialState.projectId);
 
   const verdict = state.productionVerdict;
   const primaryActionKind = state.actions.primary.kind;
@@ -136,6 +139,8 @@ export function MissionControlExperience({
         onStartScan={() => void startScan()}
         onStartSecurityTest={() => void startSecurityTest()}
       />
+
+      {protectionCenter ? <MissionControlProtectionStatus model={protectionCenter} /> : null}
 
       {showScanActivity && !verdict ? (
         <MissionControlActivityBanner

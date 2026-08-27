@@ -5,6 +5,7 @@ import {
   protectionStatusAccent,
   protectionStatusTone,
 } from "@/features/continuous-protection/types";
+import { useToggleContinuousProtection } from "@/features/continuous-protection/hooks/useToggleContinuousProtection";
 import { useI18n } from "@/lib/i18n/client";
 import { formatRelativeLocalized } from "@/lib/i18n/format";
 
@@ -15,6 +16,8 @@ export function MissionControlProtectionStatus({
 }) {
   const { t, locale } = useI18n("missionControl");
   const { t: tc } = useI18n("common");
+  const toggle = useToggleContinuousProtection(model.projectId);
+  const isOn = model.continuousProtectionEnabled && !model.continuousProtectionPaused;
 
   const relativeLabels = {
     never: tc("never"),
@@ -36,17 +39,42 @@ export function MissionControlProtectionStatus({
       className={`rounded-3xl border p-6 sm:p-8 space-y-5 animate-in fade-in duration-500 ${protectionStatusTone(model.status)}`}
       aria-labelledby="mission-control-protection-heading"
     >
-      <div className="space-y-2">
-        <p className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
-          {t("protection.eyebrow")}
-        </p>
-        <p
-          id="mission-control-protection-heading"
-          className={`text-2xl sm:text-3xl font-semibold tracking-tight break-words ${protectionStatusAccent(model.status)}`}
-        >
-          {t(`protection.status.${model.status}`)}
-        </p>
-        <p className="text-sm text-muted-foreground leading-relaxed">{model.statusHeadline}</p>
+      <div className="flex items-start justify-between gap-4">
+        <div className="space-y-2">
+          <p className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
+            {t("protection.eyebrow")}
+          </p>
+          <p
+            id="mission-control-protection-heading"
+            className={`text-2xl sm:text-3xl font-semibold tracking-tight break-words ${protectionStatusAccent(model.status)}`}
+          >
+            {t(`protection.status.${model.status}`)}
+          </p>
+          <p className="text-sm text-muted-foreground leading-relaxed">{model.statusHeadline}</p>
+        </div>
+
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={isOn}
+            aria-label={t("protection.toggle.label")}
+            disabled={toggle.isPending}
+            onClick={() => toggle.mutate(!isOn)}
+            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors seq-focus-ring disabled:opacity-60 ${
+              isOn ? "bg-brand-success" : "bg-muted-foreground/30"
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                isOn ? "translate-x-6" : "translate-x-1"
+              }`}
+            />
+          </button>
+          <span className="text-xs text-muted-foreground">
+            {isOn ? t("protection.toggle.on") : t("protection.toggle.off")}
+          </span>
+        </div>
       </div>
 
       {showConfidence && (
