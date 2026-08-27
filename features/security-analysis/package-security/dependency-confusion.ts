@@ -14,6 +14,15 @@ const INTERNAL_PREFIXES = [
 
 const SCOPED_PACKAGE_RE = /^@([a-z0-9-]+)\//;
 
+// Scopes are a single word (@company, @acme-corp), not "prefix-baseName" like
+// unscoped internal packages, so match against the bare word rather than the
+// dash-suffixed unscoped prefixes above.
+const INTERNAL_SCOPE_WORDS = INTERNAL_PREFIXES.map((prefix) => prefix.replace(/-$/, ""));
+
+function looksLikeInternalScope(scope: string): boolean {
+  return INTERNAL_SCOPE_WORDS.some((word) => scope === word || scope.startsWith(`${word}-`));
+}
+
 export type DependencyConfusionSignal = {
   risk: boolean;
   rule: string;
@@ -38,12 +47,19 @@ export function checkDependencyConfusion(
         confidence: "HIGH",
       };
     }
-    return {
-      risk: true,
-      rule: "package.dependency-confusion.scoped-internal",
-      message: `Scoped package '${packageName}' follows an internal naming pattern (@${scope}/...). Ensure the scope is authentic and not a dependency confusion target.`,
-      confidence: "MEDIUM",
-    };
+    // Nearly every real-world lockfile has dozens of scoped packages
+    // (@babel/*, @types/*, @radix-ui/*, ...) and none of them are dependency
+    // confusion risks -- the risk is specific to scopes that read as an
+    // org's own internal/private convention, not "any scope that exists".
+    if (looksLikeInternalScope(scope)) {
+      return {
+        risk: true,
+        rule: "package.dependency-confusion.scoped-internal",
+        message: `Scoped package '${packageName}' follows an internal naming pattern (@${scope}/...). Ensure the scope is authentic and not a dependency confusion target.`,
+        confidence: "MEDIUM",
+      };
+    }
+    return null;
   }
 
   const lowerName = packageName.toLowerCase();
