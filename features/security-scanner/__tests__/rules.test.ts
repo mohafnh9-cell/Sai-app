@@ -58,6 +58,37 @@ describe("critical deterministic rules", () => {
     );
   });
 
+  it("does not flag missing RLS as a HIGH blocker for a backend-mediated app with no Supabase/PostgREST exposure", async () => {
+    const result = await scanRepository([
+      {
+        path: "database/schema.sql",
+        content: "CREATE TABLE users (id serial primary key, email text);\nCREATE TABLE accounts (id serial primary key, user_id integer references users(id));",
+      },
+      {
+        path: "server/db.ts",
+        content: "import { Pool } from 'pg';\nconst pool = new Pool();\nexport async function getAccounts(userId) {\n  return pool.query('SELECT * FROM accounts WHERE user_id = $1', [userId]);\n}",
+      },
+    ]);
+    const rlsFindings = result.findings.filter((f) => f.ruleId === "database.rls-assessment" || f.ruleId === "supabase.rls-missing");
+    expect(rlsFindings.some((f) => f.severity === "high")).toBe(false);
+    expect(rlsFindings.filter((f) => f.ruleId === "supabase.rls-missing")).toHaveLength(0);
+  });
+
+  it("still flags missing RLS as HIGH when the repo does expose Postgres via Supabase/PostgREST", async () => {
+    const result = await scanRepository([
+      {
+        path: "database/schema.sql",
+        content: "CREATE TABLE users (id uuid primary key, email text);",
+      },
+      {
+        path: "lib/supabase/client.ts",
+        content: "import { createClient } from '@supabase/supabase-js';\nexport const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);",
+      },
+    ]);
+    const rlsFindings = result.findings.filter((f) => f.ruleId === "database.rls-assessment");
+    expect(rlsFindings.some((f) => f.severity === "high")).toBe(true);
+  });
+
   it("does not flag example env files, docs, or identifier assignments as hard-coded secrets", async () => {
     const result = await scanRepository([
       {

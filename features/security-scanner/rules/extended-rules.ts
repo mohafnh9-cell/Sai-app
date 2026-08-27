@@ -3,6 +3,7 @@ import { patternRule, contextualRouteRule } from "./builtin";
 import type { ScanRule } from "./types";
 import type { FindingDraft } from "../types";
 import { MACHINE_ENDPOINT_PATH, TEST_OR_EXAMPLE_PATH } from "./known-safe-patterns";
+import { repoExposesPostgresToClients } from "./client-exposure";
 
 const TEST_OR_EXAMPLE = TEST_OR_EXAMPLE_PATH;
 const ROUTE_PATH = /(?:^|\/)(?:api|routes?|controllers?|handlers?)(?:\/|$)|route\.[jt]s$/i;
@@ -275,6 +276,7 @@ const rlsAssessmentRule: ScanRule = {
     const sqlFiles = files.filter((f) => f.extension === ".sql");
     if (sqlFiles.length === 0) return [];
     const combined = sqlFiles.map((f) => f.content).join("\n");
+    const clientExposed = repoExposesPostgresToClients(files);
     const findings: FindingDraft[] = [];
     const tables: Array<{ name: string; path: string; line: number }> = [];
 
@@ -330,7 +332,7 @@ const rlsAssessmentRule: ScanRule = {
           fingerprintMaterial: `${table.name}:permissive`,
           metadata: { rlsStatus: "FAIL" },
         });
-      } else if (!enabled) {
+      } else if (!enabled && clientExposed) {
         findings.push({
           ruleId: "database.rls-assessment",
           title: `RLS FAIL: ${table.name} without visible RLS enablement`,
@@ -343,6 +345,21 @@ const rlsAssessmentRule: ScanRule = {
           remediation: "Enable RLS before exposing the table through Supabase or Postgres APIs.",
           fingerprintMaterial: `${table.name}:missing`,
           metadata: { rlsStatus: "FAIL" },
+        });
+      } else if (!enabled) {
+        findings.push({
+          ruleId: "database.rls-assessment",
+          title: `No RLS on ${table.name} — verify backend-layer authorization instead`,
+          description:
+            "Table has no ENABLE ROW LEVEL SECURITY statement, but no Supabase/PostgREST client exposure was detected in this repo. RLS only matters when Postgres is reached directly by an untrusted client; a backend-mediated app should enforce ownership checks in its query layer instead.",
+          severity: "low",
+          confidence: "low",
+          category: "database",
+          location: { path: table.path, line: table.line },
+          evidence: `RLS=NOT_APPLICABLE;table=${table.name}`,
+          remediation: "Verify the backend scopes every query for this table by the authenticated user/tenant.",
+          fingerprintMaterial: `${table.name}:not-applicable`,
+          metadata: { rlsStatus: "NOT_APPLICABLE" },
         });
       } else {
         findings.push({

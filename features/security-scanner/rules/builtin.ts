@@ -12,6 +12,7 @@ import type { FindingDraft, NormalizedFile } from "../types";
 import {
   firstServiceRoleReferenceLine,
   isSupabaseServiceRoleClientExposure,
+  repoExposesPostgresToClients,
 } from "./client-exposure";
 import {
   MACHINE_ENDPOINT_PATH,
@@ -436,6 +437,7 @@ const missingSensitiveRls: ScanRule = {
   title: "Sensitive table without visible RLS enablement",
   run: ({ files }) => {
     const sql = files.filter((file) => file.extension === ".sql");
+    if (!repoExposesPostgresToClients(files)) return [];
     const combined = sql.map((file) => file.content).join("\n");
     const findings: FindingDraft[] = [];
     const sensitive = /(?:users?|profiles?|accounts?|organizations?|projects?|payments?|customers?|sessions?|tokens?)/i;

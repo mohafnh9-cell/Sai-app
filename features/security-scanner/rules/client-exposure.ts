@@ -40,3 +40,20 @@ export function firstServiceRoleReferenceLine(file: NormalizedFile): number {
   const index = file.lines.findIndex((line) => SERVICE_ROLE_REFERENCE.test(line));
   return index >= 0 ? index + 1 : 1;
 }
+
+const SUPABASE_CONFIG_PATH = /(?:^|\/)supabase\/config\.toml$/i;
+const POSTGREST_EXPOSURE_SIGNAL =
+  /NEXT_PUBLIC_SUPABASE_(?:URL|ANON_KEY)|SUPABASE_ANON_KEY|@supabase\/supabase-js|postgrest|SUPABASE_SERVICE_ROLE_KEY|service[_-]?role/i;
+
+/**
+ * Row Level Security is a mitigation for one specific threat model: Postgres
+ * reached directly by an untrusted client via Supabase/PostgREST with an anon
+ * key. A backend-mediated app (Express+pg, Django, Rails, ...) that never
+ * exposes Postgres to the browser has no RLS-shaped attack surface — the
+ * schema alone can't tell you which one you're looking at.
+ */
+export function repoExposesPostgresToClients(
+  files: readonly Pick<NormalizedFile, "path" | "content">[]
+): boolean {
+  return files.some((file) => SUPABASE_CONFIG_PATH.test(file.path) || POSTGREST_EXPOSURE_SIGNAL.test(file.content));
+}
