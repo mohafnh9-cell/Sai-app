@@ -15057,7 +15057,10 @@ var DEFAULT_IGNORED_SEGMENTS = [
   "coverage",
   "vendor",
   "target",
-  ".cache"
+  ".cache",
+  // Static assets served as-is (bundler/esbuild output, service workers, ...).
+  // Nobody hand-writes or reviews this file-by-file -- same rationale as dist/build.
+  "public"
 ];
 var DEFAULT_BINARY_EXTENSIONS = /* @__PURE__ */ new Set([
   ".7z",
@@ -18444,6 +18447,7 @@ function dedupeAgentActionFindings(findings) {
 
 // features/security-analysis/agent-action/scan-repository.ts
 function shouldSkipPath(path) {
+  if (TEST_OR_EXAMPLE_PATH.test(path)) return true;
   return path.split("/").some((segment) => AGENT_ACTION_SKIP_DIRS.has(segment));
 }
 function isScannableFile(path) {
@@ -21508,6 +21512,7 @@ function draftToFinding(draft, detection) {
 }
 function scanFindingFields(finding) {
   const path = finding.location?.path ?? null;
+  if (path && TEST_OR_EXAMPLE_PATH.test(path)) return [];
   const fields = [
     ["title", finding.title],
     ["description", finding.description],

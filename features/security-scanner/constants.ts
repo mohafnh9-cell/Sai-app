@@ -11,6 +11,9 @@ export const DEFAULT_IGNORED_SEGMENTS = [
   "vendor",
   "target",
   ".cache",
+  // Static assets served as-is (bundler/esbuild output, service workers, ...).
+  // Nobody hand-writes or reviews this file-by-file -- same rationale as dist/build.
+  "public",
 ];
 
 export const DEFAULT_BINARY_EXTENSIONS = new Set([

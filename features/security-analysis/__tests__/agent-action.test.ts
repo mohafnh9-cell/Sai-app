@@ -122,6 +122,19 @@ describe("agent action repository scanner", () => {
     expect(result.findings.some((finding) => finding.rule.includes("bash.destructive"))).toBe(true);
   });
 
+  it("does not flag agent-action fixtures inside test/spec files", () => {
+    const paths = [
+      "features/security-analysis/__tests__/agent-action.test.ts",
+      "mcp/bash.spec.ts",
+      "server/fixtures/dangerous-tool.ts",
+      "features/security-analysis/__tests__/git-diff.test.ts",
+    ];
+    for (const path of paths) {
+      const result = scanAgentActionRepository([file(path, DANGEROUS_SHELL)]);
+      expect(result.findings).toHaveLength(0);
+    }
+  });
+
   it("detects filesystem write capability", () => {
     const result = scanAgentActionRepository([file("mcp/write.ts", FILE_WRITE_TOOL)]);
     expect(result.findings.some((finding) => finding.actionType === "file_write")).toBe(true);

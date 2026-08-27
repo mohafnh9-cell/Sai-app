@@ -1,6 +1,7 @@
 import { AGENT_ACTION_SKIP_DIRS } from "./constants";
 import { scanAgentActionFile, dedupeAgentActionFindings } from "./scan-file";
 import type { AgentScanResult } from "./types";
+import { TEST_OR_EXAMPLE_PATH } from "../../security-scanner/rules/known-safe-patterns";
 
 export type RepositoryFile = {
   path: string;
@@ -8,6 +9,7 @@ export type RepositoryFile = {
 };
 
 function shouldSkipPath(path: string): boolean {
+  if (TEST_OR_EXAMPLE_PATH.test(path)) return true;
   return path.split("/").some((segment) => AGENT_ACTION_SKIP_DIRS.has(segment));
 }
 

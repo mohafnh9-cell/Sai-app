@@ -1,6 +1,7 @@
 import type { Finding, NormalizedFile } from "@/features/security-scanner/types";
 import { findingFingerprint } from "@/features/security-scanner/fingerprint";
 import { buildFindingCorrelationKey } from "@/lib/correlation/finding-identity";
+import { TEST_OR_EXAMPLE_PATH } from "@/features/security-scanner/rules/known-safe-patterns";
 import { guardUntrustedInput, scanInjectionPatterns } from "./input-guard";
 import {
   platformInjectionFingerprintMaterial,
@@ -37,6 +38,11 @@ function draftToFinding(
 
 function scanFindingFields(finding: Finding): PlatformInjectionDetection[] {
   const path = finding.location?.path ?? null;
+  // A finding whose own evidence quotes a prompt-injection-shaped test fixture
+  // (e.g. a rule's own detection tests for "ignore previous instructions")
+  // isn't an untrusted surface -- scanning it here just re-flags our own test
+  // data as if an attacker had planted it.
+  if (path && TEST_OR_EXAMPLE_PATH.test(path)) return [];
   const fields: Array<[string, string | undefined]> = [
     ["title", finding.title],
     ["description", finding.description],
