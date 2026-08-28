@@ -15,6 +15,32 @@ describe("critical deterministic rules", () => {
     expect(result.findings.map((finding) => finding.evidence).join(" ")).not.toContain("hardcoded-production-key");
   });
 
+  it("flags unpinned GitHub Actions and curl-pipe-to-shell in workflows, but not SHA-pinned actions", async () => {
+    const result = await scanRepository([
+      {
+        path: ".github/workflows/ci.yml",
+        content: [
+          "jobs:",
+          "  build:",
+          "    steps:",
+          "      - uses: actions/checkout@v4",
+          "      - uses: some-org/trusted-action@a1b2c3d4e5f6789012345678901234567890abcd",
+          "      - run: curl -fsSL https://get.example.com/install.sh | bash",
+        ].join("\n"),
+      },
+    ]);
+    const supplyChainFindings = result.findings.filter(
+      (finding) => finding.ruleId === "cicd.github-actions-supply-chain",
+    );
+    expect(supplyChainFindings.map((f) => f.title)).toEqual(
+      expect.arrayContaining([
+        "GitHub Action referenced by mutable tag instead of a pinned commit SHA",
+        "CI step pipes a remote script directly into a shell",
+      ]),
+    );
+    expect(supplyChainFindings.filter((f) => f.evidence.includes("trusted-action"))).toHaveLength(0);
+  });
+
   it("detects injection primitives", async () => {
     const result = await scanRepository([
       { path: "api/users.ts", content: "db.query(`SELECT * FROM users WHERE id = ${req.query.id}`)\nexec(`convert ${req.body.name}`)\nreadFile(req.query.path)" },
