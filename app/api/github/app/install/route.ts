@@ -5,6 +5,7 @@ import { getServerAuthContext } from "@/lib/auth/dev-bypass";
 import { getGitHubAppInstallUrl, isGitHubAppConfigured } from "@/server/github-app/config";
 import { assertWorkspaceMembership } from "@/server/workspaces/service";
 import { enforceRateLimit } from "@/server/http/rate-limit";
+import { safeNextPath } from "@/lib/auth/safe-next-path";
 
 export const runtime = "nodejs";
 
@@ -52,11 +53,14 @@ export async function GET(request: Request) {
     });
   }
 
+  const returnTo = safeNextPath(new URL(request.url).searchParams.get("next"), "/integrations");
+
   const nonce = randomBytes(16).toString("hex");
   const exp = Math.floor(Date.now() / 1000) + STATE_TTL_SECONDS;
   const payload = JSON.stringify({
     organizationId: auth.organizationId,
     userId: auth.user.id,
+    returnTo,
     exp,
     nonce,
   });

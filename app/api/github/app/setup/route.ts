@@ -7,12 +7,16 @@ import { finalizeGitHubAppInstallation } from "@/server/github-app/installation-
 import { assertWorkspaceMembership } from "@/server/workspaces/service";
 import { enforceRateLimit } from "@/server/http/rate-limit";
 import { isGitHubAppConfigured } from "@/server/github-app/config";
+import { safeNextPath } from "@/lib/auth/safe-next-path";
 
 export const runtime = "nodejs";
 
 const STATE_COOKIE = "sequrai_github_app_install_state";
 
-function verifySignedState(state: string, secret: string): { organizationId: string; userId: string } | null {
+function verifySignedState(
+  state: string,
+  secret: string
+): { organizationId: string; userId: string; returnTo: string } | null {
   try {
     const decoded = Buffer.from(state, "base64url").toString("utf8");
     const separator = decoded.lastIndexOf(".");
@@ -25,11 +29,16 @@ function verifySignedState(state: string, secret: string): { organizationId: str
     const parsed = JSON.parse(payload) as {
       organizationId?: string;
       userId?: string;
+      returnTo?: string;
       exp?: number;
     };
     if (!parsed.organizationId || !parsed.userId || !parsed.exp) return null;
     if (parsed.exp < Math.floor(Date.now() / 1000)) return null;
-    return { organizationId: parsed.organizationId, userId: parsed.userId };
+    return {
+      organizationId: parsed.organizationId,
+      userId: parsed.userId,
+      returnTo: safeNextPath(parsed.returnTo, "/integrations"),
+    };
   } catch {
     return null;
   }
@@ -88,7 +97,9 @@ export async function GET(request: Request) {
     verified.organizationId
   );
   if (!allowed || verified.organizationId !== auth.organizationId) {
-    return NextResponse.redirect(new URL("/integrations?githubApp=workspace_denied", trustedBase));
+    const denied = new URL(verified.returnTo, trustedBase);
+    denied.searchParams.set("githubApp", "workspace_denied");
+    return NextResponse.redirect(denied);
   }
 
   const admin = createAdminClient();
@@ -99,12 +110,12 @@ export async function GET(request: Request) {
   });
 
   if (!result.ok) {
-    return NextResponse.redirect(
-      new URL(`/integrations?githubApp=${encodeURIComponent(result.code)}`, trustedBase)
-    );
+    const failed = new URL(verified.returnTo, trustedBase);
+    failed.searchParams.set("githubApp", result.code);
+    return NextResponse.redirect(failed);
   }
 
-  const redirect = new URL("/integrations", trustedBase);
+  const redirect = new URL(verified.returnTo, trustedBase);
   redirect.searchParams.set("githubApp", "installed");
   redirect.searchParams.set("repoCount", String(result.repositoryCount));
   if (setupAction) redirect.searchParams.set("setupAction", setupAction);

@@ -12,6 +12,11 @@ import type { GitHubRepo } from "@/lib/github";
 
 type Step = "idle" | "loading" | "selecting" | "saving" | "error";
 
+type GitHubAppStatus = {
+  configured: boolean;
+  installation: { status: string } | null;
+};
+
 export function OnboardingRepoPicker({
   organizationId,
   onRepositoryConnected,
@@ -28,6 +33,7 @@ export function OnboardingRepoPicker({
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
+  const [githubAppStatus, setGithubAppStatus] = useState<GitHubAppStatus | null>(null);
 
   const dateLabels = {
     never: tc("never"),
@@ -37,15 +43,36 @@ export function OnboardingRepoPicker({
     daysAgo: tc("daysAgo"),
   };
 
+  const reconnectGitHub = useCallback(async () => {
+    localStorage.setItem("sequrai_github_connect", "1");
+    if (githubAppStatus?.configured) {
+      window.location.href = "/api/github/app/install?next=%2Fonboarding%3Fstep%3Dgithub";
+      return;
+    }
+    await startGitHubOAuth("/onboarding?step=github");
+  }, [githubAppStatus]);
+
   const fetchRepos = useCallback(async () => {
     setStep("loading");
     setErrorMsg("");
 
-    const res = await fetch("/api/github/repos");
+    const statusRes = await fetch("/api/github/app/status", { cache: "no-store" });
+    const status = statusRes.ok
+      ? ((await statusRes.json().catch(() => null)) as GitHubAppStatus | null)
+      : null;
+    setGithubAppStatus(status);
+
+    const useAppRepos = status?.configured === true && status.installation?.status === "active";
+
+    const res = await fetch(useAppRepos ? "/api/github/app/repos" : "/api/github/repos");
     const data = await res.json();
 
     if (data.needsReauth || res.status === 403) {
       localStorage.setItem("sequrai_github_connect", "1");
+      if (status?.configured) {
+        window.location.href = "/api/github/app/install?next=%2Fonboarding%3Fstep%3Dgithub";
+        return;
+      }
       await startGitHubOAuth("/onboarding?step=github");
       return;
     }
@@ -92,8 +119,7 @@ export function OnboardingRepoPicker({
         | null;
 
       if (data?.needsReauth || res.status === 403) {
-        localStorage.setItem("sequrai_github_connect", "1");
-        await startGitHubOAuth("/onboarding?step=github");
+        await reconnectGitHub();
         return;
       }
 

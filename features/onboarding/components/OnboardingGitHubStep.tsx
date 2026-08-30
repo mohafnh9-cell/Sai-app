@@ -44,6 +44,16 @@ export function OnboardingGitHubStep({
     setConnecting(true);
     localStorage.setItem("sequrai_github_connect", "1");
     try {
+      const statusRes = await fetch("/api/github/app/status", { cache: "no-store" });
+      const status = statusRes.ok
+        ? ((await statusRes.json().catch(() => null)) as { configured?: boolean } | null)
+        : null;
+
+      if (status?.configured) {
+        window.location.href = "/api/github/app/install?next=%2Fonboarding%3Fstep%3Dgithub";
+        return;
+      }
+
       await startGitHubOAuth("/onboarding?step=github");
     } finally {
       setConnecting(false);
