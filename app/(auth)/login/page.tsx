@@ -55,7 +55,7 @@ function LoginForm() {
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider: "github",
         options: {
-          scopes: "repo admin:repo_hook read:user user:email",
+          scopes: "read:user user:email",
           redirectTo: `${window.location.origin}/auth/callback`,
         },
       });
