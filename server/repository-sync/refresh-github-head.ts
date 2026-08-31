@@ -16,6 +16,16 @@ export type ResolvedGitHubHead = {
   branch: string;
 };
 
+export type RefreshHeadFailureReason = "no_token" | "github_auth" | "github_other";
+
+function classifyGitHubServiceError(error: GitHubServiceError): RefreshHeadFailureReason {
+  return error.code === "GITHUB_AUTH" ||
+    error.code === "GITHUB_FORBIDDEN" ||
+    error.code === "GITHUB_NOT_FOUND"
+    ? "github_auth"
+    : "github_other";
+}
+
 export async function refreshGitHubHeadForProject(
   admin: SupabaseClient,
   input: {
@@ -25,6 +35,8 @@ export async function refreshGitHubHeadForProject(
     githubRepositoryId?: number | null;
     branch?: string | null;
     githubService?: GitHubRepositoryService;
+    /** Optional: told why resolution failed, in addition to the null return. */
+    onFailure?: (reason: RefreshHeadFailureReason) => void;
   }
 ): Promise<ResolvedGitHubHead | null> {
   if (!input.githubService) {
@@ -33,7 +45,10 @@ export async function refreshGitHubHeadForProject(
       input.organizationId,
       input.projectId
     );
-    if (!tokenResult?.token) return null;
+    if (!tokenResult?.token) {
+      input.onFailure?.("no_token");
+      return null;
+    }
 
     try {
       const ref = parseGitHubRepository(input.githubRepo);
@@ -49,6 +64,7 @@ export async function refreshGitHubHeadForProject(
           projectId: input.projectId,
           code: error.code,
         });
+        input.onFailure?.(classifyGitHubServiceError(error));
       }
       return null;
     }
@@ -68,6 +84,7 @@ export async function refreshGitHubHeadForProject(
         projectId: input.projectId,
         code: error.code,
       });
+      input.onFailure?.(classifyGitHubServiceError(error));
     }
     return null;
   }

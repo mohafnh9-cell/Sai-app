@@ -23,8 +23,20 @@ export async function resolveLatestReviewCommit(
     branch?: string | null;
   }
 ): Promise<{ commitSha: string; branch: string }> {
-  const head = await refreshGitHubHeadForProject(admin, input);
+  let failureReason: "no_token" | "github_auth" | "github_other" | null = null;
+  const head = await refreshGitHubHeadForProject(admin, {
+    ...input,
+    onFailure: (reason) => {
+      failureReason = reason;
+    },
+  });
   if (!head) {
+    if (failureReason === "no_token" || failureReason === "github_auth") {
+      throw new ReviewCommitResolutionError(
+        "GITHUB_TOKEN_UNAVAILABLE",
+        "GitHub authorization is missing or no longer valid for this repository"
+      );
+    }
     throw new ReviewCommitResolutionError(
       "GITHUB_HEAD_UNAVAILABLE",
       "Could not resolve the latest commit from GitHub"
