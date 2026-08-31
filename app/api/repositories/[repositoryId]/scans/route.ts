@@ -36,6 +36,13 @@ const historySchema = z.object({
 });
 
 function responseForError(error: unknown) {
+  console.warn({
+    component: "repository-scans-api",
+    event: "response_for_error",
+    errorType: error instanceof Error ? error.name : typeof error,
+    isReviewCommitResolutionError: error instanceof ReviewCommitResolutionError,
+    code: error instanceof ReviewCommitResolutionError ? error.code : undefined,
+  });
   if (error instanceof ReviewCommitResolutionError) {
     return NextResponse.json(
       {

@@ -31,6 +31,15 @@ export async function resolveLatestReviewCommit(
     },
   });
   if (!head) {
+    console.warn({
+      component: "resolve-latest-review-commit",
+      event: "resolution_failed",
+      projectId: input.projectId,
+      failureReason,
+      willThrow: failureReason === "no_token" || failureReason === "github_auth"
+        ? "GITHUB_TOKEN_UNAVAILABLE"
+        : "GITHUB_HEAD_UNAVAILABLE",
+    });
     if (failureReason === "no_token" || failureReason === "github_auth") {
       throw new ReviewCommitResolutionError(
         "GITHUB_TOKEN_UNAVAILABLE",
