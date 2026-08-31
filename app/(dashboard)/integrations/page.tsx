@@ -193,6 +193,10 @@ export default function IntegrationsPage() {
   const connectGitHub = useCallback(async () => {
     setErrorMsg("");
     try {
+      if (githubAppStatus?.configured) {
+        window.location.href = "/api/github/app/install?next=%2Fintegrations";
+        return;
+      }
       await startGitHubOAuth("/integrations");
     } catch (oauthError) {
       setErrorMsg(
@@ -200,7 +204,7 @@ export default function IntegrationsPage() {
       );
       setStep("error");
     }
-  }, [t]);
+  }, [t, githubAppStatus]);
 
   const disconnectGitHub = useCallback(async () => {
     setErrorMsg("");
@@ -295,7 +299,7 @@ export default function IntegrationsPage() {
       if (data?.needsReauth || res.status === 403) {
         localStorage.setItem("sequrai_github_connect", "1");
         try {
-          await startGitHubOAuth("/integrations");
+          await connectGitHub();
         } catch (oauthError) {
           throw new Error(
             oauthError instanceof Error

@@ -5,6 +5,20 @@ import { Button } from "@/components/ui/button";
 import { startGitHubConnect } from "@/lib/auth/start-github-connect";
 import { useI18n } from "@/lib/i18n/client";
 
+async function reconnectGitHub(returnPath: string) {
+  const statusRes = await fetch("/api/github/app/status", { cache: "no-store" });
+  const status = statusRes.ok
+    ? ((await statusRes.json().catch(() => null)) as { configured?: boolean } | null)
+    : null;
+
+  if (status?.configured) {
+    window.location.href = `/api/github/app/install?next=${encodeURIComponent(returnPath)}`;
+    return;
+  }
+
+  await startGitHubConnect(returnPath);
+}
+
 export function GitHubReauthBanner({
   returnPath,
   message,
@@ -25,7 +39,7 @@ export function GitHubReauthBanner({
         size="sm"
         variant="outline"
         className="shrink-0"
-        onClick={() => void startGitHubConnect(returnPath)}
+        onClick={() => void reconnectGitHub(returnPath)}
       >
         {t("githubReauthCta")}
       </Button>
