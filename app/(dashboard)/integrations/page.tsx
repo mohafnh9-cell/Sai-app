@@ -111,9 +111,6 @@ export default function IntegrationsPage() {
     "idle"
   );
   const [githubAppStatus, setGithubAppStatus] = useState<GitHubAppStatusPayload | null>(null);
-  const [githubAppStatusState, setGithubAppStatusState] = useState<
-    "idle" | "loading" | "ready" | "error"
-  >("idle");
 
   const fetchConnection = useCallback(async () => {
     setConnectionState("loading");
@@ -146,15 +143,10 @@ export default function IntegrationsPage() {
   }, []);
 
   const fetchGitHubAppStatus = useCallback(async () => {
-    setGithubAppStatusState("loading");
     const res = await fetch("/api/github/app/status", { cache: "no-store" });
     const data = (await res.json().catch(() => null)) as GitHubAppStatusPayload | null;
-    if (!res.ok || !data) {
-      setGithubAppStatusState("error");
-      return;
-    }
+    if (!res.ok || !data) return;
     setGithubAppStatus(data);
-    setGithubAppStatusState("ready");
   }, []);
 
   const fetchRepos = useCallback(async () => {
@@ -246,8 +238,6 @@ export default function IntegrationsPage() {
     if (!githubErrorParam && !githubAppParam) return;
     router.replace("/integrations", { scroll: false });
   }, [githubAppParam, githubErrorParam, router]);
-
-  const githubAppInstallSuccess = githubAppParam === "installed";
 
   const displayError = errorMsg || githubErrorMessage || "";
 
@@ -352,78 +342,6 @@ export default function IntegrationsPage() {
 
       {connectionState === "ready" && connection?.connection.status === "connected" ? (
         <McpPromoBanner />
-      ) : null}
-
-      {githubAppStatusState === "ready" && githubAppStatus?.configured ? (
-        <Card className="border-border/50">
-          <CardHeader className="pb-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-base">GitHub App (recommended)</CardTitle>
-                <CardDescription className="text-xs">
-                  Least-privilege access via installation tokens. OAuth legacy remains available as
-                  fallback.
-                </CardDescription>
-              </div>
-              <IntegrationStatusBadge
-                status={
-                  githubAppStatus.installation?.status === "active" ? "connected" : "not_connected"
-                }
-                label={
-                  githubAppStatus.installation?.status === "active"
-                    ? "Installed"
-                    : "Not installed"
-                }
-              />
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm">
-            {githubAppStatus.installation ? (
-              <div className="rounded-lg border border-border/50 bg-secondary/20 p-3 space-y-1">
-                <p className="font-medium">
-                  {githubAppStatus.installation.accountLogin}{" "}
-                  <span className="text-muted-foreground font-normal">
-                    ({githubAppStatus.installation.accountType})
-                  </span>
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Installation #{githubAppStatus.installation.githubInstallationId} ·{" "}
-                  {githubAppStatus.installation.repositorySelection} repositories
-                </p>
-              </div>
-            ) : (
-              <p className="text-muted-foreground text-xs">
-                Install the SequrAI GitHub App on your organization or account to use short-lived
-                installation tokens instead of broad OAuth scopes.
-              </p>
-            )}
-            <div className="flex flex-wrap gap-2">
-              {!githubAppStatus.installation ? (
-                <Button asChild className="gap-2">
-                  <a href="/api/github/app/install">Install GitHub App</a>
-                </Button>
-              ) : (
-                <Button variant="outline" asChild className="gap-2">
-                  <a href="/api/github/app/install">Manage installation</a>
-                </Button>
-              )}
-              {githubAppStatus.webhookUrl ? (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => void fetchGitHubAppStatus()}
-                  className="gap-1.5"
-                >
-                  <RefreshCw className="h-3.5 w-3.5" />
-                  Refresh
-                </Button>
-              ) : null}
-            </div>
-            {githubAppInstallSuccess && (
-              <p className="text-xs text-success">GitHub App installation saved successfully.</p>
-            )}
-          </CardContent>
-        </Card>
       ) : null}
 
       {/* GitHub Card */}
