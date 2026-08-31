@@ -65,6 +65,15 @@ export async function refreshGitHubHeadForProject(
           code: error.code,
         });
         input.onFailure?.(classifyGitHubServiceError(error));
+      } else {
+        console.warn({
+          component: "refresh-github-head",
+          event: "head_refresh_failed_unclassified",
+          projectId: input.projectId,
+          errorName: error instanceof Error ? error.name : typeof error,
+          errorMessage: error instanceof Error ? error.message : String(error),
+        });
+        input.onFailure?.("github_other");
       }
       return null;
     }
@@ -85,6 +94,15 @@ export async function refreshGitHubHeadForProject(
         code: error.code,
       });
       input.onFailure?.(classifyGitHubServiceError(error));
+    } else {
+      console.warn({
+        component: "refresh-github-head",
+        event: "head_refresh_failed_unclassified",
+        projectId: input.projectId,
+        errorName: error instanceof Error ? error.name : typeof error,
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
+      input.onFailure?.("github_other");
     }
     return null;
   }
