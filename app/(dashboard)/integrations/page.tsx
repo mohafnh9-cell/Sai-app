@@ -185,6 +185,16 @@ export default function IntegrationsPage() {
   const connectGitHub = useCallback(async () => {
     setErrorMsg("");
     try {
+      if (githubAppStatus?.installation?.status === "active") {
+        // The GitHub App is already installed for this account (e.g. after a
+        // repo rename, or a stale local connection record). Redirecting to
+        // GitHub's install URL in this state sends the user straight to
+        // GitHub's own "manage installation" page instead of back to us --
+        // there's nothing to install, just repos to load with what's
+        // already granted.
+        await fetchRepos();
+        return;
+      }
       if (githubAppStatus?.configured) {
         window.location.href = "/api/github/app/install?next=%2Fintegrations";
         return;
@@ -196,7 +206,7 @@ export default function IntegrationsPage() {
       );
       setStep("error");
     }
-  }, [t, githubAppStatus]);
+  }, [t, githubAppStatus, fetchRepos]);
 
   const disconnectGitHub = useCallback(async () => {
     setErrorMsg("");
