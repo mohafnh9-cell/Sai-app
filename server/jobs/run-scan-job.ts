@@ -39,7 +39,20 @@ function log(level: "info" | "error", event: string, fields: Record<string, unkn
 export async function executeScanRunJob(
   admin: SupabaseClient,
   payload: ScanRunPayload,
-  input?: { inngestRunId?: string; attempt?: number; lockedBy?: string }
+  input?: {
+    inngestRunId?: string;
+    attempt?: number;
+    lockedBy?: string;
+    /**
+     * Skip the queued->running claim. Only safe when the caller has already
+     * independently verified the underlying scan is `completed` (recovery's
+     * reconciliation path) -- a job stuck at status "running" can never win
+     * that claim (ALLOWED_SOURCE_STATUSES.running only permits "queued" as
+     * the source status), so without this the job loops as a permanent
+     * no-op ("scan_job_already_running") instead of ever finalizing.
+     */
+    reconcileOnly?: boolean;
+  }
 ): Promise<void> {
   let runPayload = payload;
   const existingJob = await getScanJob(admin, payload.scanJobId);
@@ -127,11 +140,13 @@ export async function executeScanRunJob(
     });
   }
 
-  const running = await markScanJobRunning(admin, payload.scanJobId, {
-    inngestRunId: input?.inngestRunId,
-    attemptCount: input?.attempt ?? undefined,
-    lockedBy: input?.lockedBy,
-  });
+  const running = input?.reconcileOnly
+    ? { updated: true }
+    : await markScanJobRunning(admin, payload.scanJobId, {
+        inngestRunId: input?.inngestRunId,
+        attemptCount: input?.attempt ?? undefined,
+        lockedBy: input?.lockedBy,
+      });
   if (!running.updated) {
     const current = await getScanJob(admin, payload.scanJobId);
     if (current && isTerminalScanJobStatus(current.status)) return;

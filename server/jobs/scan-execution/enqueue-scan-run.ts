@@ -243,10 +243,32 @@ export async function enqueueScanRunExecution(
       return { executor: "inline", inngestEventId: null };
     }
 
+    // No caller currently reaches this branch without passing a scheduler --
+    // schedule-scan.ts always supplies one backed by next/server's after(),
+    // which keeps the function alive until the callback finishes instead of
+    // detaching it. This fallback only exists so a future caller that
+    // forgets to pass a scheduler doesn't silently drop an unhandled
+    // rejection; it still isn't a substitute for a real scheduler.
     const inlineScheduler =
       options?.scheduler ??
       ((fn: () => void | Promise<void>) => {
-        void fn();
+        console.warn({
+          component: "scan-job-dispatch",
+          event: "inline_scheduler_missing",
+          scanJobId: job.id,
+          scanId: payload.scanId,
+        });
+        Promise.resolve()
+          .then(fn)
+          .catch((error) => {
+            console.error({
+              component: "scan-job-dispatch",
+              event: "inline_scheduler_fallback_failed",
+              scanJobId: job.id,
+              scanId: payload.scanId,
+              message: error instanceof Error ? error.message : String(error),
+            });
+          });
       });
 
     try {

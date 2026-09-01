@@ -61,12 +61,21 @@ async function reenqueueScanJob(admin: SupabaseClient, job: ScanJobRow): Promise
     await reenqueueExistingScanRunJob(admin, job, payload);
     return true;
   } catch (error) {
-    if (error instanceof ScanEnqueueError) {
-      await markScanJobFailed(admin, job.id, {
-        failureCode: error.code,
-        failureMessage: error.message,
-      });
-    }
+    const failureCode = error instanceof ScanEnqueueError ? error.code : "RECOVERY_REENQUEUE_FAILED";
+    const message =
+      error instanceof Error ? error.message : "Recovery re-enqueue failed with a non-Error value";
+    await markScanJobFailed(admin, job.id, {
+      failureCode,
+      failureMessage: message,
+    }).catch(() => undefined);
+    console.error({
+      component: "scan-job-recovery",
+      event: "reenqueue_failed",
+      scanJobId: job.id,
+      scanId: job.scan_id,
+      failureCode,
+      message,
+    });
     return false;
   }
 }
@@ -88,14 +97,25 @@ export async function runScanJobRecovery(admin: SupabaseClient): Promise<Recover
       if (scan?.status === "completed" && job.status === "running") {
         try {
           if (SCAN_RUN_JOB_TYPES.has(job.job_type)) {
-            await executeScanRunJob(admin, {
-              scanJobId: job.id,
-              scanId: job.scan_id,
-              organizationId: job.organization_id,
-              projectId: job.project_id ?? "",
-              userId: (job.metadata.userId as string | undefined) ?? job.organization_id,
-              finalize: job.metadata.finalize as ScanRunPayload["finalize"],
-            });
+            // The underlying scan already finished but the job row never
+            // reached a terminal state (e.g. the process that ran it was
+            // killed mid-flight). A normal claim can never succeed here --
+            // ALLOWED_SOURCE_STATUSES.running only permits "queued" as the
+            // source status -- so reconcileOnly skips the claim and lets
+            // executeScanRunJob run its already-completed / finalize /
+            // markScanJobCompleted tail directly.
+            await executeScanRunJob(
+              admin,
+              {
+                scanJobId: job.id,
+                scanId: job.scan_id,
+                organizationId: job.organization_id,
+                projectId: job.project_id ?? "",
+                userId: (job.metadata.userId as string | undefined) ?? job.organization_id,
+                finalize: job.metadata.finalize as ScanRunPayload["finalize"],
+              },
+              { lockedBy: "recovery-reconcile", reconcileOnly: true }
+            );
           } else if (job.job_type === "webhook_process") {
             await processWebhookJob(
               admin,
@@ -106,7 +126,19 @@ export async function runScanJobRecovery(admin: SupabaseClient): Promise<Recover
           }
           summary.finalized += 1;
           continue;
-        } catch {
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Recovery reconciliation failed";
+          await markScanJobFailed(admin, job.id, {
+            failureCode: "RECOVERY_RECONCILE_FAILED",
+            failureMessage: message,
+          }).catch(() => undefined);
+          console.error({
+            component: "scan-job-recovery",
+            event: "reconcile_failed",
+            scanJobId: job.id,
+            scanId: job.scan_id,
+            message,
+          });
           summary.failed += 1;
           continue;
         }
