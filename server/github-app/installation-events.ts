@@ -4,8 +4,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { clearInstallationTokenCache } from "./installation-token-service";
 import {
   loadInstallationByGithubId,
+  loadSoleActiveInstallationByAccountId,
   markInstallationRepositoryRemoved,
   markInstallationRevoked,
+  migrateInstallationId,
   upsertGitHubAppInstallation,
   upsertInstallationRepository,
 } from "./installation-store";
@@ -24,6 +26,7 @@ type InstallationPayload = {
     repository_selection?: string;
     permissions?: Record<string, string>;
   };
+  repositories?: Array<{ id?: number; full_name?: string }>;
   repositories_added?: Array<{ id?: number; full_name?: string }>;
   repositories_removed?: Array<{ id?: number; full_name?: string }>;
   sender?: { id?: number; login?: string };
@@ -40,7 +43,44 @@ export async function processGitHubAppInstallationEvent(input: {
     return { ok: true, action: "ignored_no_installation" };
   }
 
-  const existing = await loadInstallationByGithubId(input.admin, githubInstallationId);
+  let existing = await loadInstallationByGithubId(input.admin, githubInstallationId);
+
+  // GitHub assigns a fresh installation ID whenever the App is uninstalled
+  // and reinstalled on the same account (e.g. while troubleshooting a
+  // connection) -- the old ID just starts 404ing, it's never renamed. If we
+  // don't already know this installation ID but there's exactly one active
+  // row for the same GitHub account, treat this as that installation's ID
+  // rotating rather than a brand new, unrelated installation.
+  if (!existing && payload.installation?.account?.id) {
+    const rotated = await loadSoleActiveInstallationByAccountId(
+      input.admin,
+      payload.installation.account.id
+    );
+    if (rotated) {
+      await migrateInstallationId(input.admin, {
+        installationRowId: rotated.id,
+        newGithubInstallationId: githubInstallationId,
+        githubAccountLogin: payload.installation.account.login,
+        githubAccountType: payload.installation.account.type as "User" | "Organization" | undefined,
+        permissionsSnapshot: payload.installation.permissions,
+        repositorySelection: payload.installation.repository_selection,
+      });
+      existing = { ...rotated, github_installation_id: githubInstallationId };
+    }
+  }
+
+  if (input.eventType === "installation" && payload.action === "created" && existing) {
+    for (const repo of payload.repositories ?? []) {
+      if (!repo.id) continue;
+      await upsertInstallationRepository(input.admin, {
+        installationRowId: existing.id,
+        organizationId: existing.organization_id,
+        githubRepositoryId: repo.id,
+        githubFullName: repo.full_name ?? null,
+      });
+    }
+    return { ok: true, action: "installation_migrated" };
+  }
 
   if (input.eventType === "installation" && payload.action === "deleted") {
     if (existing) {

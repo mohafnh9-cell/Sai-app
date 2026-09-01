@@ -62,6 +62,31 @@ export async function loadInstallationByGithubId(
   return (data as GitHubAppInstallationRow | null) ?? null;
 }
 
+/**
+ * GitHub assigns a new installation ID whenever an App is uninstalled and
+ * reinstalled on the same account -- there is no "rename", the old ID just
+ * stops resolving (404s on token exchange). Webhooks for the new ID never
+ * match loadInstallationByGithubId, so a stale row lingers forever unless
+ * something reconciles by account instead. Only auto-migrate when the match
+ * is unambiguous (exactly one non-revoked row for that account) -- with
+ * more than one, a human needs to decide which workspace should follow the
+ * new installation.
+ */
+export async function loadSoleActiveInstallationByAccountId(
+  admin: SupabaseClient,
+  githubAccountId: number
+): Promise<GitHubAppInstallationRow | null> {
+  const { data } = await admin
+    .from("github_app_installations")
+    .select("*")
+    .eq("github_account_id", githubAccountId)
+    .eq("status", "active")
+    .is("revoked_at", null);
+
+  const rows = (data as GitHubAppInstallationRow[] | null) ?? [];
+  return rows.length === 1 ? rows[0] : null;
+}
+
 export async function upsertGitHubAppInstallation(
   admin: SupabaseClient,
   input: {
@@ -106,6 +131,35 @@ export async function upsertGitHubAppInstallation(
     .eq("organization_id", input.organizationId);
 
   return { id: data.id as string };
+}
+
+export async function migrateInstallationId(
+  admin: SupabaseClient,
+  input: {
+    installationRowId: string;
+    newGithubInstallationId: number;
+    githubAccountLogin?: string;
+    githubAccountType?: "User" | "Organization";
+    permissionsSnapshot?: Record<string, string>;
+    repositorySelection?: string | null;
+  }
+): Promise<void> {
+  const now = new Date().toISOString();
+  await admin
+    .from("github_app_installations")
+    .update({
+      github_installation_id: input.newGithubInstallationId,
+      ...(input.githubAccountLogin ? { github_account_login: input.githubAccountLogin } : {}),
+      ...(input.githubAccountType ? { github_account_type: input.githubAccountType } : {}),
+      ...(input.permissionsSnapshot ? { permissions_snapshot: input.permissionsSnapshot } : {}),
+      ...(input.repositorySelection !== undefined
+        ? { repository_selection: input.repositorySelection }
+        : {}),
+      status: "active",
+      revoked_at: null,
+      updated_at: now,
+    })
+    .eq("id", input.installationRowId);
 }
 
 export async function markInstallationRevoked(
