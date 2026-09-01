@@ -67,6 +67,10 @@ async function resolveGitHubAppCredential(
     project?: ProjectAuthRow | null;
     installationRowId?: string | null;
     githubInstallationId?: number | null;
+    /** Explicit repo scope hint for callers that don't have a projectId yet
+     * (e.g. verifying repos the user just picked, before the project row
+     * exists) but do know exactly which repositories the token covers. */
+    repositoryIdsHint?: readonly number[];
   }
 ): Promise<GitHubCredential | null> {
   if (!isGitHubAppConfigured()) return null;
@@ -112,7 +116,21 @@ async function resolveGitHubAppCredential(
     }
   }
 
-  const access = await fetchInstallationAccessToken(installation.github_installation_id);
+  // M3 (audit): scope the token itself to the repository this call is
+  // actually for -- a known project's repo first, otherwise an explicit
+  // hint from the caller. Only when neither is available (installation-wide
+  // operations, e.g. listing repos for the connect picker) does the token
+  // cover the whole installation.
+  const repositoryIds =
+    githubRepositoryId != null
+      ? [githubRepositoryId]
+      : input.repositoryIdsHint && input.repositoryIdsHint.length > 0
+        ? input.repositoryIdsHint
+        : undefined;
+
+  const access = await fetchInstallationAccessToken(installation.github_installation_id, {
+    repositoryIds,
+  });
   if (!access) return null;
 
   return {
@@ -131,7 +149,13 @@ async function resolveGitHubAppCredential(
 export async function resolveGitHubCredential(
   admin: SupabaseClient,
   organizationId: string,
-  projectId?: string
+  projectId?: string,
+  options?: {
+    /** Repo IDs to scope the token to when no project exists yet (e.g. the
+     * connect flow verifying repos the user just picked). Ignored once a
+     * project's own github_repository_id is known -- that always wins. */
+    repositoryIdsHint?: readonly number[];
+  }
 ): Promise<GitHubCredential | null> {
   const project = projectId
     ? await loadProjectAuthRow(admin, projectId, organizationId)
@@ -144,6 +168,7 @@ export async function resolveGitHubCredential(
       organizationId,
       project,
       installationRowId: project?.github_app_installation_id,
+      repositoryIdsHint: options?.repositoryIdsHint,
     });
     if (appCredential) {
       console.info({

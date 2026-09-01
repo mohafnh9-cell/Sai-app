@@ -196,7 +196,14 @@ async function connectRepositories(request: Request) {
     );
   }
 
-  const tokenResult = await resolveGitHubCredential(admin, organizationId);
+  // M3 (audit): scope the installation token to exactly the repos the user
+  // selected, instead of the whole installation -- these IDs are already
+  // known from the request body at this point, before the project row
+  // (and its github_repository_id) exists.
+  const requestedRepositoryIds = [...new Set(parsed.data.repos.map((repo) => repo.id))];
+  const tokenResult = await resolveGitHubCredential(admin, organizationId, undefined, {
+    repositoryIdsHint: requestedRepositoryIds,
+  });
   if (!tokenResult) {
     return NextResponse.json(
       {
@@ -222,7 +229,7 @@ async function connectRepositories(request: Request) {
     }
   }
 
-  const selectedIds = [...new Set(parsed.data.repos.map((repo) => repo.id))];
+  const selectedIds = requestedRepositoryIds;
   const verifiedRepos = await Promise.all(
     selectedIds.map((repoId) => getGitHubRepoById(providerToken, repoId))
   );
