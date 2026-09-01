@@ -29,6 +29,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const { data: membership } = await auth.supabase
+    .from("organization_members")
+    .select("role")
+    .eq("organization_id", auth.organizationId)
+    .eq("user_id", auth.user.id)
+    .maybeSingle();
+
+  if (membership?.role !== "OWNER") {
+    return NextResponse.json(
+      { error: "Only Workspace owners can manage billing", code: "workspace_access_denied" },
+      { status: 403 }
+    );
+  }
+
   const parsedBody = bodySchema.safeParse(await request.json().catch(() => ({})));
   const returnTo = sanitizeReturnPath(parsedBody.success ? parsedBody.data.returnTo : undefined);
 

@@ -17663,6 +17663,25 @@ var cicdExtended = [
     category: "cicd",
     remediation: "Set explicit least-privilege permissions for each workflow job.",
     path: /^\.github\/workflows\/.+\.ya?ml$/i
+  }]),
+  patternRule("cicd.github-actions-supply-chain", "GitHub Actions supply-chain hardening", [{
+    pattern: /uses:\s*(?!docker:\/\/)[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+@(?!(?:[0-9a-fA-F]{40})(?:\s|$))[A-Za-z0-9_./-]+/i,
+    title: "GitHub Action referenced by mutable tag instead of a pinned commit SHA",
+    description: "The workflow references an action by a tag or branch (e.g. @v4, @main) instead of a commit SHA. Tags and branches can be repointed by the action's maintainer or an attacker who compromises them \u2014 the exact vector used in real supply-chain attacks like the 2025 tj-actions/changed-files compromise.",
+    severity: "medium",
+    confidence: "medium",
+    category: "cicd",
+    remediation: "Pin every action to a full-length commit SHA (uses: owner/action@<40-char-sha>) instead of a version tag or branch.",
+    path: /^\.github\/workflows\/.+\.ya?ml$/i
+  }, {
+    pattern: /\b(?:curl|wget)\b[^\n|]*\|\s*(?:sudo\s+)?(?:bash|sh|zsh)\b/i,
+    title: "CI step pipes a remote script directly into a shell",
+    description: "Downloading and executing a remote script without pinning or verifying its contents lets whoever controls that URL run arbitrary code in your CI pipeline.",
+    severity: "high",
+    confidence: "medium",
+    category: "cicd",
+    remediation: "Download the script, verify its checksum or signature, then execute it explicitly \u2014 or replace it with a pinned, vetted action.",
+    path: /^\.github\/workflows\/.+\.ya?ml$/i
   }])
 ];
 var validationExtended = [
