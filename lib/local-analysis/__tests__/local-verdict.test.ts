@@ -75,6 +75,14 @@ describe("local production verdict", () => {
     }
   });
 
+  // P10 (audit): investigated, not just re-timed blindly. Reproduced in
+  // isolation with a generous timeout -- runLocalProductionVerdict
+  // consistently takes ~3.5-4s even for this 4-file synthetic workspace
+  // (no network calls anywhere in its call graph, verified by grep). Real,
+  // reproducible cost inside the pipeline (scanRepository's fixed
+  // per-invocation overhead, same root cause as the pipeline.integration
+  // test), not a hang -- it just leaves too little headroom under vitest's
+  // 5000ms default under parallel test-run CPU contention.
   it("J — clean workspace can reach ready_to_ship when evidence is sufficient", async () => {
     const root = mkdtempSync(join(tmpdir(), "seq-local-clean-"));
     mkdirSync(join(root, "app"), { recursive: true });
@@ -93,7 +101,7 @@ describe("local production verdict", () => {
     expect(["ready_to_ship", "almost_ready", "needs_improvement", "insufficient_data"]).toContain(
       result.verdictStatus
     );
-  });
+  }, 15_000);
 
   it("K — insufficient data when scoped diff has no changed files", async () => {
     const root = mkdtempSync(join(tmpdir(), "seq-local-diff-empty-"));

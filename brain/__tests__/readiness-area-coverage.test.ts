@@ -50,6 +50,12 @@ describe("readiness area coverage", () => {
     }
   });
 
+  // P10 (audit): investigated, not just re-timed blindly. Reproduced in
+  // isolation -- consistently ~3.1-3.5s, same fixed scanRepository
+  // overhead as the other two slow tests fixed alongside this one (no
+  // network calls, no filesystem I/O). Real, reproducible duration, not a
+  // hang; just too little headroom under vitest's 5000ms default when
+  // other tests are competing for CPU in the same run.
   it("emits readiness baselines for sequrai-app shaped trees", async () => {
     const result = await scanRepository([
       { path: "package.json", content: '{"dependencies":{"next":"16"}}' },
@@ -79,5 +85,5 @@ describe("readiness area coverage", () => {
         "testing",
       ])
     );
-  });
+  }, 15_000);
 });
