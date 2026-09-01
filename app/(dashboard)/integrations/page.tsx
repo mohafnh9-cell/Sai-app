@@ -223,6 +223,7 @@ export default function IntegrationsPage() {
 
   const githubErrorParam = searchParams.get("githubError");
   const githubAppParam = searchParams.get("githubApp");
+  const repoCountParam = searchParams.get("repoCount");
   const githubErrorMessage = useMemo(() => {
     if (!githubErrorParam) return null;
     const messages: Record<string, string> = {
@@ -234,12 +235,37 @@ export default function IntegrationsPage() {
     return messages[githubErrorParam] ?? t("connectFailed");
   }, [githubErrorParam, t]);
 
+  const githubAppMessage = useMemo(() => {
+    if (!githubAppParam) return null;
+    const errorMessages: Record<string, string> = {
+      not_configured: t("githubAppNotConfigured"),
+      invalid_setup: t("githubAppInvalidSetup"),
+      invalid_installation: t("githubAppInvalidInstallation"),
+      internal_error: t("githubAppInternalError"),
+      state_mismatch: t("githubAppStateMismatch"),
+      workspace_denied: t("githubAppWorkspaceDenied"),
+      installation_not_found: t("githubAppInstallationNotFound"),
+      installation_suspended: t("githubAppInstallationSuspended"),
+      insufficient_permissions: t("githubAppInsufficientPermissions"),
+    };
+    if (githubAppParam === "installed") {
+      return {
+        kind: "success" as const,
+        text: t("githubAppInstalled", { count: Number(repoCountParam) || 0 }),
+      };
+    }
+    return { kind: "error" as const, text: errorMessages[githubAppParam] ?? t("githubAppConnectFailed") };
+  }, [githubAppParam, repoCountParam, t]);
+
   useEffect(() => {
     if (!githubErrorParam && !githubAppParam) return;
     router.replace("/integrations", { scroll: false });
   }, [githubAppParam, githubErrorParam, router]);
 
-  const displayError = errorMsg || githubErrorMessage || "";
+  const githubAppErrorMessage = githubAppMessage?.kind === "error" ? githubAppMessage.text : null;
+  const githubAppSuccessMessage = githubAppMessage?.kind === "success" ? githubAppMessage.text : null;
+
+  const displayError = errorMsg || githubErrorMessage || githubAppErrorMessage || "";
 
   useEffect(() => {
     const pending = localStorage.getItem("sequrai_github_connect");
@@ -429,6 +455,10 @@ export default function IntegrationsPage() {
                 </Button>
               </div>
             )}
+
+          {githubAppSuccessMessage && !displayError && (
+            <p className="text-sm text-emerald-600 dark:text-emerald-400">{githubAppSuccessMessage}</p>
+          )}
 
           {connectionState === "ready" && step === "idle" && connection?.connection.status === "connected" && repos.length === 0 && !displayError && (
             <p className="text-sm text-muted-foreground">{t("loadRepositoriesHint")}</p>

@@ -37,5 +37,16 @@
   "webhookHealthSomeDegraded": "{count} repositorios requieren atención antes de que revisión de producción funcione con fiabilidad.",
   "webhookHealthReconnect": "Reconecta GitHub o el repositorio para restaurar revisión de producción.",
   "githubReauthRequired": "El acceso a GitHub expiró. Reconecta para continuar con las revisiones.",
-  "githubReauthCta": "Reconectar GitHub"
+  "githubReauthCta": "Reconectar GitHub",
+  "githubAppInstalled": "GitHub App conectada — {count} repositorios disponibles.",
+  "githubAppNotConfigured": "La GitHub App no está configurada en el servidor. Contacta a soporte.",
+  "githubAppInvalidSetup": "No se pudo completar la instalación de GitHub. Intenta conectar de nuevo.",
+  "githubAppInvalidInstallation": "El ID de instalación de GitHub no es válido. Intenta conectar de nuevo.",
+  "githubAppInternalError": "Ocurrió un error interno al conectar GitHub. Intenta de nuevo en unos minutos.",
+  "githubAppStateMismatch": "No se pudo verificar la solicitud de conexión con GitHub (puede haber expirado). Intenta conectar de nuevo.",
+  "githubAppWorkspaceDenied": "Ya no tienes acceso a ese Workspace.",
+  "githubAppInstallationNotFound": "No se encontró la instalación de GitHub App. Intenta conectar de nuevo.",
+  "githubAppInstallationSuspended": "La instalación de GitHub App está suspendida. Reactívala desde GitHub.",
+  "githubAppInsufficientPermissions": "La GitHub App no tiene permisos suficientes sobre el repositorio. Revisa los permisos otorgados en GitHub.",
+  "githubAppConnectFailed": "No se pudo conectar GitHub."
 }
