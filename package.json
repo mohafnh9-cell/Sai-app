@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && node scripts/bundle-local-mcp.mjs && next build",
+    "build": "node scripts/validate-env-on-deploy.mjs && prisma generate && node scripts/bundle-local-mcp.mjs && next build",
     "postinstall": "prisma generate",
     "start": "next start",
     "lint": "eslint",
