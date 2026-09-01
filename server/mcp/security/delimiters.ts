@@ -7,6 +7,31 @@ export type UntrustedContentSource =
   | "commit_history"
   | "finding_field";
 
+// M5 (audit): the delimiter strings are static and, before this fix, were
+// never escaped out of attacker-controlled content -- a scanned file could
+// contain a literal "<<<END_SEQURAI_UNTRUSTED_REPOSITORY_DATA>>>" and
+// prematurely close the trusted boundary, letting whatever text follows it
+// in the same file be read as if it were outside the untrusted block.
+// Break up any occurrence of either marker inside the content itself with
+// a zero-width space before wrapping, so the real markers we add below
+// remain the only literal matches in the final prompt.
+const ZERO_WIDTH_SPACE = "​";
+
+/** Breaks up a marker's exact literal text (a zero-width space spliced
+ * after the first character) so it no longer matches as a substring, while
+ * remaining visually identical to a human or a model reading the text. */
+function breakMarker(marker: string): string {
+  return `${marker.slice(0, 1)}${ZERO_WIDTH_SPACE}${marker.slice(1)}`;
+}
+
+function neutralizeDelimiterLookalikes(content: string): string {
+  return content
+    .split(UNTRUSTED_DATA_START)
+    .join(breakMarker(UNTRUSTED_DATA_START))
+    .split(UNTRUSTED_DATA_END)
+    .join(breakMarker(UNTRUSTED_DATA_END));
+}
+
 export function wrapUntrustedRepositoryData(
   content: string,
   options: { source: UntrustedContentSource; path?: string | null }
@@ -14,7 +39,8 @@ export function wrapUntrustedRepositoryData(
   const pathAttr = options.path
     ? ` path="${options.path.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`
     : "";
-  return `${UNTRUSTED_DATA_START} source="${options.source}"${pathAttr}>>>\n${content}\n${UNTRUSTED_DATA_END}`;
+  const safeContent = neutralizeDelimiterLookalikes(content);
+  return `${UNTRUSTED_DATA_START} source="${options.source}"${pathAttr}>>>\n${safeContent}\n${UNTRUSTED_DATA_END}`;
 }
 
 export function containsUntrustedDelimiter(content: string): boolean {
