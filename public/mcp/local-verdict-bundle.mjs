@@ -21385,10 +21385,18 @@ var promptInjectionRule = {
 // server/mcp/security/delimiters.ts
 var UNTRUSTED_DATA_START = "<<<SEQURAI_UNTRUSTED_REPOSITORY_DATA";
 var UNTRUSTED_DATA_END = "<<<END_SEQURAI_UNTRUSTED_REPOSITORY_DATA>>>";
+var ZERO_WIDTH_SPACE = "\u200B";
+function breakMarker(marker) {
+  return `${marker.slice(0, 1)}${ZERO_WIDTH_SPACE}${marker.slice(1)}`;
+}
+function neutralizeDelimiterLookalikes(content) {
+  return content.split(UNTRUSTED_DATA_START).join(breakMarker(UNTRUSTED_DATA_START)).split(UNTRUSTED_DATA_END).join(breakMarker(UNTRUSTED_DATA_END));
+}
 function wrapUntrustedRepositoryData(content, options) {
   const pathAttr = options.path ? ` path="${options.path.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"` : "";
+  const safeContent = neutralizeDelimiterLookalikes(content);
   return `${UNTRUSTED_DATA_START} source="${options.source}"${pathAttr}>>>
-${content}
+${safeContent}
 ${UNTRUSTED_DATA_END}`;
 }
 

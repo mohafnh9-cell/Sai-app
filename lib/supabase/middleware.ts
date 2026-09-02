@@ -17,6 +17,11 @@ const PROTECTED_PATHS = [
   "/billing",
   "/settings",
   "/onboarding",
+  // L2 (audit): the /admin page already redirects unauthenticated/non-admin
+  // users itself, so this wasn't independently exploitable -- but it's the
+  // one route that most needs a middleware backstop if a future edit ever
+  // drops that page-level check.
+  "/admin",
 ];
 
 const AUTH_PATHS = ["/login", "/signup"];

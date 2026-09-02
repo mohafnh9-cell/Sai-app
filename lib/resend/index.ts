@@ -2,7 +2,19 @@ import "server-only";
 
 import { Resend } from "resend";
 
-export const resend = new Resend(process.env.RESEND_API_KEY);
+// Lazy on purpose: constructing Resend() throws immediately if
+// RESEND_API_KEY is unset, and every call site already checks that env var
+// and early-returns before needing a client at all. Building it eagerly at
+// module load time meant simply *importing* this file crashed in any
+// environment without the key set (tests, local dev without email
+// configured) -- harmless while nothing imported this module, but this
+// file now has a real caller (server/security-alerts/notify-owner.ts), so
+// that eager construction became a real crash instead of a theoretical one.
+let client: Resend | null = null;
+export function getResendClient(): Resend {
+  client ??= new Resend(process.env.RESEND_API_KEY);
+  return client;
+}
 
 function logSendFailure(kind: string, to: string, error: unknown) {
   // M7 (audit): a Resend failure must never propagate as an unhandled
@@ -33,7 +45,7 @@ export async function sendScanCompletedEmail(params: {
   }
 
   try {
-    await resend.emails.send({
+    await getResendClient().emails.send({
       from: process.env.RESEND_FROM_EMAIL ?? "noreply@sequrai.com",
       to: params.to,
       subject: `Production Review completed for ${params.projectName}`,
@@ -67,7 +79,7 @@ export async function sendCriticalVulnerabilityEmail(params: {
   }
 
   try {
-    await resend.emails.send({
+    await getResendClient().emails.send({
       from: process.env.RESEND_FROM_EMAIL ?? "noreply@sequrai.com",
       to: params.to,
       subject: `[CRITICAL] Security vulnerability detected in ${params.projectName}`,
