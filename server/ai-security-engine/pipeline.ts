@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ProjectSecurityContext, ScanAnalysisResult } from "@/features/ai-security-engine/types";
 import { analyzeScanWithClaude, PROMPT_VERSION } from "./claude-analyzer";
 import { buildProjectSecurityContext } from "./context-builder";
+import { assertAiBudgetAvailable, AiBudgetExceededError } from "./budget";
 
 export class AISecurityEngineError extends Error {
   constructor(
@@ -92,10 +93,25 @@ export async function runAISecurityAnalysis(
   }
 
   try {
+    // M2 (audit): reject before spending a call, not after -- checked here
+    // so every caller of runAISecurityAnalysis gets the ceiling for free,
+    // regardless of which scan path invoked it.
+    await assertAiBudgetAvailable(admin, context.organizationId);
     const { result, model, tokensUsed } = await analyzeScanWithClaude(context);
     await persistAnalysis(admin, context, reportId, result, model, tokensUsed);
     return { reportId, result };
   } catch (error) {
+    if (error instanceof AiBudgetExceededError) {
+      console.warn({
+        component: "ai-security-pipeline",
+        event: "ai_budget_exceeded",
+        organizationId: context.organizationId,
+        scanId,
+        reason: error.reason,
+        limit: error.limit,
+        used: error.used,
+      });
+    }
     await admin
       .from("ai_reports")
       .update({
