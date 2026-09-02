@@ -157,4 +157,76 @@ This audit independently corroborates two things already found live earlier in t
 1. **Fixed M1** — added an OWNER-role check to `/api/stripe/portal` and `/api/stripe/checkout` (see commit).
 2. **Removed unused dependency** `nanoid`.
 
+---
+
+# POST-AUDIT HARDENING — FINAL STATUS
+
+**Date:** 2026-09-01. Executed AUDIT → FIX → TEST → VERIFY → CLEAN against every MEDIUM finding above, plus the dead-code/dependency/test-suite follow-ups. No new features were built during this pass.
+
+## Fixed Findings
+
+| ID | Finding | Fix | Evidence |
+|---|---|---|---|
+| M1 | Any member could cancel billing | OWNER-role check on `/api/stripe/portal`, `/api/stripe/checkout` | commit `6c65eec` |
+| M6 | Scan jobs stuck permanently in `running` (13-day recurring ops alert) | Root-caused: `ALLOWED_SOURCE_STATUSES.running = ["queued"]` means a job already `running` can never be re-claimed, so recovery's "scan completed, job stuck" branch looped forever as a silent no-op. Added `reconcileOnly` to `executeScanRunJob` to skip the claim when the caller has independently verified the scan is done. Also: both of recovery's failure paths now call `markScanJobFailed` on *any* thrown error, not just `ScanEnqueueError` | commit `94a032c`, 6 new tests |
+| M8 | `validate-env.mjs` never ran in the deploy path | Wired as a build prestep, gated to `VERCEL_ENV=production` only (not CI, which lacks the real secrets) | commit `7f41a27` |
+| M5 | Prompt-injection wrapping existed but the model was never told what it meant; delimiter unescaped against spoofing | Added explicit untrusted-data instructions to the system prompt; delimiter occurrences inside content are now broken up with a zero-width space before wrapping | commit `7df8cfc`, 7 new tests |
+| M9 | No explicit Claude timeout (SDK default: 10 min) | `ANTHROPIC_TIMEOUT_MS`/`ANTHROPIC_MAX_RETRIES` env-configurable, passed per-request | commit `7df8cfc` |
+| — | AI JSON output trusted without schema validation | Full zod schema for the Claude response shape; invalid shape falls back to the same per-field default the code already used for unparseable JSON | commit `7df8cfc` |
+| M3 | GitHub App installation tokens not scoped to the verified repo | `installation-token-service.ts` now passes `repository_ids`; `resolveGitHubCredential` requires `projectId` before touching repo content | commit `74ef77c` |
+| M4 | SSRF blocklist missing `172.16/12`, IPv6, DNS-rebinding protection | Hostname is resolved to its IP(s) and every resolved IP validated (not just the string), covering full RFC1918/link-local/loopback for both v4 and v6 | commit `431bc54` |
+| P10 | 3 failing tests (`readiness-area-coverage`, `pipeline.integration`, `local-verdict`) | Root-caused individually, not re-timed away — see commit `e678c36` | full suite now 100% green |
+| M2 | No per-org AI cost ceiling | `assertAiBudgetAvailable` (calls/day + token-budget/day, both env-configurable, no hardcoded provider pricing), checked before every Claude call | commit `5416e1e`, 12 new tests |
+| M7 | Critical-vulnerability emails were dead code (zero call sites) | Wired into `deliverAlertCandidate`'s existing dedupe/insert path — fires exactly once per distinct alert for free, no new dedup logic needed | commit `f0f92f2`, 6 new tests |
+| L2 | `/admin` missing from middleware `PROTECTED_PATHS` | Added (page-level check already existed; this is defense-in-depth) | commit `8d6671b` |
+| — | Dead code: 5 confirmed zero-importer files, 2 unused npm dependencies (`openai`, `@stripe/stripe-js`) | Removed after re-verifying against `.ts`/`.tsx`/`.mjs`/`.js`/`.json`, not just the original sample | commit `8d6671b` |
+| — | `browserslist` (2 high-severity advisories) | Fixed via `npm audit fix` (non-breaking) | commit `8d6671b` |
+
+**A real regression this pass caught in itself, not shipped:** deleting `lib/local-analysis/runtime-entry.ts` (on the original dead-code candidate list) broke the production build — it's a real esbuild entry point for `scripts/bundle-local-mcp.mjs`, invisible to a `.ts`/`.tsx`-only grep. Caught by actually running `npm run build`, not by static analysis alone; file restored before commit. Separately, wiring the email alert (M7) exposed that `lib/resend/index.ts` constructed its client eagerly at module load time, which throws if `RESEND_API_KEY` is unset — harmless while nothing imported it (M7's own finding), but a real crash once it had a real caller. Caught by running the full test suite, not assumed clean; fixed by making the client lazy.
+
+## Remaining Findings (not fixed this pass — with reasoning)
+
+| ID | Finding | Status | Why deferred |
+|---|---|---|---|
+| P2 | GitHub OAuth-legacy → GitHub App is not fully consolidated to one source of truth | **PARTIALLY ADDRESSED** | Full removal of `resolveWorkspaceGitHubToken` and the `oauth_legacy` fallback is a genuinely large, risky change — existing projects/orgs are still actively pinned to `oauth_legacy` in production today, and ripping that path out blind would strand them. Instead, fixed the concrete production bugs this session actually hit while live-debugging: `/api/github/app/setup` silently discarded its own result instead of showing it (commit `2956923`), every reconnect click redirected to GitHub's install flow even when already installed, producing a dead end (`a7eb360`), and installation-ID rotation (uninstall/reinstall) left the org's row pointing at a dead ID forever, producing exactly the `installation_token_failed` 404 loop observed in production (`0d5772b`, with a real reconciliation test). Recommend a dedicated migration pass (data backfill + gradual project-by-project cutover) rather than a single sweeping change. |
+| L1 | Dev-bypass check pattern (`if (!auth.bypass)`) is per-route, not centralized | ACCEPTED RISK | Confirmed unreachable in production (redundant `isRunningOnVercel()` + `NODE_ENV` gates, hard `throw` in `assertProductionSafe()`). Centralizing into the shared auth helper is a real improvement but touches every protected route's call site — architectural change requiring its own review, not a safe drive-by edit. |
+| L3 | `/api/*` routes have no middleware-level auth backstop, only per-route checks | ACCEPTED RISK | Every sampled route was correct. A middleware backstop for all API routes needs an explicit allowlist of genuinely-public routes (webhooks, MCP, health checks) maintained alongside it — get that list wrong and you either break a real public endpoint or leave the backstop toothless. Needs its own careful pass, not a blind add. |
+| L5 | In-memory rate-limit fallback is per-instance when Upstash isn't configured | ACCEPTED RISK | Upstash *is* configured in production (confirmed this session). This only matters if Upstash becomes unavailable, at which point falling back to a weaker but still-present limit is strictly better than no limit at all — not a regression to fix urgently. |
+| L6 | Webhooks for an unmapped repo skip delivery-ID dedup | ACCEPTED RISK | Low impact by construction: nothing is credited to an org on this path, so a replayed delivery just reprocesses harmlessly rather than double-crediting anything. |
+| L7 | Stripe grace period is a single global env var, not per-customer/dunning-driven | ACCEPTED RISK | Real product decision (how long a grace period, whether it should follow Stripe's own retry schedule) that belongs to whoever owns billing policy, not a default I should pick unilaterally. |
+| L8 | Some Inngest batch/dispatcher functions have no explicit `retries`/`onFailure` | ACCEPTED RISK | These are cron dispatchers (alerts-daily-batch, cp-daily-batch, etc.), not billing/security-critical paths; Inngest's platform defaults still apply. |
+| — | 6 API routes with no internal caller (`active-production-review`, `attack-authorizations`, `safe-fixes` ×3, `scan-jobs/.../cancel`, `security-intelligence`) | **DOCUMENTED, KEPT** | All recently touched (days old, not stale), well-built (real Zod validation, real auth via `requireProjectApiAccess`), and wired to substantial engines that have other active callers (`safe-fix-engine` is used by the MCP `safe_fix` tool). Reads as in-progress web-UI wiring for features that already exist via MCP, several gated behind `isFeatureEnabled`, not abandoned code. Removing working, tested backend code for a near-finished feature would be destructive per the audit's own rule; recommend confirming with whoever owns the frontend roadmap before either wiring the UI or removing. |
+| — | `sendScanCompletedEmail` (in `lib/resend`) | **DOCUMENTED, KEPT** | Still has zero call sites -- a different notification (scan completion, not critical vulnerability) that P8's spec didn't ask for. Left as ready-to-use infrastructure since it's now proven-safe (lazy client fix applies to it too), not deleted. |
+| — | `deepmerge-ts`/`mysql2`/`prisma` transitive high-severity advisories | ACCEPTED RISK | Same decision as an earlier session: the only fix (`npm audit fix --force`) installs a breaking Prisma downgrade. Not re-litigated this pass. |
+
+## Removed Code
+
+- `lib/product-vocabulary.ts`, `server/billing/require-subscription.ts`, `lib/github/resolve-token.ts`, `lib/production-review/commit-target.ts`, `lib/review/cancel-errors.ts` — zero real importers, re-verified across `.ts`/`.tsx`/`.mjs`/`.js`/`.json`.
+- npm dependencies: `nanoid`, `openai`, `@stripe/stripe-js` — confirmed as string-literal/test-fixture-only references, never real imports.
+- **Not removed** despite being on the original candidate list: `lib/local-analysis/runtime-entry.ts` — real esbuild entry point, deleting it broke the build.
+
+## Architectural Decisions
+
+- **Job execution stays on the existing `after()`/Inngest split**, not migrated to a different execution model. The M6 root cause was never actually the `after()`-vs-`void` question the audit theorized — it was a status-transition constraint bug in the recovery path. `after()` is already the correct primitive and was already in use in the real call graph.
+- **GitHub auth consolidation (P2) is deliberately incremental**, not a single big-bang cutover — see the P2 row above.
+- **AI cost control and Claude timeout are env-configurable, never hardcoded pricing** — per the audit's own explicit requirement, so these can be tuned per-deployment without a code change and never encode a provider's pricing model into the app.
+
+## Tests Added This Pass
+
+`server/jobs/__tests__/scan-job-reconcile.test.ts`, `scan-job-recovery-reconcile.test.ts` (M6, 6 tests) · `server/mcp/security/__tests__/delimiter-spoofing.test.ts` (M5, 7 tests) · `lib/env/__tests__/ai-cost-control.test.ts`, `server/ai-security-engine/__tests__/budget.test.ts` (M2, 12 tests) · `server/security-alerts/__tests__/notify-owner.test.ts`, `lifecycle-critical-email.test.ts` (M7, 6 tests) · plus M3/M4/M5/P10-adjacent tests added in their respective commits (see `git log` for exact diffs). Net: **+1863 passing tests total, 0 failing, same 4 pre-existing skips** (up from 1806 passing / 3 failing at the start of this pass).
+
+## Production Readiness
+
+| Check | Result |
+|---|---|
+| `npm run lint` | ✅ 0 errors |
+| `npm run typecheck` | ✅ 0 errors |
+| `npx vitest run` (full suite) | ✅ 1863 passed, 0 failed, 4 skipped (325 files) |
+| `npm run build` | ✅ clean (after catching and fixing the runtime-entry.ts regression) |
+| `npm audit` | 4 high-severity, all the same accepted-risk Prisma chain; browserslist fixed |
+
+## Remaining Blockers
+
+**None CRITICAL or HIGH.** Nothing found or left in this repository blocks shipping to a real paying customer on security or correctness grounds. What remains is explicitly scoped follow-up work (P2's full migration, the LOW items' architectural review, a product decision on the 6 in-progress API routes) — none of it urgent, all of it documented above with a reason, not silently dropped.
+
 Everything else above is reported, not yet changed — each carries either a production-behavior risk (job scheduling, SSRF logic, prompt engineering) or an uncertain-usage flag that deserves an explicit go-ahead rather than a silent autonomous change, per the audit's own rule: *no irreversible change without explaining it first.*
