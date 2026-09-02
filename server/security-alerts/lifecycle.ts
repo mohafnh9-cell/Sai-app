@@ -9,6 +9,7 @@ import {
   shouldDeliverAlert,
 } from "./noise-policy";
 import { severityProfile } from "./severity";
+import { notifyOwnerOfCriticalAlert } from "./notify-owner";
 import type { AlertCandidate, AlertState, FounderAlertRecord } from "./types";
 
 function log(event: string, fields: Record<string, unknown>) {
@@ -132,6 +133,23 @@ export async function deliverAlertCandidate(
     dedupeKey: input.candidate.dedupeKey,
     severity: input.candidate.severity,
   });
+
+  // M7 (audit): awaited, not detached -- notifyOwnerOfCriticalAlert already
+  // catches every error internally and never throws, so this can't fail
+  // alert delivery; awaiting it just means the caller (an Inngest step, not
+  // a request handler racing a response) doesn't return before the email
+  // attempt actually finishes, avoiding the same fire-and-forget class of
+  // bug M6 found elsewhere in this codebase. Idempotent by construction:
+  // this line only runs once per dedupe_key (see the early-return above).
+  if (input.candidate.severity === "critical") {
+    await notifyOwnerOfCriticalAlert(admin, {
+      organizationId: input.organizationId,
+      projectId: input.projectId,
+      projectName: input.projectName,
+      alertId,
+      titlePlain: input.candidate.titlePlain || copy.titlePlain,
+    });
+  }
 
   return { delivered: true, alertId };
 }
