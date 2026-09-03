@@ -75,7 +75,7 @@ export function ProductionEngineerSummary({
 
   return (
     <section
-      className="rounded-xl border border-primary/20 bg-[#101014]/80 p-6"
+      className="rounded-xl border border-primary/20 bg-surface p-6"
       aria-labelledby="ai-engineer-heading"
     >
       <div className="flex items-start justify-between gap-4">

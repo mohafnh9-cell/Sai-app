@@ -21,6 +21,7 @@
     "scanCode": {
       "title": "Escanear código",
       "description": "Analiza el repositorio y genera un nuevo veredicto de producción.",
+      "verifyDescription": "¿Corregiste algo? Vuelve a escanear para verificarlo.",
       "cta": "Escanear código",
       "running": "Analizando...",
       "rescan": "Volver a escanear",
@@ -199,7 +200,9 @@
     "staleVerdictAttack": "El veredicto de abajo puede cambiar cuando terminen los ataques."
   },
   "verdictSource": {
-    "github": "Basado en GitHub"
+    "github": "Basado en GitHub",
+    "upload": "Basado en proyecto subido",
+    "local": "Basado en proyecto local"
   },
   "localCorrelation": {
     "title": "Comparar con análisis local (avanzado)"

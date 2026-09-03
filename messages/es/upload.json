@@ -1,0 +1,49 @@
+{
+  "pageTitle": "Analizar código",
+  "pageSubtitle": "Elige cómo quieres analizar tu proyecto.",
+  "githubOption": {
+    "title": "Repositorio de GitHub",
+    "description": "Conecta un repositorio para análisis continuos, reanálisis e historial.",
+    "cta": "Conectar GitHub"
+  },
+  "uploadOption": {
+    "title": "Subir un proyecto",
+    "description": "Sube un archivo ZIP para un análisis de seguridad puntual. No necesitas un repositorio."
+  },
+  "localOption": {
+    "title": "Análisis local",
+    "description": "Analiza una carpeta de proyecto en este dispositivo. Nada sale de tu navegador salvo los archivos fuente que selecciones."
+  },
+  "local": {
+    "idle": "Selecciona una carpeta de proyecto",
+    "hint": "Analiza los archivos solo en la memoria de tu navegador — no requiere agente ni instalación aparte.",
+    "choose": "Elegir carpeta",
+    "unsupported": "La selección de carpetas locales no es compatible con este navegador. Usa Subir (ZIP) en su lugar.",
+    "fileCount_one": "{count} archivo",
+    "fileCount_other": "{count} archivos",
+    "preflight": {
+      "too_many_files": "El proyecto es demasiado grande para analizar. Tiene más de {maxFiles} archivos, el límite de la beta.",
+      "total_too_large": "El proyecto es demasiado grande para analizar. Su tamaño total supera el límite de la beta de {maxTotalMb} MB.",
+      "file_too_large": "El proyecto es demasiado grande para analizar. Contiene un archivo mayor que el límite por archivo de {maxFileMb} MB."
+    }
+  },
+  "dropzone": {
+    "idle": "Suelta tu proyecto aquí",
+    "hint": "Archivos ZIP de hasta 8 MB",
+    "browse": "Buscar archivos",
+    "dragging": "Suelta para analizar"
+  },
+  "projectNameLabel": "Nombre del proyecto",
+  "removeFile": "Quitar",
+  "analyzeCta": "Analizar proyecto",
+  "uploading": "Subiendo…",
+  "analyzing": "Analizando tu proyecto…",
+  "analyzingHint": "Usando el mismo motor de seguridad que los proyectos de GitHub. Suele tardar menos de un minuto.",
+  "successRedirecting": "Análisis completado. Abriendo tu veredicto de producción…",
+  "errors": {
+    "not_zip": "Solo se admiten archivos ZIP.",
+    "too_large": "Este archivo supera el límite de 8 MB de la beta.",
+    "generic": "Error al subir el archivo. Inténtalo de nuevo."
+  },
+  "retry": "Intentar de nuevo"
+}

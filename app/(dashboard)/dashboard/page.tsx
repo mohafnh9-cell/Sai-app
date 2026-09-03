@@ -106,24 +106,38 @@ export default async function DashboardPage({
 
   return (
     <div className="min-h-full">
-      <div className="mx-auto max-w-4xl px-4 sm:px-8 py-8 sm:py-12 pb-20 space-y-12">
+      <div className="mx-auto max-w-6xl px-4 sm:px-8 py-8 sm:py-12 pb-20 space-y-12">
         {focus ? (
-          <ProductionControlCenter
-            greeting={greeting}
-            focus={focus}
-            showFirstVerdictWelcome={params.firstVerdict === "1"}
-            labels={{
-              productionVerdict: tv("productionVerdict"),
-              readyToShipQuestion: t("readyToShipQuestion"),
-              deployYes: t("deployYes"),
-              deployNo: t("deployNo"),
-              almostReady: t("almostReady"),
-              fixThisFirst: t("fixThisFirst"),
-              fixIssue: t("fixIssue"),
-              reviewProject: t("reviewProject"),
-              firstVerdictWelcome: t("firstVerdictWelcome"),
-            }}
-          />
+          <div className={showPortfolio ? "grid gap-6 lg:grid-cols-[1fr_320px] items-start" : undefined}>
+            <ProductionControlCenter
+              greeting={greeting}
+              focus={focus}
+              showFirstVerdictWelcome={params.firstVerdict === "1"}
+              labels={{
+                productionVerdict: tv("productionVerdict"),
+                readyToShipQuestion: t("readyToShipQuestion"),
+                deployYes: t("deployYes"),
+                deployNo: t("deployNo"),
+                almostReady: t("almostReady"),
+                fixThisFirst: t("fixThisFirst"),
+                fixIssue: t("fixIssue"),
+                reviewProject: t("reviewProject"),
+                firstVerdictWelcome: t("firstVerdictWelcome"),
+              }}
+            />
+            {showPortfolio ? (
+              <div className="rounded-xl border border-border bg-surface p-5 space-y-4">
+                <div className="flex items-center justify-between border-b border-border/40 pb-3">
+                  <span className="text-sm text-muted-foreground">{t("yourAppsTitle")}</span>
+                  <span className="text-lg font-semibold tabular-nums">{projects.length}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">{t("needsAttentionTitle")}</span>
+                  <span className="text-lg font-semibold tabular-nums">{needsAttention.length}</span>
+                </div>
+              </div>
+            ) : null}
+          </div>
         ) : null}
 
         {showPortfolio ? (

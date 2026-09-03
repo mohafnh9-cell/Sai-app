@@ -19,6 +19,8 @@ import {
   findingFile,
   type ScanFinding,
 } from "@/features/security-scanner/components/types";
+import type { FindingResolutionSummary } from "@/features/mission-control/types/mission-control-state";
+import { SecuritySeverityBadge } from "@/components/sequrai/SecuritySeverityBadge";
 import { useI18n } from "@/lib/i18n/client";
 import type { Translator } from "@/lib/i18n/types";
 
@@ -99,9 +101,11 @@ function FilterSelect({
 export function TechnicalFindingsSection({
   findings,
   fixPromptContext,
+  findingResolution,
 }: {
   findings: ScanFinding[];
   fixPromptContext?: FixPromptContext;
+  findingResolution?: FindingResolutionSummary;
 }) {
   const { t } = useI18n("technicalDetails");
   const [query, setQuery] = useState("");
@@ -177,8 +181,8 @@ export function TechnicalFindingsSection({
       }}
     >
       <div className="space-y-4">
-        <div className="space-y-3 rounded-xl border bg-card p-4">
-          <div className="relative">
+        <div className="flex flex-col gap-3 rounded-xl border bg-card p-4 lg:flex-row lg:items-center">
+          <div className="relative lg:w-56 lg:shrink-0">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" aria-hidden />
             <Input
               value={query}
@@ -188,7 +192,7 @@ export function TechnicalFindingsSection({
               aria-label={t("searchAriaLabel")}
             />
           </div>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid min-w-0 flex-1 grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
             <FilterSelect
               label={t("group")}
               value={groupFilter}
@@ -228,7 +232,7 @@ export function TechnicalFindingsSection({
               onChange={setFile}
             />
             <Select value={sort} onValueChange={setSort}>
-              <SelectTrigger aria-label={t("sort")}>
+              <SelectTrigger aria-label={t("sort")} className="min-w-32">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -243,6 +247,29 @@ export function TechnicalFindingsSection({
         <p className="text-sm text-muted-foreground">
           {t("showingCount", { shown: visibleFindings.length, total: findings.length })}
         </p>
+
+        {findingResolution && findingResolution.resolvedFindings.length > 0 ? (
+          <div className="space-y-2 border-t border-b border-border/40 py-4">
+            <p className="text-label-caps text-success">
+              {t("resolvedSinceLastScan", { count: findingResolution.resolvedFindings.length })}
+            </p>
+            <ul className="space-y-1.5">
+              {findingResolution.resolvedFindings.map((entry) => (
+                <li
+                  key={entry.correlationKey}
+                  className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm"
+                >
+                  {entry.severity ? <SecuritySeverityBadge severity={entry.severity} /> : null}
+                  <span className="font-medium">{entry.title}</span>
+                  <span className="font-mono text-xs text-muted-foreground truncate">
+                    {entry.filePath}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <p className="text-xs text-muted-foreground">{t("resolutionVerifiedBody")}</p>
+          </div>
+        ) : null}
 
         {visibleFindings.length === 0 ? (
           <Card>
@@ -262,6 +289,9 @@ export function TechnicalFindingsSection({
                   key={finding.id ?? index}
                   finding={finding}
                   fixPromptContext={fixPromptContext}
+                  resolutionStatus={
+                    finding.id ? findingResolution?.statusByFindingId[finding.id] : undefined
+                  }
                 />
               ))}
             </div>

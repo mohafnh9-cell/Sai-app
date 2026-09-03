@@ -1,0 +1,53 @@
+{
+  "title": "Scanner Results",
+  "subtitle": "Technical execution history for every security scan across your projects.",
+  "emptyTitle": "No security scans yet.",
+  "emptyBody": "Connect a repository to generate your first Production Verdict.",
+  "emptyCta": "Connect repository",
+  "columns": {
+    "repository": "Repository",
+    "commit": "Commit",
+    "status": "Status",
+    "findings": "Findings",
+    "duration": "Duration",
+    "date": "Date"
+  },
+  "status": {
+    "queued": "Queued",
+    "running": "Running",
+    "completed": "Completed",
+    "failed": "Failed",
+    "cancelled": "Cancelled"
+  },
+  "findingsSummaryWithBlockers": "{blockers} blockers · {total} findings",
+  "findingsSummaryTotalOnly": "{total} findings",
+  "findingsNone": "No findings",
+  "noCommit": "No commit recorded",
+  "sourceUpload": "Upload",
+  "sourceLocal": "Local",
+  "detailSource": "Source",
+  "durationUnknown": "—",
+  "viewResult": "View result",
+  "backToResults": "Scanner Results",
+  "detailTitle": "Scan result",
+  "detailRepository": "Repository",
+  "detailBranch": "Branch",
+  "detailCommit": "Commit",
+  "detailScanType": "Scan type",
+  "detailStatus": "Status",
+  "detailDuration": "Duration",
+  "detailFilesAnalyzed": "Files analyzed",
+  "detailFindings": "Findings",
+  "detailExecution": "Execution",
+  "detailError": "Error",
+  "viewProductionVerdict": "View Production Verdict",
+  "verdictPending": "Production Verdict not yet generated for this scan.",
+  "scanTypeFull": "Full",
+  "scanTypeIncremental": "Incremental",
+  "execution": {
+    "scan_started": "Scan started",
+    "repository_fetched": "Repository fetched",
+    "scan_completed": "Security analysis completed",
+    "verdict_persisted": "Production Verdict generated"
+  }
+}

@@ -21,6 +21,7 @@
     "scanCode": {
       "title": "Scan code",
       "description": "Analyze the repository and generate a new Production Verdict.",
+      "verifyDescription": "Fixed something? Rescan to verify it worked.",
       "cta": "Scan code",
       "running": "Analyzing...",
       "rescan": "Scan again",
@@ -199,7 +200,9 @@
     "staleVerdictAttack": "The verdict below may change when attacks finish."
   },
   "verdictSource": {
-    "github": "Based on GitHub"
+    "github": "Based on GitHub",
+    "upload": "Based on uploaded project",
+    "local": "Based on local project"
   },
   "localCorrelation": {
     "title": "Compare with local analysis (advanced)"

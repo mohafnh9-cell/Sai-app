@@ -373,14 +373,14 @@ export default function IntegrationsPage() {
   );
 
   return (
-    <div className="p-6 space-y-8 max-w-4xl">
+    <div className="mx-auto max-w-4xl px-4 sm:px-8 py-8 sm:py-12 space-y-10">
       <PageHeader title={t("title")} description={t("subtitle")} />
 
       {connectionState === "ready" && connection?.connection.status === "connected" ? (
         <McpPromoBanner />
       ) : null}
 
-      {/* GitHub Card */}
+      {/* GitHub connection — the primary integration surface */}
       <Card className="border-border/50">
         <CardHeader className="pb-4">
           <div className="flex items-center justify-between">
@@ -617,15 +617,13 @@ export default function IntegrationsPage() {
       </Card>
 
       {connectionState === "ready" && connection?.connection.status === "connected" && (
-        <Card className="border-border/50">
-          <CardHeader className="pb-3">
-            <div className="flex items-center gap-2">
-              <Webhook className="h-4 w-4 text-primary" />
-              <CardTitle className="text-sm">{t("webhookHealthTitle")}</CardTitle>
-            </div>
-            <CardDescription className="text-xs">{t("webhookHealthSubtitle")}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3 pt-0 text-sm">
+        <section className="space-y-3 border-t border-border/50 pt-8">
+          <div className="flex items-center gap-2">
+            <Webhook className="h-4 w-4 text-primary" />
+            <p className="text-sm font-semibold tracking-tight">{t("webhookHealthTitle")}</p>
+          </div>
+          <p className="text-sm text-muted-foreground -mt-2">{t("webhookHealthSubtitle")}</p>
+          <div className="space-y-3 text-sm">
             {webhookHealthState === "loading" && (
               <div className="flex items-center gap-2 text-muted-foreground text-xs">
                 <RefreshCw className="h-4 w-4 animate-spin" />
@@ -685,23 +683,20 @@ export default function IntegrationsPage() {
                 </Button>
               </>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </section>
       )}
 
-      {/* GitHub webhook automation */}
-      <Card className="border-border/50">
-        <CardHeader className="pb-3">
-          <div className="flex items-center gap-2">
-            <Webhook className="h-4 w-4 text-primary" />
-            <CardTitle className="text-sm">GitHub Production Automation</CardTitle>
-          </div>
-          <CardDescription className="text-xs">
-            Webhooks are registered automatically when you connect repositories. Manual setup is
-            only needed if automation was skipped.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3 pt-0 text-sm">
+      <section className="space-y-3 border-t border-border/50 pt-8">
+        <div className="flex items-center gap-2">
+          <Webhook className="h-4 w-4 text-primary" />
+          <p className="text-sm font-semibold tracking-tight">GitHub Production Automation</p>
+        </div>
+        <p className="text-sm text-muted-foreground -mt-2">
+          Webhooks are registered automatically when you connect repositories. Manual setup is
+          only needed if automation was skipped.
+        </p>
+        <div className="space-y-3 text-sm">
           <div>
             <p className="text-xs text-muted-foreground mb-1">Payload URL</p>
             <code className="block rounded-md bg-secondary/50 px-3 py-2 text-xs break-all">
@@ -713,29 +708,32 @@ export default function IntegrationsPage() {
             Set the same secret as <code className="text-foreground">GITHUB_WEBHOOK_SECRET</code> in
             Vercel.
           </p>
-        </CardContent>
-      </Card>
+        </div>
+      </section>
 
-      {/* Channel integrations */}
-      <div className="grid gap-4 sm:grid-cols-2">
-        {[
-          { name: "Slack", description: "Get notified about critical issues in Slack.", icon: Zap },
-          { name: "Discord", description: "Security alerts in your Discord server.", icon: Zap },
-        ].map((item) => (
-          <Card key={item.name} className="border-border/50 opacity-50">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary">
-                  <item.icon className="h-4 w-4 text-muted-foreground" />
-                </div>
-                <IntegrationStatusBadge status="inactive" label="Soon" />
+      <section className="space-y-3 border-t border-border/50 pt-8">
+        <p className="text-sm font-semibold tracking-tight">Channel integrations</p>
+        <ul className="space-y-2">
+          {[
+            { name: "Slack", description: "Get notified about critical issues in Slack.", icon: Zap },
+            { name: "Discord", description: "Security alerts in your Discord server.", icon: Zap },
+          ].map((item) => (
+            <li
+              key={item.name}
+              className="flex items-center gap-3 rounded-lg border border-border/50 px-4 py-3 opacity-60"
+            >
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-secondary">
+                <item.icon className="h-4 w-4 text-muted-foreground" />
               </div>
-              <CardTitle className="text-sm mt-3">{item.name}</CardTitle>
-              <CardDescription className="text-xs">{item.description}</CardDescription>
-            </CardHeader>
-          </Card>
-        ))}
-      </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium">{item.name}</p>
+                <p className="text-xs text-muted-foreground truncate">{item.description}</p>
+              </div>
+              <IntegrationStatusBadge status="inactive" label="Soon" />
+            </li>
+          ))}
+        </ul>
+      </section>
     </div>
   );
 }

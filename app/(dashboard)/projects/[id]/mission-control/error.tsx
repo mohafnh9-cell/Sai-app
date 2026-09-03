@@ -51,7 +51,7 @@ export default function MissionControlError({
   }, [error, pathname, router, searchParams]);
 
   return (
-    <div className="app-cinematic-bg min-h-full flex flex-col items-center justify-center gap-6 p-8 text-center">
+    <div className="app-shell-bg min-h-full flex flex-col items-center justify-center gap-6 p-8 text-center">
       <div className="max-w-md space-y-3">
         <h1 className="text-2xl font-semibold tracking-tight">Mission Control couldn&apos;t load</h1>
         <p className="text-sm text-muted-foreground">

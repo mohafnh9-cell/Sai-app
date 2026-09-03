@@ -22,6 +22,19 @@ export type MissionControlScanButtonLabel = "cta" | "running" | "rescan" | "retr
 
 export type MissionControlSecurityButtonLabel = "cta" | "running";
 
+/**
+ * Current-scan-vs-previous-scan finding identity, computed by
+ * server/security-scanner/finding-resolution.ts (backed by the deterministic
+ * lib/correlation/scan-finding-resolution.ts diff). The frontend only
+ * renders this — it never recomputes resolution itself.
+ */
+export type FindingResolutionSummary = {
+  /** current ScanFinding.id -> resolution status, for findings still present this scan */
+  statusByFindingId: Record<string, "new" | "unchanged" | "ambiguous">;
+  /** findings present in the previous scan but absent from this one -- no "current" row exists for these */
+  resolvedFindings: { correlationKey: string; title: string; filePath: string; severity?: string }[];
+};
+
 export type MissionControlState = {
   projectId: string;
   projectName: string;
@@ -82,6 +95,9 @@ export type MissionControlState = {
     isVerdictStale: boolean;
     reportHref?: string;
     fixPromptContext?: FixPromptContext;
+    findingResolution?: FindingResolutionSummary;
+    /** "github" | "upload" -- how the scan behind the current verdict was ingested (Phase 10). */
+    scanSource?: string;
     attackCenterHref?: string;
     openTechnicalDetails: boolean;
     showAnalysisRunSelector: boolean;

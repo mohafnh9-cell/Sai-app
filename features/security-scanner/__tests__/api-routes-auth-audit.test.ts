@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { scanRepository } from "../index";
 
 const CODE_EXT = /\.(?:[cm]?tsx?|jsx)$/i;
-const SKIP_DIR = /(?:^|\/)(?:node_modules|\.next|dist|coverage|\.git)(?:\/|$)/;
+const SKIP_DIR = /(?:^|\/)(?:node_modules|\.next|dist|coverage|\.git|reference-ui)(?:\/|$)/;
 const TEST_FILE = /(?:^|\/)(?:__tests__|tests?)(?:\/|$)|\.(?:test|spec)\./i;
 
 function collectCodeFiles(dir: string, acc: string[] = []): string[] {

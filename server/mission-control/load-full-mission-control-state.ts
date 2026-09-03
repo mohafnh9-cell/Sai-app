@@ -12,6 +12,8 @@ import { buildMissionControlState } from "./build-mission-control-state";
 import { fixPromptContextFromScan } from "@/features/production-verdict/fix-prompt-context";
 import { loadAnalysisRunFindingsForFixPrompt } from "@/server/analysis-runs/load-run-findings-for-fix";
 import { projectVerdictHref } from "@/lib/navigation/project-hrefs";
+import { getScanFindingResolution } from "@/server/security-scanner/finding-resolution";
+import type { FindingResolutionSummary } from "@/features/mission-control/types/mission-control-state";
 
 export async function loadFullMissionControlState(
   supabase: SupabaseClient,
@@ -66,13 +68,13 @@ export async function loadFullMissionControlState(
   const scanForContext = findingsRunId
     ? await supabase
         .from("scans")
-        .select("id, detected_stack, status")
+        .select("id, detected_stack, status, source")
         .eq("id", findingsRunId)
         .eq("project_id", projectId)
         .maybeSingle()
     : await supabase
         .from("scans")
-        .select("id, detected_stack, status")
+        .select("id, detected_stack, status, source")
         .eq("project_id", projectId)
         .eq("status", "completed")
         .order("completed_at", { ascending: false })
@@ -84,6 +86,42 @@ export async function loadFullMissionControlState(
   const runFindings = scanIdForFindings
     ? await loadAnalysisRunFindingsForFixPrompt(supabase, scanIdForFindings)
     : undefined;
+
+  // Reuses the existing deterministic backend diff (lib/correlation/scan-finding-resolution.ts)
+  // against the immediately-preceding completed scan -- the frontend never computes this itself.
+  let findingResolution: FindingResolutionSummary | undefined;
+  if (admin && scanIdForFindings && scanForContext.data?.status === "completed") {
+    try {
+      const diff = await getScanFindingResolution(admin, {
+        organizationId,
+        projectId,
+        currentScanId: scanIdForFindings,
+      });
+      const statusByFindingId: FindingResolutionSummary["statusByFindingId"] = {};
+      for (const entry of diff.new) {
+        if (entry.current) statusByFindingId[entry.current.id] = "new";
+      }
+      for (const entry of diff.unchanged) {
+        if (entry.current) statusByFindingId[entry.current.id] = "unchanged";
+      }
+      for (const entry of diff.ambiguous) {
+        if (entry.current) statusByFindingId[entry.current.id] = "ambiguous";
+      }
+      findingResolution = {
+        statusByFindingId,
+        resolvedFindings: diff.resolved
+          .filter((entry) => entry.previous)
+          .map((entry) => ({
+            correlationKey: entry.correlationKey,
+            title: entry.previous!.title,
+            filePath: entry.previous!.filePath,
+            severity: entry.previous!.severity,
+          })),
+      };
+    } catch {
+      findingResolution = undefined;
+    }
+  }
 
   const latestReportHref = verdict ? projectVerdictHref(projectId, { technical: "open" }) : undefined;
 
@@ -132,6 +170,8 @@ export async function loadFullMissionControlState(
     securityTestContext,
     protectionCenter,
     fixPromptContext,
+    findingResolution,
+    scanSource: (scanForContext.data as { source?: string } | null)?.source ?? null,
     reportHref: latestReportHref,
     flags: {
       analysisRunIsolationEnabled: isolationEnabled,

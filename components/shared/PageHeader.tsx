@@ -1,22 +1,38 @@
 import { cn } from "@/lib/utils";
 
 interface PageHeaderProps {
+  /** Small caps label above the title (e.g. "Production Intelligence"). */
+  eyebrow?: string;
   title: string;
-  description?: string;
+  description?: React.ReactNode;
   action?: React.ReactNode;
+  secondaryAction?: React.ReactNode;
   className?: string;
 }
 
-export function PageHeader({ title, description, action, className }: PageHeaderProps) {
+export function PageHeader({
+  eyebrow,
+  title,
+  description,
+  action,
+  secondaryAction,
+  className,
+}: PageHeaderProps) {
   return (
-    <div className={cn("flex items-center justify-between gap-4", className)}>
+    <div className={cn("flex flex-wrap items-end justify-between gap-4", className)}>
       <div>
-        <h1 className="text-display-headline">{title}</h1>
+        {eyebrow && <p className="text-eyebrow mb-2">{eyebrow}</p>}
+        <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight leading-none">{title}</h1>
         {description && (
           <p className="text-muted-foreground mt-2 text-sm leading-relaxed max-w-2xl">{description}</p>
         )}
       </div>
-      {action && <div className="shrink-0">{action}</div>}
+      {(action || secondaryAction) && (
+        <div className="flex shrink-0 items-center gap-2">
+          {secondaryAction}
+          {action}
+        </div>
+      )}
     </div>
   );
 }

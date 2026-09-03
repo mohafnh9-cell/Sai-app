@@ -4,6 +4,7 @@ import { QueryProvider } from "@/lib/query/provider";
 import { I18nShell } from "@/components/shared/I18nShell";
 import { getCachedServerAuthContext } from "@/lib/server/request-cache";
 import { isAppAdminEmail } from "@/lib/auth/is-app-admin";
+import { isBillingEnabled } from "@/lib/billing/billing-enabled";
 import {
   listAccessibleWorkspaces,
 } from "@/server/workspaces/service";
@@ -55,6 +56,7 @@ export default async function DashboardLayout({
           activeWorkspaceId={activeWorkspaceId}
           bypass={auth.bypass}
           isAdmin={isAdmin}
+          billingEnabled={isBillingEnabled()}
         >
           {children}
         </DashboardShell>

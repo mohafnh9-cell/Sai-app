@@ -1,0 +1,49 @@
+{
+  "pageTitle": "Analyze Code",
+  "pageSubtitle": "Choose how you want to analyze your project.",
+  "githubOption": {
+    "title": "GitHub Repository",
+    "description": "Connect a repository for continuous scans, rescans, and history.",
+    "cta": "Connect GitHub"
+  },
+  "uploadOption": {
+    "title": "Upload a project",
+    "description": "Drop a ZIP file for a one-time security analysis. No repository required."
+  },
+  "localOption": {
+    "title": "Local Analysis",
+    "description": "Analyze a project folder on this device. Nothing leaves your browser except the source files you select."
+  },
+  "local": {
+    "idle": "Select a project folder",
+    "hint": "Analyzes the files in your browser's memory only — no separate agent or install required.",
+    "choose": "Choose folder",
+    "unsupported": "Local folder selection isn't supported in this browser. Use Upload (ZIP) instead.",
+    "fileCount_one": "{count} file",
+    "fileCount_other": "{count} files",
+    "preflight": {
+      "too_many_files": "Project is too large to analyze. It has more than {maxFiles} files, the beta limit.",
+      "total_too_large": "Project is too large to analyze. Its total size is over the {maxTotalMb} MB beta limit.",
+      "file_too_large": "Project is too large to analyze. It contains a file larger than the {maxFileMb} MB per-file limit."
+    }
+  },
+  "dropzone": {
+    "idle": "Drop your project here",
+    "hint": "ZIP files up to 8 MB",
+    "browse": "Browse files",
+    "dragging": "Drop to analyze"
+  },
+  "projectNameLabel": "Project name",
+  "removeFile": "Remove",
+  "analyzeCta": "Analyze project",
+  "uploading": "Uploading…",
+  "analyzing": "Analyzing your project…",
+  "analyzingHint": "Running the same security scanner used for GitHub projects. This usually takes under a minute.",
+  "successRedirecting": "Analysis complete. Opening your Production Verdict…",
+  "errors": {
+    "not_zip": "Only ZIP files are supported.",
+    "too_large": "This file is larger than the 8 MB beta limit.",
+    "generic": "Upload failed. Please try again."
+  },
+  "retry": "Try again"
+}

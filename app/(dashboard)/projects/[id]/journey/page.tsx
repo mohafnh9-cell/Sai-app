@@ -134,8 +134,8 @@ export default async function ProjectJourneyPage({ params, searchParams }: Journ
   const showSecurityTest = shouldShowSecurityTestNav({ attackCenterEnabled });
 
   return (
-    <div className={missionControlEnabled ? "app-cinematic-bg min-h-full" : "p-6 space-y-6 max-w-6xl"}>
-      <div className={missionControlEnabled ? "mx-auto max-w-4xl px-4 sm:px-8 pb-24 pt-6 sm:pt-10 space-y-6" : "space-y-6"}>
+    <div className={missionControlEnabled ? "app-shell-bg min-h-full" : "p-6 space-y-6 max-w-6xl"}>
+      <div className={missionControlEnabled ? "mx-auto max-w-6xl px-4 sm:px-8 pb-24 pt-6 sm:pt-10 space-y-6" : "space-y-6"}>
         <Button variant="ghost" size="sm" asChild className="gap-1.5 -ml-1">
           <Link href={backHref}>
             <ArrowLeft className="h-4 w-4" />

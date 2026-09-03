@@ -1,8 +1,13 @@
 "use client";
 
+import { RefreshCw } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { SecuritySeverityBadge } from "@/components/sequrai/SecuritySeverityBadge";
 import type { ProductionFixPromptInput } from "@/brain/fix-prompt";
 import type { ProductionVerdictV1 } from "@/brain/production-verdict/schema";
 import { CopySafeFixPromptButton } from "@/features/production-verdict/components/CopySafeFixPromptButton";
+import { radius, surface } from "@/lib/design-system/tokens";
+import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n/client";
 
 type SafeFixHeroCardLabels = {
@@ -14,6 +19,12 @@ type SafeFixHeroCardLabels = {
   copiedLabel?: string;
 };
 
+/**
+ * The AI Fix moment: a structured engineering workflow (problem, why it
+ * matters, proposed fix, steps, action), not an AI-generated answer card.
+ * Shares surface/radius tokens with the rest of the app shell -- no
+ * gradient, glow, or component-local color.
+ */
 export function SafeFixHeroCard({
   topPriority,
   fixPromptInput,
@@ -26,6 +37,7 @@ export function SafeFixHeroCard({
   className?: string;
 }) {
   const { t } = useI18n("projects");
+  const { t: tv } = useI18n("verdict");
 
   const eyebrow = labels?.eyebrow ?? t("fixThisFirst");
   const steps = labels?.stepThree
@@ -38,19 +50,70 @@ export function SafeFixHeroCard({
 
   return (
     <section
-      className={`rounded-3xl border border-primary/25 bg-gradient-to-b from-primary/10 via-[#101014]/80 to-[#101014]/60 p-6 sm:p-8 shadow-[0_0_60px_-24px_rgba(var(--primary-rgb,99,102,241),0.35)] ${className}`}
+      className={cn(radius.md, "border p-6 sm:p-8", surface.base, "seq-transition", className)}
       aria-labelledby="safe-fix-hero-heading"
     >
-      <p className="text-xs font-medium uppercase tracking-[0.22em] text-primary mb-2">{eyebrow}</p>
-      <h2 id="safe-fix-hero-heading" className="text-lg font-semibold tracking-tight">
+      {/* Problem */}
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="text-eyebrow">{eyebrow}</p>
+        <SecuritySeverityBadge severity={topPriority.severity} />
+        <Badge variant="outline" className="text-xs">
+          {topPriority.category}
+        </Badge>
+      </div>
+      <h2 id="safe-fix-hero-heading" className="mt-3 text-lg font-semibold tracking-tight leading-snug">
         {topPriority.title}
       </h2>
-      <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{topPriority.reason}</p>
-      <ol className="mt-6 space-y-3 text-sm text-muted-foreground list-decimal list-inside">
-        {steps.map((step) => (
-          <li key={step}>{step}</li>
-        ))}
+
+      {/* Why it matters + Proposed fix */}
+      <div className="mt-5 grid gap-5 sm:grid-cols-2">
+        <div>
+          <p className="text-label-caps">{tv("whyItMatters")}</p>
+          <p className="mt-1.5 text-sm text-muted-foreground leading-relaxed">{topPriority.reason}</p>
+        </div>
+        <div>
+          <p className="text-label-caps">{tv("action")}</p>
+          <p className="mt-1.5 text-sm text-foreground/90 leading-relaxed">{topPriority.recommendedAction}</p>
+        </div>
+      </div>
+
+      {topPriority.affectedFiles.length > 0 ? (
+        <p className="mt-4 text-xs text-muted-foreground">
+          {tv("affected")}:{" "}
+          <code className="text-foreground/80">
+            {topPriority.affectedFiles.slice(0, 3).join(", ")}
+            {topPriority.affectedFiles.length > 3
+              ? ` ${tv("moreAffected", { count: topPriority.affectedFiles.length - 3 })}`
+              : ""}
+          </code>
+        </p>
+      ) : null}
+
+      {/* Implementation steps -- the last step is always "verify by rescanning" */}
+      <ol className="mt-6 space-y-3 border-t border-border pt-5">
+        {steps.map((step, index) => {
+          const isLast = index === steps.length - 1;
+          return (
+            <li key={step} className="flex items-start gap-3 text-sm">
+              <span
+                className={cn(
+                  "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-[11px] font-semibold tabular-nums",
+                  isLast ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"
+                )}
+                aria-hidden
+              >
+                {String(index + 1).padStart(2, "0")}
+              </span>
+              <span className={cn("leading-relaxed pt-0.5", isLast ? "text-foreground" : "text-muted-foreground")}>
+                {isLast ? <RefreshCw className="mr-1.5 -mt-0.5 inline h-3.5 w-3.5" aria-hidden /> : null}
+                {step}
+              </span>
+            </li>
+          );
+        })}
       </ol>
+
+      {/* Primary action */}
       <div className="mt-6">
         <CopySafeFixPromptButton
           input={fixPromptInput}
@@ -58,7 +121,7 @@ export function SafeFixHeroCard({
           priorityId={topPriority.id}
           size="default"
           variant="default"
-          className="w-full h-12 text-base"
+          className="w-full h-11"
           label={copyLabel}
           copiedLabel={copiedLabel}
         />

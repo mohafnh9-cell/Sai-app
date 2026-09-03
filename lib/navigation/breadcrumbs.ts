@@ -8,6 +8,8 @@ type BreadcrumbLabels = Record<string, string>;
 const SEGMENT_KEYS: Record<string, keyof BreadcrumbLabels | string> = {
   dashboard: "missionControl",
   projects: "projects",
+  "scanner-results": "scannerResults",
+  new: "analyzeCode",
   integrations: "integrations",
   settings: "settings",
   onboarding: "onboarding",
@@ -61,8 +63,14 @@ export function buildBreadcrumbsFromPathname(
     }
 
     const labelKey = SEGMENT_KEYS[segment];
-    const label = labelKey ? labels[labelKey] ?? segment.replace(/-/g, " ") : segment.replace(/-/g, " ");
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(segment);
     const isLast = i === segments.length - 1;
+    if (isUuid && isLast) {
+      // A trailing raw ID (e.g. a scan result's UUID) isn't a meaningful
+      // breadcrumb label -- drop it rather than showing a dash-mangled UUID.
+      continue;
+    }
+    const label = labelKey ? labels[labelKey] ?? segment.replace(/-/g, " ") : segment.replace(/-/g, " ");
     items.push({ label, href: isLast ? undefined : path });
   }
 

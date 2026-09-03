@@ -15,6 +15,8 @@ type ProductionVerdictCardProps = {
   score?: number | null;
   scoreLabel?: string;
   sourceBadge?: React.ReactNode;
+  /** Concise "why" sentence -- what's actually driving this verdict, before the reader gets to the top blocker. */
+  why?: string | null;
   blocker?: {
     eyebrow: string;
     title: string;
@@ -38,6 +40,7 @@ export function ProductionVerdictCard({
   score = null,
   scoreLabel,
   sourceBadge,
+  why,
   blocker,
   footerLink,
   children,
@@ -57,15 +60,22 @@ export function ProductionVerdictCard({
         {sourceBadge}
       </div>
 
-      <div className="mt-4 flex flex-wrap items-end gap-6">
-        <ProductionReadinessScore score={score ?? null} status={status} label={scoreLabel} />
-        <div className="space-y-3 pb-1">
-          <p id={headingId} className="text-display-headline">
-            {headline}
-          </p>
-          <VerdictStatusBadge status={status} />
-        </div>
+      <div className="mt-4 space-y-3">
+        <VerdictStatusBadge status={status} />
+        <p id={headingId} className="text-display-headline">
+          {headline}
+        </p>
       </div>
+
+      <ProductionReadinessScore
+        score={score ?? null}
+        status={status}
+        label={scoreLabel}
+        size="secondary"
+        className="mt-6"
+      />
+
+      {why ? <p className="mt-4 text-sm text-muted-foreground leading-relaxed max-w-xl">{why}</p> : null}
 
       {blocker ? (
         <RecommendedAction

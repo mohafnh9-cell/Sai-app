@@ -3,6 +3,7 @@ import "server-only";
 import { Readable } from "node:stream";
 import { CRITICAL_FILE_PATTERN, isRelevantPath } from "./path-relevance";
 import { extractRepositoryTarball } from "./tarball-extract";
+import { SOURCE_ANALYSIS_LIMITS } from "@/lib/upload/source-limits";
 
 const GITHUB_API = "https://api.github.com";
 const API_VERSION = "2022-11-28";
@@ -13,12 +14,14 @@ const API_VERSION = "2022-11-28";
  * large repo (see features/security-scanner/config.ts DEFAULT_SCAN_CONFIG,
  * which these are kept in line with) with headroom under the 300s route
  * budget in app/api/repositories/.../scans routes.
+ *
+ * maxFiles/maxFileBytes/maxTotalBytes/maxDepth come from
+ * lib/upload/source-limits.ts, the single canonical definition shared with
+ * ZIP upload and Local Analysis (and safe to ship to the client for
+ * preflight validation) — not redefined here.
  */
 export const GITHUB_SCAN_LIMITS = {
-  maxFiles: 8_000,
-  maxFileBytes: 1024 * 1024,
-  maxTotalBytes: 40 * 1024 * 1024,
-  maxDepth: 18,
+  ...SOURCE_ANALYSIS_LIMITS,
   timeoutMs: 90_000,
   /**
    * fetchCompareSnapshot still fetches one blob per changed file (the

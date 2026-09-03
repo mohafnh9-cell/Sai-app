@@ -25,7 +25,11 @@ export function VerificationStatusBadge({ status, className }: VerificationStatu
   return (
     <Badge
       variant="outline"
-      className={cn(verificationBadgeClass(normalized), className)}
+      className={cn(
+        "px-1.5 py-0 text-[10px] font-medium",
+        verificationBadgeClass(normalized),
+        className
+      )}
       aria-label={t("verification.ariaLabel", { status: label })}
     >
       {label}

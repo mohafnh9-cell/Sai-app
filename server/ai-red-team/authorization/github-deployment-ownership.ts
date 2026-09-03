@@ -2,7 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { parseGitHubRepository } from "@/lib/github/repository-reference";
-import { resolveWorkspaceGitHubToken } from "@/server/github/workspace-connection-service";
+import { resolveGitHubCredential } from "@/server/github-app/credential-provider";
 import { normalizeOrigin } from "./types";
 
 const GITHUB_API = "https://api.github.com";
@@ -144,13 +144,9 @@ export async function verifyTargetFromAuthenticatedGitHubDeployments(
     return { status: "not_found" };
   }
 
-  const tokenResult = await resolveWorkspaceGitHubToken(
-    admin,
-    input.organizationId,
-    input.projectId
-  );
+  const credential = await resolveGitHubCredential(admin, input.organizationId, input.projectId);
   // Anonymous GitHub data is not sufficient ownership evidence.
-  if (!tokenResult?.token) return { status: "not_found" };
+  if (!credential?.token) return { status: "not_found" };
 
   let ref;
   try {
@@ -171,7 +167,7 @@ export async function verifyTargetFromAuthenticatedGitHubDeployments(
   while (true) {
     const deployments = await requestGitHubJson<GitHubDeployment[]>(
       fetchImpl,
-      tokenResult.token,
+      credential.token,
       `${base}/deployments?per_page=${GITHUB_PAGE_SIZE}&page=${page}`
     );
     if (!deployments) return { status: "not_found" };
@@ -193,7 +189,7 @@ export async function verifyTargetFromAuthenticatedGitHubDeployments(
       while (true) {
         const statuses = await requestGitHubJson<GitHubDeploymentStatus[]>(
           fetchImpl,
-          tokenResult.token,
+          credential.token,
           `${base}/deployments/${deployment.id}/statuses?per_page=${GITHUB_PAGE_SIZE}&page=${statusPage}`
         );
         if (!statuses) break;

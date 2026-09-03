@@ -199,7 +199,7 @@ export default async function MissionControlPage({ params, searchParams }: PageP
 
   return (
     <div className="min-h-full">
-      <div className="mx-auto max-w-4xl px-4 sm:px-8 pb-24 pt-6 sm:pt-8">
+      <div className="mx-auto max-w-6xl px-4 sm:px-8 pb-24 pt-6 sm:pt-8">
         <ProjectWorkflowNav
           projectId={projectId}
           analysisRunId={

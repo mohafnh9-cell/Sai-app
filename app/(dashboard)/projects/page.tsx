@@ -51,13 +51,13 @@ export default async function ProjectsPage() {
 
   return (
     <div className="min-h-full">
-      <div className="mx-auto max-w-4xl px-4 sm:px-8 py-8 sm:py-12 space-y-8">
+      <div className="mx-auto max-w-6xl px-4 sm:px-8 py-8 sm:py-12 space-y-8">
         <PageHeader
           title={t("title")}
           description={t("subtitle", { count: projectList.length })}
           action={
             <Button size="sm" asChild>
-              <Link href="/integrations">
+              <Link href="/projects/new">
                 <Plus className="mr-2 h-4 w-4" />
                 {t("connectRepository")}
               </Link>
@@ -70,7 +70,7 @@ export default async function ProjectsPage() {
             icon={FolderGit2}
             title={t("noProjectsTitle")}
             description={t("noProjectsBody")}
-            action={{ label: t("connectRepository"), href: "/integrations" }}
+            action={{ label: t("connectRepository"), href: "/projects/new" }}
             className="py-16"
           />
         ) : (

@@ -11,6 +11,8 @@ import {
   TopRisksList,
   WhatChangedSection,
 } from "@/components/sequrai";
+import { PageHeader } from "@/components/shared/PageHeader";
+import { Separator } from "@/components/ui/separator";
 import { MissionControlHero } from "./MissionControlHero";
 import { MissionControlTechnicalDetails } from "./MissionControlTechnicalDetails";
 import { MissionControlActivityBanner } from "./MissionControlActivityBanner";
@@ -58,7 +60,7 @@ export function ProductionIntelligenceView({
   const findingsMap = findingsByIdMap(findings);
   const timelineEvents = buildSecurityTimelineEvents(state, {
     analysisRun: (status) => {
-      const statusKey = `analysisRun.runStatus.${status}`;
+      const statusKey = `analysisRun.selector.runStatus.${status}`;
       const knownStatuses = new Set([
         "completed",
         "running",
@@ -68,7 +70,7 @@ export function ProductionIntelligenceView({
         "unknown",
       ]);
       if (knownStatuses.has(status)) {
-        return t(statusKey as "analysisRun.runStatus.completed");
+        return t(statusKey as "analysisRun.selector.runStatus.completed");
       }
       return t("timeline.analysisRunStarted");
     },
@@ -91,7 +93,7 @@ export function ProductionIntelligenceView({
   return (
     <div
       className={
-        staleVerdictWhileBusy ? "space-y-12 opacity-60 pointer-events-none" : "space-y-12"
+        staleVerdictWhileBusy ? "space-y-8 opacity-60 pointer-events-none" : "space-y-8"
       }
     >
       {staleVerdictWhileBusy ? (
@@ -100,21 +102,21 @@ export function ProductionIntelligenceView({
         </p>
       ) : null}
 
-      <header className="space-y-3 product-section">
-        <p className="text-eyebrow">{t("productionIntelligence.eyebrow")}</p>
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">{state.projectName}</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
+      <div className="product-section">
+        <PageHeader
+          eyebrow={t("productionIntelligence.eyebrow")}
+          title={state.projectName}
+          description={
+            <>
               {t("productionIntelligence.latestAnalysis")} · {lastAnalysis}
               {state.status.currentCommitSha ? (
                 <span className="ml-2 font-mono text-xs">{state.status.currentCommitSha.slice(0, 7)}</span>
               ) : null}
-            </p>
-          </div>
-          <ProductionJourneyStrip activeStep={showScanActivity ? "analysis" : "verdict"} />
-        </div>
-      </header>
+            </>
+          }
+          action={<ProductionJourneyStrip activeStep={showScanActivity ? "analysis" : "verdict"} />}
+        />
+      </div>
 
       {(showScanActivity || showAttackActivity) && (
         <MissionControlActivityBanner
@@ -124,7 +126,12 @@ export function ProductionIntelligenceView({
         />
       )}
 
-      <MissionControlHero verdict={verdict} showViewReportLink={state.status.hasCompletedAnalysis} />
+      <MissionControlHero
+        verdict={verdict}
+        showViewReportLink={state.status.hasCompletedAnalysis}
+        resolvedSinceLastScan={state.ui.findingResolution?.resolvedFindings.length ?? 0}
+        scanSource={state.ui.scanSource}
+      />
 
       {intelligence ? (
         <WhatChangedSection
@@ -155,9 +162,24 @@ export function ProductionIntelligenceView({
         </section>
       ) : null}
 
-      <RepositoryHealth areas={areasProgress} />
-
-      <SecurityTimeline events={timelineEvents} />
+      {(() => {
+        const hasHealth =
+          areasProgress.filter((a) => a.status === "evaluated" && a.currentScore != null).length >
+          0;
+        const hasTimeline = timelineEvents.length > 0;
+        if (!hasHealth && !hasTimeline) return null;
+        return (
+          <div className="flex flex-col gap-6 lg:flex-row lg:gap-8">
+            {hasHealth ? (
+              <RepositoryHealth areas={areasProgress} className="lg:flex-1" />
+            ) : null}
+            {hasHealth && hasTimeline ? (
+              <Separator orientation="vertical" className="hidden h-auto lg:block" />
+            ) : null}
+            {hasTimeline ? <SecurityTimeline events={timelineEvents} className="lg:flex-1" /> : null}
+          </div>
+        );
+      })()}
 
       <MissionControlTechnicalDetails
         view={state.view}
@@ -165,6 +187,7 @@ export function ProductionIntelligenceView({
         framework={state.framework}
         findings={findings}
         fixPromptContext={state.ui.fixPromptContext}
+        findingResolution={state.ui.findingResolution}
         projectId={state.projectId}
         openByDefault={openFullReport}
       />

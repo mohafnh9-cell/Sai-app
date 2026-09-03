@@ -11,6 +11,8 @@ import {
   Puzzle,
   Terminal,
   ShieldCheck,
+  CreditCard,
+  ScrollText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -28,13 +30,25 @@ import { useDemoNavigation } from "@/features/demo/use-demo-navigation";
 import { WorkspaceSwitcher } from "@/features/workspaces/components/WorkspaceSwitcher";
 import type { WorkspacePresentation } from "@/lib/workspaces/presentation";
 
-const PRIMARY_NAV = [
-  { href: "/dashboard", labelKey: "dashboard", icon: LayoutDashboard },
-  { href: "/projects", labelKey: "projects", icon: FolderGit2 },
-  { href: "/integrations", labelKey: "integrations", icon: Puzzle },
-  { href: "/onboarding?step=cursor", labelKey: "cursorMcp", icon: Terminal },
-  { href: "/settings", labelKey: "settings", icon: Settings },
-] as const;
+const WORKSPACE_GROUP = {
+  groupLabelKey: "navGroup.workspace",
+  items: [
+    { href: "/dashboard", labelKey: "dashboard", icon: LayoutDashboard },
+    { href: "/projects", labelKey: "projects", icon: FolderGit2 },
+    { href: "/scanner-results", labelKey: "scannerResults", icon: ScrollText },
+  ],
+} as const;
+
+const CONNECT_GROUP = {
+  groupLabelKey: "navGroup.connect",
+  items: [
+    { href: "/integrations", labelKey: "integrations", icon: Puzzle },
+    { href: "/onboarding?step=cursor", labelKey: "cursorMcp", icon: Terminal },
+  ],
+} as const;
+
+const SYSTEM_ITEMS = [{ href: "/settings", labelKey: "settings", icon: Settings }] as const;
+const BILLING_ITEM = { href: "/billing", labelKey: "billing", icon: CreditCard } as const;
 
 type User = {
   id: string;
@@ -51,6 +65,7 @@ export function DashboardSidebar({
   workspaces,
   activeWorkspaceId,
   isAdmin,
+  billingEnabled,
   onNavigate,
   headerAction,
   className,
@@ -60,6 +75,7 @@ export function DashboardSidebar({
   workspaces?: WorkspacePresentation[];
   activeWorkspaceId?: string | null;
   isAdmin?: boolean;
+  billingEnabled?: boolean;
   onNavigate?: () => void;
   headerAction?: React.ReactNode;
   className?: string;
@@ -101,10 +117,19 @@ export function DashboardSidebar({
       : pathname.startsWith(targetPath);
   };
 
+  const navGroups = [
+    WORKSPACE_GROUP,
+    CONNECT_GROUP,
+    {
+      groupLabelKey: "navGroup.system",
+      items: billingEnabled ? [...SYSTEM_ITEMS, BILLING_ITEM] : SYSTEM_ITEMS,
+    },
+  ];
+
   return (
     <aside
       className={cn(
-        "flex h-full w-[240px] shrink-0 flex-col border-r border-border/40 bg-card/80",
+        "flex h-full w-[240px] shrink-0 flex-col border-r border-border/40 bg-card",
         className
       )}
     >
@@ -114,7 +139,7 @@ export function DashboardSidebar({
           className="inline-flex items-center gap-2 seq-focus-ring rounded-md"
           onClick={onNavigate}
         >
-          <span className="text-sm font-semibold tracking-tight text-gradient">SequrAI</span>
+          <span className="text-sm font-semibold tracking-tight text-foreground">SequrAI</span>
         </Link>
       </div>
 
@@ -129,16 +154,23 @@ export function DashboardSidebar({
         />
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-0.5" aria-label="Primary">
-        {PRIMARY_NAV.map((item) => (
-          <NavLink
-            key={item.href}
-            href={isDemo ? href(item.href) : item.href}
-            label={t(item.labelKey)}
-            icon={item.icon}
-            active={isActive(item.href)}
-            onNavigate={onNavigate}
-          />
+      <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-4" aria-label="Primary">
+        {navGroups.map((group) => (
+          <div key={group.groupLabelKey} className="space-y-0.5">
+            <p className="px-3 pb-1 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">
+              {t(group.groupLabelKey)}
+            </p>
+            {group.items.map((item) => (
+              <NavLink
+                key={item.href}
+                href={isDemo ? href(item.href) : item.href}
+                label={t(item.labelKey)}
+                icon={item.icon}
+                active={isActive(item.href)}
+                onNavigate={onNavigate}
+              />
+            ))}
+          </div>
         ))}
         {isAdmin && !isDemo && (
           <NavLink

@@ -11,6 +11,7 @@ export type ScanExecutionTraceStage =
   | "enqueue_failed"
   | "worker_started"
   | "scan_started"
+  | "repository_fetched"
   | "scan_completed"
   | "scan_failed"
   | "verdict_persisted"

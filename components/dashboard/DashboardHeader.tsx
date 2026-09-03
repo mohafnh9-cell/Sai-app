@@ -20,6 +20,8 @@ export function DashboardHeader() {
       settings: tn("breadcrumbs.settings"),
       onboarding: tn("breadcrumbs.onboarding"),
       productionIntelligence: tn("breadcrumbs.productionIntelligence"),
+      scannerResults: tn("breadcrumbs.scannerResults"),
+      analyzeCode: tn("breadcrumbs.analyzeCode"),
       attackCenter: tn("breadcrumbs.attackCenter"),
       journey: tn("breadcrumbs.journey"),
       billing: tn("breadcrumbs.billing"),
@@ -28,7 +30,7 @@ export function DashboardHeader() {
   });
 
   return (
-    <header className="sticky top-0 z-30 hidden md:flex h-14 shrink-0 items-center gap-4 border-b border-border/50 bg-background/80 glass-surface px-6">
+    <header className="sticky top-0 z-30 hidden md:flex h-14 shrink-0 items-center gap-4 border-b border-border/50 bg-background px-6">
       <AppBreadcrumbs items={breadcrumbs} className="flex-1 min-w-0" />
       <Button
         variant="outline"

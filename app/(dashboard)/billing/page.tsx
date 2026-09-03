@@ -46,16 +46,16 @@ export default async function BillingPage({
           : null;
 
   return (
-    <div className="p-6 space-y-8 max-w-2xl">
+    <div className="mx-auto max-w-2xl px-4 sm:px-8 py-8 sm:py-12 space-y-8">
       <PageHeader title={t("title")} description={t("subtitle")} />
 
       {notice && (
-        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm">
+        <div className="rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-warning">
           {notice}
         </div>
       )}
 
-      <div className="flex items-center gap-3 rounded-lg border border-border/50 bg-secondary/20 px-4 py-3">
+      <div className="flex items-center gap-3 rounded-lg border border-border/50 px-4 py-3">
         <CreditCard className="h-4 w-4 text-muted-foreground shrink-0" />
         <div>
           <p className="text-sm font-medium">
@@ -83,7 +83,7 @@ export default async function BillingPage({
           <ul className="space-y-2">
             {BUILDER_PLAN.features.map((feature) => (
               <li key={feature} className="flex items-center gap-2 text-xs">
-                <Check className="h-3.5 w-3.5 text-green-500 shrink-0" />
+                <Check className="h-3.5 w-3.5 text-success shrink-0" />
                 {feature}
               </li>
             ))}

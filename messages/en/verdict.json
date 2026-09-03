@@ -13,6 +13,8 @@
   "productionBlocker_other": "{count} production blockers",
   "blockersRequireAttention_one": "{count} production blocker requires your attention.",
   "blockersRequireAttention_other": "{count} production blockers require your attention.",
+  "resolvedSinceLastScanInline_one": " {count} resolved since your last scan.",
+  "resolvedSinceLastScanInline_other": " {count} resolved since your last scan.",
   "estimatedPathForward": "Estimated path forward",
   "projectedScore": "Projected score",
   "scoreDelta": "Score delta",

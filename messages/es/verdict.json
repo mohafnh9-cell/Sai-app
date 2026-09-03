@@ -13,6 +13,8 @@
   "productionBlocker_other": "{count} bloqueos de producción",
   "blockersRequireAttention_one": "Hay {count} bloqueo de producción que requiere tu atención.",
   "blockersRequireAttention_other": "Hay {count} bloqueos de producción que requieren tu atención.",
+  "resolvedSinceLastScanInline_one": " {count} resuelto desde tu último análisis.",
+  "resolvedSinceLastScanInline_other": " {count} resueltos desde tu último análisis.",
   "estimatedPathForward": "Camino estimado hacia producción",
   "projectedScore": "Score proyectado",
   "scoreDelta": "Cambio de score",

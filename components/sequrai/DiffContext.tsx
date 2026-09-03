@@ -40,7 +40,7 @@ export function DiffContextBadge({ context, className, compact }: DiffContextPro
 
   return (
     <div className={cn("inline-flex flex-col gap-1", className)}>
-      <span className={cn("inline-flex rounded-full border px-2.5 py-0.5 text-[11px] font-medium", tone)}>
+      <span className={cn("inline-flex rounded-full border px-1.5 py-0 text-[10px] font-medium", tone)}>
         {label}
       </span>
       {!compact && context.hunkContext ? (

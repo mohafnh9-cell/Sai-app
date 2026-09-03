@@ -124,7 +124,7 @@ export function AttackCenterExperience({
         />
       ) : null}
 
-      <div className="space-y-6 max-w-2xl">
+      <div className="space-y-6 max-w-4xl">
       {viewState.kind === "loading" ? (
         <AttackSimulationLoadingPanel />
       ) : null}

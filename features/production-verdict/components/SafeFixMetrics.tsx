@@ -17,7 +17,9 @@ export function SafeFixMetrics({ input }: { input: ProductionFixPromptInput }) {
       <div>
         <p className="text-xs text-muted-foreground">{t("implementationRisk")}</p>
         <p className={`font-medium ${riskColor(assessment.implementationRisk)}`}>
-          {t(`implementationRiskLevel.${assessment.implementationRisk}` as "implementationRiskLevel.low")}
+          {t(
+            `implementationRiskLevel.${assessment.implementationRisk.toLowerCase()}` as "implementationRiskLevel.low"
+          )}
         </p>
       </div>
       <div>

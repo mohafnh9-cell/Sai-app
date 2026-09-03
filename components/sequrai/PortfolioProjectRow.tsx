@@ -99,7 +99,7 @@ export function PortfolioProjectRow({
 
         <div className="hidden sm:flex flex-col items-end gap-2 shrink-0 text-right">
           {score != null ? (
-            <p className="text-2xl font-semibold tabular-nums leading-none">{score}</p>
+            <p className="text-xl font-semibold tabular-nums leading-none text-muted-foreground">{score}</p>
           ) : null}
           <p className="text-label-caps">{tp("lastAnalyzed")}</p>
           <p className="text-xs text-muted-foreground tabular-nums">{lastLabel}</p>

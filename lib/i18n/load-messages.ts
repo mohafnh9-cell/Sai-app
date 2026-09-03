@@ -28,6 +28,8 @@ import enEvidenceFinding from "@/messages/en/evidenceFinding.json";
 import enLanding from "@/messages/en/landing.json";
 import enBilling from "@/messages/en/billing.json";
 import enReadiness from "@/messages/en/readiness.json";
+import enScannerResults from "@/messages/en/scannerResults.json";
+import enUpload from "@/messages/en/upload.json";
 
 import esCommon from "@/messages/es/common.json";
 import esNavigation from "@/messages/es/navigation.json";
@@ -56,6 +58,8 @@ import esEvidenceFinding from "@/messages/es/evidenceFinding.json";
 import esLanding from "@/messages/es/landing.json";
 import esBilling from "@/messages/es/billing.json";
 import esReadiness from "@/messages/es/readiness.json";
+import esScannerResults from "@/messages/es/scannerResults.json";
+import esUpload from "@/messages/es/upload.json";
 
 const PACKAGES: Record<AppLocale, Record<MessageNamespace, Messages>> = {
   en: {
@@ -87,6 +91,8 @@ const PACKAGES: Record<AppLocale, Record<MessageNamespace, Messages>> = {
     landing: enLanding,
     billing: enBilling,
     readiness: enReadiness,
+    scannerResults: enScannerResults,
+    upload: enUpload,
   },
   es: {
     common: esCommon,
@@ -117,6 +123,8 @@ const PACKAGES: Record<AppLocale, Record<MessageNamespace, Messages>> = {
     landing: esLanding,
     billing: esBilling,
     readiness: esReadiness,
+    scannerResults: esScannerResults,
+    upload: esUpload,
   },
 };
 
@@ -152,7 +160,9 @@ export function loadAllMessages(locale: AppLocale): Messages {
     { evidenceFinding: PACKAGES[locale].evidenceFinding },
     { landing: PACKAGES[locale].landing },
     { billing: PACKAGES[locale].billing },
-    { readiness: PACKAGES[locale].readiness }
+    { readiness: PACKAGES[locale].readiness },
+    { scannerResults: PACKAGES[locale].scannerResults },
+    { upload: PACKAGES[locale].upload }
   );
 }
 

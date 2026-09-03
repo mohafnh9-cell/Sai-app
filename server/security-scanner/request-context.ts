@@ -1,7 +1,7 @@
 import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { resolveWorkspaceGitHubToken } from "@/server/github/workspace-connection-service";
+import { resolveGitHubCredential } from "@/server/github-app/credential-provider";
 import { createClient } from "@/lib/supabase/server";
 import { canAccessRepository } from "./authorization";
 
@@ -62,12 +62,8 @@ export async function getScanRequestContext(repositoryId: string, requireGitHubT
         "GitHub integration is not configured"
       );
     }
-    const tokenResult = await resolveWorkspaceGitHubToken(
-      admin,
-      project.organization_id,
-      project.id
-    );
-    providerToken = tokenResult?.token;
+    const credential = await resolveGitHubCredential(admin, project.organization_id, project.id);
+    providerToken = credential?.token;
     if (!providerToken) {
       throw new ScanRequestError(
         403,

@@ -29,5 +29,6 @@ export default defineConfig({
     // chasing a moving target.
     maxWorkers: 4,
     testTimeout: 15_000,
+    exclude: ["**/node_modules/**", "reference-ui/**"],
   },
 });

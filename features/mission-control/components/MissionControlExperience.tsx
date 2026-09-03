@@ -78,7 +78,7 @@ export function MissionControlExperience({
       : "analysisRun.recoveryBanner";
 
   return (
-    <div className="space-y-10 max-w-3xl mx-auto">
+    <div className="space-y-10 max-w-5xl mx-auto">
       {state.ui.viewingHistoricalRun ? (
         <div
           className="rounded-xl border border-border/60 bg-muted/20 px-5 py-4 text-sm text-muted-foreground"
@@ -172,7 +172,15 @@ export function MissionControlExperience({
         </div>
       ) : null}
 
-      {verdict && !showSafeFixCard ? (
+      {/*
+       * "run_review" / "run_review_again" are excluded here: ProjectHomeActions
+       * above already renders that exact scan action, so repeating it below
+       * would put two identical "rescan" buttons on the same page.
+       */}
+      {verdict &&
+      !showSafeFixCard &&
+      primaryActionKind !== "run_review" &&
+      primaryActionKind !== "run_review_again" ? (
         <MissionControlPrimaryAction
           state={state}
           scanAction={scanAction}

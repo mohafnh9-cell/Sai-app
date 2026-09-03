@@ -21,12 +21,36 @@ import {
   GitHubRepositoryService,
   GitHubServiceError,
   parseGitHubRepository,
+  type RepositorySnapshot,
 } from "@/lib/github/repository-service";
 import { commitsMatch } from "@/lib/repository-sync/commits-match";
 import {
   mergeReviewPipelineMetadata,
   reviewPhaseProgressForScan,
 } from "@/brain/review-engine/state-machine";
+import { appendScanJobExecutionTrace } from "@/server/jobs/scan-execution/scan-execution-trace";
+
+/**
+ * Performance-observability only -- never lets a trace write fail the scan.
+ * Fills the gap between the existing coarse "scan_started"/"verdict_persisted"
+ * checkpoints so repository-acquisition time and rule-engine time can be
+ * told apart after the fact (Phase 8 perf audit).
+ */
+async function traceStage(
+  supabase: SupabaseClient,
+  scanJobId: string | undefined,
+  stage: "repository_fetched" | "scan_completed"
+) {
+  if (!scanJobId) return;
+  try {
+    await appendScanJobExecutionTrace(supabase, scanJobId, {
+      stage,
+      at: new Date().toISOString(),
+    });
+  } catch {
+    // best-effort only
+  }
+}
 
 const ACTIVE_SCAN_UPDATE_STATUSES = [
   "queued",
@@ -41,9 +65,9 @@ type ScanContext = {
   scanJobId?: string;
   repositoryId: string;
   organizationId: string;
-  githubRepo: string;
+  githubRepo?: string;
   branch?: string;
-  providerToken: string;
+  providerToken?: string;
   scanType?: "full" | "incremental";
   baseCommitSha?: string;
   headCommitSha?: string;
@@ -51,6 +75,15 @@ type ScanContext = {
   persistMode?: "full" | "review_only";
   /** Reuse GitHub API responses within a single scan execution. */
   githubService?: GitHubRepositoryService;
+  /**
+   * Phase 10 (upload analysis): a snapshot already assembled by a non-GitHub
+   * source adapter (e.g. a validated ZIP upload). When present, this is used
+   * verbatim instead of fetching from GitHub -- everything downstream
+   * (scanner, scoring, persistence, Production Verdict) is unchanged, so an
+   * uploaded project goes through the exact same pipeline a GitHub project
+   * does. github_repo/providerToken are meaningless in this mode.
+   */
+  prefetchedSnapshot?: RepositorySnapshot;
 };
 
 type Finding = {
@@ -175,32 +208,43 @@ export class InlineScanJobRunner implements ScanJobRunner {
         return;
       }
 
-      const ref = parseGitHubRepository(context.githubRepo);
-      const ownsGithubService = !context.githubService;
-      const github = context.githubService ?? new GitHubRepositoryService(context.providerToken);
       const isIncremental =
         context.scanType === "incremental" &&
         Boolean(context.baseCommitSha && context.headCommitSha);
+      const usingPrefetchedSnapshot = Boolean(context.prefetchedSnapshot);
 
-      let snapshot;
-      try {
-        snapshot = isIncremental
-          ? await github.fetchCompareSnapshot(
-              ref,
-              context.baseCommitSha!,
-              context.headCommitSha!
-            )
-          : await github.fetchSnapshot(ref, {
-              branch: context.branch,
-              commitSha: context.headCommitSha,
-            });
-      } finally {
-        if (ownsGithubService) {
-          github.dispose();
+      let snapshot: RepositorySnapshot;
+      if (context.prefetchedSnapshot) {
+        snapshot = context.prefetchedSnapshot;
+      } else {
+        if (!context.githubRepo || !context.providerToken) {
+          throw new Error(
+            "SCAN_CONTEXT_MISSING_SOURCE: no githubRepo/providerToken or prefetchedSnapshot"
+          );
+        }
+        const ref = parseGitHubRepository(context.githubRepo);
+        const ownsGithubService = !context.githubService;
+        const github = context.githubService ?? new GitHubRepositoryService(context.providerToken);
+        try {
+          snapshot = isIncremental
+            ? await github.fetchCompareSnapshot(
+                ref,
+                context.baseCommitSha!,
+                context.headCommitSha!
+              )
+            : await github.fetchSnapshot(ref, {
+                branch: context.branch,
+                commitSha: context.headCommitSha,
+              });
+        } finally {
+          if (ownsGithubService) {
+            github.dispose();
+          }
         }
       }
 
       if (
+        !usingPrefetchedSnapshot &&
         context.headCommitSha &&
         !commitsMatch(snapshot.commitSha, context.headCommitSha)
       ) {
@@ -219,6 +263,7 @@ export class InlineScanJobRunner implements ScanJobRunner {
         omittedFiles: snapshot.omissions.length,
         scanType: isIncremental ? "incremental" : "full",
       });
+      void traceStage(this.supabase, context.scanJobId, "repository_fetched");
 
       await assertScanContinues(this.supabase, context.scanId);
 
@@ -239,17 +284,23 @@ export class InlineScanJobRunner implements ScanJobRunner {
           },
           omissions: snapshot.omissions,
         }),
-        this.supabase
-          .from("projects")
-          .update({
-            github_repository_id: snapshot.repositoryId,
-            github_default_branch: snapshot.defaultBranch,
-            github_last_commit_sha: snapshot.commitSha,
-            github_is_private: snapshot.isPrivate,
-            github_connected_at: new Date().toISOString(),
-          })
-          .eq("id", context.repositoryId)
-          .eq("organization_id", context.organizationId),
+        // An uploaded project has no real GitHub identity -- never write
+        // synthetic github_* metadata that would make it look connected.
+        ...(usingPrefetchedSnapshot
+          ? []
+          : [
+              this.supabase
+                .from("projects")
+                .update({
+                  github_repository_id: snapshot.repositoryId,
+                  github_default_branch: snapshot.defaultBranch,
+                  github_last_commit_sha: snapshot.commitSha,
+                  github_is_private: snapshot.isPrivate,
+                  github_connected_at: new Date().toISOString(),
+                })
+                .eq("id", context.repositoryId)
+                .eq("organization_id", context.organizationId),
+            ]),
       ]);
 
       // Intentionally calls only the scanner's public, data-only API. Files are
@@ -269,6 +320,7 @@ export class InlineScanJobRunner implements ScanJobRunner {
       }
 
       const result = await scanRepositoryFiles(snapshot.files);
+      void traceStage(this.supabase, context.scanJobId, "scan_completed");
       const repositoryModel = buildRepositoryModel(
         snapshot.files.map((file) => stubNormalizedFile(file.path, file.content)),
         result.stack

@@ -2,6 +2,7 @@
   "dashboard": "Mission Control",
   "missionControl": "Mission Control",
   "projects": "Projects",
+  "scannerResults": "Scanner Results",
   "integrations": "GitHub",
   "github": "GitHub",
   "settings": "Settings",
@@ -15,6 +16,11 @@
   "signIn": "Sign in",
   "connectRepository": "Connect my repository",
   "cursorMcp": "Code agent / MCP",
+  "navGroup": {
+    "workspace": "Workspace",
+    "connect": "Connect",
+    "system": "System"
+  },
   "breadcrumbs": {
     "missionControl": "Mission Control",
     "projects": "Projects",
@@ -22,6 +28,8 @@
     "settings": "Settings",
     "onboarding": "Onboarding",
     "productionIntelligence": "Production Intelligence",
+    "scannerResults": "Scanner Results",
+    "analyzeCode": "Analyze Code",
     "attackCenter": "Security Test",
     "journey": "History",
     "billing": "Billing",

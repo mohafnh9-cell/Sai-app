@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createFakeAdmin } from "@/server/mcp/__tests__/fake-admin";
-import { resolveWorkspaceGitHubToken } from "@/server/github/workspace-connection-service";
+import { resolveGitHubCredential } from "@/server/github-app/credential-provider";
 import { verifyTargetFromAuthenticatedGitHubDeployments } from "../github-deployment-ownership";
 
-vi.mock("@/server/github/workspace-connection-service", () => ({
-  resolveWorkspaceGitHubToken: vi.fn(),
+vi.mock("@/server/github-app/credential-provider", () => ({
+  resolveGitHubCredential: vi.fn(),
 }));
 
 const ORG_ID = "11111111-1111-4111-8111-111111111111";
@@ -53,10 +53,12 @@ function githubFetchFor(
 
 describe("authenticated GitHub deployment ownership", () => {
   beforeEach(() => {
-    vi.mocked(resolveWorkspaceGitHubToken).mockResolvedValue({
+    vi.mocked(resolveGitHubCredential).mockResolvedValue({
       token: "github-token",
       userId: "user-1",
+      source: "oauth_legacy",
       connectionId: "connection-1",
+      githubInstallationId: null,
     });
   });
 
@@ -138,7 +140,7 @@ describe("authenticated GitHub deployment ownership", () => {
   });
 
   it("does not treat anonymous GitHub responses as ownership evidence", async () => {
-    vi.mocked(resolveWorkspaceGitHubToken).mockResolvedValue(null);
+    vi.mocked(resolveGitHubCredential).mockResolvedValue(null);
     const fetchImpl = githubFetchFor("https://app.example.com");
 
     const evidence = await verifyTargetFromAuthenticatedGitHubDeployments(

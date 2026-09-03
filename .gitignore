@@ -41,3 +41,9 @@ yarn-error.log*
 next-env.d.ts
 
 /lib/generated/prisma
+
+# local UI reference repos (not a dependency, not shipped)
+/reference-ui/
+
+# local Claude Code tooling config (machine/session-specific, not shipped)
+/.claude/

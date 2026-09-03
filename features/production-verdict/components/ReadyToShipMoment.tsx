@@ -31,7 +31,7 @@ export function ReadyToShipMoment({
 
   return (
     <section
-      className="relative overflow-hidden rounded-2xl border border-success/30 bg-gradient-to-br from-success/10 via-background to-background p-8 md:p-10"
+      className="relative overflow-hidden rounded-xl border border-success/30 bg-success/5 p-8 md:p-10"
       aria-labelledby="ready-to-ship-heading"
     >
       <div className="absolute top-4 right-4">

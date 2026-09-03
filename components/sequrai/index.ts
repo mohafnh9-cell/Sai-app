@@ -6,7 +6,6 @@ export { VerificationStatusBadge } from "./VerificationStatusBadge";
 export { ScanStatusIndicator, type ScanPhase } from "./ScanStatusIndicator";
 export { RecommendedAction, SeverityCountGrid } from "./RecommendedAction";
 export { DiffContextBadge, DiffContextPanel, findingDiffContext } from "./DiffContext";
-export { EvidencePanel } from "./EvidencePanel";
 export { SecurityFindingCard } from "./SecurityFindingCard";
 export { SecurityTimeline, type SecurityTimelineEvent } from "./SecurityTimeline";
 export { RepositoryHealth } from "./RepositoryHealth";

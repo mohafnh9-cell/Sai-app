@@ -168,8 +168,8 @@ export default async function AttackCenterPage({ params, searchParams }: PagePro
   );
 
   return (
-    <div className="app-cinematic-bg min-h-full">
-      <div className="mx-auto max-w-4xl px-4 sm:px-8 pb-24 pt-6 sm:pt-10">
+    <div className="app-shell-bg min-h-full">
+      <div className="mx-auto max-w-6xl px-4 sm:px-8 pb-24 pt-6 sm:pt-10">
         <Button variant="ghost" size="sm" asChild className="gap-1.5 -ml-2 text-muted-foreground mb-8">
           <Link href={missionControlHref}>
             <ArrowLeft className="h-4 w-4" />

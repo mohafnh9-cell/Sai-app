@@ -26,14 +26,11 @@ export function RepositoryHealth({ areas, className }: RepositoryHealthProps) {
         </h2>
         <p className="text-xs text-muted-foreground mt-0.5">{t("repositoryHealth.subtitle")}</p>
       </div>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-x-4 gap-y-2 sm:grid-cols-2">
         {evaluated.map((area) => (
-          <div
-            key={area.key}
-            className="flex items-center justify-between gap-4 border-b border-border/40 pb-3 last:border-0"
-          >
+          <div key={area.key} className="flex items-baseline justify-between gap-4 py-1">
             <span className="text-sm text-muted-foreground">{area.label}</span>
-            <span className="text-lg font-semibold tabular-nums">{area.currentScore}</span>
+            <span className="text-sm font-semibold tabular-nums">{area.currentScore}</span>
           </div>
         ))}
       </div>

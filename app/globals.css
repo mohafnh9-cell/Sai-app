@@ -5,7 +5,7 @@
     "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --color-background: #07070a;
   --color-foreground: #f5f5f7;
-  --color-card: rgb(16 16 22 / 0.72);
+  --color-card: #121216;
   --color-card-foreground: #f5f5f7;
   --color-popover: #12121a;
   --color-popover-foreground: #f5f5f7;
@@ -35,8 +35,8 @@
   --color-warning: #fbbf7a;
   --color-danger: #ff6b7a;
   --color-info: #5b6cff;
-  --color-surface: rgb(16 16 22 / 0.72);
-  --color-surface-elevated: rgb(21 21 30 / 0.85);
+  --color-surface: #121216;
+  --color-surface-elevated: #17171d;
   --color-surface-hover: rgb(255 255 255 / 0.06);
   --color-background-deep: #030308;
   --color-text-muted: #71717a;
@@ -267,32 +267,14 @@
     animation: glow-score 5s ease-in-out infinite;
   }
 
-  .app-cinematic-bg {
-    background:
-      radial-gradient(ellipse 90% 60% at 50% -10%, rgb(79 70 229 / 0.14) 0%, transparent 55%),
-      radial-gradient(ellipse 60% 40% at 100% 0%, rgb(123 92 255 / 0.08) 0%, transparent 50%),
-      radial-gradient(ellipse 50% 35% at 0% 20%, rgb(91 108 255 / 0.06) 0%, transparent 45%),
-      var(--color-background-deep);
+  /* Flat, calm background for the authenticated app shell — no glow, no gradient. */
+  .app-shell-bg {
+    background: var(--color-background-deep);
   }
 
   .surface-premium {
-    background: linear-gradient(
-      180deg,
-      rgb(255 255 255 / 0.04) 0%,
-      rgb(255 255 255 / 0.015) 100%
-    );
-    border: 1px solid rgb(255 255 255 / 0.08);
-    box-shadow: var(--shadow-premium);
-    -webkit-backdrop-filter: blur(12px);
-    backdrop-filter: blur(12px);
-  }
-
-  @supports not (
-    (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))
-  ) {
-    .surface-premium {
-      background: rgb(16 16 22 / 0.96);
-    }
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
   }
 
   .shadow-premium {
@@ -305,6 +287,16 @@
 
   .product-hero {
     animation: product-reveal 0.2s ease-out both;
+  }
+
+  /* Off-canvas sheet entrance -- Radix unmounts on close, so this only
+     needs to cover mount-in (matches product-reveal's entrance-only model). */
+  .sheet-reveal-left {
+    animation: sheet-reveal-left 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .sheet-overlay-reveal {
+    animation: sheet-overlay-reveal 0.2s ease-out both;
   }
 
   .product-section {
@@ -370,11 +362,31 @@
   }
 }
 
+@keyframes sheet-reveal-left {
+  from {
+    transform: translate3d(-100%, 0, 0);
+  }
+  to {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes sheet-overlay-reveal {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .landing-reveal,
   .landing-glow-score,
   .product-hero,
-  .product-section {
+  .product-section,
+  .sheet-reveal-left,
+  .sheet-overlay-reveal {
     animation: none;
   }
 }

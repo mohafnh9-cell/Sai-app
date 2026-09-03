@@ -4,6 +4,7 @@ import type { ProductionVerdictV1 } from "@/brain/production-verdict/schema";
 import type { FixPromptContext } from "@/features/production-verdict/fix-prompt-context";
 import type { ScanFinding } from "@/features/security-scanner/components/types";
 import type { MissionControlView } from "../types";
+import type { FindingResolutionSummary } from "../types/mission-control-state";
 import { MissionHeader } from "./MissionHeader";
 import { ActiveTeams } from "./ActiveTeams";
 import { WhyTheseTeams } from "./WhyTheseTeams";
@@ -36,6 +37,7 @@ export function MissionControlTechnicalDetails({
   framework,
   findings,
   fixPromptContext,
+  findingResolution,
   projectId,
   openByDefault = false,
 }: {
@@ -44,6 +46,7 @@ export function MissionControlTechnicalDetails({
   framework?: string | null;
   findings?: ScanFinding[];
   fixPromptContext?: FixPromptContext;
+  findingResolution?: FindingResolutionSummary;
   projectId?: string;
   openByDefault?: boolean;
 }) {
@@ -90,7 +93,11 @@ export function MissionControlTechnicalDetails({
         ) : null}
 
         {findings && findings.length > 0 ? (
-          <TechnicalFindingsSection findings={findings} fixPromptContext={fixPromptContext} />
+          <TechnicalFindingsSection
+            findings={findings}
+            fixPromptContext={fixPromptContext}
+            findingResolution={findingResolution}
+          />
         ) : verdict ? (
           <DetailSubsection title={t("fullReport.findings")}>
             <p className="text-sm text-muted-foreground">{t("fullReport.noFindings")}</p>

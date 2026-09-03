@@ -38,7 +38,7 @@ export default async function DemoDashboardPage({
   const showNeedsAttention = showPortfolio && needsAttention.length > 0;
 
   return (
-    <div className="app-cinematic-bg min-h-full">
+    <div className="app-shell-bg min-h-full">
       <div className="mx-auto max-w-5xl px-4 sm:p-6 sm:px-8 py-10 sm:py-14 pb-20 space-y-10">
         {projects.length === 0 ? (
           <EmptyState

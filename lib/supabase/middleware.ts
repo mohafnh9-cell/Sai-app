@@ -10,6 +10,7 @@ import {
 const PROTECTED_PATHS = [
   "/dashboard",
   "/projects",
+  "/scanner-results",
   "/security",
   "/ai-fixes",
   "/timeline",

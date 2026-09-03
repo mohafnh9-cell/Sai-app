@@ -1,0 +1,53 @@
+{
+  "title": "Resultados del escáner",
+  "subtitle": "Historial técnico de ejecución de cada análisis de seguridad en tus proyectos.",
+  "emptyTitle": "Aún no hay análisis de seguridad.",
+  "emptyBody": "Conecta un repositorio para generar tu primer veredicto de producción.",
+  "emptyCta": "Conectar repositorio",
+  "columns": {
+    "repository": "Repositorio",
+    "commit": "Commit",
+    "status": "Estado",
+    "findings": "Hallazgos",
+    "duration": "Duración",
+    "date": "Fecha"
+  },
+  "status": {
+    "queued": "En cola",
+    "running": "En curso",
+    "completed": "Completado",
+    "failed": "Fallido",
+    "cancelled": "Cancelado"
+  },
+  "findingsSummaryWithBlockers": "{blockers} bloqueos · {total} hallazgos",
+  "findingsSummaryTotalOnly": "{total} hallazgos",
+  "findingsNone": "Sin hallazgos",
+  "noCommit": "Sin commit registrado",
+  "sourceUpload": "Subida",
+  "sourceLocal": "Local",
+  "detailSource": "Origen",
+  "durationUnknown": "—",
+  "viewResult": "Ver resultado",
+  "backToResults": "Resultados del escáner",
+  "detailTitle": "Resultado del análisis",
+  "detailRepository": "Repositorio",
+  "detailBranch": "Rama",
+  "detailCommit": "Commit",
+  "detailScanType": "Tipo de análisis",
+  "detailStatus": "Estado",
+  "detailDuration": "Duración",
+  "detailFilesAnalyzed": "Archivos analizados",
+  "detailFindings": "Hallazgos",
+  "detailExecution": "Ejecución",
+  "detailError": "Error",
+  "viewProductionVerdict": "Ver veredicto de producción",
+  "verdictPending": "Aún no se ha generado el veredicto de producción para este análisis.",
+  "scanTypeFull": "Completo",
+  "scanTypeIncremental": "Incremental",
+  "execution": {
+    "scan_started": "Análisis iniciado",
+    "repository_fetched": "Repositorio obtenido",
+    "scan_completed": "Análisis de seguridad completado",
+    "verdict_persisted": "Veredicto de producción generado"
+  }
+}

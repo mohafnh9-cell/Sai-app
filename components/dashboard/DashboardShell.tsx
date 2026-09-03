@@ -1,13 +1,18 @@
 "use client";
 
 import { useState } from "react";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
+import { usePathname } from "next/navigation";
 import { Menu, Search, X } from "lucide-react";
 import { DashboardSidebar } from "@/components/dashboard/sidebar";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
+import { AppBreadcrumbs } from "@/components/dashboard/AppBreadcrumbs";
 import { CommandPalette, openCommandPalette } from "@/components/dashboard/CommandPalette";
 import { Toaster } from "@/components/ui/toaster";
 import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
+import { buildBreadcrumbsFromPathname } from "@/lib/navigation/breadcrumbs";
 import type { WorkspacePresentation } from "@/lib/workspaces/presentation";
 import { useI18n } from "@/lib/i18n/client";
 
@@ -27,6 +32,7 @@ export function DashboardShell({
   activeWorkspaceId,
   bypass,
   isAdmin,
+  billingEnabled,
   children,
 }: {
   user: DashboardUser;
@@ -35,16 +41,35 @@ export function DashboardShell({
   activeWorkspaceId?: string | null;
   bypass?: boolean;
   isAdmin?: boolean;
+  billingEnabled?: boolean;
   children: React.ReactNode;
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { t } = useI18n("dashboard");
+  const { t: tn } = useI18n("navigation");
+  const pathname = usePathname();
+  const breadcrumbs = buildBreadcrumbsFromPathname(pathname ?? "/dashboard", {
+    labels: {
+      missionControl: tn("breadcrumbs.missionControl"),
+      projects: tn("breadcrumbs.projects"),
+      integrations: tn("breadcrumbs.integrations"),
+      settings: tn("breadcrumbs.settings"),
+      onboarding: tn("breadcrumbs.onboarding"),
+      productionIntelligence: tn("breadcrumbs.productionIntelligence"),
+      scannerResults: tn("breadcrumbs.scannerResults"),
+      analyzeCode: tn("breadcrumbs.analyzeCode"),
+      attackCenter: tn("breadcrumbs.attackCenter"),
+      journey: tn("breadcrumbs.journey"),
+      billing: tn("breadcrumbs.billing"),
+      project: tn("breadcrumbs.project"),
+    },
+  });
 
   return (
-    <div className="flex h-app max-h-app overflow-hidden app-cinematic-bg">
+    <div className="flex h-app max-h-app overflow-hidden app-shell-bg">
       <CommandPalette />
 
-      <div className="flex md:hidden fixed top-0 left-0 right-0 z-40 min-h-14 items-center gap-2 border-b border-border/50 bg-background/90 glass-surface px-3 safe-top">
+      <div className="flex md:hidden fixed top-0 left-0 right-0 z-40 min-h-14 items-center gap-2 border-b border-border/50 bg-background px-3 safe-top">
         <Button
           variant="ghost"
           size="icon"
@@ -54,9 +79,7 @@ export function DashboardShell({
         >
           <Menu className="h-5 w-5" />
         </Button>
-        <span className="truncate text-sm font-semibold flex-1 min-w-0 text-gradient">
-          SequrAI
-        </span>
+        <AppBreadcrumbs items={breadcrumbs} className="flex-1 min-w-0" />
         <Button
           variant="ghost"
           size="icon"
@@ -75,39 +98,36 @@ export function DashboardShell({
           workspaces={workspaces}
           activeWorkspaceId={activeWorkspaceId}
           isAdmin={isAdmin}
+          billingEnabled={billingEnabled}
         />
       </div>
 
-      {mobileOpen && (
-        <>
-          <button
-            type="button"
-            className="fixed inset-0 z-50 bg-black/50 md:hidden"
-            aria-label={t("closeMenu")}
-            onClick={() => setMobileOpen(false)}
-          />
-          <div className="fixed inset-y-0 left-0 z-50 md:hidden shadow-xl">
-            <DashboardSidebar
-              user={user}
-              orgName={orgName}
-              workspaces={workspaces}
-              activeWorkspaceId={activeWorkspaceId}
-              isAdmin={isAdmin}
-              onNavigate={() => setMobileOpen(false)}
-              headerAction={
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setMobileOpen(false)}
-                  aria-label={t("closeMenu")}
-                >
+      <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+        <SheetContent
+          side="left"
+          showClose={false}
+          className="w-[240px] p-0 md:hidden outline-none"
+          aria-describedby={undefined}
+        >
+          <DialogPrimitive.Title className="sr-only">{t("openMenu")}</DialogPrimitive.Title>
+          <DashboardSidebar
+            user={user}
+            orgName={orgName}
+            workspaces={workspaces}
+            activeWorkspaceId={activeWorkspaceId}
+            isAdmin={isAdmin}
+            billingEnabled={billingEnabled}
+            onNavigate={() => setMobileOpen(false)}
+            headerAction={
+              <DialogPrimitive.Close asChild>
+                <Button variant="ghost" size="icon" aria-label={t("closeMenu")}>
                   <X className="h-5 w-5" />
                 </Button>
-              }
-            />
-          </div>
-        </>
-      )}
+              </DialogPrimitive.Close>
+            }
+          />
+        </SheetContent>
+      </Sheet>
 
       <div className="flex flex-1 flex-col min-h-0 min-w-0">
         <DashboardHeader />

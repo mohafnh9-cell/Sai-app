@@ -8,6 +8,7 @@ import type { SecurityTestContext } from "@/features/security-testing/types";
 import type { ProtectionCenterSnapshot } from "@/features/continuous-protection/types";
 import type { AnalysisRunListItem } from "@/server/analysis-runs/list-analysis-runs";
 import type { FixPromptContext } from "@/features/production-verdict/fix-prompt-context";
+import type { FindingResolutionSummary } from "@/features/mission-control/types/mission-control-state";
 import {
   deriveHasCompletedAnalysis,
   deriveLastAnalysisAt,
@@ -30,6 +31,9 @@ export type BuildMissionControlStateInput = {
   securityTestContext: SecurityTestContext | null;
   protectionCenter: ProtectionCenterSnapshot | null;
   fixPromptContext?: FixPromptContext;
+  findingResolution?: FindingResolutionSummary;
+  /** "github" | "upload" | null -- the ingestion source of the scan behind the current verdict (Phase 10). */
+  scanSource?: string | null;
   reportHref?: string;
   flags: {
     analysisRunIsolationEnabled: boolean;
@@ -163,6 +167,8 @@ export function buildMissionControlState(input: BuildMissionControlStateInput): 
       showReviewCompleteBanner: Boolean(input.ui.reviewComplete && missionLoad.verdict),
       ...(input.reportHref ? { reportHref: input.reportHref } : {}),
       ...(input.fixPromptContext ? { fixPromptContext: input.fixPromptContext } : {}),
+      ...(input.findingResolution ? { findingResolution: input.findingResolution } : {}),
+      ...(input.scanSource ? { scanSource: input.scanSource } : {}),
       ...(input.securityTestContext?.attackCenterHref
         ? { attackCenterHref: input.securityTestContext.attackCenterHref }
         : {}),
