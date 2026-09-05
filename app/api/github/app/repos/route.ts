@@ -44,17 +44,27 @@ export async function GET(request: Request) {
     repos = await listInstallationRepositories(installation.github_installation_id);
   } catch (error) {
     if (error instanceof GitHubInstallationApiError) {
+      console.error("github_app_repos_list_failed", {
+        installationId: installation.id,
+        status: error.status,
+        message: error.message,
+      });
       return NextResponse.json(
-        { error: "Could not list GitHub repositories", code: githubErrorCode(error.status) },
+        { error: githubErrorMessage(error.status), code: githubErrorCode(error.status) },
         { status: githubErrorStatus(error.status) }
       );
     }
     console.error("github_app_repos_list_failed", {
       installationId: installation.id,
+      errorType: error instanceof Error ? error.name : "unknown",
       message: error instanceof Error ? error.message : "unknown",
     });
     return NextResponse.json(
-      { error: "Could not list GitHub repositories", code: "github_error" },
+      {
+        error:
+          "Could not list GitHub repositories due to an unexpected error (not a GitHub API response -- check server logs for the real cause, e.g. a malformed GITHUB_APP_PRIVATE_KEY).",
+        code: "github_error",
+      },
       { status: 502 }
     );
   }
@@ -91,4 +101,18 @@ function githubErrorCode(upstreamStatus: number): string {
   if (upstreamStatus === 404) return "github_not_found";
   if (upstreamStatus === 429) return "github_rate_limited";
   return "github_unavailable";
+}
+
+/** Actionable, distinct text per real cause -- shown directly in the UI. */
+function githubErrorMessage(upstreamStatus: number): string {
+  if (upstreamStatus === 401 || upstreamStatus === 403) {
+    return "GitHub denied access to this installation (expired token or insufficient permissions). Try \"Reconnect GitHub\", or check that the SequrAI GitHub App is still installed and active at github.com/settings/installations.";
+  }
+  if (upstreamStatus === 404) {
+    return "GitHub reports this App installation no longer exists. It was likely uninstalled on GitHub's side -- reconnect GitHub to create a new installation.";
+  }
+  if (upstreamStatus === 429) {
+    return "GitHub rate limit reached while listing repositories. Wait a minute and try again.";
+  }
+  return `GitHub is temporarily unavailable (status ${upstreamStatus}). Try again shortly.`;
 }
