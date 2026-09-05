@@ -3,6 +3,7 @@ import {
   classifySecretDetection,
   inferSecretClassificationFromPersistedFinding,
   isNonBlockingSecretClassification,
+  severityForSecretClassification,
   SECRET_CLASSIFICATION_METADATA_KEY,
 } from "../rules/secret-classification";
 
@@ -160,6 +161,70 @@ describe("classifySecretDetection", () => {
       evidence: "credential=[REDACTED]",
     });
     expect(result).toBeUndefined();
+  });
+
+  describe("Phase 31.1 -- real-world false positives from next-saas-starter / NodeGoat", () => {
+    it("does not flag an enum member whose value echoes its own identifier (UPDATE_PASSWORD = 'UPDATE_PASSWORD')", () => {
+      const result = classifySecretDetection({
+        path: "lib/db/schema.ts",
+        value: "UPDATE_PASSWORD",
+        variableName: "UPDATE_PASSWORD",
+        line: "  UPDATE_PASSWORD = 'UPDATE_PASSWORD',",
+        lineIndex: 0,
+        fileLines: testLines("  UPDATE_PASSWORD = 'UPDATE_PASSWORD',"),
+      });
+      expect(isNonBlockingSecretClassification(result.classification)).toBe(true);
+    });
+
+    it("does not flag an ordinary error message near a password-named variable ('Invalid password')", () => {
+      const result = classifySecretDetection({
+        path: "app/routes/session.js",
+        value: "Invalid password",
+        variableName: "invalidPasswordErrorMessage",
+        line: 'const invalidPasswordErrorMessage = "Invalid password";',
+        lineIndex: 0,
+        fileLines: testLines('const invalidPasswordErrorMessage = "Invalid password";'),
+      });
+      expect(isNonBlockingSecretClassification(result.classification)).toBe(true);
+    });
+
+    it("still flags a genuinely credential-shaped value in production source (identifier + value evidence together)", () => {
+      const result = classifySecretDetection({
+        path: "server/config/production.ts",
+        value: "aK9pQ2rT7vN4wL8hJ3sT6yU1zA5bC0dE",
+        variableName: "apiSecretKey",
+        line: 'const apiSecretKey = "aK9pQ2rT7vN4wL8hJ3sT6yU1zA5bC0dE";',
+        lineIndex: 0,
+        fileLines: testLines('const apiSecretKey = "aK9pQ2rT7vN4wL8hJ3sT6yU1zA5bC0dE";'),
+      });
+      expect(isNonBlockingSecretClassification(result.classification)).toBe(false);
+    });
+
+    it("downgrades a credential-shaped value inside a test/ path to non-blocking (TEST_FIXTURE), reaching severity via isNonBlockingSecretClassification", () => {
+      const result = classifySecretDetection({
+        path: "test/security/profile-test.js",
+        value: "User1_123",
+        variableName: "sutUserPassword",
+        line: 'var sutUserPassword = "User1_123";',
+        lineIndex: 0,
+        fileLines: testLines('var sutUserPassword = "User1_123";'),
+      });
+      expect(result.classification).toBe("TEST_FIXTURE");
+      expect(isNonBlockingSecretClassification(result.classification)).toBe(true);
+      expect(severityForSecretClassification(result.classification)).toBe("info");
+    });
+
+    it("a real-format credential (sk_live_) in a test path is still REAL_SECRET -- test paths do not blanket-suppress known formats", () => {
+      const result = classifySecretDetection({
+        path: "test/security/leaked.js",
+        value: "sk_live_abcdefghijklmnopqrstuvwxyz",
+        variableName: "apiKey",
+        line: 'const apiKey = "sk_live_abcdefghijklmnopqrstuvwxyz";',
+        lineIndex: 0,
+        fileLines: testLines('const apiKey = "sk_live_abcdefghijklmnopqrstuvwxyz";'),
+      });
+      expect(result.classification).toBe("REAL_SECRET");
+    });
   });
 
   it("exports non-blocking classifications", () => {

@@ -9,6 +9,7 @@ import {
 import { GitHubServiceError } from "@/lib/github/repository-service";
 import { markRepositorySyncError } from "@/server/repository-sync";
 import { scheduleAutomationScan } from "@/server/jobs/schedule-scan";
+import { assertOrganizationCanRunScan } from "@/server/billing/assert-scan-access";
 import {
   buildCommitValidationInput,
   hasActiveRepositoryReview,
@@ -88,6 +89,22 @@ export async function runAutomaticProductionReview(
       ok: true,
       action: "automatic_review_skipped",
       reason: decision.reason,
+    };
+  }
+
+  // Phase 31.2: automatic (webhook-triggered) reviews previously created
+  // scans with no billing check -- every other scan-creation path already
+  // goes through this same gate. A no-op today (billing disabled), but a
+  // real free-scan bypass once it's enabled otherwise.
+  try {
+    await assertOrganizationCanRunScan(admin, input.project.organization_id, {
+      id: input.userId,
+    });
+  } catch {
+    return {
+      ok: true,
+      action: "automatic_review_skipped",
+      reason: "subscription_required",
     };
   }
 

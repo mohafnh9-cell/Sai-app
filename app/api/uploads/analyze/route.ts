@@ -8,6 +8,7 @@ import { normalizeLocalFiles, LocalFilesValidationError } from "@/lib/upload/nor
 import { buildUploadSnapshot } from "@/lib/upload/build-upload-snapshot";
 import { runUploadScan, UploadScanError } from "@/server/uploads/run-upload-scan";
 import { SOURCE_ANALYSIS_LIMITS, LOCAL_ANALYSIS_TRANSPORT_MAX_BYTES } from "@/lib/upload/source-limits";
+import { ScanRequestError } from "@/server/security-scanner/request-context";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -189,6 +190,41 @@ async function handleUpload(request: Request) {
     );
   }
 
+  const snapshot = buildUploadSnapshot({
+    projectName,
+    files: extraction.files,
+    totalBytes: extraction.totalBytes,
+    omissions: extraction.omissions,
+  });
+
+  // Phase 31.2: idempotency guard. Upload/Local Analysis has no stable
+  // external identity to dedupe against (unlike a GitHub repo), but a
+  // double-click or network retry submits byte-identical content within
+  // seconds -- snapshot.commitSha is a deterministic content hash
+  // (build-upload-snapshot.ts), so a recent scan with the same org +
+  // content hash + source is the same submission, not a new one. A short
+  // window (not a permanent unique constraint) so a deliberate re-upload of
+  // the same project later still creates a fresh analysis.
+  const dedupeWindowStart = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+  const { data: recentDuplicate } = await admin
+    .from("scans")
+    .select("id, project_id")
+    .eq("organization_id", organizationId)
+    .eq("commit_sha", snapshot.commitSha)
+    .eq("source", isLocalAnalysis ? "local" : "upload")
+    .gte("created_at", dedupeWindowStart)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (recentDuplicate?.project_id && recentDuplicate?.id) {
+    return NextResponse.json({
+      projectId: recentDuplicate.project_id as string,
+      scanId: recentDuplicate.id as string,
+      duplicate: true,
+    });
+  }
+
   const { data: project, error: projectError } = await admin
     .from("projects")
     .insert({
@@ -209,12 +245,6 @@ async function handleUpload(request: Request) {
   }
 
   const projectId = project.id as string;
-  const snapshot = buildUploadSnapshot({
-    projectName,
-    files: extraction.files,
-    totalBytes: extraction.totalBytes,
-    omissions: extraction.omissions,
-  });
 
   try {
     const { scanId } = await runUploadScan(admin, {
@@ -227,6 +257,13 @@ async function handleUpload(request: Request) {
 
     return NextResponse.json({ projectId, scanId });
   } catch (error) {
+    if (error instanceof ScanRequestError) {
+      // Same entitlement-gate error GitHub scans surface (assert-scan-access.ts)
+      // -- real status/code/message, not a generic 500. A no-op today since
+      // isBillingEnabled() is false; only reachable once billing is enabled.
+      console.error("upload_scan_rejected", { code: error.code, status: error.status });
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
     console.error("upload_scan_failed", {
       name: error instanceof Error ? error.name : "UnknownError",
       code: error instanceof UploadScanError ? error.code : undefined,

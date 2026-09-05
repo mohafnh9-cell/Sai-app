@@ -371,6 +371,25 @@ export async function generateAndPersistProductionVerdict(
   });
 
   try {
+    // Phase 30: selective AI reasoning overlay -- runs after the
+    // deterministic verdict is already persisted above, so its own success,
+    // failure, timeout, or unavailability can never affect the verdict this
+    // function already returned/committed. Purely additive; see
+    // server/ai-reasoning/run-scan-reasoning.ts for the full authority model.
+    const { runScanAiReasoning } = await import("@/server/ai-reasoning/run-scan-reasoning");
+    await runScanAiReasoning(admin, {
+      organizationId: input.organizationId,
+      projectId: input.projectId,
+      scanId: input.scanId,
+    });
+  } catch (aiReasoningError) {
+    log("ai_reasoning_unexpected_error", {
+      scanId: input.scanId,
+      error: aiReasoningError instanceof Error ? aiReasoningError.message : String(aiReasoningError),
+    });
+  }
+
+  try {
     const { recordReviewCompletedMemory } = await import("@/server/production-memory/record-writes");
     await recordReviewCompletedMemory(admin, {
       organizationId: input.organizationId,

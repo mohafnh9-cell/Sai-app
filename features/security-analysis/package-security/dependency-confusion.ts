@@ -1,5 +1,5 @@
 import type { SbomEcosystem } from "../sbom/types";
-import { findSimilarPackages } from "./typosquat";
+import { isKnownPopularPackage } from "./typosquat";
 
 const INTERNAL_PREFIXES = [
   "internal-",
@@ -38,12 +38,22 @@ export function checkDependencyConfusion(
   if (scopedMatch) {
     const scope = scopedMatch[1];
     const unscopedName = packageName.replace(SCOPED_PACKAGE_RE, "");
-    const similar = findSimilarPackages(unscopedName, ecosystem, 1, 1);
-    if (similar.length > 0) {
+    // "@types/<pkg>" mirroring "<pkg>" is DefinitelyTyped's universal,
+    // by-design convention (@types/react, @types/node, ...) -- an exact
+    // name match under this specific scope is expected, not suspicious.
+    if (scope === "types") return null;
+    // Phase 31.1: this must be an EXACT match against a known popular
+    // unscoped name, not fuzzy similarity -- a scoped package can
+    // legitimately resemble an unscoped one (e.g. "@radix-ui/rect" reads
+    // similar to "react" but shares no meaningful identity with it).
+    // Sharing the *exact* bare name of a well-known unscoped package under
+    // an unrelated scope (e.g. "@some-scope/react") is a much narrower,
+    // genuinely suspicious signal worth flagging.
+    if (isKnownPopularPackage(unscopedName, ecosystem)) {
       return {
         risk: true,
         rule: "package.dependency-confusion.scoped-public-collision",
-        message: `Scoped package '${packageName}' contains unscoped name '${unscopedName}' similar to known public package '${similar[0]?.name}'. Verify scope authenticity to avoid dependency confusion.`,
+        message: `Scoped package '${packageName}' shares the exact name '${unscopedName}' with a well-known public package. Verify scope authenticity to avoid dependency confusion.`,
         confidence: "HIGH",
       };
     }

@@ -20,7 +20,21 @@ import { startRepositoryManualScan } from "@/server/security-scanner/start-repos
 import { mapStartScanResultToHttpBody } from "@/server/analysis-runs/map-start-scan-result";
 
 export const runtime = "nodejs";
-export const maxDuration = 300;
+// Phase 25: was 300s, silently inconsistent with vercel.json's 60s entry
+// for this same route (`app/api/repositories/**/scans/route.ts`). Next.js's
+// route segment config takes precedence over vercel.json's `functions` map
+// for routes it owns, so 300 was almost certainly the value actually in
+// effect -- a real, misleading gap between declared and effective config.
+// Corrected to match vercel.json's already-intended value: this route's
+// POST handler explicitly never awaits scan execution
+// (startRepositoryManualScan passes awaitInlineExecution: false to
+// scheduleScanRun) -- its only synchronous work is a handful of bounded DB
+// operations plus one GitHub HEAD-commit-resolution call, none of which
+// plausibly need more than a small fraction of 60s even under real-world
+// degradation. 300s was very likely copy-pasted from a genuinely
+// long-running route (full-product-audit, mcp) rather than deliberately
+// chosen for this one.
+export const maxDuration = 60;
 
 const paramsSchema = z.object({ repositoryId: z.string().uuid() });
 const createScanSchema = z
@@ -113,7 +127,18 @@ export async function POST(
   { params }: { params: Promise<{ repositoryId: string }> }
 ) {
   try {
-    const rateLimited = await enforceRateLimit(request);
+    // Dedicated budget (not the shared default "api" bucket every other
+    // route uses) -- scan creation is expensive (repository fetch +
+    // scanner run), so it must not share its ceiling with unrelated
+    // read-heavy dashboard traffic from the same IP, and abusive scan
+    // spamming from one IP must not be able to spend the same budget that
+    // read-only endpoints depend on (Phase 13 finding).
+    const rateLimited = await enforceRateLimit(request, {
+      limit: 20,
+      windowMs: 60_000,
+      keyPrefix: "scan-create",
+      errorMessage: "Too many scan requests. Try again shortly.",
+    });
     if (rateLimited) return rateLimited;
 
     const parsedParams = paramsSchema.safeParse(await params);

@@ -346,3 +346,73 @@ describe("rule isolation", () => {
     expect(result.omissions).toContainEqual(expect.objectContaining({ reason: "rule-error", ruleId: "a.broken" }));
   });
 });
+
+describe("Phase 31.1 -- web.open-redirect (literal vs. request-derived destination)", () => {
+  async function openRedirectFindings(content: string) {
+    const result = await scanRepository([{ path: "app/api/checkout/route.ts", content }]);
+    return result.findings.filter((f) => f.ruleId === "web.open-redirect");
+  }
+
+  it("does NOT flag a literal destination", async () => {
+    const findings = await openRedirectFindings(
+      "export function GET() { return NextResponse.redirect(new URL('/dashboard', request.url)); }"
+    );
+    expect(findings).toHaveLength(0);
+  });
+
+  it("does NOT flag request.url used only as new URL()'s base argument", async () => {
+    const findings = await openRedirectFindings(
+      "export function GET() { return NextResponse.redirect(new URL('/pricing', request.url)); }"
+    );
+    expect(findings).toHaveLength(0);
+  });
+
+  it("does NOT flag new URL(req.url) used to parse the current request (not a redirect at all)", async () => {
+    const findings = await openRedirectFindings(
+      'export function GET(req) { const id = new URL(req.url).searchParams.get("id"); return Response.json({id}); }'
+    );
+    expect(findings).toHaveLength(0);
+  });
+
+  it("FLAGS a query-controlled destination", async () => {
+    const findings = await openRedirectFindings(
+      "export function GET(req) { const dest = searchParams.get('redirect'); return NextResponse.redirect(new URL(searchParams.get('redirect'), request.url)); }"
+    );
+    expect(findings.length).toBeGreaterThan(0);
+  });
+
+  it("FLAGS direct user input passed straight to redirect()", async () => {
+    const findings = await openRedirectFindings(
+      "export function GET(req, res) { return res.redirect(req.query.url); }"
+    );
+    expect(findings.length).toBeGreaterThan(0);
+  });
+
+  it("does NOT flag a redirect() call whose argument is a member expression unrelated to the request (e.g. a Stripe session URL)", async () => {
+    const findings = await openRedirectFindings(
+      "export async function GET() { const session = await stripe.checkout.sessions.retrieve(id); redirect(session.url); }"
+    );
+    expect(findings).toHaveLength(0);
+  });
+
+  it("does NOT flag redirect(destination) when destination was assigned a literal a few lines earlier", async () => {
+    const findings = await openRedirectFindings(
+      ["function go() {", "  const destination = '/dashboard';", "  redirect(destination);", "}"].join("\n")
+    );
+    expect(findings).toHaveLength(0);
+  });
+
+  it("FLAGS redirect(destination) when destination was assigned a request-derived value a few lines earlier", async () => {
+    const findings = await openRedirectFindings(
+      ["function go(req) {", "  const destination = req.query.url;", "  redirect(destination);", "}"].join("\n")
+    );
+    expect(findings.length).toBeGreaterThan(0);
+  });
+
+  it("real reproduction: NodeGoat's res.redirect(req.query.url) is still detected", async () => {
+    const findings = await openRedirectFindings(
+      '        return res.redirect(req.query.url);\n'
+    );
+    expect(findings.length).toBeGreaterThan(0);
+  });
+});

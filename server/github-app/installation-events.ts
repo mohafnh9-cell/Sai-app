@@ -185,7 +185,20 @@ export async function finalizeGitHubAppInstallation(input: {
     repositorySelection: remote.repository_selection,
   });
 
-  const repos = await listInstallationRepositories(remote.id);
+  // Phase 31.2: listInstallationRepositories now throws on a GitHub API
+  // failure instead of silently returning []. The installation row is
+  // already persisted above -- don't fail the whole install finalize over a
+  // transient repo-listing error; the repos list can be (re)fetched later
+  // via GET /api/github/app/repos, which surfaces the failure properly.
+  let repos: Awaited<ReturnType<typeof listInstallationRepositories>> = [];
+  try {
+    repos = await listInstallationRepositories(remote.id);
+  } catch (error) {
+    console.error("github_app_finalize_repo_sync_failed", {
+      installationId: remote.id,
+      message: error instanceof Error ? error.message : "unknown",
+    });
+  }
   for (const repo of repos) {
     await upsertInstallationRepository(input.admin, {
       installationRowId,

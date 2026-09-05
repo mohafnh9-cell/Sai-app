@@ -78,12 +78,24 @@ export async function updateProjectAction(projectId: string, formData: FormData)
     updated_at: new Date().toISOString(),
   };
 
-  const { error } = await supabase
+  // Phase 31.2 (Task 3 follow-up): this query has no explicit
+  // organization_id check -- it relies entirely on the RLS policy
+  // "Members can update their org projects" (001_initial_schema.sql:156)
+  // to silently affect zero rows for a project outside the caller's
+  // organization. That's a real, verified backstop, but without reading
+  // back which row (if any) was actually touched, a cross-org attempt
+  // looked identical to success: no `error`, redirect fires as normal.
+  // Selecting the updated row's id makes that distinction explicit.
+  const { data: updated, error } = await supabase
     .from("projects")
     .update(payload)
-    .eq("id", projectId);
+    .eq("id", projectId)
+    .select("id");
 
   if (error) return { error: { _root: [error.message] } };
+  if (!updated || updated.length === 0) {
+    return { error: { _root: ["Project not found or you do not have access to update it."] } };
+  }
 
   revalidatePath(`/projects/${projectId}`);
   revalidatePath("/projects");
@@ -95,12 +107,20 @@ export async function deleteProjectAction(projectId: string) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { error } = await supabase
+  // Same reasoning as updateProjectAction above -- RLS ("Owners and admins
+  // can delete projects", 001_initial_schema.sql:166) genuinely blocks a
+  // cross-org delete, but a silently-affected-zero-rows delete previously
+  // looked identical to a real one from the caller's side.
+  const { data: deleted, error } = await supabase
     .from("projects")
     .delete()
-    .eq("id", projectId);
+    .eq("id", projectId)
+    .select("id");
 
   if (error) return { error: error.message };
+  if (!deleted || deleted.length === 0) {
+    return { error: "Project not found or you do not have access to delete it." };
+  }
 
   revalidatePath("/projects");
   redirect("/projects");

@@ -26,10 +26,20 @@ export const packageSecurityRule: ScanRule = {
   title: "Package hallucination and dependency confusion analysis",
   run: async ({ files, shared }) => {
     const repositoryFiles = shared?.repositoryFiles ?? toRepositoryFiles(files);
-    const { findings } = await analyzePackageSecurityEvidence(repositoryFiles, {
+    const { scan, findings } = await analyzePackageSecurityEvidence(repositoryFiles, {
       sbomComponents: shared?.sbomSnapshot.components,
       cache: shared?.registryCache,
     });
+    // Phase 23: best-effort only -- telemetry must never affect scan
+    // findings/behavior, so this is deliberately isolated from the actual
+    // scan logic above with its own try/catch.
+    try {
+      if (shared?.registryMetricsSink) {
+        shared.registryMetricsSink.current = scan.registryMetrics;
+      }
+    } catch {
+      // best-effort only
+    }
     if (findings.length === 0) {
       return [];
     }

@@ -12,7 +12,12 @@ export default async function ScanHistoryPage({
   const auth = await getCachedServerAuthContext();
   if (!auth) redirect("/login");
 
-  const { data: project } = await auth.supabase.from("projects").select("id").eq("id", id).maybeSingle();
+  const { data: project } = await auth.supabase
+    .from("projects")
+    .select("id")
+    .eq("id", id)
+    .eq("organization_id", auth.organizationId)
+    .maybeSingle();
   if (!project) notFound();
 
   redirect(projectVerdictHref(id, { technical: "open" }));

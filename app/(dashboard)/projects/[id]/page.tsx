@@ -17,10 +17,12 @@ export default async function ProjectDetailPage({
   const auth = await getCachedServerAuthContext();
   if (!auth?.organizationId) redirect("/login");
 
+  // Explicit organization_id filter, not just RLS (Phase 12 audit finding).
   const { data: project } = await auth.supabase
     .from("projects")
     .select("id")
     .eq("id", id)
+    .eq("organization_id", auth.organizationId)
     .maybeSingle();
 
   if (!project) notFound();

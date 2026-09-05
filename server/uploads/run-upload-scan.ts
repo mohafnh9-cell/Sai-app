@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { InlineScanJobRunner } from "@/server/security-scanner/scan-job-runner";
 import { createScanJob, markScanJobCompleted, markScanJobFailed, markScanJobRunning } from "@/server/jobs/scan-job-store";
 import { ensureProductionVerdictForCompletedScan } from "@/server/production-verdict/ensure-verdict-for-scan";
+import { assertOrganizationCanRunScan } from "@/server/billing/assert-scan-access";
 import type { RepositorySnapshot } from "@/lib/github/repository-service";
 
 export class UploadScanError extends Error {
@@ -41,6 +42,13 @@ export async function runUploadScan(
     source?: "upload" | "local";
   }
 ): Promise<{ scanId: string }> {
+  // Same server-side entitlement gate GitHub scans go through
+  // (start-repository-manual-scan.ts) -- reused as-is, not reimplemented.
+  // A no-op today (isBillingEnabled() is false for beta), but Upload/Local
+  // must not be able to bypass it once billing is enabled. Placed before
+  // any scan work begins, matching the GitHub call site's placement.
+  await assertOrganizationCanRunScan(admin, input.organizationId, { id: input.userId });
+
   const { data: scan, error: insertError } = await admin
     .from("scans")
     .insert({

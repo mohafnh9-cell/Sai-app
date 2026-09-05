@@ -67,10 +67,43 @@ export type PackageSecurityRawFinding = {
   match?: string;
 };
 
+/**
+ * Phase 22 -- aggregate, scan-level dependency-intelligence metrics.
+ * Deliberately aggregate-only (no per-dependency log lines) so this stays
+ * cheap at 1,000-scan scale; carries only counts/durations, nothing
+ * sensitive (no package names, no URLs, no response content).
+ *
+ * registryPhaseDurationMs is real wall-clock time (measured start-to-finish
+ * around the whole lookupPackages call), NOT the sum of individual lookup
+ * durations -- those overlap under concurrency, so summing them would wildly
+ * overstate elapsed time. Both are reported so the difference is visible.
+ */
+export type RegistryPhaseMetrics = {
+  dependencyCount: number;
+  uniqueDependencyCount: number;
+  registryLookupCount: number;
+  cacheHitCount: number;
+  coalescedCount: number;
+  networkRequestCount: number;
+  p50LookupMs: number;
+  p95LookupMs: number;
+  p99LookupMs: number;
+  maxLookupMs: number;
+  /** True wall-clock elapsed time for the whole registry-verification phase. */
+  registryPhaseDurationMs: number;
+  /** Sum of individual lookup durations -- NOT wall-clock; will exceed registryPhaseDurationMs whenever lookups overlap. */
+  sumOfLookupDurationsMs: number;
+  semaphoreWaitTotalMs: number;
+  unavailableCount: number;
+  timeoutCount: number;
+  retryCount: number;
+};
+
 export type PackageSecurityScanResult = {
   findings: PackageSecurityRawFinding[];
   dependenciesChecked: number;
   registryLookups: number;
   skippedInternal: number;
   registryUnavailable: boolean;
+  registryMetrics: RegistryPhaseMetrics;
 };

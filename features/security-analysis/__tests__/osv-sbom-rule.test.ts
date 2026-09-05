@@ -1,6 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { osvSbomRule } from "../rules/osv-sbom-rule";
 import { OSV_SBOM_RULE_ID } from "../osv/enrich-sbom";
+import { resetDependencyProcessCachesForTests } from "../shared/dependency-process-cache";
+
+// See osv-enrich-sbom.test.ts -- same cross-test isolation reasoning.
+beforeEach(() => {
+  resetDependencyProcessCachesForTests();
+});
 
 const PACKAGE_LOCK = JSON.stringify(
   {

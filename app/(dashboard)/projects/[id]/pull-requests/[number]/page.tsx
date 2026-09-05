@@ -21,10 +21,15 @@ export default async function PullRequestSecurityPage({ params, searchParams }: 
   const auth = await getCachedServerAuthContext();
   if (!auth) redirect("/login");
 
+  // Explicit organization_id filter, not just RLS -- this query already
+  // selected organization_id but never actually compared it against the
+  // caller's org (Phase 12 audit finding: selecting the field without using
+  // it for authorization is not a check).
   const { data: project } = await auth.supabase
     .from("projects")
     .select("id, name, github_repo, organization_id")
     .eq("id", projectId)
+    .eq("organization_id", auth.organizationId)
     .maybeSingle();
   if (!project) notFound();
 

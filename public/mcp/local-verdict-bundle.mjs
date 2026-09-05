@@ -15146,6 +15146,17 @@ function contextWindow(lines, lineIndex, radius = 4) {
   const end = Math.min(lines.length, lineIndex + radius + 1);
   return lines.slice(start, end).join("\n");
 }
+function looksLikeNaturalLanguageValue(value) {
+  if (/\s/.test(value)) return true;
+  if (/[.!?]$/.test(value)) return true;
+  return false;
+}
+function valueMatchesIdentifier(value, variableName) {
+  if (!variableName) return false;
+  const normalize = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const normalizedValue = normalize(value);
+  return normalizedValue.length > 0 && normalizedValue === normalize(variableName);
+}
 function shannonEntropy(value) {
   if (!value) return 0;
   const counts = /* @__PURE__ */ new Map();
@@ -15194,6 +15205,13 @@ function classifySecretDetection(input) {
       confidence: "high"
     };
   }
+  if (valueMatchesIdentifier(value, variableName)) {
+    return {
+      classification: "FALSE_POSITIVE",
+      signals: ["value_equals_identifier"],
+      confidence: "high"
+    };
+  }
   if (isTestOrExampleFile(path) && looksLikeTestFixtureSecretValue(value)) {
     return {
       classification: "TEST_FIXTURE",
@@ -15229,7 +15247,8 @@ ${line}`;
     signals.push("production_auth_context");
   }
   const entropy = shannonEntropy(value);
-  if (entropy >= 0.62 && value.length >= 16) {
+  const opaqueToken = !looksLikeNaturalLanguageValue(value);
+  if (opaqueToken && entropy >= 0.62 && value.length >= 16) {
     realScore += 1;
     signals.push("high_entropy");
   } else if (entropy <= 0.45 && value.length <= 32) {
@@ -15246,6 +15265,17 @@ ${line}`;
   if (fixtureScore >= 2 && realScore === 0) {
     return { classification: "TEST_FIXTURE", signals, confidence: "high" };
   }
+  const hasValueEvidence = signals.includes("high_entropy") || signals.includes("production_auth_context");
+  if (!hasValueEvidence) {
+    return { classification: "TEST_FIXTURE", signals: [...signals, "no_value_evidence"], confidence: "low" };
+  }
+  if (isTestOrExampleFile(path) && realScore < 3) {
+    return {
+      classification: "TEST_FIXTURE",
+      signals: [...signals, "test_path_dampened"],
+      confidence: "medium"
+    };
+  }
   if (realScore >= 2) {
     return {
       classification: realScore >= 2.5 ? "PROBABLE_SECRET" : "POTENTIAL_SECRET",
@@ -15253,7 +15283,7 @@ ${line}`;
       confidence: "medium"
     };
   }
-  if (realScore >= 1 || entropy >= 0.55) {
+  if (realScore >= 1 || opaqueToken && entropy >= 0.55) {
     return { classification: "POTENTIAL_SECRET", signals, confidence: "medium" };
   }
   if (fixtureScore >= 1) {
@@ -16107,8 +16137,8 @@ function parsePnpmLock(path, content) {
   const deps = [];
   const seen = /* @__PURE__ */ new Set();
   const patterns = [
-    /^\s+\/?(@?[^@\s:][^@:]*?)@(\d[^:\s]*)\s*:/gm,
-    /^\s+'(@?[^@'\s]+)@(\d[^']*)':\s*$/gm
+    /^[ \t]+\/?(@?[^@\s:\n-][^@:\n]*?)@(\d[^:\s]*)\s*:/gm,
+    /^[ \t]+'(@?[^@'\s]+)@(\d[^']*)':\s*$/gm
   ];
   for (const pattern of patterns) {
     let match;
@@ -16643,7 +16673,7 @@ function createOsvMemoryCache() {
 var PACKAGE_SECURITY_RULE_ID = "package-security.scan-packages";
 var PACKAGE_SECURITY_SOURCE_TOOL = "scan_packages";
 var REGISTRY_TIMEOUT_MS = 8e3;
-var REGISTRY_LOOKUP_CONCURRENCY = 8;
+var REGISTRY_LOOKUP_CONCURRENCY = 12;
 var REGISTRY_SUPPORTED_ECOSYSTEMS = /* @__PURE__ */ new Set([
   "npm",
   "pypi",
@@ -16687,7 +16717,158 @@ var NPM_BUILTIN_PACKAGES = /* @__PURE__ */ new Set([
   "process"
 ]);
 
+// node_modules/server-only/index.js
+throw new Error(
+  "This module cannot be imported from a Client Component module. It should only be used from a Server Component."
+);
+
+// features/security-analysis/shared/dependency-process-cache.ts
+var TRUTHY = /* @__PURE__ */ new Set(["1", "true", "yes", "on"]);
+function isExplicitlyTruthy(value) {
+  const normalized = value?.trim().toLowerCase();
+  return normalized != null && TRUTHY.has(normalized);
+}
+function isDependencyProcessCacheDisabled() {
+  return isExplicitlyTruthy(process.env.SEQURAI_DEP_CACHE_DISABLED);
+}
+function envMs(name, fallbackMs) {
+  const raw = process.env[name]?.trim();
+  if (!raw) return fallbackMs;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallbackMs;
+}
+var REGISTRY_CACHE_TTL_MS = envMs("SEQURAI_DEP_CACHE_TTL_REGISTRY_MS", 60 * 6e4);
+var OSV_CACHE_TTL_MS = envMs("SEQURAI_DEP_CACHE_TTL_OSV_MS", 15 * 6e4);
+var MAX_ENTRIES_PER_CACHE = 5e3;
+var TtlCache = class {
+  constructor(ttlMs) {
+    this.ttlMs = ttlMs;
+    this.store = /* @__PURE__ */ new Map();
+  }
+  get(key) {
+    const entry = this.store.get(key);
+    if (!entry) return void 0;
+    if (Date.now() > entry.expiresAt) {
+      this.store.delete(key);
+      return void 0;
+    }
+    return entry.value;
+  }
+  set(key, value) {
+    if (this.store.size >= MAX_ENTRIES_PER_CACHE && !this.store.has(key)) {
+      const oldestKey = this.store.keys().next().value;
+      if (oldestKey !== void 0) this.store.delete(oldestKey);
+    }
+    this.store.set(key, { value, expiresAt: Date.now() + this.ttlMs });
+  }
+  get size() {
+    return this.store.size;
+  }
+  clear() {
+    this.store.clear();
+  }
+};
+var registryProcessCache = new TtlCache(REGISTRY_CACHE_TTL_MS);
+var osvProcessCache = new TtlCache(OSV_CACHE_TTL_MS);
+function isPromotableRegistryStatus(status) {
+  return status === "exists" || status === "not_found";
+}
+function seedRegistryScanCache(keys) {
+  const scanCache = /* @__PURE__ */ new Map();
+  if (isDependencyProcessCacheDisabled()) return scanCache;
+  for (const key of keys) {
+    const cached2 = registryProcessCache.get(key);
+    if (cached2) scanCache.set(key, cached2);
+  }
+  return scanCache;
+}
+function promoteRegistryResults(results) {
+  if (isDependencyProcessCacheDisabled()) return;
+  for (const [key, result] of results) {
+    if (isPromotableRegistryStatus(result.status)) {
+      registryProcessCache.set(key, result);
+    }
+  }
+}
+function promoteOsvResults(scanCache) {
+  if (isDependencyProcessCacheDisabled()) return;
+  for (const [key, vulns] of scanCache) {
+    osvProcessCache.set(key, vulns);
+  }
+}
+function seedOsvScanCacheFromProcess(keys) {
+  const scanCache = /* @__PURE__ */ new Map();
+  if (isDependencyProcessCacheDisabled()) return scanCache;
+  for (const key of keys) {
+    const cached2 = osvProcessCache.get(key);
+    if (cached2) scanCache.set(key, cached2);
+  }
+  return scanCache;
+}
+var inFlightRegistryLookups = /* @__PURE__ */ new Map();
+function coalesceRegistryLookup(key, fetchFn, onCoalesced) {
+  if (isDependencyProcessCacheDisabled()) return fetchFn();
+  const existing = inFlightRegistryLookups.get(key);
+  if (existing) {
+    try {
+      onCoalesced?.();
+    } catch {
+    }
+    return existing;
+  }
+  const pending = fetchFn().finally(() => {
+    inFlightRegistryLookups.delete(key);
+  });
+  inFlightRegistryLookups.set(key, pending);
+  return pending;
+}
+var REGISTRY_PROCESS_CONCURRENCY = (() => {
+  const raw = process.env.SEQURAI_REGISTRY_PROCESS_CONCURRENCY?.trim();
+  const parsed = raw ? Number.parseInt(raw, 10) : NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 32;
+})();
+var Semaphore = class {
+  constructor(max) {
+    this.max = max;
+    this.active = 0;
+    this.waiters = [];
+  }
+  async acquire() {
+    if (this.active < this.max) {
+      this.active += 1;
+      return () => this.release();
+    }
+    return new Promise((resolve2) => {
+      this.waiters.push(() => {
+        this.active += 1;
+        resolve2(() => this.release());
+      });
+    });
+  }
+  release() {
+    this.active -= 1;
+    const next = this.waiters.shift();
+    if (next) next();
+  }
+  get activeCount() {
+    return this.active;
+  }
+};
+var registryProcessSemaphore = new Semaphore(REGISTRY_PROCESS_CONCURRENCY);
+async function withRegistryProcessSlot(fn, onWait) {
+  if (isDependencyProcessCacheDisabled()) return fn();
+  const waitStart = performance.now();
+  const release = await registryProcessSemaphore.acquire();
+  onWait?.(performance.now() - waitStart);
+  try {
+    return await fn();
+  } finally {
+    release();
+  }
+}
+
 // features/security-analysis/package-security/registry-client.ts
+var REGISTRY_CLIENT_USER_AGENT = "SequrAI-Scanner/1.0";
 function cacheKey(ecosystem, name) {
   return `${ecosystem}:${name.toLowerCase()}`;
 }
@@ -16710,13 +16891,24 @@ function registryUrl(ecosystem, name) {
       return "";
   }
 }
-async function fetchWithTimeout(url2, fetchImpl, timeoutMs) {
+var HEAD_SAFE_ECOSYSTEMS = /* @__PURE__ */ new Set(["npm", "pypi", "rubygems"]);
+function lookupMethodFor(ecosystem) {
+  return HEAD_SAFE_ECOSYSTEMS.has(ecosystem) ? "HEAD" : "GET";
+}
+async function fetchWithTimeout(url2, method, fetchImpl, timeoutMs) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     return await fetchImpl(url2, {
-      method: "GET",
-      headers: { Accept: "application/json" },
+      method,
+      // Phase 18A: crates.io's real API rejects/blocks requests without a
+      // descriptive User-Agent identifying the client (their published
+      // crawler policy requires this of automated clients; verified live --
+      // requests without one were returning 403 even for existing crates,
+      // including on HEAD). Sent on every ecosystem, not just crates.io --
+      // this is a safe, standard courtesy to any registry, and matches the
+      // identifier GitHubRepositoryService already uses for GitHub's API.
+      headers: { Accept: "application/json", "User-Agent": REGISTRY_CLIENT_USER_AGENT },
       signal: controller.signal
     });
   } finally {
@@ -16730,36 +16922,69 @@ async function lookupSingle(ecosystem, name, options) {
   }
   const fetchImpl = options.fetchImpl ?? fetch;
   const timeoutMs = options.timeoutMs ?? REGISTRY_TIMEOUT_MS;
-  for (let attempt = 0; attempt < 2; attempt++) {
+  const method = lookupMethodFor(ecosystem);
+  const lookupStart = performance.now();
+  let semaphoreWaitMs = 0;
+  let networkMs = 0;
+  let retried = false;
+  function emit(result) {
     try {
-      const response = await fetchWithTimeout(url2, fetchImpl, timeoutMs);
+      options.onLookupTiming?.({
+        ecosystem,
+        status: result.status,
+        reason: result.reason,
+        semaphoreWaitMs,
+        networkMs,
+        totalMs: performance.now() - lookupStart,
+        retried
+      });
+    } catch {
+    }
+    return result;
+  }
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (attempt > 0) retried = true;
+    try {
+      const attemptStart = performance.now();
+      let thisAttemptWaitMs = 0;
+      const response = await withRegistryProcessSlot(
+        () => fetchWithTimeout(url2, method, fetchImpl, timeoutMs),
+        (waitMs) => {
+          thisAttemptWaitMs = waitMs;
+        }
+      );
+      semaphoreWaitMs += thisAttemptWaitMs;
+      networkMs += Math.max(0, performance.now() - attemptStart - thisAttemptWaitMs);
       if (response.status === 404) {
-        return { status: "not_found", registryUrl: url2 };
+        return emit({ status: "not_found", registryUrl: url2 });
       }
       if (!response.ok) {
-        return { status: "unavailable", reason: `registry_status_${response.status}`, registryUrl: url2 };
+        return emit({ status: "unavailable", reason: `registry_status_${response.status}`, registryUrl: url2 });
+      }
+      if (method === "HEAD") {
+        return emit({ status: "exists", registryUrl: url2 });
       }
       if (ecosystem === "go") {
         const text = await response.text();
         if (!text.trim()) {
-          return { status: "not_found", registryUrl: url2 };
+          return emit({ status: "not_found", registryUrl: url2 });
         }
-        return { status: "exists", registryUrl: url2 };
+        return emit({ status: "exists", registryUrl: url2 });
       }
       const body = await response.json().catch(() => null);
       if (!body || typeof body !== "object") {
-        return { status: "unavailable", reason: "malformed_response", registryUrl: url2 };
+        return emit({ status: "unavailable", reason: "malformed_response", registryUrl: url2 });
       }
-      return { status: "exists", registryUrl: url2 };
+      return emit({ status: "exists", registryUrl: url2 });
     } catch (error51) {
       const reason = error51 instanceof Error && error51.name === "AbortError" ? "timeout" : "network_error";
       if (attempt === 0 && reason === "timeout") {
         continue;
       }
-      return { status: "unavailable", reason, registryUrl: url2 };
+      return emit({ status: "unavailable", reason, registryUrl: url2 });
     }
   }
-  return { status: "unavailable", reason: "timeout", registryUrl: url2 };
+  return emit({ status: "unavailable", reason: "timeout", registryUrl: url2 });
 }
 async function lookupPackages(packages, options = {}) {
   const cache = options.cache ?? /* @__PURE__ */ new Map();
@@ -16777,17 +17002,30 @@ async function lookupPackages(packages, options = {}) {
     }
     uncached.push({ key, pkg });
   }
-  for (let index = 0; index < uncached.length; index += REGISTRY_LOOKUP_CONCURRENCY) {
-    const chunk = uncached.slice(index, index + REGISTRY_LOOKUP_CONCURRENCY);
-    await Promise.all(
-      chunk.map(async ({ key, pkg }) => {
-        const result = await lookupSingle(pkg.ecosystem, pkg.name, options);
-        cache.set(key, result);
-        results.set(key, result);
-      })
+  const concurrency = options.concurrency ?? REGISTRY_LOOKUP_CONCURRENCY;
+  await runBoundedQueue(uncached, concurrency, async ({ key, pkg }) => {
+    const result = await coalesceRegistryLookup(
+      key,
+      () => lookupSingle(pkg.ecosystem, pkg.name, options),
+      options.onCoalesced
     );
-  }
+    cache.set(key, result);
+    results.set(key, result);
+  });
   return results;
+}
+async function runBoundedQueue(items, concurrency, worker) {
+  if (items.length === 0) return;
+  let nextIndex = 0;
+  async function runOneWorker() {
+    while (nextIndex < items.length) {
+      const item = items[nextIndex];
+      nextIndex += 1;
+      await worker(item);
+    }
+  }
+  const workerCount = Math.min(concurrency, items.length);
+  await Promise.all(Array.from({ length: workerCount }, () => runOneWorker()));
 }
 function createRegistryCache() {
   return /* @__PURE__ */ new Map();
@@ -16803,7 +17041,8 @@ function createScanSharedContext(files, options = {}) {
     repositoryFiles,
     sbomSnapshot: buildSbomSnapshot(repositoryFiles, { includeDev: options.includeDev ?? true }),
     registryCache: createRegistryCache(),
-    osvCache: createOsvMemoryCache()
+    osvCache: createOsvMemoryCache(),
+    registryMetricsSink: { current: null }
   };
 }
 
@@ -17179,6 +17418,102 @@ var injectionRules = [
     path: CODE_PATH
   }])
 ];
+var REDIRECT_CALL_PATTERN = /\b(?:NextResponse\.)?redirect\s*\(/gi;
+var REQUEST_DERIVED = /\b(?:req|request)\.(?:query|params|body|url)\b|searchParams\.get|\.params\.|\.query\./i;
+function extractFirstArgument(line, openParenIndex) {
+  let depth = 0;
+  let start = -1;
+  for (let i = openParenIndex; i < line.length; i += 1) {
+    const ch = line[i];
+    if (ch === "(" || ch === "[" || ch === "{") {
+      if (depth === 0 && i === openParenIndex) {
+        start = i + 1;
+      }
+      depth += 1;
+      continue;
+    }
+    if (ch === ")" || ch === "]" || ch === "}") {
+      depth -= 1;
+      if (depth === 0 && ch === ")") {
+        return start >= 0 ? line.slice(start, i) : null;
+      }
+      continue;
+    }
+    if (ch === "," && depth === 1 && start >= 0) {
+      return line.slice(start, i);
+    }
+  }
+  return start >= 0 ? line.slice(start) : null;
+}
+function isLiteralDestination(arg) {
+  return /^\s*['"`]/.test(arg);
+}
+function unwrapUrlConstructor(arg) {
+  const trimmed = arg.trim();
+  const match = /^new\s+URL\s*\(/.exec(trimmed);
+  if (!match) return arg;
+  const inner = extractFirstArgument(trimmed, match[0].length - 1);
+  return inner ?? arg;
+}
+function isDynamicDestination(arg) {
+  return REQUEST_DERIVED.test(arg);
+}
+function resolveIdentifierNearby(identifier, lines, fromLine, radius = 8) {
+  const start = Math.max(0, fromLine - radius);
+  const assignmentPattern = new RegExp(`\\b(?:const|let|var)\\s+${identifier}\\s*=\\s*([^;\\n]+)`);
+  for (let i = fromLine; i >= start; i -= 1) {
+    const match = assignmentPattern.exec(lines[i]);
+    if (!match) continue;
+    const value = match[1] ?? "";
+    if (isLiteralDestination(value)) return "literal";
+    if (isDynamicDestination(value)) return "dynamic";
+    return "unknown";
+  }
+  return "unknown";
+}
+var openRedirectRule = {
+  id: "web.open-redirect",
+  title: "Open redirect",
+  run: ({ files }) => {
+    const findings = [];
+    for (const file2 of files) {
+      if (!CODE_PATH.test(file2.path)) continue;
+      for (let index = 0; index < file2.lines.length; index += 1) {
+        const line = file2.lines[index];
+        REDIRECT_CALL_PATTERN.lastIndex = 0;
+        let match;
+        while (match = REDIRECT_CALL_PATTERN.exec(line)) {
+          const openParenIndex = match.index + match[0].length - 1;
+          const firstArg = extractFirstArgument(line, openParenIndex);
+          if (firstArg == null) continue;
+          const resolvedArg = unwrapUrlConstructor(firstArg);
+          let dynamic = false;
+          if (isLiteralDestination(resolvedArg)) {
+            dynamic = false;
+          } else if (isDynamicDestination(resolvedArg)) {
+            dynamic = true;
+          } else if (/^[A-Za-z_$][\w$]*$/.test(resolvedArg.trim())) {
+            dynamic = resolveIdentifierNearby(resolvedArg.trim(), file2.lines, index) === "dynamic";
+          }
+          if (!dynamic) continue;
+          findings.push({
+            ruleId: "web.open-redirect",
+            title: "User-controlled redirect",
+            description: "The redirect/URL destination appears to come from request-controlled input.",
+            severity: "medium",
+            confidence: "medium",
+            category: "web",
+            location: { path: file2.path, line: index + 1, column: openParenIndex + 1 },
+            evidence: redactEvidence(line.trim()),
+            remediation: "Allowlist local paths or trusted destination hosts.",
+            fingerprintMaterial: match[0].replace(/\s+/g, " ")
+          });
+        }
+      }
+    }
+    return findings;
+  }
+};
 var configurationRules = [
   patternRule("web.permissive-cors", "Permissive CORS", [{
     pattern: /(?:Access-Control-Allow-Origin["']?\s*[:,]\s*["']\*|cors\s*\(\s*(?:\)|\{[^}]*origin\s*:\s*(?:true|["']\*)))/i,
@@ -17283,16 +17618,7 @@ var configurationRules = [
     remediation: "Disable debug mode in production configuration.",
     excludePath: TEST_OR_EXAMPLE2
   }]),
-  patternRule("web.open-redirect", "Open redirect", [{
-    pattern: /(?:redirect|location(?:\.href)?\s*=)\s*\([^)]*(?:req\.|request\.|params|query|searchParams)/i,
-    title: "User-controlled redirect",
-    description: "A request value appears to determine the redirect destination.",
-    severity: "medium",
-    confidence: "medium",
-    category: "web",
-    remediation: "Allowlist local paths or trusted destination hosts.",
-    path: CODE_PATH
-  }]),
+  openRedirectRule,
   patternRule("web.next-xss", "Next.js and XSS", [{
     pattern: /dangerouslySetInnerHTML\s*=\s*\{\s*\{\s*__html\s*:\s*(?!DOMPurify|sanitize)/,
     title: "Unsanitized HTML rendering",
@@ -17368,21 +17694,26 @@ var ROUTE_RULE_EXCLUSIONS = {
   )
 };
 var routeRules = [
+  // Phase 31.1 (P2): this rule scans only the route file's own text for a
+  // recognized auth-check pattern -- it cannot see auth performed by a
+  // helper function the route calls (e.g. `getUser()` reading a session
+  // cookie). The wording must not claim the scanner knows authentication is
+  // absent, only that it found no direct guard in this file.
   contextualRouteRule("auth.missing", "Missing authentication", RECOGNIZED_AUTH, {
-    title: "Route has no visible authentication",
-    description: "A request handler was found without a recognizable authentication check.",
+    title: "No direct authentication guard detected",
+    description: "No recognizable authentication check appears directly in this route file. Authentication performed by a helper function it calls (e.g. reading a session cookie) would not be visible to this check.",
     severity: "medium",
     confidence: "low",
     category: "authentication",
-    remediation: "Enforce authentication in the handler or a guaranteed middleware layer."
+    remediation: "Confirm this route is actually protected, either by a direct check here or a guaranteed middleware layer."
   }, ROUTE_RULE_EXCLUSIONS),
   contextualRouteRule("authz.insufficient", "Insufficient authorization", RECOGNIZED_AUTHZ, {
-    title: "Route has no visible authorization",
-    description: "The handler has no recognizable ownership, role, or policy check.",
+    title: "No direct authorization check detected",
+    description: "No recognizable ownership, role, or policy check appears directly in this route file. A check performed inside a helper function it calls would not be visible here.",
     severity: "medium",
     confidence: "low",
     category: "authorization",
-    remediation: "Check object ownership or explicit permissions after authentication."
+    remediation: "Confirm object ownership or explicit permissions are checked, either here or inside a called helper, after authentication."
   }, ROUTE_RULE_EXCLUSIONS),
   contextualRouteRule("validation.missing", "Missing validation", /(?:\.parse\(|safeParse|validate|schema|joi\.|yup\.|zod|validator)/i, {
     title: "Route has no visible input validation",
@@ -20082,6 +20413,12 @@ var TOP_PACKAGES = {
     "axum"
   ]
 };
+function isKnownPopularPackage(name, ecosystem) {
+  const knownPackages = TOP_PACKAGES[ecosystem];
+  if (!knownPackages) return false;
+  const normalized = name.toLowerCase().replace(/^@/, "");
+  return knownPackages.some((known) => known.toLowerCase() === normalized);
+}
 function levenshteinDistance(a, b) {
   if (a.length > b.length) {
     [a, b] = [b, a];
@@ -20108,8 +20445,8 @@ function levenshteinDistance(a, b) {
 function findSimilarPackages(packageName, ecosystem, maxDistance = 2, limit = 5) {
   const knownPackages = TOP_PACKAGES[ecosystem];
   if (!knownPackages) return [];
-  const normalizedInput = packageName.toLowerCase().replace(/^@/, "");
-  const unscopedInput = normalizedInput.includes("/") ? normalizedInput.split("/").pop() ?? normalizedInput : normalizedInput;
+  if (packageName.includes("/")) return [];
+  const unscopedInput = packageName.toLowerCase().replace(/^@/, "");
   const matches = [];
   for (const known of knownPackages) {
     const normalizedKnown = known.toLowerCase();
@@ -20144,12 +20481,12 @@ function checkDependencyConfusion(packageName, ecosystem) {
   if (scopedMatch) {
     const scope = scopedMatch[1];
     const unscopedName = packageName.replace(SCOPED_PACKAGE_RE, "");
-    const similar = findSimilarPackages(unscopedName, ecosystem, 1, 1);
-    if (similar.length > 0) {
+    if (scope === "types") return null;
+    if (isKnownPopularPackage(unscopedName, ecosystem)) {
       return {
         risk: true,
         rule: "package.dependency-confusion.scoped-public-collision",
-        message: `Scoped package '${packageName}' contains unscoped name '${unscopedName}' similar to known public package '${similar[0]?.name}'. Verify scope authenticity to avoid dependency confusion.`,
+        message: `Scoped package '${packageName}' shares the exact name '${unscopedName}' with a well-known public package. Verify scope authenticity to avoid dependency confusion.`,
         confidence: "HIGH"
       };
     }
@@ -20564,15 +20901,64 @@ async function analyzePackageSecurity(files, options = {}) {
   let registryLookups = 0;
   let skippedInternal = dependencies.length - registryTargets.length;
   let registryUnavailable = false;
+  const registryScanCache = options.cache ?? /* @__PURE__ */ new Map();
+  let cacheHitCount = 0;
+  if (!options.skipRegistry && registryTargets.length > 0) {
+    const keys = registryTargets.map((dep) => cacheKey(dep.ecosystem, dep.name));
+    for (const [key, value] of seedRegistryScanCache(keys)) {
+      if (!registryScanCache.has(key)) {
+        registryScanCache.set(key, value);
+        cacheHitCount += 1;
+      }
+    }
+  }
+  const lookupDurationsMs = [];
+  let networkRequestCount = 0;
+  let coalescedCount = 0;
+  let semaphoreWaitTotalMs = 0;
+  let unavailableCount = 0;
+  let timeoutCount = 0;
+  let retryCount = 0;
+  const registryPhaseStart = performance.now();
   const lookupResults = options.skipRegistry || registryTargets.length === 0 ? /* @__PURE__ */ new Map() : await lookupPackages(
     registryTargets.map((dep) => ({ ecosystem: dep.ecosystem, name: dep.name })),
     {
       fetchImpl: options.fetchImpl,
       timeoutMs: options.timeoutMs,
-      cache: options.cache ?? createRegistryCache()
+      cache: registryScanCache,
+      onCoalesced: () => {
+        coalescedCount += 1;
+        options.onCoalesced?.();
+      },
+      onLookupTiming: (event) => {
+        networkRequestCount += 1;
+        lookupDurationsMs.push(event.totalMs);
+        semaphoreWaitTotalMs += event.semaphoreWaitMs;
+        if (event.status === "unavailable") unavailableCount += 1;
+        if (event.reason === "timeout") timeoutCount += 1;
+        if (event.retried) retryCount += 1;
+        options.onLookupTiming?.(event);
+      }
     }
   );
+  const registryPhaseDurationMs = performance.now() - registryPhaseStart;
   registryLookups = lookupResults.size;
+  promoteRegistryResults(lookupResults);
+  const registryMetrics = {
+    dependencyCount: dependencies.length,
+    uniqueDependencyCount: registryTargets.length,
+    registryLookupCount: registryLookups,
+    cacheHitCount,
+    coalescedCount,
+    networkRequestCount,
+    ...percentiles(lookupDurationsMs),
+    registryPhaseDurationMs,
+    sumOfLookupDurationsMs: lookupDurationsMs.reduce((sum, ms) => sum + ms, 0),
+    semaphoreWaitTotalMs,
+    unavailableCount,
+    timeoutCount,
+    retryCount
+  };
   for (const dep of dependencies) {
     const confusion = checkDependencyConfusion(dep.name, dep.ecosystem);
     if (confusion) {
@@ -20610,7 +20996,21 @@ async function analyzePackageSecurity(files, options = {}) {
     dependenciesChecked: dependencies.length,
     registryLookups,
     skippedInternal,
-    registryUnavailable
+    registryUnavailable,
+    registryMetrics
+  };
+}
+function percentiles(valuesMs) {
+  if (valuesMs.length === 0) {
+    return { p50LookupMs: 0, p95LookupMs: 0, p99LookupMs: 0, maxLookupMs: 0 };
+  }
+  const sorted = [...valuesMs].sort((a, b) => a - b);
+  const at = (p2) => sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil(p2 / 100 * sorted.length) - 1))];
+  return {
+    p50LookupMs: Math.round(at(50)),
+    p95LookupMs: Math.round(at(95)),
+    p99LookupMs: Math.round(at(99)),
+    maxLookupMs: Math.round(sorted[sorted.length - 1])
   };
 }
 
@@ -20722,10 +21122,16 @@ var packageSecurityRule = {
   title: "Package hallucination and dependency confusion analysis",
   run: async ({ files, shared }) => {
     const repositoryFiles = shared?.repositoryFiles ?? toRepositoryFiles(files);
-    const { findings } = await analyzePackageSecurityEvidence(repositoryFiles, {
+    const { scan, findings } = await analyzePackageSecurityEvidence(repositoryFiles, {
       sbomComponents: shared?.sbomSnapshot.components,
       cache: shared?.registryCache
     });
+    try {
+      if (shared?.registryMetricsSink) {
+        shared.registryMetricsSink.current = scan.registryMetrics;
+      }
+    } catch {
+    }
     if (findings.length === 0) {
       return [];
     }
@@ -21730,8 +22136,14 @@ async function analyzeOsvSbomEvidence(files, options = {}) {
   if (packages.length === 0) {
     return { snapshot, findings: [] };
   }
+  const osvScanCache = options.osv?.cache ?? /* @__PURE__ */ new Map();
+  const keys = packages.map((pkg) => cacheKeyForPackage(pkg));
+  for (const [key, value] of seedOsvScanCacheFromProcess(keys)) {
+    if (!osvScanCache.has(key)) osvScanCache.set(key, value);
+  }
   try {
-    const batch = await queryOsvBatch(packages, options.osv);
+    const batch = await queryOsvBatch(packages, { ...options.osv, cache: osvScanCache });
+    promoteOsvResults(osvScanCache);
     const findings = dedupeOsvFindings(osvBatchToFindings(snapshot.components, batch, files));
     return { snapshot, findings };
   } catch (error51) {
@@ -23128,6 +23540,12 @@ async function scanRepository(files, options = {}) {
     normalized.files
   );
   const durationMs = Math.max(0, config2.now() - startedAt);
+  let registryMetrics;
+  try {
+    registryMetrics = shared.registryMetricsSink.current ?? void 0;
+  } catch {
+    registryMetrics = void 0;
+  }
   return {
     findings,
     stack,
@@ -23143,7 +23561,8 @@ async function scanRepository(files, options = {}) {
       findingsBeforeDeduplication: allFindings.length,
       findings: findings.length,
       durationMs,
-      truncated: normalized.truncated || timeLimited
+      truncated: normalized.truncated || timeLimited,
+      ...registryMetrics ? { registryMetrics } : {}
     }
   };
 }

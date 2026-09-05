@@ -56,11 +56,30 @@ export type GitHubInstallationRepo = {
   stargazers_count: number;
 };
 
+/**
+ * Phase 31.2: a GitHub API failure on any page (401/403/404/429/5xx) used to
+ * `break` the pagination loop and return whatever had been accumulated so
+ * far -- a failure on the FIRST page returned an empty array with no error,
+ * indistinguishable from "this installation genuinely has zero repos."
+ * Callers need to tell those apart, so this is now a typed, thrown error.
+ */
+export class GitHubInstallationApiError extends Error {
+  constructor(
+    public readonly status: number,
+    message: string
+  ) {
+    super(message);
+    this.name = "GitHubInstallationApiError";
+  }
+}
+
 export async function listInstallationRepositories(
   githubInstallationId: number
 ): Promise<GitHubInstallationRepo[]> {
   const installationToken = await fetchInstallationAccessToken(githubInstallationId);
-  if (!installationToken) return [];
+  if (!installationToken) {
+    throw new GitHubInstallationApiError(401, "Could not obtain a GitHub installation access token.");
+  }
 
   const headers = {
     Authorization: `Bearer ${installationToken.token}`,
@@ -75,7 +94,12 @@ export async function listInstallationRepositories(
       `${GITHUB_API}/installation/repositories?per_page=100&page=${page}`,
       { headers, cache: "no-store" }
     );
-    if (!response.ok) break;
+    if (!response.ok) {
+      throw new GitHubInstallationApiError(
+        response.status,
+        `GitHub installation repository listing failed with status ${response.status}.`
+      );
+    }
 
     const body = (await response.json()) as {
       repositories?: GitHubInstallationRepo[];

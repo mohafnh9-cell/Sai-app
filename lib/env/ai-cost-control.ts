@@ -2,12 +2,16 @@
  * M2 (audit): AI (Claude) cost ceiling per organization per day.
  *
  * The existing scan-rate-limit.ts caps how often scans can be STARTED
- * (5/repo/hour, 3 concurrent/org), which already bounds concurrent AI
- * usage indirectly -- AI analysis only ever runs as part of a scan job.
- * What was still missing: a tenant with many repos, or many distinct
- * commits, could stay under those per-repo/per-org-concurrency limits
- * and still generate unbounded Claude spend over a full day. This adds
- * that ceiling.
+ * (5 web scans/repo/hour, 10 MCP reviews/org/hour) -- a request-RATE limit,
+ * not a concurrency limit. (Phase 13 correction: no actual concurrent-scan
+ * cap exists anywhere in the codebase -- Inngest's `concurrency: {limit: 3,
+ * key: organizationId}` on the scan-run function throttles GitHub/upload/
+ * local scans queued through Inngest, but that's a job-scheduling detail,
+ * not a guarantee callers can rely on, and it doesn't cover the inline
+ * scheduler path some orgs use.) What was still missing here: a tenant
+ * with many repos, or many distinct commits, could stay under the
+ * per-repo/per-org rate limits and still generate unbounded Claude spend
+ * over a full day. This adds that ceiling.
  *
  * Same pattern as scan-rate-limit.ts: env-configurable, disabled by
  * default outside production unless explicitly enabled, no hardcoded

@@ -75,6 +75,26 @@ function contextWindow(lines: readonly string[], lineIndex: number, radius = 4):
   return lines.slice(start, end).join("\n");
 }
 
+// Phase 31.1: value-evidence checks. Identifier evidence (a variable name
+// containing "password"/"secret"/"key") is a signal, never proof -- a real
+// credential is an opaque token: no whitespace, no sentence punctuation. An
+// ordinary English phrase ("Invalid password") or a value that's simply an
+// echo of its own identifier (a TS enum member `UPDATE_PASSWORD =
+// 'UPDATE_PASSWORD'`) can never be a real secret, regardless of entropy or
+// variable-name pattern.
+function looksLikeNaturalLanguageValue(value: string): boolean {
+  if (/\s/.test(value)) return true;
+  if (/[.!?]$/.test(value)) return true;
+  return false;
+}
+
+function valueMatchesIdentifier(value: string, variableName?: string): boolean {
+  if (!variableName) return false;
+  const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const normalizedValue = normalize(value);
+  return normalizedValue.length > 0 && normalizedValue === normalize(variableName);
+}
+
 function shannonEntropy(value: string): number {
   if (!value) return 0;
   const counts = new Map<string, number>();
@@ -133,6 +153,14 @@ export function classifySecretDetection(input: SecretClassificationInput): Secre
     };
   }
 
+  if (valueMatchesIdentifier(value, variableName)) {
+    return {
+      classification: "FALSE_POSITIVE",
+      signals: ["value_equals_identifier"],
+      confidence: "high",
+    };
+  }
+
   if (isTestOrExampleFile(path) && looksLikeTestFixtureSecretValue(value)) {
     return {
       classification: "TEST_FIXTURE",
@@ -173,7 +201,11 @@ export function classifySecretDetection(input: SecretClassificationInput): Secre
   }
 
   const entropy = shannonEntropy(value);
-  if (entropy >= 0.62 && value.length >= 16) {
+  // Entropy is only evidence of a secret when the value is also opaque-token
+  // shaped -- a natural-language phrase can have "high" character entropy
+  // (varied letters) without being anything like a credential.
+  const opaqueToken = !looksLikeNaturalLanguageValue(value);
+  if (opaqueToken && entropy >= 0.62 && value.length >= 16) {
     realScore += 1;
     signals.push("high_entropy");
   } else if (entropy <= 0.45 && value.length <= 32) {
@@ -194,6 +226,28 @@ export function classifySecretDetection(input: SecretClassificationInput): Secre
     return { classification: "TEST_FIXTURE", signals, confidence: "high" };
   }
 
+  // A variable name suggesting a secret (e.g. containing "password") is
+  // evidence, not proof, that the assigned value is one -- require at least
+  // one signal grounded in the VALUE's own shape (opaque-token entropy, or
+  // production auth context) before crossing into a blocking classification.
+  const hasValueEvidence = signals.includes("high_entropy") || signals.includes("production_auth_context");
+  if (!hasValueEvidence) {
+    return { classification: "TEST_FIXTURE", signals: [...signals, "no_value_evidence"], confidence: "low" };
+  }
+
+  // Test/example paths dampen a heuristic (non-format-matched) credential-
+  // shaped value to non-blocking unless corroborated by multiple strong,
+  // independent signals -- a real hardcoded credential in a test file can
+  // still matter, but a single entropy+name coincidence should not become a
+  // production blocker just because it sits in a *_test.js file.
+  if (isTestOrExampleFile(path) && realScore < 3) {
+    return {
+      classification: "TEST_FIXTURE",
+      signals: [...signals, "test_path_dampened"],
+      confidence: "medium",
+    };
+  }
+
   if (realScore >= 2) {
     return {
       classification: realScore >= 2.5 ? "PROBABLE_SECRET" : "POTENTIAL_SECRET",
@@ -202,7 +256,7 @@ export function classifySecretDetection(input: SecretClassificationInput): Secre
     };
   }
 
-  if (realScore >= 1 || entropy >= 0.55) {
+  if (realScore >= 1 || (opaqueToken && entropy >= 0.55)) {
     return { classification: "POTENTIAL_SECRET", signals, confidence: "medium" };
   }
 

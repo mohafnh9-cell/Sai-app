@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { assertOrganizationCanRunScan } from "@/server/billing/assert-scan-access";
 
 export const ACTIVE_AUTOMATION_SCAN_STATUSES = [
   "queued",
@@ -47,6 +48,20 @@ export async function createAutomationScan(
     triggerType?: "webhook" | "scheduled";
   }
 ): Promise<string | null> {
+  // Phase 31.2: scheduled/incremental GitHub automation scans previously
+  // created scans with no billing check -- every other scan-creation path
+  // already goes through this same gate. No-op today (billing disabled),
+  // real free-scan bypass once enabled otherwise.
+  try {
+    await assertOrganizationCanRunScan(admin, input.organizationId, { id: input.userId });
+  } catch {
+    console.info("automation_scan_billing_rejected", {
+      organizationId: input.organizationId,
+      projectId: input.projectId,
+    });
+    return null;
+  }
+
   const { data: scan, error } = await admin
     .from("scans")
     .insert({

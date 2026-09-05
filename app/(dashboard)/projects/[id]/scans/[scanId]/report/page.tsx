@@ -16,6 +16,7 @@ export default async function ProductionReportPage({
     .from("projects")
     .select("id")
     .eq("id", projectId)
+    .eq("organization_id", auth.organizationId)
     .maybeSingle();
   if (!project) notFound();
 

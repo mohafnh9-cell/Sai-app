@@ -1,4 +1,5 @@
 import { CLIENT_ENV_PREFIX_PATTERN, SECRET_NAME_PATTERN } from "../constants";
+import { redactEvidence } from "../redaction";
 import { patternFindings, type PatternSpec } from "./helpers";
 import {
   classifySecretDetection,
@@ -239,6 +240,143 @@ const injectionRules = [
   }]),
 ];
 
+// Phase 31.1: matches a redirect/URL-construction call and extracts its
+// FIRST argument's raw text (balanced-paren/bracket aware, stops at the
+// first top-level comma or the call's closing paren). The security question
+// is "can an attacker influence the destination", i.e. the first argument --
+// not "does request.url appear anywhere in the call" (it legitimately
+// appears as new URL()'s second, base-resolution argument in the safe,
+// standard `new URL('/dashboard', request.url)` idiom).
+// Only actual redirect calls are trigger points -- NOT every `new URL(...)`
+// construction (a very common idiom for parsing the *current* request's own
+// URL, e.g. `new URL(req.url).searchParams.get(...)`, which has nothing to
+// do with a redirect destination). A `new URL(...)` passed AS a redirect
+// call's argument is still evaluated via unwrapUrlConstructor() below.
+const REDIRECT_CALL_PATTERN = /\b(?:NextResponse\.)?redirect\s*\(/gi;
+const REQUEST_DERIVED = /\b(?:req|request)\.(?:query|params|body|url)\b|searchParams\.get|\.params\.|\.query\./i;
+
+function extractFirstArgument(line: string, openParenIndex: number): string | null {
+  let depth = 0;
+  let start = -1;
+  for (let i = openParenIndex; i < line.length; i += 1) {
+    const ch = line[i];
+    if (ch === "(" || ch === "[" || ch === "{") {
+      if (depth === 0 && i === openParenIndex) {
+        start = i + 1;
+      }
+      depth += 1;
+      continue;
+    }
+    if (ch === ")" || ch === "]" || ch === "}") {
+      depth -= 1;
+      if (depth === 0 && ch === ")") {
+        return start >= 0 ? line.slice(start, i) : null;
+      }
+      continue;
+    }
+    if (ch === "," && depth === 1 && start >= 0) {
+      return line.slice(start, i);
+    }
+  }
+  return start >= 0 ? line.slice(start) : null;
+}
+
+function isLiteralDestination(arg: string): boolean {
+  return /^\s*['"`]/.test(arg);
+}
+
+/**
+ * `new URL(destination, base)` resolves relative to `base` -- `base` is
+ * never the redirect target, only `destination` is. When a redirect call's
+ * own first argument is itself a `new URL(...)` expression (the standard
+ * `NextResponse.redirect(new URL('/path', request.url))` idiom), unwrap it
+ * and evaluate its own first argument instead of the whole nested-call
+ * text -- otherwise `request.url` appearing as the *base* argument would
+ * wrongly read as evidence that the destination itself is request-derived.
+ */
+function unwrapUrlConstructor(arg: string): string {
+  const trimmed = arg.trim();
+  const match = /^new\s+URL\s*\(/.exec(trimmed);
+  if (!match) return arg;
+  const inner = extractFirstArgument(trimmed, match[0].length - 1);
+  return inner ?? arg;
+}
+
+function isDynamicDestination(arg: string): boolean {
+  // Only flag when the destination itself is evidently request-derived --
+  // an arbitrary non-literal expression (e.g. `session.url` from a Stripe
+  // API response) is not, by itself, attacker-controlled input.
+  return REQUEST_DERIVED.test(arg);
+}
+
+/** Bounded (not full data-flow) lookback: does a nearby `const/let/var <name> = <expr>` show the identifier was assigned a literal or a request-derived value? */
+function resolveIdentifierNearby(
+  identifier: string,
+  lines: readonly string[],
+  fromLine: number,
+  radius = 8
+): "literal" | "dynamic" | "unknown" {
+  const start = Math.max(0, fromLine - radius);
+  const assignmentPattern = new RegExp(`\\b(?:const|let|var)\\s+${identifier}\\s*=\\s*([^;\\n]+)`);
+  for (let i = fromLine; i >= start; i -= 1) {
+    const match = assignmentPattern.exec(lines[i]);
+    if (!match) continue;
+    const value = match[1] ?? "";
+    if (isLiteralDestination(value)) return "literal";
+    if (isDynamicDestination(value)) return "dynamic";
+    return "unknown";
+  }
+  return "unknown";
+}
+
+const openRedirectRule: ScanRule = {
+  id: "web.open-redirect",
+  title: "Open redirect",
+  run: ({ files }) => {
+    const findings: FindingDraft[] = [];
+    for (const file of files) {
+      if (!CODE_PATH.test(file.path)) continue;
+      for (let index = 0; index < file.lines.length; index += 1) {
+        const line = file.lines[index];
+        REDIRECT_CALL_PATTERN.lastIndex = 0;
+        let match: RegExpExecArray | null;
+        while ((match = REDIRECT_CALL_PATTERN.exec(line))) {
+          const openParenIndex = match.index + match[0].length - 1;
+          const firstArg = extractFirstArgument(line, openParenIndex);
+          if (firstArg == null) continue;
+
+          const resolvedArg = unwrapUrlConstructor(firstArg);
+
+          let dynamic = false;
+          if (isLiteralDestination(resolvedArg)) {
+            dynamic = false;
+          } else if (isDynamicDestination(resolvedArg)) {
+            dynamic = true;
+          } else if (/^[A-Za-z_$][\w$]*$/.test(resolvedArg.trim())) {
+            dynamic = resolveIdentifierNearby(resolvedArg.trim(), file.lines, index) === "dynamic";
+          }
+
+          if (!dynamic) continue;
+
+          findings.push({
+            ruleId: "web.open-redirect",
+            title: "User-controlled redirect",
+            description: "The redirect/URL destination appears to come from request-controlled input.",
+            severity: "medium",
+            confidence: "medium",
+            category: "web",
+            location: { path: file.path, line: index + 1, column: openParenIndex + 1 },
+            evidence: redactEvidence(line.trim()),
+            remediation: "Allowlist local paths or trusted destination hosts.",
+            fingerprintMaterial: match[0].replace(/\s+/g, " "),
+          });
+        }
+      }
+    }
+    return findings;
+  },
+};
+
 const configurationRules = [
   patternRule("web.permissive-cors", "Permissive CORS", [{
     pattern: /(?:Access-Control-Allow-Origin["']?\s*[:,]\s*["']\*|cors\s*\(\s*(?:\)|\{[^}]*origin\s*:\s*(?:true|["']\*)))/i,
@@ -294,12 +432,7 @@ const configurationRules = [
     severity: "low", confidence: "medium", category: "configuration",
     remediation: "Disable debug mode in production configuration.", excludePath: TEST_OR_EXAMPLE,
   }]),
-  patternRule("web.open-redirect", "Open redirect", [{
-    pattern: /(?:redirect|location(?:\.href)?\s*=)\s*\([^)]*(?:req\.|request\.|params|query|searchParams)/i,
-    title: "User-controlled redirect", description: "A request value appears to determine the redirect destination.",
-    severity: "medium", confidence: "medium", category: "web",
-    remediation: "Allowlist local paths or trusted destination hosts.", path: CODE_PATH,
-  }]),
+  openRedirectRule,
   patternRule("web.next-xss", "Next.js and XSS", [{
     pattern: /dangerouslySetInnerHTML\s*=\s*\{\s*\{\s*__html\s*:\s*(?!DOMPurify|sanitize)/,
     title: "Unsanitized HTML rendering", description: "React HTML injection can execute attacker-controlled markup.",
@@ -382,15 +515,20 @@ const ROUTE_RULE_EXCLUSIONS = {
 };
 
 const routeRules: ScanRule[] = [
+  // Phase 31.1 (P2): this rule scans only the route file's own text for a
+  // recognized auth-check pattern -- it cannot see auth performed by a
+  // helper function the route calls (e.g. `getUser()` reading a session
+  // cookie). The wording must not claim the scanner knows authentication is
+  // absent, only that it found no direct guard in this file.
   contextualRouteRule("auth.missing", "Missing authentication", RECOGNIZED_AUTH, {
-    title: "Route has no visible authentication", description: "A request handler was found without a recognizable authentication check.",
+    title: "No direct authentication guard detected", description: "No recognizable authentication check appears directly in this route file. Authentication performed by a helper function it calls (e.g. reading a session cookie) would not be visible to this check.",
     severity: "medium", confidence: "low", category: "authentication",
-    remediation: "Enforce authentication in the handler or a guaranteed middleware layer.",
+    remediation: "Confirm this route is actually protected, either by a direct check here or a guaranteed middleware layer.",
   }, ROUTE_RULE_EXCLUSIONS),
   contextualRouteRule("authz.insufficient", "Insufficient authorization", RECOGNIZED_AUTHZ, {
-    title: "Route has no visible authorization", description: "The handler has no recognizable ownership, role, or policy check.",
+    title: "No direct authorization check detected", description: "No recognizable ownership, role, or policy check appears directly in this route file. A check performed inside a helper function it calls would not be visible here.",
     severity: "medium", confidence: "low", category: "authorization",
-    remediation: "Check object ownership or explicit permissions after authentication.",
+    remediation: "Confirm object ownership or explicit permissions are checked, either here or inside a called helper, after authentication.",
   }, ROUTE_RULE_EXCLUSIONS),
   contextualRouteRule("validation.missing", "Missing validation", /(?:\.parse\(|safeParse|validate|schema|joi\.|yup\.|zod|validator)/i, {
     title: "Route has no visible input validation", description: "A mutating handler lacks a recognizable schema validation step.",

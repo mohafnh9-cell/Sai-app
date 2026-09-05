@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { runUploadScan } from "../run-upload-scan";
+import { ScanRequestError } from "@/server/security-scanner/request-context";
 
 const runMock = vi.fn();
 const ensureVerdictMock = vi.fn().mockResolvedValue({ productionVerdictId: "verdict-1" });
+const assertCanRunScanMock = vi.fn().mockResolvedValue(undefined);
 
 vi.mock("@/server/security-scanner/scan-job-runner", () => ({
   InlineScanJobRunner: class {
@@ -14,6 +16,15 @@ vi.mock("@/server/security-scanner/scan-job-runner", () => ({
 
 vi.mock("@/server/production-verdict/ensure-verdict-for-scan", () => ({
   ensureProductionVerdictForCompletedScan: (...args: unknown[]) => ensureVerdictMock(...args),
+}));
+
+// Same entitlement gate GitHub scans call (start-repository-manual-scan.ts)
+// -- mocked here so these tests can control its outcome directly and prove
+// runUploadScan actually calls it and honors the result, without
+// re-testing assert-scan-access.ts's own internal subscription-lookup
+// logic (unchanged, out of scope for this closure pass).
+vi.mock("@/server/billing/assert-scan-access", () => ({
+  assertOrganizationCanRunScan: (...args: unknown[]) => assertCanRunScanMock(...args),
 }));
 
 /** A chainable query-builder stub: any .eq()/.in()/.select()/... call returns
@@ -91,6 +102,8 @@ const snapshot = {
 describe("runUploadScan", () => {
   it("creates the scan row with source='upload' and calls the runner with the prefetched snapshot", async () => {
     runMock.mockResolvedValue(undefined);
+    assertCanRunScanMock.mockClear();
+    assertCanRunScanMock.mockResolvedValue(undefined);
     const admin = adminStub();
 
     const result = await runUploadScan(admin, {
@@ -101,6 +114,7 @@ describe("runUploadScan", () => {
     });
 
     expect(result.scanId).toBe("scan-1");
+    expect(assertCanRunScanMock).toHaveBeenCalledWith(admin, "org-1", { id: "user-1" });
     const scanInsert = admin.updates.find((u) => u.table === "scans.insert")!.payload as Record<
       string,
       unknown
@@ -141,5 +155,60 @@ describe("runUploadScan", () => {
       runUploadScan(admin, { organizationId: "org-1", projectId: "proj-1", userId: "user-1", snapshot })
     ).rejects.toThrow("scanner exploded");
     expect(ensureVerdictMock).not.toHaveBeenCalled();
+  });
+
+  describe("billing entitlement gate (Phase 12.1 -- same gate GitHub scans use)", () => {
+    it("billing disabled: succeeds exactly as today regardless of the gate mock (real assert-scan-access.ts is a no-op when isBillingEnabled() is false)", async () => {
+      runMock.mockReset();
+      runMock.mockResolvedValue(undefined);
+      assertCanRunScanMock.mockReset();
+      assertCanRunScanMock.mockResolvedValue(undefined); // simulates the real no-op behavior
+      const admin = adminStub();
+
+      const result = await runUploadScan(admin, {
+        organizationId: "org-1",
+        projectId: "proj-1",
+        userId: "user-1",
+        snapshot,
+      });
+
+      expect(result.scanId).toBe("scan-1");
+      expect(runMock).toHaveBeenCalled();
+    });
+
+    it("billing enabled + organization not entitled: rejects the upload before any scan row is created", async () => {
+      runMock.mockReset();
+      assertCanRunScanMock.mockReset();
+      assertCanRunScanMock.mockRejectedValue(
+        new ScanRequestError(402, "SUBSCRIPTION_REQUIRED", "Subscribe to Builder Edition to run Production Reviews.")
+      );
+      const admin = adminStub();
+
+      await expect(
+        runUploadScan(admin, { organizationId: "org-1", projectId: "proj-1", userId: "user-1", snapshot })
+      ).rejects.toMatchObject({ status: 402, code: "SUBSCRIPTION_REQUIRED" });
+
+      expect(admin.updates.find((u) => u.table === "scans.insert")).toBeUndefined();
+      expect(runMock).not.toHaveBeenCalled();
+    });
+
+    it("billing enabled + organization entitled: succeeds", async () => {
+      runMock.mockReset();
+      runMock.mockResolvedValue(undefined);
+      assertCanRunScanMock.mockReset();
+      assertCanRunScanMock.mockResolvedValue(undefined); // simulates an active subscription
+      const admin = adminStub();
+
+      const result = await runUploadScan(admin, {
+        organizationId: "org-1",
+        projectId: "proj-1",
+        userId: "user-1",
+        snapshot,
+        source: "local",
+      });
+
+      expect(result.scanId).toBe("scan-1");
+      expect(runMock).toHaveBeenCalled();
+    });
   });
 });

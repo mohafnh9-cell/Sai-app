@@ -14,6 +14,7 @@ import { CoverageBreakdown } from "@/features/production-verdict/components/Cove
 import { TechnicalFindingsSection } from "@/features/production-verdict/components/TechnicalFindingsSection";
 import { FastestPathForward } from "@/features/production-verdict/components/FastestPathForward";
 import { LocalGitHubCorrelationPanel } from "@/features/local-github-correlation/components/LocalGitHubCorrelationPanel";
+import { AiReasoningPanel } from "@/features/production-verdict/components/AiReasoningPanel";
 import { useI18n } from "@/lib/i18n/client";
 
 function DetailSubsection({
@@ -93,11 +94,14 @@ export function MissionControlTechnicalDetails({
         ) : null}
 
         {findings && findings.length > 0 ? (
-          <TechnicalFindingsSection
-            findings={findings}
-            fixPromptContext={fixPromptContext}
-            findingResolution={findingResolution}
-          />
+          <>
+            <TechnicalFindingsSection
+              findings={findings}
+              fixPromptContext={fixPromptContext}
+              findingResolution={findingResolution}
+            />
+            {verdict?.scanId ? <AiReasoningPanel scanId={verdict.scanId} /> : null}
+          </>
         ) : verdict ? (
           <DetailSubsection title={t("fullReport.findings")}>
             <p className="text-sm text-muted-foreground">{t("fullReport.noFindings")}</p>

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   analyzeOsvSbomEvidence,
   dedupeOsvFindings,
@@ -8,6 +8,15 @@ import {
 import { mapOsvVulnerability } from "../osv/map-vulnerability";
 import { createSbomComponent } from "../sbom/component";
 import { securityAnalysisFindingToDraft } from "../to-finding-draft";
+import { resetDependencyProcessCachesForTests } from "../shared/dependency-process-cache";
+
+// Phase 15's cross-scan process cache is module-scoped (by design -- it
+// must survive across analyzeOsvSbomEvidence calls in production). Reset
+// it before each test so one test's OSV result can't leak into another's
+// via a stale cache hit.
+beforeEach(() => {
+  resetDependencyProcessCachesForTests();
+});
 
 const PACKAGE_LOCK = JSON.stringify(
   {
@@ -253,5 +262,65 @@ describe("osv enrich sbom", () => {
 
     expect(result.findings).toHaveLength(0);
     expect(result.osvError).toBeTruthy();
+  });
+});
+
+describe("Phase 15 -- cross-scan OSV cache", () => {
+  const files = [
+    { path: "package.json", content: '{"name":"demo-app","version":"1.0.0"}' },
+    { path: "package-lock.json", content: PACKAGE_LOCK },
+  ];
+
+  it("a second, independent scan for the same package@version makes zero OSV requests (cache hit)", async () => {
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        results: [
+          {
+            vulns: [
+              {
+                id: "GHSA-xxxx-yyyy-zzzz",
+                aliases: ["CVE-2021-23337"],
+                summary: "Prototype Pollution in lodash",
+                severity: [{ type: "CVSS_V3", score: 7.5 }],
+                affected: [
+                  {
+                    package: { name: "lodash" },
+                    ranges: [{ events: [{ introduced: "4.0.0", fixed: "4.17.21" }] }],
+                  },
+                ],
+              },
+            ],
+          },
+          { vulns: [] },
+        ],
+      }),
+    })) as unknown as typeof fetch;
+
+    const first = await analyzeOsvSbomEvidence(files, { osv: { fetchImpl } });
+    expect(fetchImpl).toHaveBeenCalled();
+    expect(first.findings.length).toBeGreaterThan(0);
+
+    const secondFetchImpl = vi.fn(async () => {
+      throw new Error("must not be called -- lodash@4.17.20 should be served from the cross-scan cache");
+    }) as unknown as typeof fetch;
+
+    const second = await analyzeOsvSbomEvidence(files, { osv: { fetchImpl: secondFetchImpl } });
+
+    expect(secondFetchImpl).not.toHaveBeenCalled();
+    // Deterministic output unchanged: same vulnerability findings either way.
+    expect(second.findings.map((f) => f.title)).toEqual(first.findings.map((f) => f.title));
+  });
+
+  it("a failed OSV batch is never cached cross-scan -- the next scan genuinely retries", async () => {
+    const failingFetch = vi.fn(async () => ({ ok: false, status: 503 })) as unknown as typeof fetch;
+    const first = await analyzeOsvSbomEvidence(files, { osv: { fetchImpl: failingFetch } });
+    expect(first.osvError).toBeTruthy();
+
+    const secondFetch = vi.fn(async () => ({ ok: false, status: 503 })) as unknown as typeof fetch;
+    await analyzeOsvSbomEvidence(files, { osv: { fetchImpl: secondFetch } });
+
+    // If the outage had been cached cross-scan, this would never fire.
+    expect(secondFetch).toHaveBeenCalled();
   });
 });

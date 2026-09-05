@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getGitHubRepos, getGitHubTokenScopes } from "@/lib/github";
+import { GitHubApiError, getGitHubRepos, getGitHubTokenScopes } from "@/lib/github";
 import { getServerAuthContext } from "@/lib/auth/dev-bypass";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveWorkspaceGitHubToken } from "@/server/github/workspace-connection-service";
@@ -59,7 +59,36 @@ export async function GET(request: Request) {
 
     const repos = await getGitHubRepos(tokenResult.token);
     return NextResponse.json({ repos, scopes, workspaceId: auth.organizationId });
-  } catch {
+  } catch (error) {
+    // Phase 31.2: 401/403 (expired/insufficient token), 429 (rate limited),
+    // and a genuine 5xx/network failure used to all collapse into one
+    // generic 500 -- the caller couldn't tell "reconnect GitHub" apart from
+    // "try again in a minute" apart from "GitHub is down."
+    if (error instanceof GitHubApiError) {
+      if (error.status === 401 || error.status === 403) {
+        return NextResponse.json(
+          {
+            error: "GitHub access has expired or is insufficient.",
+            code: "github_reauthorization_required",
+            needsReauth: true,
+          },
+          { status: 403 }
+        );
+      }
+      if (error.status === 429) {
+        return NextResponse.json(
+          { error: "GitHub rate limit reached. Try again shortly.", code: "github_rate_limited" },
+          { status: 429 }
+        );
+      }
+      return NextResponse.json(
+        { error: "GitHub is temporarily unavailable.", code: "github_unavailable" },
+        { status: 502 }
+      );
+    }
+    console.error("github_repos_list_failed", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
     return NextResponse.json(
       { error: "Failed to fetch GitHub repositories", code: "internal_error" },
       { status: 500 }

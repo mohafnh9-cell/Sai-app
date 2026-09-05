@@ -11,19 +11,21 @@ import {
 import { guardUntrustedInput, UNTRUSTED_DATA_START, UNTRUSTED_DATA_END } from "@/server/mcp/security";
 
 const PROMPT_VERSION = `2.0.0-ae-narrative+${ANALYSIS_ENGINE_V2_VERSION}`;
-const MODEL = "claude-sonnet-4-20250514";
+export const MODEL = "claude-sonnet-4-20250514";
 
 // M9 (audit): the SDK's own default is a 10-minute timeout with 2 retries,
 // which is longer than any Vercel function budget that calls this and lets
 // the platform -- not the app -- decide failure behavior. Configurable via
 // env so it can be tuned per-deployment without a code change; defaults are
 // conservative relative to the scan job's own SCAN_JOB_TIMEOUT_MS budget.
-const CLAUDE_TIMEOUT_MS = Number(process.env.ANTHROPIC_TIMEOUT_MS ?? 90_000);
-const CLAUDE_MAX_RETRIES = Number(process.env.ANTHROPIC_MAX_RETRIES ?? 2);
+export const CLAUDE_TIMEOUT_MS = Number(process.env.ANTHROPIC_TIMEOUT_MS ?? 90_000);
+export const CLAUDE_MAX_RETRIES = Number(process.env.ANTHROPIC_MAX_RETRIES ?? 2);
 
 let client: Anthropic | null = null;
 
-function getClient() {
+/** Shared Anthropic client -- reused by server/ai-reasoning (Phase 30) so the
+ * app never instantiates more than one SDK client. */
+export function getClient() {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return null;
   client ??= new Anthropic({ apiKey });

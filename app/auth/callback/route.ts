@@ -29,6 +29,7 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
+  const providerError = searchParams.get("error");
   const origin = redirectOrigin(request);
   const cookieNext = request.cookies.get("sequrai_auth_next")?.value;
   const next = safeNextPath(
@@ -37,7 +38,12 @@ export async function GET(request: NextRequest) {
   );
 
   if (!code) {
-    return NextResponse.redirect(`${origin}/login?error=auth_callback_failed`);
+    // The provider (Supabase/Google/GitHub) appends `error`/`error_description`
+    // on user cancellation or consent denial rather than a `code` -- surface
+    // that distinctly instead of collapsing every no-code case into one
+    // generic "something went wrong" message.
+    const errorCode = providerError === "access_denied" ? "oauth_cancelled" : "auth_callback_failed";
+    return NextResponse.redirect(`${origin}/login?error=${errorCode}`);
   }
 
   try {

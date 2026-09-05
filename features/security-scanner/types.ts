@@ -73,6 +73,14 @@ export interface ScanMetrics {
   findings: number;
   durationMs: number;
   truncated: boolean;
+  /**
+   * Phase 23 -- aggregate dependency-registry telemetry (Phase 22), best-
+   * effort attached here so it rides along with the metrics every scan
+   * already persists (scans.metrics). Absent if package-security.scan-
+   * packages didn't run, was skipped, or metrics capture itself failed --
+   * never required for a scan to be considered successful.
+   */
+  registryMetrics?: unknown;
 }
 
 export interface ScanResult {

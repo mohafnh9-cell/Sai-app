@@ -178,12 +178,31 @@ export function OnboardingReviewStep({
     }
   }, [projectId, scanId, startScan]);
 
+  const pollTimerRef = useRef<number | null>(null);
+
   useEffect(() => {
     if (!scanId) return;
     queueMicrotask(() => void pollScan());
     const timer = window.setInterval(() => void pollScan(), 4000);
-    return () => window.clearInterval(timer);
+    pollTimerRef.current = timer;
+    return () => {
+      window.clearInterval(timer);
+      pollTimerRef.current = null;
+    };
   }, [pollScan, scanId]);
+
+  // Stop polling once the scan reaches a terminal state -- otherwise this
+  // kept firing every 4s indefinitely (until unmount) even after the scan
+  // had already completed or failed, multiplying request load for no reason
+  // under concurrent onboarding traffic (Phase 13 finding). Checked as a
+  // separate effect (rather than folded into the interval-setup effect
+  // above) so it doesn't tear down and recreate the interval on every poll.
+  useEffect(() => {
+    if (scan && !scanIsActive(scan.status) && pollTimerRef.current != null) {
+      window.clearInterval(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+  }, [scan]);
 
   const stageState = useMemo(
     () => resolveReviewStageIndex(scan?.status, scan?.progress),

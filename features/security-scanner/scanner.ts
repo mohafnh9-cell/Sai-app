@@ -100,6 +100,17 @@ export async function scanRepository(files: readonly InputFile[], options: ScanO
     normalized.files
   );
   const durationMs = Math.max(0, config.now() - startedAt);
+
+  // Phase 23: best-effort pickup of package-security's aggregate registry
+  // telemetry (see ScanSharedContext.registryMetricsSink) -- never lets a
+  // read failure here affect the scan result being returned.
+  let registryMetrics: unknown;
+  try {
+    registryMetrics = shared.registryMetricsSink.current ?? undefined;
+  } catch {
+    registryMetrics = undefined;
+  }
+
   return {
     findings,
     stack,
@@ -116,6 +127,7 @@ export async function scanRepository(files: readonly InputFile[], options: ScanO
       findings: findings.length,
       durationMs,
       truncated: normalized.truncated || timeLimited,
+      ...(registryMetrics ? { registryMetrics } : {}),
     },
   };
 }

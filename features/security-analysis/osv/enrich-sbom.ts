@@ -11,11 +11,13 @@ import {
 import type { RepositoryFile, SbomComponent, SbomSnapshot } from "../sbom/types";
 import { componentsToOsvPackages, queryOsvBatch, type OsvClientOptions } from "./client";
 import {
+  cacheKeyForPackage,
   mapOsvConfidence,
   mapOsvExternalSeverity,
 } from "./map-vulnerability";
-import type { OsvBatchResult, OsvMappedVulnerability } from "./types";
+import type { OsvApiVulnerability, OsvBatchResult, OsvMappedVulnerability } from "./types";
 import { guardUntrustedInput } from "@/server/mcp/security";
+import { promoteOsvResults, seedOsvScanCacheFromProcess } from "../shared/dependency-process-cache";
 
 export const OSV_SBOM_RULE_ID = "dependencies.osv-sbom";
 export const OSV_SBOM_EXTERNAL_RULE_ID = "dependency-vulnerability";
@@ -204,8 +206,21 @@ export async function analyzeOsvSbomEvidence(
     return { snapshot, findings: [] };
   }
 
+  // Phase 15: seed with cross-scan hits (short TTL -- vulnerability data
+  // can change at any moment as new CVEs are disclosed, so this favors
+  // correctness over hit rate; see dependency-process-cache.ts). Fills gaps
+  // in whatever scan-level cache Map is in play (e.g. shared.osvCache from
+  // createScanSharedContext, the production path) without disturbing
+  // entries already present in it.
+  const osvScanCache = options.osv?.cache ?? new Map<string, OsvApiVulnerability[]>();
+  const keys = packages.map((pkg) => cacheKeyForPackage(pkg));
+  for (const [key, value] of seedOsvScanCacheFromProcess(keys)) {
+    if (!osvScanCache.has(key)) osvScanCache.set(key, value);
+  }
+
   try {
-    const batch = await queryOsvBatch(packages, options.osv);
+    const batch = await queryOsvBatch(packages, { ...options.osv, cache: osvScanCache });
+    promoteOsvResults(osvScanCache);
     const findings = dedupeOsvFindings(osvBatchToFindings(snapshot.components, batch, files));
     return { snapshot, findings };
   } catch (error) {

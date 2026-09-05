@@ -370,7 +370,7 @@ export class GitHubRepositoryService {
   }
 
   private async fetchRequest<T>(path: string): Promise<T> {
-    const response = await this.rawFetch(path);
+    const response = await this.rawFetchWithRetry(path);
     if (!response.ok) throw this.errorForResponse(response);
     return (await response.json()) as T;
   }
@@ -385,12 +385,40 @@ export class GitHubRepositoryService {
     commitSha: string
   ): Promise<Readable> {
     const path = `/repos/${encodeURIComponent(ref.owner)}/${encodeURIComponent(ref.repo)}/tarball/${encodeURIComponent(commitSha)}`;
-    const response = await this.rawFetch(path);
+    const response = await this.rawFetchWithRetry(path);
     if (!response.ok) throw this.errorForResponse(response);
     if (!response.body) {
       throw new GitHubServiceError("GITHUB_RESPONSE", "GitHub tarball response had no body", 502);
     }
     return Readable.fromWeb(response.body as import("node:stream/web").ReadableStream<Uint8Array>);
+  }
+
+  /**
+   * Retries transient failures only (network errors and 5xx responses) --
+   * never 401/403/404/429, which are not transient and would just waste the
+   * retry budget against an outcome that won't change. Bounded to 2 retries
+   * with short backoff so a burst of concurrent scans (Phase 13) doesn't
+   * each individually hammer GitHub during a real outage; the overall
+   * service-level timeoutMs (90s, via this.controller) still bounds the
+   * total time any single retry sequence can take.
+   */
+  private async rawFetchWithRetry(path: string, attempt = 0): Promise<Response> {
+    const maxRetries = 2;
+    const backoffMs = 400 * 2 ** attempt;
+    try {
+      const response = await this.rawFetch(path);
+      if (!response.ok && response.status >= 500 && attempt < maxRetries) {
+        await new Promise((resolve) => setTimeout(resolve, backoffMs));
+        return this.rawFetchWithRetry(path, attempt + 1);
+      }
+      return response;
+    } catch (error) {
+      if (attempt < maxRetries && !this.controller.signal.aborted) {
+        await new Promise((resolve) => setTimeout(resolve, backoffMs));
+        return this.rawFetchWithRetry(path, attempt + 1);
+      }
+      throw error;
+    }
   }
 
   private rawFetch(path: string): Promise<Response> {

@@ -22,7 +22,17 @@ function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [oauthLoading, setOauthLoading] = useState<"github" | "google" | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(() => {
+    const callbackError = searchParams.get("error");
+    if (!callbackError) return null;
+    const key =
+      callbackError === "oauth_cancelled"
+        ? "oauthCancelled"
+        : callbackError === "oauth_state_invalid"
+          ? "oauthStateInvalidLogin"
+          : "oauthCallbackFailed";
+    return t(key);
+  });
 
   const redirectTarget = safeNextPath(searchParams.get("redirectTo"));
 

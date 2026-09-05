@@ -112,9 +112,19 @@ function parseYarnLock(path: string, content: string): SbomComponent[] {
 function parsePnpmLock(path: string, content: string): SbomComponent[] {
   const deps: SbomComponent[] = [];
   const seen = new Set<string>();
+  // Phase 31.1: the name-capture group previously excluded only "@" and ":"
+  // -- NOT newlines -- so a package-header line's `@version:` could satisfy
+  // a name match that started several lines earlier on an unrelated line
+  // (most commonly a `transitivePeerDependencies:` YAML list item like
+  // "      - supports-color", which contains neither "@" nor ":"). The
+  // regex would then backtrack across the blank line and into the *next*
+  // real package header to find its "@", fusing both into one fabricated,
+  // multi-line "name". Excluding "\n" (and a leading "-", which never
+  // starts a real npm package name) keeps every match confined to a single
+  // real `name@version:` header line.
   const patterns = [
-    /^\s+\/?(@?[^@\s:][^@:]*?)@(\d[^:\s]*)\s*:/gm,
-    /^\s+'(@?[^@'\s]+)@(\d[^']*)':\s*$/gm,
+    /^[ \t]+\/?(@?[^@\s:\n-][^@:\n]*?)@(\d[^:\s]*)\s*:/gm,
+    /^[ \t]+'(@?[^@'\s]+)@(\d[^']*)':\s*$/gm,
   ];
   for (const pattern of patterns) {
     let match: RegExpExecArray | null;

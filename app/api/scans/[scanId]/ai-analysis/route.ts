@@ -61,7 +61,16 @@ export async function POST(
   { params }: { params: Promise<{ scanId: string }> }
 ) {
   try {
-    const rateLimited = await enforceRateLimit(request);
+    // Dedicated budget -- this triggers a real Claude API call (AI Fix /
+    // analysis generation), which is expensive and cost-bearing, so it must
+    // not share the generic per-IP "api" bucket with unrelated read-heavy
+    // dashboard traffic (Phase 13 finding, same reasoning as scan creation).
+    const rateLimited = await enforceRateLimit(request, {
+      limit: 20,
+      windowMs: 60_000,
+      keyPrefix: "ai-analysis",
+      errorMessage: "Too many AI analysis requests. Try again shortly.",
+    });
     if (rateLimited) return rateLimited;
 
     const parsed = paramsSchema.safeParse(await params);

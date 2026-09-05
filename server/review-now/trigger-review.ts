@@ -18,6 +18,8 @@ import { scheduleScanRun } from "@/server/jobs/schedule-scan";
 import { recoverStaleActiveReviewsForProject } from "@/server/review-recovery/stale-review";
 import { recordLiveHeadCommit } from "@/server/repository-sync/persistence";
 import { releaseActiveReviewForNewHead } from "@/server/review-start/release-active-review-for-new-head";
+import { assertOrganizationCanRunScan } from "@/server/billing/assert-scan-access";
+import { ScanRequestError } from "@/server/security-scanner/request-context";
 
 export type ResolveGitHubTokenFn = (
   admin: SupabaseClient,
@@ -48,6 +50,7 @@ export class ReviewNowError extends Error {
       | "invalid_commit"
       | "commit_not_found"
       | "review_creation_failed"
+      | "subscription_required"
       | "internal_error",
     message: string
   ) {
@@ -186,6 +189,20 @@ export async function triggerProductionReview(
       "repository_disconnected",
       "No organization member has a valid GitHub connection for this repository."
     );
+  }
+
+  // Phase 31.2: MCP review_now previously created scans with no billing
+  // check at all -- every other scan-creation path (GitHub manual, upload,
+  // local, CI) already goes through this same gate. Placed before the
+  // GitHub API call below so a rejected org never pays for a commit
+  // resolution it can't use.
+  try {
+    await assertOrganizationCanRunScan(admin, input.organizationId, { id: tokenResult.userId });
+  } catch (error) {
+    if (error instanceof ScanRequestError) {
+      throw new ReviewNowError("subscription_required", error.message);
+    }
+    throw error;
   }
 
   const ref = parseGitHubRepository(input.githubRepo);

@@ -52,7 +52,16 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   if (!projectId) return { title: t("page.title") };
   const auth = await getCachedServerAuthContext();
   if (!auth?.organizationId) return { title: t("page.title") };
-  const { data } = await auth.supabase.from("projects").select("name").eq("id", projectId).maybeSingle();
+  // Explicit organization_id filter, not just RLS -- auth.supabase can be an
+  // admin (RLS-bypassing) client under SEQURAI_BYPASS_AUTH dev mode (see the
+  // matching fix in mission-control/page.tsx, found during the Phase 12
+  // cross-tenant audit).
+  const { data } = await auth.supabase
+    .from("projects")
+    .select("name")
+    .eq("id", projectId)
+    .eq("organization_id", auth.organizationId)
+    .maybeSingle();
   return { title: data?.name ? `${data.name} — ${t("page.title")}` : t("page.title") };
 }
 
@@ -113,10 +122,14 @@ export default async function AttackCenterPage({ params, searchParams }: PagePro
     }
   }
 
+  // Explicit organization_id filter, not just RLS -- see the generateMetadata
+  // fix above and load-full-mission-control-state.ts for the same
+  // cross-tenant leak pattern found during the Phase 12 audit.
   const { data: project } = await auth.supabase
     .from("projects")
     .select("id, name")
     .eq("id", projectId)
+    .eq("organization_id", auth.organizationId)
     .maybeSingle();
 
   if (!project) notFound();

@@ -95,3 +95,58 @@ describe("GitHubRepositoryService.fetchCompareSnapshot", () => {
     });
   });
 });
+
+describe("GitHubRepositoryService transient-failure retry (Phase 13)", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("retries a 5xx response and succeeds once GitHub recovers", async () => {
+    let repoCalls = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/repos/acme/widgets")) {
+        repoCalls += 1;
+        if (repoCalls < 3) {
+          return new Response("upstream error", { status: 502 });
+        }
+        return jsonResponse(REPO_RESPONSE);
+      }
+      if (url.includes("/compare/")) return jsonResponse({ files: [] });
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const service = new GitHubRepositoryService("test-token");
+    const snapshot = await service.fetchCompareSnapshot(
+      { owner: "acme", repo: "widgets" },
+      "base-sha",
+      "head-sha"
+    );
+    service.dispose();
+
+    expect(repoCalls).toBe(3);
+    expect(snapshot.files).toEqual([]);
+  });
+
+  it("does not retry a non-transient 404 -- fails immediately", async () => {
+    let repoCalls = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/repos/acme/widgets")) {
+        repoCalls += 1;
+        return new Response("not found", { status: 404 });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const service = new GitHubRepositoryService("test-token");
+    await expect(
+      service.fetchCompareSnapshot({ owner: "acme", repo: "widgets" }, "base-sha", "head-sha")
+    ).rejects.toMatchObject({ code: "GITHUB_NOT_FOUND" });
+    service.dispose();
+
+    expect(repoCalls).toBe(1);
+  });
+});

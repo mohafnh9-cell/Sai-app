@@ -36,10 +36,18 @@ export async function loadFullMissionControlState(
   const attackCenterEnabled = isFeatureEnabled("attack_simulation", { organizationId });
   const continuousProtectionEnabled = isFeatureEnabled("continuous_protection", { organizationId });
 
+  // Explicit organization_id filter, not just RLS: `supabase` here can be an
+  // admin (service-role, RLS-bypassing) client -- always under
+  // SEQURAI_BYPASS_AUTH dev mode, and legitimately in some real callers too.
+  // Without this, a project ID from another organization is fetched and
+  // rendered as if it belonged to the caller (confirmed live during the
+  // Phase 12 audit). RLS on `projects` already enforces this correctly for
+  // a real end-user session, but this must not be the only layer.
   const { data: project } = await supabase
     .from("projects")
     .select("id, name, framework")
     .eq("id", projectId)
+    .eq("organization_id", organizationId)
     .maybeSingle();
 
   if (!project) return null;

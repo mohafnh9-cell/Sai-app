@@ -82,8 +82,14 @@ export default async function AdminPage() {
       admin.from("projects").select("id", { count: "exact", head: true }),
       admin
         .from("scans")
-        .select("status, created_at, completed_at")
-        .gte("created_at", thirtyDaysAgo),
+        .select("status, created_at, completed_at, metrics")
+        .gte("created_at", thirtyDaysAgo)
+        // Phase 23: this now also selects `metrics` (heavier than the prior
+        // status/timestamps-only select) to surface registry-health stats
+        // below -- bounded defensively since this is a force-dynamic page
+        // with no other pagination.
+        .order("created_at", { ascending: false })
+        .limit(2000),
       admin
         .from("mcp_api_keys")
         .select("created_at, first_used_at")
@@ -104,6 +110,34 @@ export default async function AdminPage() {
   const p95 = percentileSummary(completedDurations);
   const failedCount = scans.filter((s) => s.status === "failed").length;
   const failureRate = scans.length ? ((failedCount / scans.length) * 100).toFixed(1) : "0.0";
+
+  // Phase 23 -- registry/dependency-intelligence health, sourced from the
+  // aggregate-only registryMetrics each scan already persists in its own
+  // `metrics` column (Phase 22/23 instrumentation) -- no new table, no
+  // per-dependency data, just per-scan aggregates rolled up here. A scan
+  // with no registryMetrics (skipped, package-security didn't run, or
+  // telemetry capture failed) is simply excluded, never treated as an error.
+  const registryMetricsList = scans
+    .map((s) => (s.metrics as { registryMetrics?: Record<string, number> } | null)?.registryMetrics)
+    .filter((m): m is Record<string, number> => Boolean(m));
+  const registryPhaseDurations = registryMetricsList
+    .map((m) => m.registryPhaseDurationMs)
+    .filter((v): v is number => typeof v === "number");
+  const registryPhaseP = percentileSummary(registryPhaseDurations);
+  const totalLookups = registryMetricsList.reduce((sum, m) => sum + (m.registryLookupCount ?? 0), 0);
+  const totalUnavailable = registryMetricsList.reduce((sum, m) => sum + (m.unavailableCount ?? 0), 0);
+  const totalTimeouts = registryMetricsList.reduce((sum, m) => sum + (m.timeoutCount ?? 0), 0);
+  const totalNetworkRequests = registryMetricsList.reduce((sum, m) => sum + (m.networkRequestCount ?? 0), 0);
+  const unavailableRate = totalNetworkRequests
+    ? ((totalUnavailable / totalNetworkRequests) * 100).toFixed(2)
+    : "0.00";
+  const timeoutRate = totalNetworkRequests ? ((totalTimeouts / totalNetworkRequests) * 100).toFixed(2) : "0.00";
+  const avgSemaphoreWaitMs = registryMetricsList.length
+    ? Math.round(
+        registryMetricsList.reduce((sum, m) => sum + (m.semaphoreWaitTotalMs ?? 0), 0) /
+          registryMetricsList.length
+      )
+    : 0;
 
   const mcpKeys = mcpKeysResult.data ?? [];
   const mcpSetupDurations = mcpKeys
@@ -150,6 +184,29 @@ export default async function AdminPage() {
           label="Keys MCP sin usar"
           value={mcpKeysNeverUsed}
           hint={`de ${mcpKeys.length} generadas en 30 días`}
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        <StatCard
+          label="Registry P95 (fase)"
+          value={registryPhaseP.p95 !== null ? `${(registryPhaseP.p95 / 1000).toFixed(1)}s` : "—"}
+          hint={`de ${registryPhaseP.count} scans con telemetría`}
+        />
+        <StatCard
+          label="Registry no disponible"
+          value={`${unavailableRate}%`}
+          hint={`Umbral: WARN >1%, CRITICAL >2-3%`}
+        />
+        <StatCard
+          label="Timeout rate"
+          value={`${timeoutRate}%`}
+          hint={`de ${totalLookups} lookups totales`}
+        />
+        <StatCard
+          label="Espera media de semáforo"
+          value={`${avgSemaphoreWaitMs}ms`}
+          hint="Presión del proceso (cap=32)"
         />
       </div>
 

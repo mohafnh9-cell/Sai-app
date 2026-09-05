@@ -75,6 +75,14 @@ const TOP_PACKAGES: Partial<Record<SbomEcosystem, string[]>> = {
   ],
 };
 
+/** Exact (not fuzzy) membership check -- used where similarity alone would be too weak a signal. */
+export function isKnownPopularPackage(name: string, ecosystem: SbomEcosystem): boolean {
+  const knownPackages = TOP_PACKAGES[ecosystem];
+  if (!knownPackages) return false;
+  const normalized = name.toLowerCase().replace(/^@/, "");
+  return knownPackages.some((known) => known.toLowerCase() === normalized);
+}
+
 export function levenshteinDistance(a: string, b: string): number {
   if (a.length > b.length) {
     [a, b] = [b, a];
@@ -110,10 +118,17 @@ export function findSimilarPackages(
   const knownPackages = TOP_PACKAGES[ecosystem];
   if (!knownPackages) return [];
 
-  const normalizedInput = packageName.toLowerCase().replace(/^@/, "");
-  const unscopedInput = normalizedInput.includes("/")
-    ? normalizedInput.split("/").pop() ?? normalizedInput
-    : normalizedInput;
+  // Phase 31.1: npm scopes are their own namespace -- "@radix-ui/rect" can
+  // never actually be confused with (or resolve in place of) the unscoped
+  // "react" package at install time, so fuzzy-comparing only the unscoped
+  // tail ("rect" vs "react", edit distance 1) produced false positives
+  // against real, legitimately-scoped packages. A scoped package's identity
+  // includes its scope; comparing it against TOP_PACKAGES' unscoped names is
+  // a structurally different question (see checkDependencyConfusion for the
+  // narrower, exact-match check that *is* meaningful for scoped packages).
+  if (packageName.includes("/")) return [];
+
+  const unscopedInput = packageName.toLowerCase().replace(/^@/, "");
 
   const matches: Array<{ name: string; distance: number }> = [];
   for (const known of knownPackages) {

@@ -34,7 +34,15 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const { t } = await getTranslator("missionControl");
   const auth = await getCachedServerAuthContext();
   if (!auth?.organizationId) return { title: t("page.title") };
-  const { data } = await auth.supabase.from("projects").select("name").eq("id", id).maybeSingle();
+  // Explicit organization_id filter, not just RLS -- see the matching fix in
+  // loadFullMissionControlState (same cross-tenant leak, this file's other
+  // unguarded project lookup, found during the Phase 12 audit).
+  const { data } = await auth.supabase
+    .from("projects")
+    .select("name")
+    .eq("id", id)
+    .eq("organization_id", auth.organizationId)
+    .maybeSingle();
   return { title: data?.name ? `${data.name} — ${t("page.title")}` : t("page.title") };
 }
 

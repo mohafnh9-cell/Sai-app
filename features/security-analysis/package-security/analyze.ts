@@ -9,13 +9,15 @@ import {
   isInternalDependency,
   isLikelyPrivatePackage,
 } from "./extract-dependencies";
-import { createRegistryCache, lookupPackages, registryCacheKey } from "./registry-client";
+import { lookupPackages, registryCacheKey } from "./registry-client";
 import { findSimilarPackages } from "./typosquat";
+import { promoteRegistryResults, seedRegistryScanCache } from "../shared/dependency-process-cache";
 import type {
   DeclaredPackageDependency,
   PackageSecurityRawFinding,
   PackageSecurityScanResult,
   RegistryLookupResult,
+  RegistryPhaseMetrics,
 } from "./types";
 import type { RegistryClientOptions } from "./registry-client";
 
@@ -154,6 +156,36 @@ export async function analyzePackageSecurity(
   let skippedInternal = dependencies.length - registryTargets.length;
   let registryUnavailable = false;
 
+  // Phase 15: seed this scan's cache with cross-scan hits before falling
+  // back to a network lookup. lookupPackages already checks cache.get(key)
+  // per unique dependency before fetching (registry-client.ts), so a
+  // pre-seeded entry here means zero network calls for it -- no change to
+  // lookupPackages' own dedup/retry/timeout logic was needed.
+  const registryScanCache = options.cache ?? new Map<string, RegistryLookupResult>();
+  let cacheHitCount = 0;
+  if (!options.skipRegistry && registryTargets.length > 0) {
+    const keys = registryTargets.map((dep) => registryCacheKey(dep.ecosystem, dep.name));
+    for (const [key, value] of seedRegistryScanCache(keys)) {
+      if (!registryScanCache.has(key)) {
+        registryScanCache.set(key, value);
+        cacheHitCount += 1;
+      }
+    }
+  }
+
+  // Phase 22: aggregate-only timing instrumentation, purely observational
+  // -- never read by any security decision below. See RegistryLookupTimingEvent
+  // for exactly what's captured (ecosystem, status, durations; nothing
+  // sensitive).
+  const lookupDurationsMs: number[] = [];
+  let networkRequestCount = 0;
+  let coalescedCount = 0;
+  let semaphoreWaitTotalMs = 0;
+  let unavailableCount = 0;
+  let timeoutCount = 0;
+  let retryCount = 0;
+  const registryPhaseStart = performance.now();
+
   const lookupResults =
     options.skipRegistry || registryTargets.length === 0
       ? new Map<string, RegistryLookupResult>()
@@ -162,10 +194,44 @@ export async function analyzePackageSecurity(
           {
             fetchImpl: options.fetchImpl,
             timeoutMs: options.timeoutMs,
-            cache: options.cache ?? createRegistryCache(),
+            cache: registryScanCache,
+            onCoalesced: () => {
+              coalescedCount += 1;
+              options.onCoalesced?.();
+            },
+            onLookupTiming: (event) => {
+              networkRequestCount += 1;
+              lookupDurationsMs.push(event.totalMs);
+              semaphoreWaitTotalMs += event.semaphoreWaitMs;
+              if (event.status === "unavailable") unavailableCount += 1;
+              if (event.reason === "timeout") timeoutCount += 1;
+              if (event.retried) retryCount += 1;
+              options.onLookupTiming?.(event);
+            },
           }
         );
+  const registryPhaseDurationMs = performance.now() - registryPhaseStart;
   registryLookups = lookupResults.size;
+  // Only "exists"/"not_found" are promoted cross-scan -- see
+  // dependency-process-cache.ts's isPromotableRegistryStatus for why
+  // "unavailable" must never persist beyond this single scan.
+  promoteRegistryResults(lookupResults);
+
+  const registryMetrics: RegistryPhaseMetrics = {
+    dependencyCount: dependencies.length,
+    uniqueDependencyCount: registryTargets.length,
+    registryLookupCount: registryLookups,
+    cacheHitCount,
+    coalescedCount,
+    networkRequestCount,
+    ...percentiles(lookupDurationsMs),
+    registryPhaseDurationMs,
+    sumOfLookupDurationsMs: lookupDurationsMs.reduce((sum, ms) => sum + ms, 0),
+    semaphoreWaitTotalMs,
+    unavailableCount,
+    timeoutCount,
+    retryCount,
+  };
 
   for (const dep of dependencies) {
     const confusion = checkDependencyConfusion(dep.name, dep.ecosystem);
@@ -212,5 +278,21 @@ export async function analyzePackageSecurity(
     registryLookups,
     skippedInternal,
     registryUnavailable,
+    registryMetrics,
+  };
+}
+
+/** Phase 22 -- p50/p95/p99/max from a set of durations. Nearest-rank method; empty input returns all zeros. */
+function percentiles(valuesMs: number[]): { p50LookupMs: number; p95LookupMs: number; p99LookupMs: number; maxLookupMs: number } {
+  if (valuesMs.length === 0) {
+    return { p50LookupMs: 0, p95LookupMs: 0, p99LookupMs: 0, maxLookupMs: 0 };
+  }
+  const sorted = [...valuesMs].sort((a, b) => a - b);
+  const at = (p: number) => sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil((p / 100) * sorted.length) - 1))];
+  return {
+    p50LookupMs: Math.round(at(50)),
+    p95LookupMs: Math.round(at(95)),
+    p99LookupMs: Math.round(at(99)),
+    maxLookupMs: Math.round(sorted[sorted.length - 1]),
   };
 }
