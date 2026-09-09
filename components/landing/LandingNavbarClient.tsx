@@ -17,7 +17,7 @@ const LanguageSelector = dynamic(
   { ssr: false, loading: () => null }
 );
 
-export function LandingNavbarClient() {
+export function LandingNavbarClient({ isAuthenticated = false }: { isAuthenticated?: boolean }) {
   const [scrolled, setScrolled] = useState(false);
   const { t } = useI18n("navigation");
 
@@ -54,18 +54,22 @@ export function LandingNavbarClient() {
 
         <div className="flex items-center gap-2">
           <LanguageSelector variant="compact" />
-          <Link
-            href="/login"
-            className="hidden text-[13px] text-muted-foreground transition-colors hover:text-foreground sm:inline"
-          >
-            {t("signIn")}
-          </Link>
+          {!isAuthenticated && (
+            <Link
+              href="/login"
+              className="hidden text-[13px] text-muted-foreground transition-colors hover:text-foreground sm:inline"
+            >
+              {t("signIn")}
+            </Link>
+          )}
           <Button
             size="sm"
             className="h-9 rounded-full bg-brand-gradient px-4 text-[13px] font-medium hover:opacity-90"
             asChild
           >
-            <Link href="/connect">{t("connectRepository")}</Link>
+            <Link href={isAuthenticated ? "/dashboard" : "/connect"}>
+              {isAuthenticated ? t("openDashboard") : t("connectRepository")}
+            </Link>
           </Button>
         </div>
       </div>

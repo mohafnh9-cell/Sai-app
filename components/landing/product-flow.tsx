@@ -20,7 +20,7 @@ export function ProductFlow() {
         <div className="mt-16 grid gap-12 md:grid-cols-2 lg:grid-cols-4 lg:gap-8">
           {FLOW_STEP_KEYS.map((stepKey, index) => (
             <div key={stepKey} className="relative">
-              {index < FLOW_STEP_KEYS.length - 1 && (
+              {index < FLOW_STEP_KEYS.length - 1 && (index + 1) % 4 !== 0 && (
                 <span
                   className="absolute left-0 top-5 hidden h-px w-[calc(100%+2rem)] bg-gradient-to-r from-border via-border to-transparent lg:block"
                   aria-hidden

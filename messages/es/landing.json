@@ -22,24 +22,69 @@
   },
   "flow": {
     "eyebrow": "Cómo funciona",
-    "title": "Conecta. Haz push. Obtén tu capa de seguridad.",
+    "title": "Del código a producción, con evidencia en cada paso.",
     "steps": {
       "connect": {
         "word": "Conecta",
-        "line": "Vincula tu repositorio de GitHub."
+        "line": "Conecta GitHub, sube un ZIP o analiza un proyecto local."
       },
-      "push": {
-        "word": "Push",
-        "line": "SequrAI ejecuta revisiones de seguridad en cada cambio de código."
+      "scan": {
+        "word": "Escanea",
+        "line": "Análisis de seguridad determinista e inteligencia de dependencias revisan tu código."
       },
       "verdict": {
         "word": "Veredicto",
-        "line": "Consulta tu veredicto de producción — qué riesgos corregir antes de desplegar."
+        "line": "Obtén un veredicto de producción respaldado por evidencia, no por una suposición."
       },
-      "deploy": {
-        "word": "Despliega",
-        "line": "Sigue las recomendaciones y prepárate para producción con confianza."
+      "understand": {
+        "word": "Entiende",
+        "line": "Descubre qué significa cada hallazgo, por qué importa y con qué confianza lo afirma SequrAI."
+      },
+      "fix": {
+        "word": "Corrige",
+        "line": "Obtén un prompt de Safe Fix accionable para tu agente de código."
+      },
+      "rescan": {
+        "word": "Reescanea",
+        "line": "Verifica si el riesgo realmente cambió — no solo si editaste el archivo."
+      },
+      "proof": {
+        "word": "Evidencia",
+        "line": "Sigue cómo mejora tu veredicto de producción con el tiempo."
       }
+    }
+  },
+  "mcp": {
+    "eyebrow": "Para agentes de código con IA",
+    "title": "Dale a tu agente de código una capa de seguridad.",
+    "subtitle": "Conecta SequrAI a Claude Code, Cursor u otro cliente compatible con MCP, y deja que tu agente trabaje con la inteligencia de seguridad de SequrAI mientras construyes.",
+    "clientsLabel": "Conecta tu agente",
+    "claudeCode": {
+      "name": "Claude Code",
+      "description": "Conecta SequrAI con un solo comando.",
+      "copyLabel": "Copiar comando"
+    },
+    "cursor": {
+      "name": "Cursor",
+      "description": "Añade SequrAI a tu configuración de MCP.",
+      "copyLabel": "Copiar configuración"
+    },
+    "copied": "Copiado",
+    "docsLink": "Ver documentación de MCP",
+    "toolsRemoteLabel": "Herramientas remotas (tu repositorio conectado)",
+    "toolsLocalLabel": "Herramientas locales (tu workspace, vía stdio)",
+    "security": {
+      "title": "La seguridad no debería depender de un solo modelo.",
+      "line1": "Tu clave MCP está limitada a tu organización y puedes revocarla en cualquier momento desde Ajustes.",
+      "line2": "El escáner determinista sigue siendo la autoridad — el razonamiento de IA explica y correlaciona evidencia, nunca anula un hallazgo de seguridad, y ninguna herramienta MCP puede debilitar o anular tu veredicto de producción.",
+      "line3": "safe_fix solo devuelve un prompt para que tu agente lo revise y aplique. Nada de lo que SequrAI hace vía MCP ejecuta o confirma código en tu nombre."
+    },
+    "steps": {
+      "eyebrow": "Cómo funciona la conexión",
+      "step1": { "title": "Conecta", "line": "Añade SequrAI como servidor MCP con una clave limitada." },
+      "step2": { "title": "Descubre", "line": "Tu agente lista las herramientas de seguridad disponibles de SequrAI." },
+      "step3": { "title": "Inspecciona", "line": "Tu agente pide a SequrAI el veredicto de producción y los hallazgos actuales." },
+      "step4": { "title": "Construye seguro", "line": "Construye, escanea, corrige y reescanea — sin salir de tu editor." }
     }
   },
   "preview": {
@@ -82,5 +127,38 @@
   },
   "brand": {
     "name": "SequrAI"
+  },
+  "mcpPage": {
+    "eyebrow": "Model Context Protocol",
+    "title": "SequrAI, dentro de tu agente de código.",
+    "intro": "SequrAI expone su inteligencia de seguridad como un servidor MCP, para que Claude Code, Cursor o cualquier cliente compatible con MCP pueda consultar tu veredicto de producción, revisar cambios recientes y pedir un Safe Fix — sin salir de tu editor.",
+    "whyTitle": "Por qué conectar tu agente",
+    "whyBody": "Los agentes de código con IA hacen que el desarrollo de software sea mucho más rápido. Eso crea un problema nuevo: el software puede llegar a producción más rápido de lo que un humano puede revisarlo correctamente. SequrAI se sitúa entre tu agente y producción como la capa de inteligencia de seguridad antes del despliegue.",
+    "authTitle": "Autenticación",
+    "authBody": "SequrAI emite una clave API limitada a tu organización (seq_live_...) o un token OAuth 2.0, generado desde Ajustes. La clave viaja solo en una cabecera Authorization — nunca se incrusta en una URL, en un archivo de configuración subido al repositorio, ni en el propio código del cliente de SequrAI.",
+    "capabilitiesTitle": "Capacidades",
+    "capabilitiesRemoteIntro": "Las herramientas remotas operan sobre tu repositorio de GitHub conectado y tu historial de escaneos guardado.",
+    "capabilitiesLocalIntro": "Las herramientas locales operan sobre tu workspace actual vía un bridge stdio local, sin subir código fuente a SequrAI.",
+    "workflowTitle": "Flujo de ejemplo",
+    "workflowLine": "\"Revisa mi proyecto\" → SequrAI ejecuta una revisión nueva → \"¿Puedo desplegar?\" → SequrAI responde desde el veredicto de producción guardado → \"Corrige el bloqueador principal\" → SequrAI devuelve un prompt de Safe Fix para que tu agente lo aplique → \"Revisa de nuevo\" → verifica si el riesgo realmente cambió.",
+    "troubleshootingTitle": "Solución de problemas",
+    "troubleshootingBody": "Si tu agente no puede conectar con SequrAI, confirma que la cabecera Authorization lleva una clave vigente de Ajustes, y que tu cliente MCP soporta el transporte HTTP streamable (Claude Code y la mayoría de clientes modernos lo hacen; Cursor usa en su lugar el bridge stdio local).",
+    "dashboardCta": "Abrir ajustes de tu workspace",
+    "toolDescriptions": {
+      "full_product_audit": "Auditoría conectada a GitHub: revisión de código, pruebas de seguridad y hallazgos correlacionados.",
+      "can_i_deploy": "Respuesta de despliegue desde tu veredicto de producción guardado.",
+      "review_now": "Inicia una revisión de protección nueva, solo de código.",
+      "safe_fix": "Un prompt de fix para copiar y pegar en tu agente — nunca ejecuta código por sí solo.",
+      "what_changed": "Compara tus dos últimas revisiones válidas.",
+      "production_history": "Consulta la evolución de tu veredicto de producción en el tiempo.",
+      "discover_application": "Descubrimiento de arquitectura y superficie de ataque vía GitHub.",
+      "cancel_review": "Detiene una revisión activa.",
+      "authorize_dynamic_target": "Verifica la propiedad de una app desplegada antes de pruebas dinámicas.",
+      "sequrai_local_status": "Workspace, rama y estado de git del proyecto local actual.",
+      "sequrai_local_audit": "Veredicto de producción calculado a partir de evidencia local, sin subir.",
+      "sequrai_local_review": "Revisa cambios de git en staging y sin confirmar antes de hacer commit.",
+      "sequrai_local_findings": "Hallazgos locales accionables, con la evidencia redactada.",
+      "sequrai_local_prepare": "Un manifiesto de archivos saneado — nada se sube automáticamente."
+    }
   }
 }

@@ -11,9 +11,11 @@
   "technicalDetails": "Detalles técnicos",
   "product": "Producto",
   "howItWorks": "Cómo funciona",
+  "mcp": "MCP",
   "workflow": "Flujo",
   "pricing": "Precios",
   "signIn": "Iniciar sesión",
+  "openDashboard": "Abrir panel",
   "connectRepository": "Conectar mi repositorio",
   "cursorMcp": "Agente / MCP",
   "navGroup": {

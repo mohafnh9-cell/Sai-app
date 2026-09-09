@@ -6,8 +6,9 @@ import { HeroDashboardPreview } from "@/components/landing/hero-dashboard-previe
 import { FEATURE_KEYS } from "@/content/landing";
 import { useI18n } from "@/lib/i18n/client";
 
-export function Hero() {
+export function Hero({ isAuthenticated = false }: { isAuthenticated?: boolean }) {
   const { t } = useI18n("landing");
+  const { t: tn } = useI18n("navigation");
 
   return (
     <section className="relative min-h-hero-screen overflow-x-clip pt-16 md:pt-20 safe-top">
@@ -42,7 +43,9 @@ export function Hero() {
               className="h-12 rounded-full bg-brand-gradient px-7 text-sm font-medium hover:opacity-90"
               asChild
             >
-              <Link href="/connect">{t("hero.ctaPrimary")}</Link>
+              <Link href={isAuthenticated ? "/dashboard" : "/connect"}>
+                {isAuthenticated ? tn("openDashboard") : t("hero.ctaPrimary")}
+              </Link>
             </Button>
             <Button
               variant="ghost"

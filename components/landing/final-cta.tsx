@@ -5,8 +5,9 @@ import { Button } from "@/components/ui/button";
 import { BrandLogo } from "@/components/landing/brand-logo";
 import { useI18n } from "@/lib/i18n/client";
 
-export function FinalCTA() {
+export function FinalCTA({ isAuthenticated = false }: { isAuthenticated?: boolean }) {
   const { t } = useI18n("landing");
+  const { t: tn } = useI18n("navigation");
 
   return (
     <section className="bg-background py-32 md:py-44 lg:py-52">
@@ -24,7 +25,9 @@ export function FinalCTA() {
           className="mt-10 h-12 rounded-full bg-brand-gradient px-8 text-sm font-medium hover:opacity-90"
           asChild
         >
-          <Link href="/connect">{t("finalCta.button")}</Link>
+          <Link href={isAuthenticated ? "/dashboard" : "/connect"}>
+            {isAuthenticated ? tn("openDashboard") : t("finalCta.button")}
+          </Link>
         </Button>
 
         <div className="mt-20 flex flex-col items-center gap-2">

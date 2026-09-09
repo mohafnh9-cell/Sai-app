@@ -11,9 +11,11 @@
   "technicalDetails": "Evidence",
   "product": "Product",
   "howItWorks": "How it works",
+  "mcp": "MCP",
   "workflow": "Workflow",
   "pricing": "Pricing",
   "signIn": "Sign in",
+  "openDashboard": "Open dashboard",
   "connectRepository": "Connect my repository",
   "cursorMcp": "Code agent / MCP",
   "navGroup": {

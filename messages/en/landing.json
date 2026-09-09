@@ -22,24 +22,69 @@
   },
   "flow": {
     "eyebrow": "How it works",
-    "title": "Connect. Push. Get your security layer.",
+    "title": "From code to production, with evidence at every step.",
     "steps": {
       "connect": {
         "word": "Connect",
-        "line": "Link your GitHub repository."
+        "line": "Connect GitHub, upload a ZIP, or analyze a local project."
       },
-      "push": {
-        "word": "Push",
-        "line": "SequrAI runs Security Reviews on every code change."
+      "scan": {
+        "word": "Scan",
+        "line": "Deterministic security analysis and dependency intelligence review your code."
       },
       "verdict": {
         "word": "Verdict",
-        "line": "See your Production Verdict — which risks to fix before you deploy."
+        "line": "Get a Production Verdict backed by evidence, not a guess."
       },
-      "deploy": {
-        "word": "Deploy",
-        "line": "Follow Recommendations and prepare for production with confidence."
+      "understand": {
+        "word": "Understand",
+        "line": "See what each finding means, why it matters, and how confident SequrAI is."
+      },
+      "fix": {
+        "word": "Fix",
+        "line": "Get an actionable Safe Fix prompt for your code agent."
+      },
+      "rescan": {
+        "word": "Rescan",
+        "line": "Verify whether the risk actually changed — not just whether you edited the file."
+      },
+      "proof": {
+        "word": "Proof",
+        "line": "Track how your Production Verdict improves over time."
       }
+    }
+  },
+  "mcp": {
+    "eyebrow": "For AI coding agents",
+    "title": "Give your coding agent a security layer.",
+    "subtitle": "Connect SequrAI to Claude Code, Cursor, or another MCP-compatible client, and let your agent work with SequrAI's security intelligence while you build.",
+    "clientsLabel": "Connect your agent",
+    "claudeCode": {
+      "name": "Claude Code",
+      "description": "Connect SequrAI with one command.",
+      "copyLabel": "Copy command"
+    },
+    "cursor": {
+      "name": "Cursor",
+      "description": "Add SequrAI to your MCP configuration.",
+      "copyLabel": "Copy configuration"
+    },
+    "copied": "Copied",
+    "docsLink": "View MCP documentation",
+    "toolsRemoteLabel": "Remote tools (your connected repository)",
+    "toolsLocalLabel": "Local tools (your workspace, via stdio)",
+    "security": {
+      "title": "Security should not depend on a single model.",
+      "line1": "Your MCP key is scoped to your organization and can be revoked at any time from Settings.",
+      "line2": "The deterministic scanner stays authoritative — AI reasoning explains and correlates evidence, it never overrides a security finding, and no MCP tool can weaken or override your Production Verdict.",
+      "line3": "safe_fix only ever returns a prompt for your agent to review and apply. Nothing SequrAI does through MCP executes or commits code on your behalf."
+    },
+    "steps": {
+      "eyebrow": "How the connection works",
+      "step1": { "title": "Connect", "line": "Add SequrAI as an MCP server with a scoped key." },
+      "step2": { "title": "Discover", "line": "Your agent lists SequrAI's available security tools." },
+      "step3": { "title": "Inspect", "line": "Your agent asks SequrAI for the current Production Verdict and findings." },
+      "step4": { "title": "Build safely", "line": "Build, scan, fix, and rescan — without leaving your editor." }
     }
   },
   "preview": {
@@ -82,5 +127,38 @@
   },
   "brand": {
     "name": "SequrAI"
+  },
+  "mcpPage": {
+    "eyebrow": "Model Context Protocol",
+    "title": "SequrAI, inside your coding agent.",
+    "intro": "SequrAI exposes its security intelligence as an MCP server, so Claude Code, Cursor, or any MCP-compatible client can check your Production Verdict, review recent changes, and request a Safe Fix — without leaving your editor.",
+    "whyTitle": "Why connect your agent",
+    "whyBody": "AI coding agents make software development dramatically faster. That creates a new problem: software can reach production faster than a human can properly review it. SequrAI sits between your agent and production as the security intelligence layer before deployment.",
+    "authTitle": "Authentication",
+    "authBody": "SequrAI issues an organization-scoped API key (seq_live_...) or an OAuth 2.0 bearer token, generated from Settings. The key travels only in an Authorization header — it is never embedded in a URL, a config file committed to source control, or SequrAI's own client bundles.",
+    "capabilitiesTitle": "Capabilities",
+    "capabilitiesRemoteIntro": "Remote tools operate on your connected GitHub repository and persisted scan history.",
+    "capabilitiesLocalIntro": "Local tools operate on your current workspace over a local stdio bridge, without uploading source code to SequrAI.",
+    "workflowTitle": "Example workflow",
+    "workflowLine": "\"Review my project\" → SequrAI runs a fresh review → \"Can I deploy?\" → SequrAI answers from the persisted Production Verdict → \"Fix the top blocker\" → SequrAI returns a Safe Fix prompt for your agent to apply → \"Review again\" → verify the risk actually changed.",
+    "troubleshootingTitle": "Troubleshooting",
+    "troubleshootingBody": "If your agent can't reach SequrAI, confirm the Authorization header carries a current key from Settings, and that your MCP client supports the streamable HTTP transport (Claude Code and most modern clients do; Cursor uses the local stdio bridge instead).",
+    "dashboardCta": "Open your workspace settings",
+    "toolDescriptions": {
+      "full_product_audit": "GitHub-connected audit: code review, security tests, and correlated findings.",
+      "can_i_deploy": "Deploy answer from your persisted Production Verdict.",
+      "review_now": "Start a fresh code-only protection review.",
+      "safe_fix": "A copy-paste fix prompt for your agent — never executes code on its own.",
+      "what_changed": "Compare your last two valid reviews.",
+      "production_history": "See your Production Verdict trend over time.",
+      "discover_application": "Architecture and attack-surface discovery via GitHub.",
+      "cancel_review": "Stop an active review.",
+      "authorize_dynamic_target": "Verify ownership of a deployed app before dynamic checks.",
+      "sequrai_local_status": "Workspace, branch, and git state for the current local project.",
+      "sequrai_local_audit": "Production Verdict computed from local, unpushed workspace evidence.",
+      "sequrai_local_review": "Review staged and unstaged git changes before you commit.",
+      "sequrai_local_findings": "Actionable local findings, with evidence redacted.",
+      "sequrai_local_prepare": "A sanitized file manifest — nothing is uploaded automatically."
+    }
   }
 }
