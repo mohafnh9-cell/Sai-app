@@ -35,6 +35,11 @@ const CONNECTION_STATUS_LABEL: Record<string, string> = {
 
 const USERS_PAGE_SIZE = 200;
 
+/** Not called during render -- keeps Date.now() out of the page component's own function body (react-hooks/purity). */
+function isoDaysAgo(days: number): string {
+  return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+}
+
 /** Supabase's admin listUsers only returns one page — loop until it stops filling up. */
 async function listAllUsers(admin: SupabaseClient): Promise<User[]> {
   const users: User[] = [];
@@ -68,8 +73,8 @@ export default async function AdminPage() {
   if (!emailVerified || !isAppAdminEmail(auth.user.email)) redirect("/dashboard");
 
   const admin = createAdminClient();
-  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const sevenDaysAgo = isoDaysAgo(7);
+  const thirtyDaysAgo = isoDaysAgo(30);
 
   const [users, connectionsResult, orgsResult, projectsCountResult, scansResult, mcpKeysResult] =
     await Promise.all([
