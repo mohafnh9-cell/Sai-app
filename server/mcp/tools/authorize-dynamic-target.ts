@@ -17,7 +17,11 @@ import {
 } from "@/server/ai-red-team/authorization/dynamic-target-authorization-service";
 import { normalizeOrigin } from "@/server/ai-red-team/authorization/types";
 import { reapproveExpandedDynamicTargetScope } from "@/server/ai-red-team/authorization/dynamic-scope-expansion";
+import { isDynamicTargetAuthorizationRateLimited } from "@/server/ai-red-team/authorization/rate-limit";
 import { loadRequiredDynamicPathsForLatestScan } from "@/server/full-product-audit/load-required-dynamic-paths-for-project";
+
+/** Actions that trigger a real outbound HTTP/DNS check or a GitHub API call. */
+const RATE_LIMITED_ACTIONS = new Set(["check", "initiate", "manual_help", "authorize_and_check"]);
 
 async function resolveMcpUserEmail(
   admin: McpAuthContext["admin"],
@@ -109,6 +113,13 @@ export async function authorizeDynamicTarget(
   const userEmail = await resolveMcpUserEmail(ctx.admin, ctx.userId);
   const action = input.action ?? "status";
   const targetOrigin = resolveTargetOrigin(input);
+
+  if (
+    RATE_LIMITED_ACTIONS.has(action) &&
+    (await isDynamicTargetAuthorizationRateLimited(ctx.admin, ctx.organizationId))
+  ) {
+    throw new McpError(429, "rate_limited", t("errors.rate_limited"));
+  }
 
   if (action === "decline") {
     const lines = [t("authorizeDynamicTarget.declinedHeader"), "", t("authorizeDynamicTarget.declinedBody")];

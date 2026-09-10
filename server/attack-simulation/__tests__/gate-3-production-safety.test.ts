@@ -482,6 +482,7 @@ describe("Gate 3 — Phase 13: Full product audit safety scenarios", () => {
     return runFullProductAudit(admin as never, {
       organizationId: E2E_ORG_ID,
       projectId: E2E_PROJECT_ID,
+      userId: "e2e-test-user",
       projectName: "Gate 3 Lab",
       repositoryFullName: "sequrai/gate3",
       githubRepo: "sequrai/gate3",

@@ -119,6 +119,21 @@ export type DynamicVerificationSummary = {
   notSafelyTestableCount: number;
 };
 
+/**
+ * Phase 34: summary of server/ai-red-team/intelligence's correlation-engine /
+ * attack-chain-builder output, now persisted to the attack_chains table
+ * (see server/ai-red-team/intelligence/persistence.ts) instead of being
+ * discarded before it reaches the database. Absent (undefined) rather than
+ * zeroed when the unified red-team phase did not run for this scan, so a
+ * client can distinguish "no chains found" from "not computed."
+ */
+export type AttackChainsSummary = {
+  confirmed: number;
+  partiallyValidated: number;
+  potential: number;
+  topConfirmed: { title: string; summary: string } | null;
+};
+
 export type FullProductAuditResult = {
   mode: "full_product_audit";
   phase: FullProductAuditPhase;
@@ -133,6 +148,7 @@ export type FullProductAuditResult = {
   findings: ConsolidatedAuditFinding[];
   engines: FullProductAuditEngineSummary;
   dynamicVerification: DynamicVerificationSummary;
+  attackChains?: AttackChainsSummary;
   safeFixAvailable: boolean;
   safeFixBlockerId: string | null;
   recommendation: string;

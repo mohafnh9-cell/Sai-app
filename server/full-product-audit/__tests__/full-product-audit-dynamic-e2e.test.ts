@@ -99,6 +99,7 @@ async function runAudit(options?: {
   const result = await runFullProductAudit(admin as never, {
     organizationId: E2E_ORG_ID,
     projectId: E2E_PROJECT_ID,
+    userId: "e2e-test-user",
     projectName: "Dynamic Security E2E Lab",
     repositoryFullName: "sequrai/dynamic-security-e2e",
     githubRepo: "sequrai/dynamic-security-e2e",
@@ -216,6 +217,7 @@ describe("full_product_audit MCP entry shape", () => {
     const result = await runFullProductAudit(admin as never, {
       organizationId: E2E_ORG_ID,
       projectId: E2E_PROJECT_ID,
+      userId: "e2e-test-user",
       projectName: "Dynamic Security E2E Lab",
       repositoryFullName: "sequrai/dynamic-security-e2e",
       githubRepo: "sequrai/dynamic-security-e2e",

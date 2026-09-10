@@ -3,6 +3,8 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { DEFAULT_SECURITY_TEST_IDS } from "@/features/security-testing/user-test-catalog";
 import { isFeatureEnabled } from "@/server/feature-flags";
+import { assertOrganizationCanRunScan } from "@/server/billing/assert-scan-access";
+import { ScanRequestError } from "@/server/security-scanner/request-context";
 import { AttackExecutionEnqueueError } from "@/server/attack-simulation/executor/enqueue-attack-execution";
 import { startAttackCampaign, StartAttackCampaignError } from "@/server/attack-simulation/start-attack-campaign";
 import { getAttackCampaignByScanId, getAttackCampaignById, listAttackScenariosForCampaign } from "@/server/attack-simulation/persistence/campaign-repository";
@@ -63,6 +65,18 @@ export async function ensureSecurityTestsForAudit(
     dynamicVerificationDecision?: DynamicVerificationDecision;
     dynamicScopeExpansionApproved?: boolean;
     createdBy?: string | null;
+    /**
+     * Phase 34 P0: the dynamic-testing stage previously ran with no billing
+     * check of its own -- every other scan/compute entry point already goes
+     * through assertOrganizationCanRunScan() (see
+     * server/billing/__tests__/scan-entry-points-gate.test.ts), but this one
+     * did not. Required so the gate below can run before any campaign/network
+     * work starts. The static review portion of Full Product Audit is
+     * already billed separately via triggerProductionReview(), so this is
+     * additive coverage for the dynamic add-on specifically, not a second
+     * billing system.
+     */
+    userId: string;
   }
 ): Promise<SecurityTestRunResult> {
   if (!isFeatureEnabled("attack_simulation", { organizationId: input.organizationId })) {
@@ -107,6 +121,36 @@ export async function ensureSecurityTestsForAudit(
       runtimeMode: dynamicTarget.runtimeMode,
       dynamicTargetSource: dynamicTarget.source,
       skippedReason: verificationPlan.skippedReason,
+      timedOut: false,
+      dynamicVerification: verificationPlan.state,
+    };
+  }
+
+  // Phase 34 P0 (billing gate): must run before any expensive dynamic work --
+  // hypothesis building, campaign creation, or a single network request --
+  // and before the feature-flag/target checks above have any side effect
+  // beyond read-only lookups. Reuses the same server-authoritative gate every
+  // other scan-creation path already calls; this is not a second billing
+  // system.
+  try {
+    await assertOrganizationCanRunScan(admin, input.organizationId, { id: input.userId });
+  } catch (error) {
+    const skippedReason =
+      error instanceof ScanRequestError && error.code === "SCAN_LIMIT_REACHED"
+        ? "scan_limit_reached"
+        : error instanceof ScanRequestError
+          ? "subscription_required"
+          : (() => {
+              throw error;
+            })();
+    return {
+      campaignId: null,
+      executionIds: [],
+      adaptersExecuted: [],
+      adaptersSelectedFromFindings: selectedAdapterIds,
+      runtimeMode: dynamicTarget.runtimeMode,
+      dynamicTargetSource: dynamicTarget.source,
+      skippedReason,
       timedOut: false,
       dynamicVerification: verificationPlan.state,
     };

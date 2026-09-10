@@ -93,6 +93,7 @@ describe("dynamic target authorization flow", () => {
     const result = await runFullProductAudit(admin as never, {
       organizationId: E2E_ORG_ID,
       projectId: E2E_PROJECT_ID,
+      userId: "e2e-test-user",
       projectName: "No Auth Project",
       repositoryFullName: "sequrai/no-auth",
       githubRepo: "sequrai/no-auth",
@@ -299,6 +300,7 @@ describe("dynamic target authorization flow", () => {
     const result = await runFullProductAudit(admin as never, {
       organizationId: E2E_ORG_ID,
       projectId: E2E_PROJECT_ID,
+      userId: "e2e-test-user",
       projectName: "Authorized Project",
       repositoryFullName: "sequrai/authorized",
       githubRepo: "sequrai/authorized",
@@ -319,6 +321,7 @@ describe("dynamic target authorization flow", () => {
     const result = await runFullProductAudit(admin as never, {
       organizationId: E2E_ORG_ID,
       projectId: E2E_PROJECT_ID,
+      userId: "e2e-test-user",
       projectName: "Static Only",
       repositoryFullName: "sequrai/static-only",
       githubRepo: "sequrai/static-only",

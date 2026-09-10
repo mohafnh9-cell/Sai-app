@@ -71,6 +71,7 @@ export async function fullProductAudit(
       waitForReviewMs: MCP_FULL_PRODUCT_AUDIT_REVIEW_WAIT_MS,
       waitForSecurityTestsMs: MCP_FULL_PRODUCT_AUDIT_SECURITY_WAIT_MS,
       dynamicVerificationDecision: input.dynamicVerificationDecision,
+      userId: ctx.userId,
     });
   } catch (error) {
     if (error instanceof FullProductAuditError) {

@@ -60,6 +60,7 @@ export async function POST(
       waitForReviewMs: 50_000,
       waitForSecurityTestsMs: 50_000,
       dynamicVerificationDecision: parsedBody.data.dynamicVerificationDecision,
+      userId: access.userId,
     });
 
     return NextResponse.json({

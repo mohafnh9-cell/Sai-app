@@ -1,0 +1,161 @@
+# Phase 35 -- SequrAI's starter OpenGrep taint-mode rule pack.
+#
+# Purpose: prove and deliver real cross-line source->sink dataflow analysis
+# for the vulnerability classes the native 47-rule regex scanner can only
+# catch in their simplest single-line form (see server/security-evidence's
+# EvidenceKind "TAINT_FLOW" / "AST"). This pack is intentionally small and
+# curated, not a wholesale import of a third-party template library -- each
+# rule here was hand-verified against a real fixture (see
+# server/security-engines/__tests__/opengrep-engine.test.ts) before being
+# added.
+#
+# Every rule's `mode: taint` output includes a `dataflow_trace` (source,
+# intermediate vars, sink) in opengrep-core's JSON -- that trace is preserved
+# as CanonicalEvidence with kind "TAINT_FLOW" (see normalize.ts), never
+# discarded.
+
+rules:
+  - id: js-sql-injection-taint
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: "User-controlled input (request query/body/params) reaches a raw SQL execution sink without going through a parameterized query or sanitizer."
+    metadata:
+      cwe: "CWE-89"
+      owasp: "A03:2021"
+      category: injection
+    mode: taint
+    pattern-sources:
+      - patterns:
+          - pattern-either:
+              - pattern: req.query.$X
+              - pattern: req.body.$X
+              - pattern: req.params.$X
+              - pattern: request.query.$X
+              - pattern: request.body.$X
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $DB.raw(...)
+              - pattern: $DB.query(...)
+              - pattern: connection.query(...)
+              - pattern: pool.query(...)
+    # A second array argument is the parameterized-binding calling
+    # convention (db.raw(sql, [bindings])) -- the tainted value there is a
+    # bound parameter, not interpolated into the SQL string, so it is not a
+    # SQL-injection sink. Verified for real: without this sanitizer,
+    # db.raw("...", [userId]) was a false positive (see opengrep-engine.test.ts).
+    pattern-sanitizers:
+      - patterns:
+          - pattern-either:
+              - pattern: $DB.raw($Q, [...])
+              - pattern: $DB.query($Q, [...])
+
+  - id: js-command-injection-taint
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: "User-controlled input reaches a shell/process execution sink (child_process.exec/execSync) without going through execFile/spawn with an argument array."
+    metadata:
+      cwe: "CWE-78"
+      owasp: "A03:2021"
+      category: injection
+    mode: taint
+    pattern-sources:
+      - patterns:
+          - pattern-either:
+              - pattern: req.query.$X
+              - pattern: req.body.$X
+              - pattern: req.params.$X
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: exec(...)
+              - pattern: execSync(...)
+              - pattern: child_process.exec(...)
+
+  - id: js-ssrf-taint
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: "User-controlled input reaches an outbound HTTP request sink (fetch/axios/http.request) without validation against an allowlist -- possible SSRF."
+    metadata:
+      cwe: "CWE-918"
+      owasp: "A10:2021"
+      category: ssrf
+    mode: taint
+    pattern-sources:
+      - patterns:
+          - pattern-either:
+              - pattern: req.query.$X
+              - pattern: req.body.$X
+              - pattern: req.params.$X
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: fetch(...)
+              - pattern: axios.get(...)
+              - pattern: axios.post(...)
+              - pattern: http.request(...)
+              - pattern: https.request(...)
+
+  - id: py-sql-injection-taint
+    languages: [python]
+    severity: ERROR
+    message: "User-controlled input reaches a raw SQL execution sink without a parameterized query."
+    metadata:
+      cwe: "CWE-89"
+      owasp: "A03:2021"
+      category: injection
+    mode: taint
+    pattern-sources:
+      - patterns:
+          - pattern-either:
+              - pattern: request.args.get(...)
+              - pattern: request.form.get(...)
+              - pattern: request.GET.get(...)
+              - pattern: request.POST.get(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: cursor.execute(...)
+              - pattern: $CONN.execute(...)
+
+  - id: py-command-injection-taint
+    languages: [python]
+    severity: ERROR
+    message: "User-controlled input reaches a shell execution sink (os.system/subprocess with shell=True) without sanitization."
+    metadata:
+      cwe: "CWE-78"
+      owasp: "A03:2021"
+      category: injection
+    mode: taint
+    pattern-sources:
+      - patterns:
+          - pattern-either:
+              - pattern: request.args.get(...)
+              - pattern: request.form.get(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: os.system(...)
+              - pattern: subprocess.call(..., shell=True, ...)
+              - pattern: subprocess.run(..., shell=True, ...)
+
+  - id: py-ssrf-taint
+    languages: [python]
+    severity: ERROR
+    message: "User-controlled input reaches an outbound HTTP request sink without validation against an allowlist -- possible SSRF."
+    metadata:
+      cwe: "CWE-918"
+      owasp: "A10:2021"
+      category: ssrf
+    mode: taint
+    pattern-sources:
+      - patterns:
+          - pattern-either:
+              - pattern: request.args.get(...)
+              - pattern: request.form.get(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: requests.get(...)
+              - pattern: requests.post(...)
+              - pattern: urllib.request.urlopen(...)

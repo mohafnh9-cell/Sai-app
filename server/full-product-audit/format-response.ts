@@ -148,6 +148,26 @@ function appendMainRisks(lines: string[], t: McpTranslator, risks: ConsolidatedA
   }
 }
 
+function appendAttackChains(lines: string[], t: McpTranslator, chains: FullProductAuditResult["attackChains"]) {
+  if (!chains) return;
+  if (chains.confirmed === 0 && chains.partiallyValidated === 0 && chains.potential === 0) return;
+  lines.push("", t("fullProductAudit.report.attackChainsHeader"));
+  if (chains.confirmed > 0) {
+    lines.push(t("fullProductAudit.report.attackChainsConfirmed", { count: String(chains.confirmed) }));
+    if (chains.topConfirmed) {
+      lines.push(`- ${chains.topConfirmed.title}: ${chains.topConfirmed.summary}`);
+    }
+  }
+  if (chains.partiallyValidated > 0) {
+    lines.push(
+      t("fullProductAudit.report.attackChainsPartiallyValidated", { count: String(chains.partiallyValidated) })
+    );
+  }
+  if (chains.potential > 0) {
+    lines.push(t("fullProductAudit.report.attackChainsPotential", { count: String(chains.potential) }));
+  }
+}
+
 function appendTestFixtures(lines: string[], t: McpTranslator, findings: ConsolidatedAuditFinding[]) {
   const fixtures = findings.filter((finding) => finding.userFacing?.safeToIgnore);
   if (fixtures.length === 0) return;
@@ -243,6 +263,7 @@ export function formatFullProductAuditResponse(
 
   appendCheckedCategories(lines, t, result);
   appendMainRisks(lines, t, result.topRisks);
+  appendAttackChains(lines, t, result.attackChains);
   appendTestFixtures(lines, t, result.findings);
   appendStaticVsDynamic(lines, t);
 

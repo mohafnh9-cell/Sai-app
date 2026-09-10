@@ -219,6 +219,7 @@ describe("full_product_audit live verdict consistency", () => {
     const audit = await runFullProductAudit(admin as never, {
       organizationId: E2E_ORG_ID,
       projectId: E2E_PROJECT_ID,
+      userId: "e2e-test-user",
       projectName: "sequrai-app",
       repositoryFullName: "mohafnh9-cell/sequrai-app",
       githubRepo: "mohafnh9-cell/sequrai-app",
@@ -247,6 +248,7 @@ describe("full_product_audit live verdict consistency", () => {
     const audit = await runFullProductAudit(admin as never, {
       organizationId: E2E_ORG_ID,
       projectId: E2E_PROJECT_ID,
+      userId: "e2e-test-user",
       projectName: "sequrai-app",
       repositoryFullName: "mohafnh9-cell/sequrai-app",
       githubRepo: "mohafnh9-cell/sequrai-app",
@@ -276,6 +278,7 @@ describe("full_product_audit live verdict consistency", () => {
     const audit = await runFullProductAudit(admin as never, {
       organizationId: E2E_ORG_ID,
       projectId: E2E_PROJECT_ID,
+      userId: "e2e-test-user",
       projectName: "sequrai-app",
       repositoryFullName: "mohafnh9-cell/sequrai-app",
       githubRepo: "mohafnh9-cell/sequrai-app",

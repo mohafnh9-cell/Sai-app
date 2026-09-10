@@ -24,6 +24,7 @@ import {
 import { pollUntilReviewTerminal } from "./poll";
 import { ensureSecurityTestsForAudit } from "./run-security-tests";
 import { resolveDynamicTargetForAudit } from "./resolve-dynamic-target";
+import { loadAttackChainsSummary } from "./load-attack-chains-summary";
 import type { FullProductAuditResult } from "./types";
 import type { DynamicVerificationDecision } from "./dynamic-verification-flow";
 
@@ -51,6 +52,8 @@ export type RunFullProductAuditInput = {
   waitForSecurityTestsMs?: number;
   dynamicVerificationDecision?: DynamicVerificationDecision;
   reviewDeps?: import("@/server/review-now/trigger-review").TriggerReviewDependencies;
+  /** Phase 34 P0: required to bill the dynamic-testing stage (see run-security-tests.ts). */
+  userId: string;
 };
 
 function buildRecommendation(input: {
@@ -260,6 +263,7 @@ export async function runFullProductAudit(
     staticFindings,
     dynamicVerificationDecision: input.dynamicVerificationDecision,
     dynamicScopeExpansionApproved: input.dynamicVerificationDecision === "authorize",
+    userId: input.userId,
   });
 
   const attackFindingsByExecution = await listAttackFindingsForExecutions(
@@ -345,6 +349,10 @@ export async function runFullProductAudit(
   const timedOut = reviewTimedOut || securityTests.timedOut;
   const phase = timedOut ? "partial" : "complete";
   const recommendation = buildRecommendation({ verdictStatus, topRisks, counts });
+  const attackChains = await loadAttackChainsSummary(admin, {
+    organizationId: input.organizationId,
+    scanId,
+  });
 
   let nextAction = safeFixBlockerId
     ? "Run safe_fix for the top blocker, apply the prompt, then run Full Product Audit again."
@@ -397,6 +405,7 @@ export async function runFullProductAudit(
       },
     },
     dynamicVerification: securityTests.dynamicVerification,
+    attackChains,
     safeFixAvailable: Boolean(safeFixBlockerId),
     safeFixBlockerId,
     recommendation,

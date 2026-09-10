@@ -84,6 +84,7 @@ describe("ensureSecurityTestsForAudit scope gate", () => {
       scanJobId: null,
       commitSha: E2E_COMMIT_SHA,
       waitForScanBootstrapMs: 100,
+      userId: "e2e-test-user",
       staticFindings: [forgotPasswordFinding],
     });
 
@@ -106,6 +107,7 @@ describe("ensureSecurityTestsForAudit scope gate", () => {
       scanJobId: null,
       commitSha: E2E_COMMIT_SHA,
       waitForScanBootstrapMs: 100,
+      userId: "e2e-test-user",
       dynamicScopeExpansionApproved: true,
       staticFindings: [forgotPasswordFinding],
     });
