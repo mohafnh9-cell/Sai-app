@@ -51,6 +51,7 @@ export class ReviewNowError extends Error {
       | "commit_not_found"
       | "review_creation_failed"
       | "subscription_required"
+      | "scan_limit_reached"
       | "internal_error",
     message: string
   ) {
@@ -200,7 +201,8 @@ export async function triggerProductionReview(
     await assertOrganizationCanRunScan(admin, input.organizationId, { id: tokenResult.userId });
   } catch (error) {
     if (error instanceof ScanRequestError) {
-      throw new ReviewNowError("subscription_required", error.message);
+      const code = error.code === "SCAN_LIMIT_REACHED" ? "scan_limit_reached" : "subscription_required";
+      throw new ReviewNowError(code, error.message);
     }
     throw error;
   }

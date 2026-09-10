@@ -9,14 +9,20 @@ import { ScanRequestError } from "@/server/security-scanner/request-context";
  * once enabled. This is the function every scan entry point (GitHub,
  * Upload, Local) now calls before doing any scan work.
  */
-function subscriptionAdminStub(subscriptionRow: { status: string } | null) {
+function subscriptionAdminStub(
+  subscriptionRow: { status: string; free_scans_used?: number } | null
+) {
+  // Mutable so a `.rpc()` call and a subsequent `.from("subscriptions")` read
+  // see the same, evolving free_scans_used state -- matching how the real
+  // Postgres row is shared between reads and the atomic-increment function.
+  let row = subscriptionRow ? { free_scans_used: 0, ...subscriptionRow } : null;
   return {
     from: (table: string) => {
       if (table === "subscriptions") {
         return {
           select: () => ({
             eq: () => ({
-              maybeSingle: async () => ({ data: subscriptionRow, error: null }),
+              maybeSingle: async () => ({ data: row, error: null }),
             }),
           }),
         };
@@ -31,6 +37,15 @@ function subscriptionAdminStub(subscriptionRow: { status: string } | null) {
         };
       }
       throw new Error(`unexpected table ${table}`);
+    },
+    rpc: async (fn: string, args: { p_organization_id: string; p_limit: number }) => {
+      if (fn !== "consume_free_scan_credit") throw new Error(`unexpected rpc ${fn}`);
+      // Self-heals a missing row, exactly like the real Postgres function
+      // (organizations that never opened Stripe checkout have none yet).
+      if (!row) row = { status: "canceled", free_scans_used: 0 };
+      if (row.free_scans_used >= args.p_limit) return { data: false, error: null };
+      row.free_scans_used += 1;
+      return { data: true, error: null };
     },
   } as never;
 }
@@ -54,22 +69,46 @@ describe("assertOrganizationCanRunScan", () => {
     ).resolves.toBeUndefined();
   });
 
-  it("billing enabled + no active subscription: rejects with a 402 ScanRequestError", async () => {
+  it("billing enabled + no active subscription: grants exactly FREE_SCAN_LIMIT scans, then rejects with SCAN_LIMIT_REACHED", async () => {
     vi.stubEnv("SEQURAI_BILLING_ENABLED", "true");
     vi.stubEnv("SEQURAI_ADMIN_EMAILS", "");
     const admin = subscriptionAdminStub(null);
+    const user = { id: "user-1", email: "user@example.com" };
 
-    await expect(
-      assertOrganizationCanRunScan(admin, "org-1", { id: "user-1", email: "user@example.com" })
-    ).rejects.toBeInstanceOf(ScanRequestError);
+    // First FREE_SCAN_LIMIT (2) calls are granted -- this is the new Free
+    // plan, not the old unconditional block.
+    await expect(assertOrganizationCanRunScan(admin, "org-1", user)).resolves.toBeUndefined();
+    await expect(assertOrganizationCanRunScan(admin, "org-1", user)).resolves.toBeUndefined();
 
+    // The 3rd is rejected with the documented, structured error code.
     try {
-      await assertOrganizationCanRunScan(admin, "org-1", { id: "user-1", email: "user@example.com" });
+      await assertOrganizationCanRunScan(admin, "org-1", user);
       throw new Error("expected assertOrganizationCanRunScan to reject");
     } catch (error) {
       expect(error).toBeInstanceOf(ScanRequestError);
       expect((error as InstanceType<typeof ScanRequestError>).status).toBe(402);
+      expect((error as InstanceType<typeof ScanRequestError>).code).toBe("SCAN_LIMIT_REACHED");
     }
+  });
+
+  it("billing enabled + free plan already at the limit: rejects immediately", async () => {
+    vi.stubEnv("SEQURAI_BILLING_ENABLED", "true");
+    vi.stubEnv("SEQURAI_ADMIN_EMAILS", "");
+    const admin = subscriptionAdminStub({ status: "canceled", free_scans_used: 2 });
+
+    await expect(
+      assertOrganizationCanRunScan(admin, "org-1", { id: "user-1", email: "user@example.com" })
+    ).rejects.toMatchObject({ status: 402, code: "SCAN_LIMIT_REACHED" });
+  });
+
+  it("admin bypass email: unaffected by the free-scan limit even with zero credits left", async () => {
+    vi.stubEnv("SEQURAI_BILLING_ENABLED", "true");
+    vi.stubEnv("SEQURAI_ADMIN_EMAILS", "admin@example.com");
+    const admin = subscriptionAdminStub({ status: "canceled", free_scans_used: 2 });
+
+    await expect(
+      assertOrganizationCanRunScan(admin, "org-1", { id: "user-1", email: "admin@example.com" })
+    ).resolves.toBeUndefined();
   });
 
   it("billing enabled + active subscription: succeeds", async () => {

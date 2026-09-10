@@ -221,11 +221,49 @@ class FakeQuery
 
 export type FakeTables = Record<string, Row[]>;
 
+/**
+ * Mirrors the real `consume_free_scan_credit` Postgres function (migration
+ * 060) against the in-memory `subscriptions` table: self-heals a missing
+ * row, then conditionally increments `free_scans_used` only while it is
+ * below `p_limit`. This proves the decision logic (2 allowed, 3rd rejected;
+ * per-organization isolation) is correct. It does NOT prove true concurrent-
+ * request safety under real load -- that guarantee comes from Postgres row
+ * locking in the real function and can only be verified against a live
+ * database, not this synchronous, single-threaded fake.
+ */
+function fakeConsumeFreeScanCredit(tables: FakeTables, args: Record<string, unknown>) {
+  const organizationId = args.p_organization_id as string;
+  const limit = args.p_limit as number;
+  if (!tables.subscriptions) tables.subscriptions = [];
+  let row = tables.subscriptions.find((r) => r.organization_id === organizationId);
+  if (!row) {
+    row = {
+      id: `00000000-0000-4000-8000-${String((fakeIdCounter += 1)).padStart(12, "0")}`,
+      organization_id: organizationId,
+      plan: "FREE",
+      status: "canceled",
+      free_scans_used: 0,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    tables.subscriptions.push(row);
+  }
+  const used = (row.free_scans_used as number | undefined) ?? 0;
+  if (used >= limit) return { data: false, error: null };
+  row.free_scans_used = used + 1;
+  row.updated_at = new Date().toISOString();
+  return { data: true, error: null };
+}
+
 export function createFakeAdmin(tables: FakeTables) {
   return {
     from(table: string) {
       if (!tables[table]) tables[table] = [];
       return new FakeQuery(tables[table]);
+    },
+    async rpc(fn: string, args: Record<string, unknown>) {
+      if (fn === "consume_free_scan_credit") return fakeConsumeFreeScanCredit(tables, args);
+      throw new Error(`unexpected rpc ${fn}`);
     },
   };
 }

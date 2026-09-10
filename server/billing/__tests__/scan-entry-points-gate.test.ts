@@ -24,16 +24,34 @@ function billingTables(): FakeTables {
   };
 }
 
+/**
+ * An organization on the Free plan that has already used both of its free
+ * scan credits (migration 060 / server/billing/entitlements.ts). Distinct
+ * from `billingTables()` (no subscriptions row at all), which now gets 2
+ * free scans before being rejected -- see assert-scan-access.test.ts.
+ */
+function exhaustedFreeTierTables(): FakeTables {
+  return {
+    subscriptions: [
+      { organization_id: ORG_A, plan: "FREE", status: "canceled", free_scans_used: 2 },
+    ],
+    profiles: [{ id: "user-1", email: "user@example.com" }],
+    scans: [],
+    repository_scan_state: [],
+    production_verdicts: [],
+  };
+}
+
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.resetModules();
 });
 
 describe("Phase 31.2 -- review_now (MCP) respects the billing gate", () => {
-  it("billing enabled + no subscription: rejects with subscription_required, creates no scan row", async () => {
+  it("billing enabled + free scans already exhausted: rejects with scan_limit_reached, creates no scan row", async () => {
     vi.stubEnv("SEQURAI_BILLING_ENABLED", "true");
     const { triggerProductionReview, ReviewNowError } = await import("../../review-now/trigger-review");
-    const tables = billingTables();
+    const tables = exhaustedFreeTierTables();
     const admin = createFakeAdmin(tables);
 
     await expect(
@@ -52,9 +70,36 @@ describe("Phase 31.2 -- review_now (MCP) respects the billing gate", () => {
           scheduleBackground: () => {},
         }
       )
-    ).rejects.toMatchObject({ code: "subscription_required" } as InstanceType<typeof ReviewNowError>);
+    ).rejects.toMatchObject({ code: "scan_limit_reached" } as InstanceType<typeof ReviewNowError>);
 
     expect(tables.scans).toHaveLength(0);
+  });
+
+  it("billing enabled + a brand-new organization (no subscriptions row yet): the first scan is granted as a free credit", async () => {
+    vi.stubEnv("SEQURAI_BILLING_ENABLED", "true");
+    const { triggerProductionReview } = await import("../../review-now/trigger-review");
+    const tables = billingTables();
+    const admin = createFakeAdmin(tables);
+
+    const result = await triggerProductionReview(
+      admin as never,
+      {
+        organizationId: ORG_A,
+        projectId: "11111111-1111-4111-8111-111111111111",
+        githubRepo: "acme/alpha",
+        githubRepositoryId: 42,
+      },
+      {
+        resolveToken: async () => ({ token: "gh-token", userId: "user-1" }),
+        resolveCommit: async () => ({ sha: "abc123", branch: "main" }),
+        runScan: vi.fn(),
+        scheduleBackground: () => {},
+      }
+    );
+
+    expect(result.outcome).toBe("queued");
+    expect(tables.scans).toHaveLength(1);
+    expect(tables.subscriptions[0]).toMatchObject({ organization_id: ORG_A, free_scans_used: 1 });
   });
 
   it("billing disabled: unaffected (existing no-op behavior preserved)", async () => {
@@ -85,10 +130,10 @@ describe("Phase 31.2 -- review_now (MCP) respects the billing gate", () => {
 });
 
 describe("Phase 31.2 -- automatic review on push respects the billing gate", () => {
-  it("billing enabled + no subscription: returns automatic_review_skipped, creates no scan row", async () => {
+  it("billing enabled + free scans already exhausted: returns automatic_review_skipped, creates no scan row", async () => {
     vi.stubEnv("SEQURAI_BILLING_ENABLED", "true");
     const { runAutomaticProductionReview } = await import("../../automatic-review/run-on-push");
-    const tables = billingTables();
+    const tables = exhaustedFreeTierTables();
     const admin = createFakeAdmin(tables);
 
     const result = await runAutomaticProductionReview(admin as never, {
@@ -108,16 +153,16 @@ describe("Phase 31.2 -- automatic review on push respects the billing gate", () 
       userId: "user-1",
     });
 
-    expect(result).toMatchObject({ ok: true, action: "automatic_review_skipped", reason: "subscription_required" });
+    expect(result).toMatchObject({ ok: true, action: "automatic_review_skipped", reason: "scan_limit_reached" });
     expect(tables.scans).toHaveLength(0);
   });
 });
 
 describe("Phase 31.2 -- GitHub automation (scheduled/incremental) scan respects the billing gate", () => {
-  it("billing enabled + no subscription: returns null, creates no scan row", async () => {
+  it("billing enabled + free scans already exhausted: returns null, creates no scan row", async () => {
     vi.stubEnv("SEQURAI_BILLING_ENABLED", "true");
     const { createAutomationScan } = await import("../../github-automation/automation-scan");
-    const tables = billingTables();
+    const tables = exhaustedFreeTierTables();
     const admin = createFakeAdmin(tables);
 
     const scanId = await createAutomationScan(admin as never, {

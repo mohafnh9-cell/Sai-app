@@ -10,6 +10,7 @@ import { GitHubServiceError } from "@/lib/github/repository-service";
 import { markRepositorySyncError } from "@/server/repository-sync";
 import { scheduleAutomationScan } from "@/server/jobs/schedule-scan";
 import { assertOrganizationCanRunScan } from "@/server/billing/assert-scan-access";
+import { ScanRequestError } from "@/server/security-scanner/request-context";
 import {
   buildCommitValidationInput,
   hasActiveRepositoryReview,
@@ -100,11 +101,15 @@ export async function runAutomaticProductionReview(
     await assertOrganizationCanRunScan(admin, input.project.organization_id, {
       id: input.userId,
     });
-  } catch {
+  } catch (error) {
+    const reason =
+      error instanceof ScanRequestError && error.code === "SCAN_LIMIT_REACHED"
+        ? "scan_limit_reached"
+        : "subscription_required";
     return {
       ok: true,
       action: "automatic_review_skipped",
-      reason: "subscription_required",
+      reason,
     };
   }
 

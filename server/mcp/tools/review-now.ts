@@ -41,6 +41,7 @@ const ERROR_STATUS: Record<string, number> = {
   commit_not_found: 404,
   review_creation_failed: 500,
   subscription_required: 402,
+  scan_limit_reached: 402,
   internal_error: 500,
 };
 
