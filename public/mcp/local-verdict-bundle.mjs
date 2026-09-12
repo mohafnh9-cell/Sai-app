@@ -17227,7 +17227,7 @@ function repoExposesPostgresToClients(files) {
 var RECOGNIZED_AUTH_PATTERN = /(?:auth\(|getServerSession|getServerAuthContext|getCachedServerAuthContext|getScanRequestContext|getScanAccessContext|resolveMcpAuth|assertInternalOpsAuthorized|verifyInternalOpsRequest|serve\s*\(|signingKey|verifyGitHubWebhookSignature|verifyStripeWebhookSignature|constructEvent|webhookSecret|exchangeCodeForSession|currentUser|getUser|verifyToken|requireAuth|Authorization|supabase\.auth\.getUser|requireCiProjectAccess|requireProjectApiAccess|code_verifier|codeVerifier|assertActiveOAuthClient)/i;
 var RECOGNIZED_AUTHZ_PATTERN = /(?:authorize|permission|role|ownerId|organizationId|organization_id|userId\s*[=!]==?|can\w+\(|policy|getServerAuthContext|getCachedServerAuthContext|getScanRequestContext|getScanAccessContext|resolveMcpAuth|assertInternalOpsAuthorized|verifyInternalOpsRequest|requireProjectApiAccess|getProjectAccessForUser|canAccessRepository|verifyGitHubWebhookSignature|verifyStripeWebhookSignature|constructEvent|requireCiProjectAccess)/i;
 var TEST_OR_EXAMPLE_PATH = /(?:^|\/)(?:test|tests|__tests__|fixtures?|examples?)(?:\/|$)|\.(?:test|spec)\./i;
-var MACHINE_ENDPOINT_PATH = /\/oauth\/(?:register|revoke|token)(?:\/|$)|\/\.well-known\/|\/auth\/callback\/|\/webhooks?\/|\/api\/internal\//i;
+var MACHINE_ENDPOINT_PATH = /\/oauth\/(?:register|revoke|token)(?:\/|$)|\/\.well-known\/|\/auth\/callback\/|\/webhooks?\/|\/api\/internal\/|^app\/route\.[jt]s$/i;
 
 // features/security-scanner/rules/builtin.ts
 var TEST_OR_EXAMPLE2 = /(?:^|\/)(?:test|tests|__tests__|fixtures?|examples?)(?:\/|$)|\.(?:test|spec)\./i;

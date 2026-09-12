@@ -61,6 +61,33 @@ const nextConfig = {
           },
         ],
       },
+      {
+        // Phase 42.5 (public landing migration): the public homepage is a
+        // self-unpacking static bundle (content/landing/index.html,
+        // app/route.ts) that inflates its own fonts/scripts/images at
+        // runtime from `data:`/`blob:` URIs -- confirmed by its own
+        // in-bundle comments ("Strict artifact hosts allow font-src data:
+        // but not blob:", asset decoding via `URL.createObjectURL`). The
+        // site-wide CSP above blocks exactly those, so this scopes a
+        // looser policy to `/` only; every other route keeps the strict
+        // policy above (Next.js: later matching headers() entries override
+        // the same header key for the routes they match).
+        source: "/",
+        headers: [
+          {
+            key: "Content-Security-Policy",
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-eval' 'unsafe-inline' blob:",
+              "style-src 'self' 'unsafe-inline'",
+              "img-src 'self' data: https: blob:",
+              "font-src 'self' data:",
+              "connect-src 'self' blob:",
+              "frame-ancestors 'none'",
+            ].join("; "),
+          },
+        ],
+      },
     ];
   },
   poweredByHeader: false,
