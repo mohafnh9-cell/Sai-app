@@ -3,68 +3,68 @@
 @theme {
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
     "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  /* Base palette below matches the app-shell palette 1:1 (see the
-     `.app-shell` / `html[data-app-shell="true"]` block further down) so
-     every Next.js-rendered page -- auth, demo, mcp, onboarding, legal,
-     oauth -- gets the same SequrAI palette by default, without needing the
-     app-shell attribute. The real public landing at "/" is served as a
-     byte-for-byte static file by app/route.ts (content/landing/index.html)
-     and never loads this stylesheet at all, so it is unaffected either
-     way. */
-  --color-background: #060708;
-  --color-foreground: #e8e9ea;
-  --color-card: #0a0b0c;
-  --color-card-foreground: #e8e9ea;
-  --color-popover: #0a0b0c;
-  --color-popover-foreground: #e8e9ea;
-  --color-primary: #7fd1c1;
-  --color-primary-foreground: #06110e;
-  --color-secondary: rgb(255 255 255 / 0.06);
-  --color-secondary-foreground: #e8e9ea;
-  --color-muted: rgb(255 255 255 / 0.04);
-  --color-muted-foreground: #9ba0a7;
-  --color-accent: rgb(255 255 255 / 0.06);
-  --color-accent-foreground: #e8e9ea;
-  --color-destructive: #ef8a7f;
-  --color-destructive-foreground: #1a0908;
-  --color-border: rgb(255 255 255 / 0.08);
-  --color-input: rgb(255 255 255 / 0.13);
-  --color-ring: #7fd1c1;
+  /* This is the LANDING's palette -- app/page.tsx (Hero, LandingNavbar,
+     LandingBelowFold, McpSection, etc.) renders through the root layout and
+     reads these tokens directly. Do not change these to the SequrAI
+     dashboard palette: the app-shell block further down overrides these
+     same token names, scoped to `.app-shell` / `html[data-app-shell="true"]`,
+     which every non-landing product page opts into (see
+     components/shared/AppPaletteScope.tsx) -- that is the only place the
+     new palette belongs. */
+  --color-background: #07070a;
+  --color-foreground: #f5f5f7;
+  --color-card: #121216;
+  --color-card-foreground: #f5f5f7;
+  --color-popover: #12121a;
+  --color-popover-foreground: #f5f5f7;
+  --color-primary: #7b5cff;
+  --color-primary-foreground: #f5f5f7;
+  --color-secondary: rgb(255 255 255 / 0.04);
+  --color-secondary-foreground: #f5f5f7;
+  --color-muted: rgb(255 255 255 / 0.03);
+  --color-muted-foreground: #a1a1aa;
+  --color-accent: rgb(255 255 255 / 0.05);
+  --color-accent-foreground: #f5f5f7;
+  --color-destructive: #ff6b7a;
+  --color-destructive-foreground: #f5f5f7;
+  --color-border: rgb(255 255 255 / 0.07);
+  --color-input: rgb(255 255 255 / 0.1);
+  --color-ring: #7b5cff;
   --radius: 1rem;
 
-  --color-brand-blue: #7fd1c1;
-  --color-brand-purple: #7fd1c1;
-  --color-brand-violet: #7fd1c1;
-  --color-brand-indigo: #7fd1c1;
-  --color-brand-success: #7fd1c1;
-  --color-brand-warning: #e9c46a;
-  --color-brand-danger: #ef8a7f;
-  --color-success: #7fd1c1;
-  --color-warning: #e9c46a;
-  --color-danger: #ef8a7f;
-  --color-info: #82878e;
-  --color-surface: #0a0b0c;
-  --color-surface-elevated: #121418;
+  --color-brand-blue: #5b6cff;
+  --color-brand-purple: #9b5cff;
+  --color-brand-violet: #7b5cff;
+  --color-brand-indigo: #4f46e5;
+  --color-brand-success: #6ee7a8;
+  --color-brand-warning: #fbbf7a;
+  --color-brand-danger: #ff6b7a;
+  --color-success: #6ee7a8;
+  --color-warning: #fbbf7a;
+  --color-danger: #ff6b7a;
+  --color-info: #5b6cff;
+  --color-surface: #121216;
+  --color-surface-elevated: #17171d;
   --color-surface-hover: rgb(255 255 255 / 0.06);
-  --color-background-deep: #060708;
-  --color-text-muted: #7b8087;
+  --color-background-deep: #030308;
+  --color-text-muted: #71717a;
 
   /* Security severity */
-  --color-severity-critical: #ef8a7f;
-  --color-severity-high: #ef8a7f;
-  --color-severity-medium: #e9c46a;
-  --color-severity-low: #82878e;
+  --color-severity-critical: #ff5c6c;
+  --color-severity-high: #fb923c;
+  --color-severity-medium: #f7c65f;
+  --color-severity-low: #60a5fa;
 
   /* Verification trust states */
-  --color-verification-confirmed: #7fd1c1;
-  --color-verification-likely: #e9c46a;
-  --color-verification-potential: #82878e;
+  --color-verification-confirmed: #6ee7a8;
+  --color-verification-likely: #a3e635;
+  --color-verification-potential: #fbbf7a;
 
   /* Production readiness */
-  --color-readiness-ready: #7fd1c1;
-  --color-readiness-attention: #e9c46a;
-  --color-readiness-caution: #e9c46a;
-  --color-readiness-blocked: #ef8a7f;
+  --color-readiness-ready: #6ee7a8;
+  --color-readiness-attention: #fbbf7a;
+  --color-readiness-caution: #fb923c;
+  --color-readiness-blocked: #ff6b7a;
 
   --shadow-premium: 0 1px 2px rgb(0 0 0 / 0.24), 0 12px 40px rgb(0 0 0 / 0.35);
   --shadow-premium-lg: 0 2px 4px rgb(0 0 0 / 0.2), 0 24px 64px rgb(0 0 0 / 0.45);
@@ -134,19 +134,43 @@
 }
 
 @layer utilities {
-  /* Single-accent palette: no purple gradient. The brand wordmark's accent
-     letters use the one teal accent as a solid color (a "label", per the
-     palette's own "rótulos" use case), not a gradient. */
+  /* Landing default: the original purple/violet gradient wordmark + CTA
+     treatment -- unchanged. Scoped overrides for every other product page
+     (auth, demo, mcp, onboarding, legal) live in the app-shell block below:
+     a single teal accent for the wordmark and a white CTA fill, matching
+     the authenticated app's primary Button (components/ui/button.tsx). */
   .text-gradient {
+    background: linear-gradient(135deg, #5b6cff 0%, #7b5cff 50%, #9b5cff 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
+
+  @supports not ((-webkit-background-clip: text) or (background-clip: text)) {
+    .text-gradient {
+      background: none;
+      -webkit-text-fill-color: currentColor;
+      color: #9b5cff;
+    }
+  }
+
+  .bg-brand-gradient {
+    background: linear-gradient(135deg, #5b6cff 0%, #7b5cff 50%, #9b5cff 100%);
+    background-color: #7b5cff;
+  }
+
+  .app-shell .text-gradient,
+  html[data-app-shell="true"] .text-gradient {
+    background: none;
+    -webkit-text-fill-color: currentColor;
     color: #7fd1c1;
   }
 
-  /* CTA buttons across the marketing/product surface use the same white
-     button treatment as the authenticated app's primary Button (see
-     components/ui/button.tsx) -- the palette reserves teal for positive
-     state / labels / links, not button fills. */
-  .bg-brand-gradient {
+  .app-shell .bg-brand-gradient,
+  html[data-app-shell="true"] .bg-brand-gradient {
     background: #e8e9ea;
+    background-color: #e8e9ea;
     color: #060708;
   }
 
