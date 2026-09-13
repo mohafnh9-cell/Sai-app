@@ -6,6 +6,7 @@ import { IntelligenceSurface } from "./IntelligenceSurface";
 import { ProductionReadinessScore } from "./ProductionReadinessScore";
 import { VerdictStatusBadge } from "@/features/production-verdict/components/VerdictStatusBadge";
 import { RecommendedAction } from "./RecommendedAction";
+import { InfoTip } from "@/components/shared/InfoTip";
 import { cn } from "@/lib/utils";
 
 type ProductionVerdictCardProps = {
@@ -23,6 +24,12 @@ type ProductionVerdictCardProps = {
     description?: string | null;
   } | null;
   footerLink?: { href: string; label: string } | null;
+  /** Real backend fields (ProductionVerdictV1.confidence / .blockersCount) -- optional so callers with no verdict data yet render exactly as before. */
+  stats?: {
+    scoreHelp: { label: string; title: string; body: string };
+    confidence?: { value: string; label: string; title: string; body: string } | null;
+    blockers?: { count: number; label: string; title: string; body: string } | null;
+  } | null;
   children?: React.ReactNode;
   className?: string;
   id?: string;
@@ -43,6 +50,7 @@ export function ProductionVerdictCard({
   why,
   blocker,
   footerLink,
+  stats = null,
   children,
   className,
   id = "production-verdict-detail",
@@ -68,13 +76,55 @@ export function ProductionVerdictCard({
           </p>
         </div>
 
-        <ProductionReadinessScore
-          score={score ?? null}
-          status={status}
-          label={scoreLabel}
-          size="secondary"
-          className="mt-6"
-        />
+        {stats ? (
+          <div className="mt-6 flex flex-wrap items-start gap-x-10 gap-y-5">
+            <div>
+              <InfoTip
+                label={stats.scoreHelp.label}
+                title={stats.scoreHelp.title}
+                body={stats.scoreHelp.body}
+              />
+              <ProductionReadinessScore score={score ?? null} status={status} size="secondary" className="mt-2" />
+            </div>
+            {stats.confidence ? (
+              <div>
+                <InfoTip
+                  label={stats.confidence.label}
+                  title={stats.confidence.title}
+                  body={stats.confidence.body}
+                />
+                <p className="mt-2 text-2xl sm:text-3xl font-semibold tracking-tight leading-none">
+                  {stats.confidence.value}
+                </p>
+              </div>
+            ) : null}
+            {stats.blockers ? (
+              <div>
+                <InfoTip
+                  label={stats.blockers.label}
+                  title={stats.blockers.title}
+                  body={stats.blockers.body}
+                />
+                <p
+                  className={cn(
+                    "mt-2 text-2xl sm:text-3xl font-semibold tabular-nums tracking-tight leading-none",
+                    stats.blockers.count > 0 ? "text-danger" : "text-success"
+                  )}
+                >
+                  {stats.blockers.count}
+                </p>
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <ProductionReadinessScore
+            score={score ?? null}
+            status={status}
+            label={scoreLabel}
+            size="secondary"
+            className="mt-6"
+          />
+        )}
 
         {why ? <p className="mt-4 text-sm text-muted-foreground leading-relaxed max-w-xl">{why}</p> : null}
 

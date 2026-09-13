@@ -61,6 +61,29 @@ export function MissionControlHero({
       status={view.status}
       score={verdict.score}
       scoreLabel={tm("projectHome.verdictSummary.score")}
+      stats={
+        verdict.score != null
+          ? {
+              scoreHelp: {
+                label: t("verdict.productionReadyScore"),
+                title: t("verdict.scoreHelpTitle"),
+                body: t("verdict.scoreHelpBody"),
+              },
+              confidence: {
+                value: t(`verdict.confidenceLevel.${verdict.confidence}`),
+                label: t("verdict.confidenceLabel"),
+                title: t("verdict.confidenceHelpTitle"),
+                body: t("verdict.confidenceHelpBody"),
+              },
+              blockers: {
+                count: verdict.blockersCount,
+                label: t("verdict.blockersLabel"),
+                title: t("verdict.blockersHelpTitle"),
+                body: t("verdict.blockersHelpBody"),
+              },
+            }
+          : null
+      }
       why={why}
       sourceBadge={
         <span className="inline-flex items-center rounded-full border border-border/60 bg-muted/30 px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">

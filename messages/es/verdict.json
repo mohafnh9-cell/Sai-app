@@ -9,6 +9,14 @@
     "insufficient": "AÚN NO LO SABEMOS."
   },
   "productionReadyScore": "Puntuación del Veredicto de Producción",
+  "confidenceLabel": "Confianza",
+  "blockersLabel": "Bloqueantes",
+  "scoreHelpTitle": "Production Ready Score",
+  "scoreHelpBody": "Un resumen de 0 a 100 de las comprobaciones completadas en esta revisión. Apoya el veredicto, pero nunca lo sustituye: cualquier bloqueante de producción fuerza un veredicto de no listo, sea cual sea la puntuación.",
+  "confidenceHelpTitle": "Confianza",
+  "confidenceHelpBody": "Cuánta evidencia respalda este veredicto. Confianza baja significa que la revisión llegó a su conclusión con cobertura parcial — no que los hallazgos sean menos graves.",
+  "blockersHelpTitle": "Bloqueante de producción",
+  "blockersHelpBody": "Un hallazgo cuya consecuencia impide el despliegue. Eso es distinto de la severidad técnica: un hallazgo de severidad alta puede no bloquear, y uno medio sí.",
   "productionBlocker_one": "{count} bloqueo de producción",
   "productionBlocker_other": "{count} bloqueos de producción",
   "blockersRequireAttention_one": "Hay {count} bloqueo de producción que requiere tu atención.",
@@ -128,5 +136,10 @@
     "low": "Bajo",
     "medium": "Medio",
     "high": "Alto"
+  },
+  "confidenceLevel": {
+    "low": "Baja",
+    "medium": "Media",
+    "high": "Alta"
   }
 }

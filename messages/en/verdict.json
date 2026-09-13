@@ -9,6 +9,14 @@
     "insufficient": "NOT ENOUGH EVIDENCE YET."
   },
   "productionReadyScore": "Production Ready Score",
+  "confidenceLabel": "Confidence",
+  "blockersLabel": "Blockers",
+  "scoreHelpTitle": "Production Ready Score",
+  "scoreHelpBody": "A 0–100 summary of the checks that completed on this review. It supports the verdict but never overrides it: any production blocker forces a not-ready verdict regardless of score.",
+  "confidenceHelpTitle": "Confidence",
+  "confidenceHelpBody": "How much evidence backs this verdict. Low confidence means the review reached its conclusion on partial coverage — not that the findings are less severe.",
+  "blockersHelpTitle": "Production blocker",
+  "blockersHelpBody": "A finding whose consequence blocks deployment. That's separate from technical severity: a high-severity finding may not block, and a medium one may.",
   "productionBlocker_one": "{count} production blocker",
   "productionBlocker_other": "{count} production blockers",
   "blockersRequireAttention_one": "{count} production blocker requires your attention.",
@@ -125,6 +133,11 @@
     "info": "Info"
   },
   "implementationRiskLevel": {
+    "low": "Low",
+    "medium": "Medium",
+    "high": "High"
+  },
+  "confidenceLevel": {
     "low": "Low",
     "medium": "Medium",
     "high": "High"
