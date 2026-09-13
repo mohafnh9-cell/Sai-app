@@ -45,10 +45,10 @@ export function ProductionControlCenter({
   return (
     <IntelligenceSurface
       toneClass={tone}
-      className="product-hero max-w-3xl"
+      className="product-hero max-w-3xl app-surface-metal app-liquid-glow app-liquid-glow-live"
       aria-labelledby="mission-control-home-heading"
     >
-      <div className="space-y-8">
+      <div className="relative z-[1] space-y-8">
         <div className="space-y-1">
           <p className="text-sm text-muted-foreground">{greeting}</p>
           {showFirstVerdictWelcome ? (

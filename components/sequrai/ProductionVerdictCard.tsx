@@ -55,46 +55,48 @@ export function ProductionVerdictCard({
       toneClass={verdictToneClass(status)}
       className={cn("product-hero", className)}
     >
-      <div className="flex flex-wrap items-center gap-3">
-        <p className="text-eyebrow">{eyebrow}</p>
-        {sourceBadge}
-      </div>
+      <div className="relative z-[1]">
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="text-eyebrow">{eyebrow}</p>
+          {sourceBadge}
+        </div>
 
-      <div className="mt-4 space-y-3">
-        <VerdictStatusBadge status={status} />
-        <p id={headingId} className="text-display-headline">
-          {headline}
-        </p>
-      </div>
+        <div className="mt-4 space-y-3">
+          <VerdictStatusBadge status={status} />
+          <p id={headingId} className="text-display-headline">
+            {headline}
+          </p>
+        </div>
 
-      <ProductionReadinessScore
-        score={score ?? null}
-        status={status}
-        label={scoreLabel}
-        size="secondary"
-        className="mt-6"
-      />
-
-      {why ? <p className="mt-4 text-sm text-muted-foreground leading-relaxed max-w-xl">{why}</p> : null}
-
-      {blocker ? (
-        <RecommendedAction
-          eyebrow={blocker.eyebrow}
-          title={blocker.title}
-          description={blocker.description}
+        <ProductionReadinessScore
+          score={score ?? null}
+          status={status}
+          label={scoreLabel}
+          size="secondary"
+          className="mt-6"
         />
-      ) : null}
 
-      {children}
+        {why ? <p className="mt-4 text-sm text-muted-foreground leading-relaxed max-w-xl">{why}</p> : null}
 
-      {footerLink ? (
-        <a
-          href={footerLink.href}
-          className="mt-6 inline-flex text-sm font-medium text-primary underline-offset-4 hover:underline seq-focus-ring rounded-sm"
-        >
-          {footerLink.label}
-        </a>
-      ) : null}
+        {blocker ? (
+          <RecommendedAction
+            eyebrow={blocker.eyebrow}
+            title={blocker.title}
+            description={blocker.description}
+          />
+        ) : null}
+
+        {children}
+
+        {footerLink ? (
+          <a
+            href={footerLink.href}
+            className="mt-6 inline-flex text-sm font-medium text-primary underline-offset-4 hover:underline seq-focus-ring rounded-sm"
+          >
+            {footerLink.label}
+          </a>
+        ) : null}
+      </div>
     </IntelligenceSurface>
   );
 }

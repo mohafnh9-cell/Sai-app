@@ -586,19 +586,22 @@ html[data-app-shell="true"] .app-mono {
     border: 1px solid var(--color-border);
   }
 
-  /* ---- Material level 2: liquid glass -- secondary actions, small controls, tabs. ---- */
+  /* ---- Material level 2: glass -- floating panels, dropdowns, command/search UI,
+     modals, contextual overlays. Never the whole application -- a controlled
+     material for surfaces that float above content, not a background treatment. ---- */
   .app-surface-glass {
-    background: rgb(28 32 37 / 0.86);
-    border: 1px solid rgb(255 255 255 / 0.12);
-    -webkit-backdrop-filter: blur(6px);
-    backdrop-filter: blur(6px);
+    background: rgb(18 20 24 / 0.72);
+    border: 1px solid rgb(255 255 255 / 0.08);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06);
+    -webkit-backdrop-filter: blur(10px) saturate(110%);
+    backdrop-filter: blur(10px) saturate(110%);
   }
 
   @supports not (
     (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))
   ) {
     .app-surface-glass {
-      background: rgb(20 23 27 / 0.96);
+      background: rgb(15 17 20 / 0.96);
     }
   }
 
@@ -637,6 +640,34 @@ html[data-app-shell="true"] .app-mono {
     background-size: 250% 250%;
     mix-blend-mode: screen;
     animation: app-metal-sheen 12s linear infinite;
+  }
+
+  /* ---- Liquid light: soft atmospheric teal glow, sits behind a premium
+     surface's content -- reserve for the Production Verdict hero and other
+     genuinely high-priority surfaces (never every card). Static by default;
+     opt into slow movement with .app-liquid-glow-live, which itself still
+     respects prefers-reduced-motion below. Needs the host to be
+     `position: relative` (app-surface-metal already is) and to clip via its
+     own border-radius -- `overflow: hidden` isn't set here so the host's
+     rounded corners stay intact without a second radius to keep in sync. */
+  .app-liquid-glow {
+    position: relative;
+  }
+
+  .app-liquid-glow::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    border-radius: inherit;
+    overflow: hidden;
+    background:
+      radial-gradient(circle at 70% 20%, rgb(127 209 193 / 0.08), transparent 35%),
+      radial-gradient(circle at 20% 80%, rgb(127 209 193 / 0.045), transparent 30%);
+  }
+
+  .app-liquid-glow-live::before {
+    animation: app-liquid-drift 18s ease-in-out infinite;
   }
 
   .app-radius-control {
@@ -712,6 +743,18 @@ html[data-app-shell="true"] .app-mono {
   }
 }
 
+@keyframes app-liquid-drift {
+  0%,
+  100% {
+    opacity: 0.85;
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    opacity: 1;
+    transform: translate3d(1%, -1%, 0);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .app-fade-up,
   .app-stagger-item {
@@ -720,6 +763,10 @@ html[data-app-shell="true"] .app-mono {
   }
 
   .app-surface-metal-sheen::after {
+    animation: none;
+  }
+
+  .app-liquid-glow-live::before {
     animation: none;
   }
 

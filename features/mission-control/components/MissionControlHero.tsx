@@ -55,6 +55,7 @@ export function MissionControlHero({
     <ProductionVerdictCard
       id="production-verdict-detail"
       headingId="mission-control-verdict-heading"
+      className="app-surface-metal app-liquid-glow app-liquid-glow-live"
       eyebrow={t("verdict.productionVerdict")}
       headline={t(canDeployKey)}
       status={view.status}
