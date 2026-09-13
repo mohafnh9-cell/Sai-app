@@ -28,6 +28,16 @@ export type ScannerResultListItem = {
   mediumCount: number | null;
   errorMessage: string | null;
   hasVerdict: boolean;
+  /**
+   * Phase 44 UX audit finding: this list previously showed only the
+   * generic execution status (Completed/Failed/Running) -- never the
+   * actual security verdict, so a security-relevant list communicated no
+   * security information at all. Same column/pattern already used by
+   * list-analysis-runs.ts. Null when no verdict exists yet for this scan
+   * (e.g. still processing, or failed before verdict generation) --
+   * distinct from an actual verdict status, never fabricated.
+   */
+  verdictStatus: string | null;
 };
 
 /**
@@ -75,13 +85,15 @@ export async function listScannerResultsForOrganization(
 
   const [{ data: projects }, { data: verdicts }] = await Promise.all([
     admin.from("projects").select("id, name").in("id", projectIds),
-    admin.from("production_verdicts").select("scan_id").in("scan_id", scanIds),
+    admin.from("production_verdicts").select("scan_id, status").in("scan_id", scanIds),
   ]);
 
   const projectNameById = new Map(
     (projects ?? []).map((row) => [row.id as string, row.name as string])
   );
-  const scanIdsWithVerdict = new Set((verdicts ?? []).map((row) => row.scan_id as string));
+  const verdictStatusByScan = new Map(
+    (verdicts ?? []).map((row) => [row.scan_id as string, row.status as string])
+  );
 
   return scans.map((row) => ({
     scanId: row.id as string,
@@ -105,7 +117,8 @@ export async function listScannerResultsForOrganization(
     highCount: (row.high_count as number | null) ?? null,
     mediumCount: (row.medium_count as number | null) ?? null,
     errorMessage: (row.error_message as string | null) ?? null,
-    hasVerdict: scanIdsWithVerdict.has(row.id as string),
+    hasVerdict: verdictStatusByScan.has(row.id as string),
+    verdictStatus: verdictStatusByScan.get(row.id as string) ?? null,
   }));
 }
 
@@ -133,7 +146,7 @@ export async function getScannerResultDetail(
     admin.from("projects").select("id, name").eq("id", scan.project_id).maybeSingle(),
     admin
       .from("production_verdicts")
-      .select("scan_id")
+      .select("scan_id, status")
       .eq("scan_id", scan.id)
       .maybeSingle(),
     admin
@@ -172,6 +185,7 @@ export async function getScannerResultDetail(
     mediumCount: (scan.medium_count as number | null) ?? null,
     errorMessage: (scan.error_message as string | null) ?? null,
     hasVerdict: Boolean(verdict),
+    verdictStatus: (verdict?.status as string | undefined) ?? null,
     executionTrace: trace,
   };
 }
