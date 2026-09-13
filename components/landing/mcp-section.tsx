@@ -96,7 +96,7 @@ export function McpSection() {
                   onClick={() => setActiveClient(client)}
                   className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
                     activeClient === client
-                      ? "bg-brand-gradient text-white"
+                      ? "bg-brand-gradient"
                       : "border border-border text-muted-foreground hover:text-foreground"
                   }`}
                 >

@@ -3,60 +3,68 @@
 @theme {
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
     "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --color-background: #07070a;
-  --color-foreground: #f5f5f7;
-  --color-card: #121216;
-  --color-card-foreground: #f5f5f7;
-  --color-popover: #12121a;
-  --color-popover-foreground: #f5f5f7;
-  --color-primary: #7b5cff;
-  --color-primary-foreground: #f5f5f7;
-  --color-secondary: rgb(255 255 255 / 0.04);
-  --color-secondary-foreground: #f5f5f7;
-  --color-muted: rgb(255 255 255 / 0.03);
-  --color-muted-foreground: #a1a1aa;
-  --color-accent: rgb(255 255 255 / 0.05);
-  --color-accent-foreground: #f5f5f7;
-  --color-destructive: #ff6b7a;
-  --color-destructive-foreground: #f5f5f7;
-  --color-border: rgb(255 255 255 / 0.07);
-  --color-input: rgb(255 255 255 / 0.1);
-  --color-ring: #7b5cff;
+  /* Base palette below matches the app-shell palette 1:1 (see the
+     `.app-shell` / `html[data-app-shell="true"]` block further down) so
+     every Next.js-rendered page -- auth, demo, mcp, onboarding, legal,
+     oauth -- gets the same SequrAI palette by default, without needing the
+     app-shell attribute. The real public landing at "/" is served as a
+     byte-for-byte static file by app/route.ts (content/landing/index.html)
+     and never loads this stylesheet at all, so it is unaffected either
+     way. */
+  --color-background: #060708;
+  --color-foreground: #e8e9ea;
+  --color-card: #0a0b0c;
+  --color-card-foreground: #e8e9ea;
+  --color-popover: #0a0b0c;
+  --color-popover-foreground: #e8e9ea;
+  --color-primary: #7fd1c1;
+  --color-primary-foreground: #06110e;
+  --color-secondary: rgb(255 255 255 / 0.06);
+  --color-secondary-foreground: #e8e9ea;
+  --color-muted: rgb(255 255 255 / 0.04);
+  --color-muted-foreground: #9ba0a7;
+  --color-accent: rgb(255 255 255 / 0.06);
+  --color-accent-foreground: #e8e9ea;
+  --color-destructive: #ef8a7f;
+  --color-destructive-foreground: #1a0908;
+  --color-border: rgb(255 255 255 / 0.08);
+  --color-input: rgb(255 255 255 / 0.13);
+  --color-ring: #7fd1c1;
   --radius: 1rem;
 
-  --color-brand-blue: #5b6cff;
-  --color-brand-purple: #9b5cff;
-  --color-brand-violet: #7b5cff;
-  --color-brand-indigo: #4f46e5;
-  --color-brand-success: #6ee7a8;
-  --color-brand-warning: #fbbf7a;
-  --color-brand-danger: #ff6b7a;
-  --color-success: #6ee7a8;
-  --color-warning: #fbbf7a;
-  --color-danger: #ff6b7a;
-  --color-info: #5b6cff;
-  --color-surface: #121216;
-  --color-surface-elevated: #17171d;
+  --color-brand-blue: #7fd1c1;
+  --color-brand-purple: #7fd1c1;
+  --color-brand-violet: #7fd1c1;
+  --color-brand-indigo: #7fd1c1;
+  --color-brand-success: #7fd1c1;
+  --color-brand-warning: #e9c46a;
+  --color-brand-danger: #ef8a7f;
+  --color-success: #7fd1c1;
+  --color-warning: #e9c46a;
+  --color-danger: #ef8a7f;
+  --color-info: #82878e;
+  --color-surface: #0a0b0c;
+  --color-surface-elevated: #121418;
   --color-surface-hover: rgb(255 255 255 / 0.06);
-  --color-background-deep: #030308;
-  --color-text-muted: #71717a;
+  --color-background-deep: #060708;
+  --color-text-muted: #7b8087;
 
   /* Security severity */
-  --color-severity-critical: #ff5c6c;
-  --color-severity-high: #fb923c;
-  --color-severity-medium: #f7c65f;
-  --color-severity-low: #60a5fa;
+  --color-severity-critical: #ef8a7f;
+  --color-severity-high: #ef8a7f;
+  --color-severity-medium: #e9c46a;
+  --color-severity-low: #82878e;
 
   /* Verification trust states */
-  --color-verification-confirmed: #6ee7a8;
-  --color-verification-likely: #a3e635;
-  --color-verification-potential: #fbbf7a;
+  --color-verification-confirmed: #7fd1c1;
+  --color-verification-likely: #e9c46a;
+  --color-verification-potential: #82878e;
 
   /* Production readiness */
-  --color-readiness-ready: #6ee7a8;
-  --color-readiness-attention: #fbbf7a;
-  --color-readiness-caution: #fb923c;
-  --color-readiness-blocked: #ff6b7a;
+  --color-readiness-ready: #7fd1c1;
+  --color-readiness-attention: #e9c46a;
+  --color-readiness-caution: #e9c46a;
+  --color-readiness-blocked: #ef8a7f;
 
   --shadow-premium: 0 1px 2px rgb(0 0 0 / 0.24), 0 12px 40px rgb(0 0 0 / 0.35);
   --shadow-premium-lg: 0 2px 4px rgb(0 0 0 / 0.2), 0 24px 64px rgb(0 0 0 / 0.45);
@@ -126,25 +134,20 @@
 }
 
 @layer utilities {
+  /* Single-accent palette: no purple gradient. The brand wordmark's accent
+     letters use the one teal accent as a solid color (a "label", per the
+     palette's own "rótulos" use case), not a gradient. */
   .text-gradient {
-    background: linear-gradient(135deg, #5b6cff 0%, #7b5cff 50%, #9b5cff 100%);
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
-    color: transparent;
+    color: #7fd1c1;
   }
 
-  @supports not ((-webkit-background-clip: text) or (background-clip: text)) {
-    .text-gradient {
-      background: none;
-      -webkit-text-fill-color: currentColor;
-      color: #9b5cff;
-    }
-  }
-
+  /* CTA buttons across the marketing/product surface use the same white
+     button treatment as the authenticated app's primary Button (see
+     components/ui/button.tsx) -- the palette reserves teal for positive
+     state / labels / links, not button fills. */
   .bg-brand-gradient {
-    background: linear-gradient(135deg, #5b6cff 0%, #7b5cff 50%, #9b5cff 100%);
-    background-color: #7b5cff;
+    background: #e8e9ea;
+    color: #060708;
   }
 
   /* Viewport height — vh fallback, then dvh/svh; iOS Safari fill-available */
@@ -388,5 +391,328 @@
   .sheet-reveal-left,
   .sheet-overlay-reveal {
     animation: none;
+  }
+}
+
+/* ==========================================================================
+   APP SHELL — Phase 2 (authenticated application only)
+
+   Everything below applies wherever the `.app-shell` wrapper
+   (components/dashboard/DashboardShell.tsx, app/demo/**) is present on the
+   page. It redefines the SAME Tailwind theme custom properties declared in
+   the @theme block above (--color-background, --color-primary,
+   --color-border, etc.) so every existing component that already uses
+   bg-background / bg-card / border-border / text-primary /
+   text-muted-foreground picks up the new palette automatically -- no
+   per-component recoloring needed.
+
+   Phase 43 closure: keyed on `html[data-app-shell="true"]`, not just the
+   `.app-shell` class, because Radix's Dialog/DropdownMenu/Sheet content is
+   rendered through a Portal into `document.body` -- a SIBLING of the
+   `.app-shell` div, not a descendant of it. A class-scoped custom property
+   only cascades to descendants, so every portaled surface (the user menu,
+   the mobile nav sheet, any future dialog) was silently falling back to the
+   root theme's purple/Inter values instead of the landing's palette --
+   confirmed live via getComputedStyle before this fix (dropdown menu
+   resolved --color-primary: #7b5cff, the OLD root value, not #7fd1c1).
+   `<html>` is a shared ancestor of both the inline app-shell subtree AND
+   anything Radix portals to `document.body`, so setting the attribute on
+   `<html>` (DashboardShell.tsx, effect-driven) reaches both. The `.app-shell`
+   class stays on the wrapper as a marker/fallback; it no longer does the
+   scoping alone.
+
+   The landing page never sets this attribute, so it is completely
+   unaffected: it keeps reading the root @theme values defined above,
+   unchanged.
+   ========================================================================== */
+
+.app-shell,
+html[data-app-shell="true"],
+html[data-app-shell="true"] body {
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* `body` itself carries an explicit `font-family: var(--font-sans)` (from
+   its own `font-sans` utility class in @layer base) -- an explicit
+   declaration on body always wins over an inherited value from `<html>`,
+   even though the rule above also matches `<html>`. Anything Radix portals
+   into document.body (dropdowns, sheets, dialogs) inherits body's COMPUTED
+   font-family, not html's, so body's own override above is what actually
+   fixes portaled content -- confirmed live: without it, a portaled menu's
+   background/accent colors picked up the app-shell teal correctly (custom
+   properties inherit regardless of intervening computed values) but its
+   font stayed Inter until this rule was added. */
+
+.app-shell,
+html[data-app-shell="true"] {
+  /* Base surfaces */
+  --color-background: #060708;
+  --color-background-deep: #060708;
+  --color-foreground: #e8e9ea;
+  --color-card: #0a0b0c;
+  --color-card-foreground: #e8e9ea;
+  --color-popover: #0a0b0c;
+  --color-popover-foreground: #e8e9ea;
+  --color-secondary: rgb(255 255 255 / 0.06);
+  --color-secondary-foreground: #e8e9ea;
+  --color-muted: rgb(255 255 255 / 0.04);
+  --color-muted-foreground: #9ba0a7;
+  --color-accent: rgb(255 255 255 / 0.06);
+  --color-accent-foreground: #e8e9ea;
+  --color-border: rgb(255 255 255 / 0.08);
+  --color-input: rgb(255 255 255 / 0.13);
+  --color-surface: #0a0b0c;
+  --color-surface-elevated: #121418;
+  --color-surface-hover: rgb(255 255 255 / 0.06);
+  /* Additional surface: code/technical panels (evidence blocks, log output,
+     the mission-control "full report" technical details). */
+  --app-surface-code: #0b0d0f;
+  /* Text hierarchy, 3rd step (tertiary) -- already used by severity-low/info
+     below; named here so it's reusable directly as body copy where a level
+     below --color-muted-foreground is needed. */
+  --app-text-tertiary: #82878e;
+  /* Phase 43 closure: #6a6f76 (the darkest step in this ramp) measures
+     3.98:1 against #060708, failing WCAG AA for regular text (4.5:1) --
+     #7b8087 was adopted for --color-text-muted (5.07:1, passes) so any body
+     copy stays compliant. #6a6f76 is kept ONLY as --app-text-micro for
+     genuinely decorative/non-essential mono micro-labels (e.g. a
+     timestamp's seconds, a hash fragment) that are never the sole carrier
+     of meaning -- never use it for body text, labels, or anything a user
+     must read to understand the UI. */
+  --color-text-muted: #7b8087;
+  --app-text-micro: #6a6f76;
+  /* Border, 3rd step (max-intensity light-beam edge) -- for a highlighted
+     metal surface's brightest edge only (e.g. the Production Verdict hero),
+     never a default border. */
+  --app-border-glow-max: rgb(255 255 255 / 0.42);
+
+  /* Only brand accent -- never used for severity. */
+  --color-primary: #7fd1c1;
+  --color-primary-foreground: #06110e;
+  --color-ring: #7fd1c1;
+  --color-destructive: #ef8a7f;
+  --color-destructive-foreground: #1a0908;
+
+  /* Severity: semantic only, drawn from the same restrained palette. The
+     brief supplies exactly one medium and one high/"not ready" hue --
+     critical reuses high's red (weight is communicated by layout/typography
+     in the findings screens, not a second invented red), low/info fall back
+     to the neutral tertiary grays since no cool hue is part of this system. */
+  --color-severity-critical: #ef8a7f;
+  --color-severity-high: #ef8a7f;
+  --color-severity-medium: #e9c46a;
+  --color-severity-low: #82878e;
+  --color-verification-confirmed: #7fd1c1;
+  --color-verification-likely: #e9c46a;
+  --color-verification-potential: #82878e;
+  --color-readiness-ready: #7fd1c1;
+  --color-readiness-attention: #e9c46a;
+  --color-readiness-caution: #e9c46a;
+  --color-readiness-blocked: #ef8a7f;
+  --color-success: #7fd1c1;
+  --color-warning: #e9c46a;
+  --color-danger: #ef8a7f;
+  --color-info: #82878e;
+
+  /* App-only tokens with no root/@theme equivalent. */
+  --app-border-metal: rgb(255 255 255 / 0.13);
+  --app-radius-control: 0.5625rem; /* 9px */
+  --app-radius-card: 0.8125rem; /* 13px */
+  --app-radius-surface: 1.25rem; /* 20px */
+  --app-shadow-max: 0 18px 50px rgb(0 0 0 / 0.5);
+  --app-ease: cubic-bezier(0.16, 1, 0.3, 1);
+
+  --radius: var(--app-radius-card);
+}
+
+.app-shell code,
+.app-shell kbd,
+.app-shell .app-mono,
+html[data-app-shell="true"] code,
+html[data-app-shell="true"] kbd,
+html[data-app-shell="true"] .app-mono {
+  font-family: var(--font-geist-mono), ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+
+@layer utilities {
+  /* ---- Material level 1: graphite -- background, editorial sections, lists. ---- */
+  .app-surface-graphite {
+    background: linear-gradient(180deg, #121418 0%, #0b0c0e 100%);
+    border: 1px solid var(--color-border);
+  }
+
+  /* ---- Material level 0: code -- evidence blocks, logs, technical/raw output. ---- */
+  .app-surface-code {
+    background: var(--app-surface-code);
+    border: 1px solid var(--color-border);
+  }
+
+  /* ---- Material level 2: liquid glass -- secondary actions, small controls, tabs. ---- */
+  .app-surface-glass {
+    background: rgb(28 32 37 / 0.86);
+    border: 1px solid rgb(255 255 255 / 0.12);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+  }
+
+  @supports not (
+    (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))
+  ) {
+    .app-surface-glass {
+      background: rgb(20 23 27 / 0.96);
+    }
+  }
+
+  .app-surface-glass-hover {
+    transition: transform 200ms var(--app-ease), border-color 200ms var(--app-ease);
+  }
+
+  .app-surface-glass-hover:hover {
+    transform: translateY(-1px);
+    border-color: rgb(255 255 255 / 0.18);
+  }
+
+  /* ---- Material level 3: liquid metal -- Production Verdict hero, primary CTA only. ---- */
+  .app-surface-metal {
+    position: relative;
+    background: linear-gradient(180deg, #1d2126 0%, #101215 42%, #0a0b0d 100%);
+    border: 1px solid var(--app-border-metal);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.15),
+      var(--app-shadow-max);
+  }
+
+  /* Optional, extremely subtle diagonal sheen -- opt-in via a second class so
+     Level 3 stays a still surface by default. */
+  .app-surface-metal-sheen::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(
+      115deg,
+      transparent 40%,
+      rgb(255 255 255 / 0.05) 50%,
+      transparent 60%
+    );
+    background-size: 250% 250%;
+    mix-blend-mode: screen;
+    animation: app-metal-sheen 12s linear infinite;
+  }
+
+  .app-radius-control {
+    border-radius: var(--app-radius-control);
+  }
+
+  .app-radius-card {
+    border-radius: var(--app-radius-card);
+  }
+
+  .app-radius-surface {
+    border-radius: var(--app-radius-surface);
+  }
+
+  /* ---- Typography helpers ---- */
+  .app-label-micro {
+    font-family: var(--font-geist-mono), ui-monospace, monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+  }
+
+  .app-mono-nums {
+    font-family: var(--font-geist-mono), ui-monospace, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---- Motion ---- */
+  .app-fade-up {
+    animation: app-fade-up 450ms var(--app-ease) both;
+  }
+
+  .app-stagger-item {
+    animation-delay: calc(var(--app-stagger-index, 0) * 300ms);
+  }
+
+  .app-hover-lift {
+    transition: transform 200ms var(--app-ease);
+  }
+
+  .app-hover-lift:hover {
+    transform: translateY(-2px);
+  }
+
+  /* ---- Accessibility ---- */
+  .app-focus-ring {
+    outline: none;
+  }
+
+  .app-focus-ring:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 3px;
+  }
+}
+
+@keyframes app-fade-up {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes app-metal-sheen {
+  0% {
+    background-position: 0% 0%;
+  }
+  100% {
+    background-position: 200% 200%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-fade-up,
+  .app-stagger-item {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+
+  .app-surface-metal-sheen::after {
+    animation: none;
+  }
+
+  .app-hover-lift,
+  .app-surface-glass-hover {
+    transition: none;
+  }
+
+  /* Phase 43 closure: a blanket kill switch for every other
+     transition/animation the shell activated (seq-transition on TopNav
+     links/buttons/dropdown items, the mobile nav sheet, Button's
+     active:scale press feedback, Radix's own open/close animations on
+     DropdownMenu/Sheet/Dialog). Near-zero duration rather than `transition:
+     none`/`animation: none` outright -- Radix and other libraries listen
+     for transitionend/animationend to finish their open/close lifecycle,
+     so killing the event entirely can leave a menu stuck partially
+     mounted. State changes (hover/focus/active colors, open/closed) still
+     apply instantly; only the motion is removed. Keyed on
+     `html[data-app-shell="true"]` (not just `.app-shell`) for the same
+     Portal reason as the token block above -- the mobile sheet and every
+     dropdown render into document.body, outside `.app-shell`'s own
+     subtree, but still inside `<html>`. Applies only while an authenticated
+     page is mounted -- the landing is explicitly out of scope for this
+     phase and manages its own motion inside its own bundle. */
+  .app-shell,
+  .app-shell *,
+  html[data-app-shell="true"],
+  html[data-app-shell="true"] * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
