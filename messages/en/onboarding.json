@@ -106,6 +106,7 @@
   "cursorCopyQuestion": "Copy question",
   "cursorFinish": "I'm connected",
   "cursorSkip": "Skip for now",
+  "skipOnboarding": "Skip for now",
   "cursorExistingTitle": "Existing MCP connection",
   "cursorExistingBody": "Your previous key stays hidden. Generate a new one only if you need to set up another client.",
   "cursorExistingRegenerate": "Generate new MCP key",

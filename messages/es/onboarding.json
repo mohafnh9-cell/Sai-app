@@ -106,6 +106,7 @@
   "cursorCopyQuestion": "Copiar pregunta",
   "cursorFinish": "Ya estoy conectado",
   "cursorSkip": "Omitir por ahora",
+  "skipOnboarding": "Saltar por ahora",
   "cursorExistingTitle": "Conexión MCP existente",
   "cursorExistingBody": "La clave anterior permanece oculta. Genera una nueva solo si necesitas configurar otro cliente.",
   "cursorExistingRegenerate": "Generar nueva clave MCP",

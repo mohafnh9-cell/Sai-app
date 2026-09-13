@@ -6,6 +6,7 @@ import { trackEvent } from "@/lib/analytics/track";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { ProductionVerdictV1 } from "@/brain/production-verdict/schema";
 import { markOnboardingWizardComplete } from "@/lib/onboarding/mark-onboarding-complete";
+import { useI18n } from "@/lib/i18n/client";
 import {
   type OnboardingContext,
   type OnboardingProject,
@@ -62,9 +63,12 @@ function resolveProjectName(
   return projects.find((project) => project.id === projectId)?.name ?? null;
 }
 
+const SKIPPABLE_STEPS = new Set<WizardStep>(["welcome", "github", "repository"]);
+
 export function OnboardingFlow({ initialContext }: { initialContext: OnboardingContext }) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { t: to } = useI18n("onboarding");
 
   const explicitStep =
     parseWizardStep(searchParams.get("step")) ??
@@ -217,6 +221,18 @@ export function OnboardingFlow({ initialContext }: { initialContext: OnboardingC
 
   return (
     <div className={`w-full ${containerClass} space-y-8 transition-all duration-500`}>
+      {SKIPPABLE_STEPS.has(step) && (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={() => void finishWizard("/dashboard")}
+            className="text-sm text-muted-foreground hover:text-foreground seq-transition seq-focus-ring rounded-md"
+          >
+            {to("skipOnboarding")}
+          </button>
+        </div>
+      )}
+
       {step !== "welcome" && step !== "cursor" && (
         <OnboardingProgressTracker wizardStep={step} context={progressContext} />
       )}
