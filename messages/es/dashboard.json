@@ -28,6 +28,7 @@
   "yourAppsSubtitle": "Abre un proyecto para ver tu veredicto y el siguiente paso.",
   "noProjectsTitle": "Aún no hay proyectos",
   "noProjectsBody": "Conecta un repositorio de GitHub para obtener tu veredicto de producción.",
+  "allShownAboveNotice": "El resto necesita atención — consulta la lista de arriba.",
   "firstVerdictWelcome": "Tu primer veredicto está listo.",
   "portfolioOpenProject": "{name} — {status}. Abrir veredicto.",
   "commandPaletteTitle": "Paleta de comandos",
@@ -43,5 +44,8 @@
   "closeMenu": "Cerrar menú",
   "search": "Buscar",
   "breadcrumb": "Ruta de navegación",
-  "authBypassBanner": "Bypass de autenticación activo (SEQURAI_BYPASS_AUTH) — eliminar antes de producción"
+  "authBypassBanner": "Bypass de autenticación activo (SEQURAI_BYPASS_AUTH) — eliminar antes de producción",
+  "mcpConnectionTitle": "MCP",
+  "mcpConnected": "Conectado",
+  "mcpNotConnected": "No conectado"
 }

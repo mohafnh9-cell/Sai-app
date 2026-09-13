@@ -18,6 +18,8 @@ import {
 import { partitionPortfolioProjects } from "@/lib/dashboard/filter-portfolio-projects";
 import { onboardingResumePath } from "@/lib/onboarding/resume-path";
 import { getWorkspaceGitHubConnectionView } from "@/server/github/workspace-connection-service";
+import { getMcpConnectionStatus } from "@/server/mcp/connection-status";
+import { IntegrationStatusBadge } from "@/components/sequrai";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Mission Control" };
@@ -50,7 +52,7 @@ export default async function DashboardPage({
     );
   }
 
-  const [hasVerdict, { data: recentProjects }, brain, verdictsByProject, githubConnection] =
+  const [hasVerdict, { data: recentProjects }, brain, verdictsByProject, githubConnection, mcpConnection] =
     await Promise.all([
       organizationHasProductionVerdict(supabase, organizationId),
       supabase
@@ -62,6 +64,7 @@ export default async function DashboardPage({
       getCachedOrgBrain(supabase, organizationId),
       getLatestVerdictsByOrganization(supabase, organizationId),
       getWorkspaceGitHubConnectionView(supabase, organizationId),
+      getMcpConnectionStatus(supabase, organizationId),
     ]);
 
   if (!hasVerdict) {
@@ -103,6 +106,15 @@ export default async function DashboardPage({
   const { needsAttention } = partitionPortfolioProjects(projects, projectReadiness);
   const showNeedsAttention = showPortfolio && needsAttention.length > 0;
   const needsAttentionIds = new Set(needsAttention.map((p) => p.id));
+  // UX audit finding (frontend-ui-ux / Nielsen's Aesthetic and Minimalist
+  // Design heuristic): "Your apps" used to render every project again,
+  // right below "Needs attention" rendering the same subset -- a user with
+  // 6 of 8 projects needing attention saw those same 6 cards twice in a
+  // row. "Your apps" now shows only the remainder; the full list is still
+  // one click away via the existing "View all" link to /projects.
+  const otherProjects = showNeedsAttention
+    ? projects.filter((project) => !needsAttentionIds.has(project.id))
+    : projects;
 
   return (
     <div className="min-h-full">
@@ -134,6 +146,13 @@ export default async function DashboardPage({
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">{t("needsAttentionTitle")}</span>
                   <span className="text-lg font-semibold tabular-nums">{needsAttention.length}</span>
+                </div>
+                <div className="flex items-center justify-between border-t border-border/40 pt-3">
+                  <span className="text-sm text-muted-foreground">{t("mcpConnectionTitle")}</span>
+                  <IntegrationStatusBadge
+                    status={mcpConnection.connected ? "connected" : "not_connected"}
+                    label={mcpConnection.connected ? t("mcpConnected") : t("mcpNotConnected")}
+                  />
                 </div>
               </div>
             ) : null}
@@ -182,9 +201,11 @@ export default async function DashboardPage({
                   description={t("noProjectsBody")}
                   action={{ label: t("connectRepository"), href: "/integrations" }}
                 />
+              ) : otherProjects.length === 0 ? (
+                <p className="text-sm text-muted-foreground">{t("allShownAboveNotice")}</p>
               ) : (
                 <div className="space-y-1">
-                  {projects.map((project) => (
+                  {otherProjects.map((project) => (
                     <PortfolioVerdictCard
                       key={project.id}
                       projectId={project.id}

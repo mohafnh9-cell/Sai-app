@@ -28,6 +28,7 @@
   "yourAppsSubtitle": "Open a project for your Production Verdict and next step.",
   "noProjectsTitle": "No projects yet",
   "noProjectsBody": "Connect a GitHub repository to get your Production Verdict.",
+  "allShownAboveNotice": "Everything else needs attention — see the list above.",
   "firstVerdictWelcome": "Your first Production Verdict is ready.",
   "portfolioOpenProject": "{name} — {status}. Open Production Verdict.",
   "commandPaletteTitle": "Command palette",
@@ -43,5 +44,8 @@
   "closeMenu": "Close menu",
   "search": "Search",
   "breadcrumb": "Breadcrumb",
-  "authBypassBanner": "Auth bypass active (SEQURAI_BYPASS_AUTH) — remove before production"
+  "authBypassBanner": "Auth bypass active (SEQURAI_BYPASS_AUTH) — remove before production",
+  "mcpConnectionTitle": "MCP",
+  "mcpConnected": "Connected",
+  "mcpNotConnected": "Not connected"
 }

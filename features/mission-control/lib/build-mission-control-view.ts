@@ -59,8 +59,6 @@ function deriveTeamStatus(
   id: MissionTeamId,
   selected: boolean,
   input: MissionControlBuildInput,
-  index: number,
-  selectedCount: number,
   t: Translator
 ): MissionTeamCard {
   const name = t(`teams.${id}`);
@@ -111,17 +109,15 @@ function deriveTeamStatus(
   }
 
   if (input.scanInProgress) {
-    const progress = input.sessionProgress ?? Math.min(95, 20 + index * 12);
-    const runningIndex = Math.floor((progress / 100) * selectedCount);
-    let status: MissionTeamStatus = "queued";
-    if (index < runningIndex) status = "completed";
-    else if (index === runningIndex) status = "running";
+    // No real per-team signal (teamExecution/metrics) for this team yet --
+    // show it honestly as queued rather than guessing which team is
+    // "running" from its position in the list.
     return {
       id,
       name,
-      status,
-      estimatedDurationLabel: status === "running" ? t("teams.duration.estimate") : t("status.queued"),
-      progressPercent: status === "completed" ? 100 : status === "running" ? 55 : 0,
+      status: "queued",
+      estimatedDurationLabel: t("status.queued"),
+      progressPercent: 0,
     };
   }
 
@@ -163,15 +159,18 @@ export function buildMissionControlView(
   const t = input.t ?? namespaceTranslator(locale, "missionControl");
   const sig = signals(input);
   const selectedIds = MISSION_TEAMS.map((team) => team.id).filter((id) => teamSelected(id, sig));
-  const teams = MISSION_TEAMS.map((team, index) =>
-    deriveTeamStatus(team.id, teamSelected(team.id, sig), input, index, selectedIds.length, t)
+  const teams = MISSION_TEAMS.map((team) =>
+    deriveTeamStatus(team.id, teamSelected(team.id, sig), input, t)
   );
   const teamReasons = MISSION_TEAMS.map((team) => teamReason(team.id, sig, t));
 
   const progress =
     input.cancelledReview?.progressAtCancellation ??
     input.sessionProgress ??
-    (input.scanInProgress ? 42 : input.verdict ? 100 : 8);
+    // No real progress reported yet for an in-progress scan -- 0 is honest
+    // (verdict-complete/idle cases below are visual baselines, not claims
+    // about a specific measured scan's progress).
+    (input.scanInProgress ? 0 : input.verdict ? 100 : 8);
   const runningTeam = teams.find((t) => t.status === "running");
   const currentPhase =
     input.cancelledReview?.lastCompletedPhase ??
@@ -218,7 +217,7 @@ export function buildMissionControlView(
       projectName: input.projectName,
       statusLabel: headerStatus,
       progressPercent: progress,
-      etaLabel: input.scanInProgress ? formatEta(input.sessionEtaSeconds ?? 102) : "—",
+      etaLabel: input.scanInProgress ? formatEta(input.sessionEtaSeconds) : "—",
       currentPhase: String(currentPhase).replace(" Team", " Analysis"),
     },
     teams,
