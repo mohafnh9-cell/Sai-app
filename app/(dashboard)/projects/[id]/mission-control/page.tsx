@@ -74,6 +74,18 @@ export default async function MissionControlPage({ params, searchParams }: PageP
   if (!auth?.organizationId) redirect("/login");
   const organizationId = auth.organizationId;
 
+  // Perf: neither of these depends on the analysis-run resolution or
+  // loadFullMissionControlState below (both only need projectId/user.id) --
+  // kick them off now so they run concurrently with that sequence instead
+  // of waiting for it to fully finish first (previously a fully sequential
+  // waterfall: resolve run -> load state -> THEN start these two).
+  const productionDataPromise = Promise.all([
+    getProductionIntelligence(auth.supabase, projectId, auth.user.id).catch(() => null),
+    getProductionJourneyByProject(auth.supabase, projectId, auth.user.id, { limit: 50 }).catch(
+      () => null
+    ),
+  ]);
+
   const isolationEnabled = isFeatureEnabled("analysis_run_isolation", { organizationId });
   const attackCenterEnabled = isFeatureEnabled("attack_simulation", { organizationId });
   const manualRecovery = query.recovery === "1";
@@ -196,12 +208,7 @@ export default async function MissionControlPage({ params, searchParams }: PageP
     hasVerdict: Boolean(missionControlState.productionVerdict),
   });
 
-  const [productionIntelligence, journey] = await Promise.all([
-    getProductionIntelligence(auth.supabase, projectId, auth.user.id).catch(() => null),
-    getProductionJourneyByProject(auth.supabase, projectId, auth.user.id, { limit: 50 }).catch(
-      () => null
-    ),
-  ]);
+  const [productionIntelligence, journey] = await productionDataPromise;
 
   const showSecurityTest = shouldShowSecurityTestNav({ attackCenterEnabled });
 

@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/shared/PageHeader";
-import { getServerAuthContext } from "@/lib/auth/dev-bypass";
+import { getCachedServerAuthContext } from "@/lib/server/request-cache";
 import { getTranslator } from "@/lib/i18n/server";
 import { WorkspaceManagementPanel } from "@/features/workspaces/components/WorkspaceManagementPanel";
 import { CreateWorkspaceButton } from "@/features/workspaces/components/CreateWorkspaceButton";
@@ -13,7 +13,7 @@ import type { Metadata } from "next";
 export const metadata: Metadata = { title: "Workspaces" };
 
 export default async function WorkspacesSettingsPage() {
-  const auth = await getServerAuthContext();
+  const auth = await getCachedServerAuthContext();
   if (!auth) redirect("/login");
 
   const { t } = await getTranslator("workspace");

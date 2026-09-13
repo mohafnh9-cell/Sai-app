@@ -8,12 +8,12 @@ import { DeleteAccountPanel } from "@/features/settings/DeleteAccountPanel";
 import { VerdictAutopilotToggle } from "@/features/autopilot/components/VerdictAutopilotToggle";
 import { McpApiKeysPanel } from "@/features/settings/McpApiKeysPanel";
 import { isVerdictAutopilotEnabled } from "@/server/autopilot";
-import { getServerAuthContext } from "@/lib/auth/dev-bypass";
+import { getCachedServerAuthContext } from "@/lib/server/request-cache";
 
 export const metadata: Metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
-  const auth = await getServerAuthContext();
+  const auth = await getCachedServerAuthContext();
   if (!auth) redirect("/login");
   const { supabase, organizationId } = auth;
   const { t } = await getTranslator("settings");

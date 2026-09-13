@@ -1,6 +1,5 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
 import { CreditCard, Check } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -8,8 +7,8 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { isBillingEnabled } from "@/lib/billing/billing-enabled";
 import { BUILDER_PLAN } from "@/lib/billing/builder-plan";
 import { getOrganizationSubscription, hasActiveSubscription } from "@/server/billing/subscription-status";
-import { resolveActiveWorkspaceIdForUser } from "@/server/workspaces/service";
 import { BillingActions } from "@/features/billing/components/BillingActions";
+import { getCachedServerAuthContext } from "@/lib/server/request-cache";
 import { getTranslator } from "@/lib/i18n/server";
 import type { Metadata } from "next";
 
@@ -20,19 +19,20 @@ export default async function BillingPage({
 }: {
   searchParams: Promise<{ reason?: string; checkout?: string; returnTo?: string }>;
 }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  // Perf: reuse the auth context the (dashboard) layout already resolved
+  // (memoized per-request via React cache()) instead of re-running
+  // getUser() + resolveActiveWorkspaceIdForUser() from scratch -- this page
+  // previously paid for a second full auth round trip on every visit.
+  const auth = await getCachedServerAuthContext();
+  if (!auth) redirect("/login");
   if (!isBillingEnabled()) redirect("/dashboard");
 
   const { t } = await getTranslator("billing");
   const params = await searchParams;
 
-  const organizationId = await resolveActiveWorkspaceIdForUser(supabase, user.id);
+  const organizationId = auth.organizationId;
   const subscription = organizationId
-    ? await getOrganizationSubscription(supabase, organizationId)
+    ? await getOrganizationSubscription(auth.supabase, organizationId)
     : null;
   const isActive = hasActiveSubscription(subscription);
 
