@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { geistSans, geistMono } from "@/lib/fonts";
 
 /**
  * Opts a page into the SequrAI product palette (dark graphite/metal
@@ -17,13 +18,25 @@ import { useEffect } from "react";
  * dropdowns) render into `document.body`, a sibling of any wrapper this
  * component could render -- only a shared ancestor like `<html>` reaches
  * both. Mirrors DashboardShell's own effect exactly.
+ *
+ * Also attaches the Geist font-variable classes, for the same reason
+ * DashboardShell does: the CSS rule that keys the app-shell typeface off
+ * `data-app-shell` references `var(--font-geist-sans)` unconditionally --
+ * setting the attribute WITHOUT this class leaves that custom property
+ * undefined, which invalidates the whole `font-family` declaration (an
+ * unlayered rule, so it still wins the cascade over the layered Inter
+ * fallback) and silently drops every scoped page to the browser's serif
+ * default. Confirmed live: without this, /login rendered its headings in
+ * Times, not Inter/Geist.
  */
 export function AppPaletteScope({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const html = document.documentElement;
     html.setAttribute("data-app-shell", "true");
+    html.classList.add(geistSans.variable, geistMono.variable);
     return () => {
       html.removeAttribute("data-app-shell");
+      html.classList.remove(geistSans.variable, geistMono.variable);
     };
   }, []);
 

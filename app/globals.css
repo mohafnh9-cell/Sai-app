@@ -518,6 +518,20 @@ html[data-app-shell="true"] {
   --color-destructive: #ef8a7f;
   --color-destructive-foreground: #1a0908;
 
+  /* Root theme's --color-brand-* tokens (bg-brand-success, text-brand-warning,
+     etc.) are the landing's blue/purple/green/orange set -- a handful of
+     dashboard components (MissionControlHistorySection,
+     MissionControlProtectionStatus) reach for them directly, so they need
+     an app-shell override too or they'd render the landing's green/orange
+     instead of this palette's teal/amber/coral. */
+  --color-brand-blue: #7fd1c1;
+  --color-brand-purple: #7fd1c1;
+  --color-brand-violet: #7fd1c1;
+  --color-brand-indigo: #7fd1c1;
+  --color-brand-success: #7fd1c1;
+  --color-brand-warning: #e9c46a;
+  --color-brand-danger: #ef8a7f;
+
   /* Severity: semantic only, drawn from the same restrained palette. The
      brief supplies exactly one medium and one high/"not ready" hue --
      critical reuses high's red (weight is communicated by layout/typography
