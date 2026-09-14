@@ -30,12 +30,15 @@ export const TEST_OR_EXAMPLE_PATH =
  * by oversight: RFC-mandated public OAuth endpoints (register RFC 7591,
  * revoke RFC 7009, token exchange protected by PKCE RFC 7636 rather than a
  * browser session), OAuth/GitHub callback handlers, signature-verified
- * webhook receivers, public discovery metadata (RFC 8414 / RFC 9728), and
- * internal-only API routes.
+ * webhook receivers, public discovery metadata (RFC 8414 / RFC 9728),
+ * internal-only API routes, and the public marketing homepage route
+ * handler (Phase 42.5: `app/route.ts` serves the static landing page --
+ * read-only, unauthenticated, no user data -- by specification, the same
+ * way a static asset route needs no auth/authz/CSRF check).
  *
  * Deliberately narrow, not a blanket "/oauth/" prefix: /oauth/authorize
  * and /oauth/consent *do* use a browser session (supabase.auth.getUser)
  * and must stay subject to auth/CSRF checks.
  */
 export const MACHINE_ENDPOINT_PATH =
-  /\/oauth\/(?:register|revoke|token)(?:\/|$)|\/\.well-known\/|\/auth\/callback\/|\/webhooks?\/|\/api\/internal\//i;
+  /\/oauth\/(?:register|revoke|token)(?:\/|$)|\/\.well-known\/|\/auth\/callback\/|\/webhooks?\/|\/api\/internal\/|^app\/route\.[jt]s$/i;
