@@ -3,7 +3,7 @@ import "server-only";
 import { spawn } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve, sep } from "node:path";
 
 /**
  * Phase 35, section 21: every external engine is treated as untrusted
@@ -107,6 +107,31 @@ export function safeExec(options: SafeExecOptions): Promise<SafeExecResult> {
     child.on("error", () => finish(null));
     child.on("close", (code: number | null) => finish(code));
   });
+}
+
+export class WorkspacePathEscapeError extends Error {
+  constructor(public readonly attemptedPath: string) {
+    super(`Path escapes the isolated workspace: ${attemptedPath}`);
+    this.name = "WorkspacePathEscapeError";
+  }
+}
+
+/**
+ * Phase 35.5, section 11/40: a repository's own file paths are UNTRUSTED
+ * input (a crafted ZIP/local-upload entry, or a repository snapshot from
+ * any future source, could contain "../../etc/something" or an absolute
+ * path). Resolves `relativePath` against `workspaceDir` and rejects it if
+ * the result would land outside that directory -- must be called before
+ * ANY write that uses a repository-supplied path, never trust `join()`
+ * alone to keep a path contained.
+ */
+export function resolveSafeWorkspacePath(workspaceDir: string, relativePath: string): string {
+  const workspaceRoot = resolve(workspaceDir);
+  const resolved = resolve(workspaceRoot, relativePath);
+  if (resolved !== workspaceRoot && !resolved.startsWith(workspaceRoot + sep)) {
+    throw new WorkspacePathEscapeError(relativePath);
+  }
+  return resolved;
 }
 
 /**

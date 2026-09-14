@@ -49,6 +49,7 @@ class FakeQuery
   private limitN?: number;
   private errorToReturn: { message: string; code?: string } | null = null;
   private pendingRows: Row[] | null = null;
+  private pendingUpdateValues: Row | null = null;
   private countMode = false;
 
   constructor(private rows: Row[]) {}
@@ -114,28 +115,15 @@ class FakeQuery
   }
 
   update(values: Row) {
-    const self = this;
-    const applied = { done: false };
-    const apply = () => {
-      if (applied.done) return;
-      applied.done = true;
-      const matched = self.rows.filter((r) => matches(r, self.filters));
-      for (const row of matched) Object.assign(row, values, { updated_at: new Date().toISOString() });
-      self.pendingRows = matched;
-    };
-    const originalEq = this.eq.bind(this);
-    const originalIn = this.in.bind(this);
-    this.eq = (col: string, value: unknown) => {
-      originalEq(col, value);
-      apply();
-      return this;
-    };
-    this.in = (col: string, value: unknown[]) => {
-      originalIn(col, value);
-      apply();
-      return this;
-    };
-    apply();
+    // Lazy, like a real postgrest-js builder: the update isn't applied
+    // until the FULL filter chain has been built and the query is actually
+    // consumed (resolveRows(), on await/maybeSingle()/single()) -- applying
+    // eagerly per-.eq()-call (as an earlier version of this fake did) means
+    // a multi-filter chain like .update(...).eq("id", x).eq("org_id", y)
+    // would apply the mutation after the FIRST .eq() alone, ignoring the
+    // second filter entirely. That silently broke tenant-scoped update
+    // assertions -- always resolve the complete filter set first.
+    this.pendingUpdateValues = values;
     return this;
   }
 
@@ -168,6 +156,13 @@ class FakeQuery
   }
 
   private resolveRows(): Row[] {
+    if (this.pendingUpdateValues) {
+      const values = this.pendingUpdateValues;
+      this.pendingUpdateValues = null;
+      const matched = this.rows.filter((r) => matches(r, this.filters));
+      for (const row of matched) Object.assign(row, values, { updated_at: new Date().toISOString() });
+      this.pendingRows = matched;
+    }
     if (this.pendingRows) return this.pendingRows;
     let result = this.rows.filter((r) => matches(r, this.filters));
     if (this.orderCol) {
@@ -255,6 +250,37 @@ function fakeConsumeFreeScanCredit(tables: FakeTables, args: Record<string, unkn
   return { data: true, error: null };
 }
 
+/**
+ * Mirrors the real claim_next_security_job Postgres function (migration
+ * 063): atomically claims the oldest/highest-priority QUEUED row, flips it
+ * to RUNNING, and returns it -- or returns no row if nothing is queued.
+ * Single-threaded here, so it doesn't prove real FOR UPDATE SKIP LOCKED
+ * concurrency safety (that guarantee comes from Postgres row locking in the
+ * real function), but it does prove the claim-then-transition contract the
+ * worker code depends on.
+ */
+function fakeClaimNextSecurityJob(tables: FakeTables, args: Record<string, unknown>) {
+  const workerId = args.p_worker_id as string;
+  const jobs = tables.security_jobs ?? [];
+  const queued = jobs
+    .filter((r) => r.status === "QUEUED")
+    .sort((a, b) => {
+      const priorityDiff = ((b.priority as number) ?? 0) - ((a.priority as number) ?? 0);
+      if (priorityDiff !== 0) return priorityDiff;
+      return String(a.requested_at ?? "").localeCompare(String(b.requested_at ?? ""));
+    });
+  const job = queued[0];
+  if (!job) return { data: [], error: null };
+
+  job.status = "RUNNING";
+  job.claimed_by = workerId;
+  job.claimed_at = new Date().toISOString();
+  job.started_at = new Date().toISOString();
+  job.attempt = ((job.attempt as number) ?? 0) + 1;
+  job.updated_at = new Date().toISOString();
+  return { data: [job], error: null };
+}
+
 export function createFakeAdmin(tables: FakeTables) {
   return {
     from(table: string) {
@@ -263,6 +289,7 @@ export function createFakeAdmin(tables: FakeTables) {
     },
     async rpc(fn: string, args: Record<string, unknown>) {
       if (fn === "consume_free_scan_credit") return fakeConsumeFreeScanCredit(tables, args);
+      if (fn === "claim_next_security_job") return fakeClaimNextSecurityJob(tables, args);
       throw new Error(`unexpected rpc ${fn}`);
     },
   };
