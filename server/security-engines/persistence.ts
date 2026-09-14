@@ -5,8 +5,14 @@ import type { CanonicalSeverity, SequrAIFinding } from "@/server/security-eviden
 import type { EngineResult } from "./types";
 import { crossEngineDeduplication } from "./deduplicate";
 
-/** Maps an existing `scan_findings` DB row (native 47-rule scanner) into the canonical shape, for cross-engine dedup only -- never persisted back over the native row. */
-function mapScanFindingRowToSequrAIFinding(
+/**
+ * Maps an existing `scan_findings` DB row (native 47-rule scanner) into the
+ * canonical shape. Originally for cross-engine dedup only (below); exported
+ * so the orchestrator's native-coverage loader (Phase 38) can reuse the SAME
+ * mapping instead of a second, divergent one -- never persisted back over
+ * the native row either way.
+ */
+export function mapScanFindingRowToSequrAIFinding(
   row: Record<string, unknown>,
   ctx: { scanId: string; projectId: string; organizationId: string }
 ): SequrAIFinding {
