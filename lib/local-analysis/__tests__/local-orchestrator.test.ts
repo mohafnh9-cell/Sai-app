@@ -219,7 +219,7 @@ describe("runLocalSecurityOrchestrator", () => {
 
     const result = await runLocalSecurityOrchestrator({ workspacePath: root, scope: "workspace", signal: controller.signal });
 
-    expect(result.phase).toBe("incomplete");
+    expect(result.phase).toBe("cancelled");
     expect(result.engines[0]?.errors[0]?.code).toBe("aborted");
   });
 

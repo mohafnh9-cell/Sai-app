@@ -23,6 +23,15 @@ export type SafeExecOptions = {
   /** Explicit allowlist. process.env is never passed wholesale (section 21/37). */
   envAllowlist?: Record<string, string>;
   maxOutputBytes?: number;
+  /**
+   * L1.4: optional external cancellation, separate from the timeout above.
+   * An already-aborted signal is honored immediately (the child is never
+   * spawned); a signal that aborts mid-run kills the child the same way a
+   * timeout does (SIGKILL, timer/listeners cleaned up, promise still
+   * resolves rather than rejects) so a caller distinguishes "cancelled" from
+   * "crashed" via `SafeExecResult.aborted`, not a thrown error.
+   */
+  signal?: AbortSignal;
 };
 
 export type SafeExecResult = {
@@ -30,6 +39,8 @@ export type SafeExecResult = {
   stdout: string;
   stderr: string;
   timedOut: boolean;
+  /** True only when `signal` fired -- distinct from timedOut, which is this function's own timeoutMs elapsing. */
+  aborted: boolean;
   truncated: boolean;
   durationMs: number;
 };
@@ -39,6 +50,20 @@ const DEFAULT_MAX_OUTPUT_BYTES = 32 * 1024 * 1024; // 32MB
 export function safeExec(options: SafeExecOptions): Promise<SafeExecResult> {
   const maxOutputBytes = options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES;
   const started = Date.now();
+
+  if (options.signal?.aborted) {
+    // Never spawn at all if already cancelled -- no process, no timer, no
+    // listener ever exists to clean up.
+    return Promise.resolve({
+      exitCode: null,
+      stdout: "",
+      stderr: "",
+      timedOut: false,
+      aborted: true,
+      truncated: false,
+      durationMs: 0,
+    });
+  }
 
   return new Promise((resolve) => {
     const child = spawn(options.command, options.args, {
@@ -62,12 +87,19 @@ export function safeExec(options: SafeExecOptions): Promise<SafeExecResult> {
     let stdoutBytes = 0;
     let truncated = false;
     let timedOut = false;
+    let aborted = false;
     let settled = false;
 
     const timer = setTimeout(() => {
       timedOut = true;
       child.kill("SIGKILL");
     }, options.timeoutMs);
+
+    const onAbort = () => {
+      aborted = true;
+      child.kill("SIGKILL");
+    };
+    options.signal?.addEventListener("abort", onAbort, { once: true });
 
     child.stdout.on("data", (chunk: Buffer) => {
       if (stdoutBytes >= maxOutputBytes) {
@@ -94,11 +126,13 @@ export function safeExec(options: SafeExecOptions): Promise<SafeExecResult> {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      options.signal?.removeEventListener("abort", onAbort);
       resolve({
         exitCode,
         stdout,
         stderr,
         timedOut,
+        aborted,
         truncated,
         durationMs: Date.now() - started,
       });

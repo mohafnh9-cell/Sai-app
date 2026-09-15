@@ -29,7 +29,14 @@ export type LocalEngineOutcome = {
   errors: Array<{ code: string; message: string }>;
 };
 
-export type LocalOrchestratorPhase = "complete" | "partial" | "incomplete";
+/**
+ * L1.4: precedence when multiple conditions apply simultaneously is
+ * cancelled > incomplete > partial > complete -- a run the caller asked to
+ * stop is reported as cancelled even if, say, the native engine had also
+ * already failed; cancellation is never downgraded to a lesser-looking
+ * status.
+ */
+export type LocalOrchestratorPhase = "complete" | "partial" | "incomplete" | "cancelled";
 
 export type LocalOrchestratorResult = {
   source: "local";
@@ -37,6 +44,11 @@ export type LocalOrchestratorResult = {
   workspace: string;
   scope: LocalAnalysisScope;
   /**
+   * "cancelled": input.signal fired before the run finished -- never
+   * reported as failed, successful, or as zero findings; whatever findings
+   * had already been produced by engines that completed before
+   * cancellation are still returned, but no verdict is computed (STEP 10:
+   * cancellation must not be mistaken for FAILED/SUCCESS/empty-findings).
    * "incomplete": the native engine (the one every other result depends on
    * for scope/normalization) failed outright -- callers must not treat
    * `findings` as meaningful. "partial": native succeeded but one or more
@@ -66,11 +78,13 @@ export type LocalOrchestratorInput = {
   scope?: LocalAnalysisScope;
   gitDiffOnly?: boolean;
   /**
-   * Best-effort only: checked between phases, not mid-engine-execution --
-   * neither scanRepository() nor the SecurityEngine.execute() contract
-   * accepts a signal today, so an already-running external engine's own
-   * self-enforced timeout is what actually bounds it (STEP 4/9's "do not
-   * invent a second timeout mechanism").
+   * L1.4: genuinely propagated to the external engines (OpenGrep/Trivy kill
+   * their running subprocess via safeExec's own abort handling; all four
+   * external-and-native-adjacent engines skip immediately if already
+   * aborted before they'd have started). The native engine is the one real,
+   * honest limitation: scanRepository() has no signal/cancellation contract
+   * of its own, so an in-flight native scan is not interrupted -- checked
+   * before/after, never mid-execution. Not silently claimed as solved.
    */
   signal?: AbortSignal;
   /** L1.3: when true, persist the scan/findings/verdict to the local SQLite store. Default false -- a scan remains purely in-memory unless explicitly asked to be remembered. */
@@ -195,7 +209,7 @@ export async function runLocalSecurityOrchestrator(
       scanId,
       workspace,
       scope: resolvedScope,
-      phase: "incomplete",
+      phase: "cancelled",
       findings: [],
       engines: [{ engine: NATIVE_ENGINE_ID, status: "SKIPPED", durationMs: 0, findingsCount: 0, errors: [{ code: "aborted", message: "Cancelled before analysis started." }] }],
       durationMs: Date.now() - startedAt,
@@ -215,6 +229,7 @@ export async function runLocalSecurityOrchestrator(
       organizationId: identity.mode === "cloud-bound" ? identity.organizationId : identity.repositoryId,
       files,
       githubRepo: null,
+      signal: input.signal,
     }),
   ]);
 
@@ -293,15 +308,27 @@ export async function runLocalSecurityOrchestrator(
     });
   }
 
-  const phase: LocalOrchestratorPhase = nativeFailed ? "incomplete" : externalPartialFailure ? "partial" : "complete";
+  // Precedence: cancelled > incomplete > partial > complete -- a run the
+  // caller asked to stop is reported as cancelled even if native also
+  // failed, never downgraded to a lesser-looking status (STEP 34).
+  const phase: LocalOrchestratorPhase = input.signal?.aborted
+    ? "cancelled"
+    : nativeFailed
+      ? "incomplete"
+      : externalPartialFailure
+        ? "partial"
+        : "complete";
   const sortedFindings = sortFindings(findings);
   const durationMs = Date.now() - startedAt;
 
-  // Only compute a verdict when the native engine actually produced a
-  // meaningful result -- an "incomplete" scan (native failed) has nothing
-  // a verdict could honestly be built from (STEP 3/19: never fabricate one).
+  // Only compute a verdict when the run actually finished on its own terms:
+  // an "incomplete" scan (native failed) has nothing a verdict could
+  // honestly be built from, and a "cancelled" run must never be presented
+  // as a completed, trustworthy analysis regardless of what partial
+  // findings exist (STEP 3/10/19: never fabricate one, cancellation is
+  // never success).
   let verdict: ProductionVerdictV1 | undefined;
-  if (!nativeFailed) {
+  if (phase !== "incomplete" && phase !== "cancelled") {
     verdict = generateProductionVerdict({
       projectId: identity.projectId,
       repositoryId: identity.repositoryId,

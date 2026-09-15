@@ -151,6 +151,20 @@ export function createTrivyEngine(): SecurityEngine {
       const cacheDir = resolveCacheDir();
       const errors: EngineResult["errors"] = [];
 
+      if (input.signal?.aborted) {
+        return {
+          ...base,
+          status: "SKIPPED",
+          completedAt: new Date().toISOString(),
+          durationMs: Date.now() - started,
+          capabilitiesCompleted: [],
+          findings: [],
+          evidence: [],
+          metrics: {},
+          errors: [{ code: "cancelled", message: "Cancelled before Trivy started." }],
+        };
+      }
+
       try {
         const dbWarm = await ensureVulnerabilityDbWarm(binary, cacheDir, Math.min(60_000, input.timeoutMs));
         if (!dbWarm) {
@@ -199,8 +213,13 @@ export function createTrivyEngine(): SecurityEngine {
             cwd: workspaceDir,
             timeoutMs: input.timeoutMs,
             envAllowlist: { DOCKER_CONFIG: cacheDir },
+            signal: input.signal,
           });
 
+          if (result.aborted) {
+            errors.push({ code: "cancelled", message: "trivy fs scan was cancelled" });
+            return null;
+          }
           if (result.timedOut) {
             errors.push({ code: "timeout", message: "trivy fs scan exceeded the execution timeout" });
             return null;

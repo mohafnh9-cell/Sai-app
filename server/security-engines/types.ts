@@ -109,6 +109,8 @@ export type EngineExecuteInput = {
   githubRepo?: string | null;
   /** Hard ceiling this engine must self-enforce; the orchestrator does not separately kill the process. */
   timeoutMs: number;
+  /** L1.4: optional external cancellation, independent of timeoutMs -- an engine that runs a subprocess should pass this straight through to safeExec. Optional and backward-compatible: no existing caller needs to supply it. */
+  signal?: AbortSignal;
 };
 
 /**

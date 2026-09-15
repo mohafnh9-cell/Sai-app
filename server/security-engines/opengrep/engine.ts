@@ -110,7 +110,8 @@ async function runOnSingleFile(
   originalPath: string,
   content: string,
   language: string,
-  timeoutMs: number
+  timeoutMs: number,
+  signal?: AbortSignal
 ): Promise<{ matches: OpenGrepMatch[]; errorMessage: string | null }> {
   const safeName = `${randomUUID()}${originalPath.slice(originalPath.lastIndexOf("."))}`;
   const targetPath = join(workspaceDir, safeName);
@@ -121,7 +122,12 @@ async function runOnSingleFile(
     args: ["-json", "-lang", language, "-rules", RULES_FILE, "-max_memory", "1024", "-timeout", "10", targetPath],
     cwd: workspaceDir,
     timeoutMs,
+    signal,
   });
+
+  if (result.aborted) {
+    return { matches: [], errorMessage: "cancelled" };
+  }
 
   if (result.timedOut) {
     return { matches: [], errorMessage: "per-file timeout exceeded" };
@@ -238,6 +244,7 @@ export function createOpenGrepEngine(): SecurityEngine {
       try {
         await withIsolatedWorkspace("opengrep-scan", async (workspaceDir) => {
           for (const target of targets) {
+            if (input.signal?.aborted) break;
             const perFileTimeout = Math.min(DEFAULT_PER_FILE_TIMEOUT_MS, input.timeoutMs);
             let outcome = await runOnSingleFile(
               binary,
@@ -245,7 +252,8 @@ export function createOpenGrepEngine(): SecurityEngine {
               target.path,
               target.content,
               target.language,
-              perFileTimeout
+              perFileTimeout,
+              input.signal
             );
             // Phase 42: a real production run saw ~60/60 files fail with
             // "opengrep-core exited 2" (a fatal unhandled exception inside
@@ -256,14 +264,15 @@ export function createOpenGrepEngine(): SecurityEngine {
             // without ever turning a REAL, reproducible failure into a
             // false "clean" result: a file that fails twice is still
             // recorded as failed, with both attempts' detail preserved.
-            if (outcome.errorMessage?.startsWith("opengrep-core exited")) {
+            if (outcome.errorMessage?.startsWith("opengrep-core exited") && !input.signal?.aborted) {
               const retry = await runOnSingleFile(
                 binary,
                 workspaceDir,
                 target.path,
                 target.content,
                 target.language,
-                perFileTimeout
+                perFileTimeout,
+                input.signal
               );
               if (retry.errorMessage) {
                 outcome = { matches: retry.matches, errorMessage: `${outcome.errorMessage} (retry also failed: ${retry.errorMessage})` };

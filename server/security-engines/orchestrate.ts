@@ -23,6 +23,8 @@ export type RunSecurityEnginesInput = {
   files: Array<{ path: string; content: string }>;
   githubRepo?: string | null;
   timeoutMs?: number;
+  /** L1.4: optional, backward-compatible external cancellation, passed straight through to each engine.execute(). */
+  signal?: AbortSignal;
 };
 
 export type RunSecurityEnginesOutput = {
@@ -67,6 +69,27 @@ export async function runSecurityEngines(
         };
       }
 
+      if (input.signal?.aborted) {
+        return {
+          engine: engine.id,
+          engineVersion: engine.version,
+          executionId: `${engine.id}-cancelled`,
+          scanId: input.scanId,
+          projectId: input.projectId,
+          organizationId: input.organizationId,
+          status: "SKIPPED",
+          startedAt: new Date().toISOString(),
+          completedAt: new Date().toISOString(),
+          durationMs: 0,
+          capabilitiesAttempted: [],
+          capabilitiesCompleted: [],
+          findings: [],
+          evidence: [],
+          metrics: {},
+          errors: [{ code: "cancelled", message: "Cancelled before this engine started." }],
+        };
+      }
+
       try {
         return await engine.execute({
           scanId: input.scanId,
@@ -75,6 +98,7 @@ export async function runSecurityEngines(
           files: input.files,
           githubRepo: input.githubRepo,
           timeoutMs,
+          signal: input.signal,
         });
       } catch (error) {
         return {
