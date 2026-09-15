@@ -29,6 +29,11 @@ export const DEFAULT_IGNORED_DIRS = new Set([
   ".cache",
   ".turbo",
   ".vercel",
+  // L1.2: .sequrai/project.json is local tooling identity, not application
+  // source -- excluded for the same reason .git/.vercel are, and so the
+  // orchestrator scanning a workspace never re-scans the very identity
+  // file resolveLocalIdentity() just wrote into it.
+  ".sequrai",
 ]);
 
 /**

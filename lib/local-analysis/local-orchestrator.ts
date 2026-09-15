@@ -4,14 +4,9 @@ import { scanRepository } from "@/features/security-scanner/scanner";
 import type { VerdictEngineInput } from "@/brain/production-verdict/engine";
 import { collectInputFiles, mapScanFindingToVerdictInput } from "./map-findings";
 import { getGitContext, resolveScopeFromArgs, resolveScopePaths } from "./git-scope";
-import { listWorkspaceFiles, normalizeWorkspaceRoot } from "./workspace";
-import {
-  LOCAL_ORGANIZATION_ID,
-  LOCAL_PROJECT_ID,
-  LOCAL_REPOSITORY_ID,
-  createLocalScanId,
-  type LocalAnalysisScope,
-} from "./constants";
+import { normalizeWorkspaceRoot } from "./workspace";
+import { createLocalScanId, type LocalAnalysisScope } from "./constants";
+import { resolveLocalIdentity } from "./local-identity";
 
 export type VerdictFinding = VerdictEngineInput["findings"][number];
 
@@ -143,6 +138,9 @@ export async function runLocalSecurityOrchestrator(
   const startedAt = Date.now();
   const workspace = normalizeWorkspaceRoot(input.workspacePath);
   const scanId = createLocalScanId();
+  // L1.2: real, workspace-derived identity instead of the same fixed
+  // LOCAL_PROJECT_ID/LOCAL_ORGANIZATION_ID for every repository.
+  const identity = await resolveLocalIdentity(workspace);
 
   const git = getGitContext(workspace);
   const scope = resolveScopeFromArgs({ scope: input.scope, gitDiffOnly: input.gitDiffOnly });
@@ -192,8 +190,12 @@ export async function runLocalSecurityOrchestrator(
     scanRepository(files),
     runSecurityEngines({
       scanId,
-      projectId: LOCAL_PROJECT_ID,
-      organizationId: LOCAL_ORGANIZATION_ID,
+      projectId: identity.projectId,
+      // No real organization in local-only mode; the repository's own
+      // stable identity is reused here purely as EngineResult bookkeeping
+      // metadata (never authorization-checked locally) rather than a
+      // single constant shared by every repository on the machine.
+      organizationId: identity.mode === "cloud-bound" ? identity.organizationId : identity.repositoryId,
       files,
       githubRepo: null,
     }),
@@ -287,5 +289,3 @@ export async function runLocalSecurityOrchestrator(
     durationMs: Date.now() - startedAt,
   };
 }
-
-export { LOCAL_PROJECT_ID, LOCAL_REPOSITORY_ID, LOCAL_ORGANIZATION_ID };

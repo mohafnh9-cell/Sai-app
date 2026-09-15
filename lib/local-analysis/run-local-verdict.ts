@@ -1,11 +1,7 @@
 import { generateProductionVerdict, verdictHeadline } from "@/brain/production-verdict/engine";
 import { scanRepository } from "@/features/security-scanner/scanner";
-import {
-  createLocalScanId,
-  LOCAL_PROJECT_ID,
-  LOCAL_REPOSITORY_ID,
-  type LocalAnalysisScope,
-} from "./constants";
+import { createLocalScanId, type LocalAnalysisScope } from "./constants";
+import { resolveLocalIdentity } from "./local-identity";
 import {
   getGitContext,
   parseGitFileCounts,
@@ -67,11 +63,12 @@ function buildInsufficientDataResult(input: {
   git: ReturnType<typeof getGitContext>;
   snapshot: LocalSnapshotMetadata;
   reason: string;
+  identity: Awaited<ReturnType<typeof resolveLocalIdentity>>;
 }): LocalProductionVerdictResult {
   const scanId = createLocalScanId();
   const { verdict } = generateProductionVerdict({
-    projectId: LOCAL_PROJECT_ID,
-    repositoryId: LOCAL_REPOSITORY_ID,
+    projectId: input.identity.projectId,
+    repositoryId: input.identity.repositoryId,
     scanId,
     commitSha: input.git.commitSha,
     branch: input.git.branch,
@@ -123,6 +120,11 @@ export async function runLocalProductionVerdict(
   const scope = resolveScopeFromArgs(input);
   const git = getGitContext(workspace);
   const listing = listWorkspaceFiles(workspace);
+  // L1.2: real, workspace-derived identity -- a local UUID (or, once a
+  // cloud resolver is wired in a later phase, the server-verified cloud
+  // project) instead of the same fixed LOCAL_PROJECT_ID/LOCAL_REPOSITORY_ID
+  // for every repository on the machine.
+  const identity = await resolveLocalIdentity(workspace);
   const emptySnapshot: LocalSnapshotMetadata = {
     filesAnalyzed: 0,
     filesExcluded: listing.stats.filesExcluded,
@@ -141,6 +143,7 @@ export async function runLocalProductionVerdict(
       snapshot: emptySnapshot,
       reason:
         "Git is not available in this workspace. Use scope=workspace or initialize a git repository.",
+      identity,
     });
   }
 
@@ -151,6 +154,7 @@ export async function runLocalProductionVerdict(
       git,
       snapshot: emptySnapshot,
       reason: "No changed files detected for the selected scope.",
+      identity,
     });
   }
 
@@ -177,6 +181,7 @@ export async function runLocalProductionVerdict(
         credentialsSkipped: scopedListing.stats.credentialsSkipped,
       },
       reason: "No readable source files found inside the authorized workspace.",
+      identity,
     });
   }
 
@@ -193,8 +198,8 @@ export async function runLocalProductionVerdict(
   };
 
   const { verdict } = generateProductionVerdict({
-    projectId: LOCAL_PROJECT_ID,
-    repositoryId: LOCAL_REPOSITORY_ID,
+    projectId: identity.projectId,
+    repositoryId: identity.repositoryId,
     scanId,
     commitSha: git.commitSha,
     branch: git.branch,
