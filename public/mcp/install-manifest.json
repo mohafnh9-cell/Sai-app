@@ -9,6 +9,6 @@
     "path": "/mcp/local-analysis.mjs",
     "sha256": "3f789618d44c29962513ee3ccc3ff4c3a46385f341061d751a3ccd72159e7eac",
     "bundlePath": "/mcp/local-verdict-bundle.mjs",
-    "bundleSha256": "d97a1906c7683fba6eb4c93510f7be33ea404d7550c52867c40889c016adb375"
+    "bundleSha256": "721b20ea90bf556570cbad7b583c0543993a95be266ed9f0e27c3f7ca0712800"
   }
 }
