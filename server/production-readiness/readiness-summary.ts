@@ -6,6 +6,7 @@ import { buildJobsHealthSummary } from "@/server/observability/health-summary";
 import { getMetricCounters } from "@/server/observability/metrics";
 import { getOperationTimingSummaries } from "@/server/observability/operation-timing";
 import { listFeatureFlags } from "@/server/feature-flags";
+import { isSecurityWorkerEnabled } from "@/server/security-jobs/worker-config";
 
 export type ReadinessCheck = {
   name: string;
@@ -57,6 +58,18 @@ export async function buildProductionReadinessSummary(
   checks.push({
     name: "supabase_service_role",
     status: process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ? "ok" : "down",
+  });
+
+  // Phase 38.7 verification: reports only the derived ENABLED/DISABLED
+  // state from the running process's own isSecurityWorkerEnabled() check --
+  // never the raw env var value -- so this endpoint (already internal-ops-
+  // token gated) can confirm what this specific deployment actually has
+  // wired, independent of whether the Vercel dashboard/CLI can read the var
+  // back (e.g. when it's marked Sensitive).
+  checks.push({
+    name: "security_worker_enabled",
+    status: isSecurityWorkerEnabled() ? "ok" : "degraded",
+    detail: isSecurityWorkerEnabled() ? "ENABLED" : "DISABLED",
   });
 
   const jobs = await buildJobsHealthSummary(admin);
