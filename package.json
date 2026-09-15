@@ -34,7 +34,8 @@
     "load-test:staging": "node scripts/staging-load-test.mjs",
     "db:apply-migrations": "node scripts/apply-migrations.mjs",
     "mcp": "node mcp/stdio-bridge.mjs",
-    "build:mcp-local": "node scripts/bundle-local-mcp.mjs"
+    "build:mcp-local": "node scripts/bundle-local-mcp.mjs",
+    "build:security-worker": "node scripts/bundle-security-worker.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.111.0",

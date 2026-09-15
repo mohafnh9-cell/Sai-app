@@ -47,3 +47,6 @@ next-env.d.ts
 
 # local Claude Code tooling config (machine/session-specific, not shipped)
 /.claude/
+
+# Phase 35.5: bundled worker output (rebuilt via npm run build:security-worker)
+/worker/dist/
