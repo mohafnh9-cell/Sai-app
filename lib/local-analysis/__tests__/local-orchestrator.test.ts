@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -299,5 +299,66 @@ describe("runLocalSecurityOrchestrator", () => {
     } finally {
       globalThis.fetch = originalFetch;
     }
+  });
+
+  it("15 (L1.3) — persist: false (default) never touches disk", async () => {
+    const root = tmpWorkspace("seq-orch-no-persist-");
+    writeFileSync(join(root, "app.ts"), "export const ok = true;\n");
+    const result = await runLocalSecurityOrchestrator({ workspacePath: root, scope: "workspace" });
+    expect(result.persistence).toBeUndefined();
+    expect(existsSync(join(root, ".sequrai", "sequrai.db"))).toBe(false);
+  });
+
+  it("16 (L1.3) — persist: true saves a real scan/findings/verdict, retrievable by a fresh store instance", async () => {
+    const root = tmpWorkspace("seq-orch-persist-");
+    const fakeStripeSecret = ["sk_", "live_", "abcdefghijklmnopqrstuvwxyz123456"].join("");
+    writeFileSync(join(root, "config.ts"), `export const token = "${fakeStripeSecret}";`);
+
+    const result = await runLocalSecurityOrchestrator({ workspacePath: root, scope: "workspace", persist: true });
+    expect(result.persistence?.status).toBe("saved");
+    expect(result.verdict).toBeDefined();
+
+    const { openLocalPersistenceStore } = await import("../local-persistence");
+    const store = openLocalPersistenceStore(root);
+    const scan = store.getScan(result.scanId);
+    const findings = store.getFindingsForScan(result.scanId);
+    const verdict = store.getVerdictForScan(result.scanId);
+    expect(scan?.scanId).toBe(result.scanId);
+    expect(findings.length).toBeGreaterThan(0);
+    expect(verdict?.status).toBe(result.verdict?.status);
+    store.close();
+  });
+
+  it("17 (L1.3) — a native engine failure (incomplete phase) is not persisted with a fabricated verdict", async () => {
+    vi.resetModules();
+    vi.doMock("@/features/security-scanner/scanner", () => ({
+      scanRepository: vi.fn().mockRejectedValue(new Error("crash")),
+    }));
+    const { runLocalSecurityOrchestrator: run } = await import("../local-orchestrator");
+
+    const root = tmpWorkspace("seq-orch-persist-incomplete-");
+    writeFileSync(join(root, "app.ts"), "export const ok = true;\n");
+
+    const result = await run({ workspacePath: root, scope: "workspace", persist: true });
+    expect(result.phase).toBe("incomplete");
+    expect(result.verdict).toBeUndefined();
+    expect(result.persistence?.status).toBe("saved");
+
+    const { openLocalPersistenceStore } = await import("../local-persistence");
+    const store = openLocalPersistenceStore(root);
+    expect(store.getScan(result.scanId)?.phase).toBe("incomplete");
+    expect(store.getVerdictForScan(result.scanId)).toBeNull();
+    store.close();
+  });
+
+  it("18 (L1.3) — a persistence failure (unwritable location) is reported explicitly, never hidden", async () => {
+    const root = tmpWorkspace("seq-orch-persist-fail-");
+    writeFileSync(join(root, "app.ts"), "export const ok = true;\n");
+    mkdirSync(join(root, ".sequrai"), { recursive: true });
+    symlinkSync("/nonexistent-target", join(root, ".sequrai", "sequrai.db"));
+
+    const result = await runLocalSecurityOrchestrator({ workspacePath: root, scope: "workspace", persist: true });
+    expect(result.persistence?.status).toBe("unavailable");
+    expect(result.verdict).toBeDefined(); // the scan itself still succeeded and is returned
   });
 });

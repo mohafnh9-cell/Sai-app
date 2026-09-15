@@ -93,7 +93,7 @@ export function normalizeWorkspaceRoot(input?: string): string {
   return root;
 }
 
-function realpathResolved(path: string): string {
+export function realpathResolved(path: string): string {
   try {
     return realpathSync.native(path);
   } catch (error) {
@@ -109,7 +109,7 @@ function realpathResolved(path: string): string {
   }
 }
 
-function isDescendantPath(root: string, target: string): boolean {
+export function isDescendantPath(root: string, target: string): boolean {
   const normalizedRoot = root.endsWith(sep) ? root.slice(0, -1) : root;
   const normalizedTarget = target.endsWith(sep) ? target.slice(0, -1) : target;
   if (normalizedTarget === normalizedRoot) return true;

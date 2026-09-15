@@ -1,12 +1,14 @@
 import type { EngineExecutionStatus, EngineId } from "@/server/security-engines/types";
 import { runSecurityEngines } from "@/server/security-engines/orchestrate";
 import { scanRepository } from "@/features/security-scanner/scanner";
-import type { VerdictEngineInput } from "@/brain/production-verdict/engine";
+import { generateProductionVerdict, type VerdictEngineInput } from "@/brain/production-verdict/engine";
+import type { ProductionVerdictV1 } from "@/brain/production-verdict/schema";
 import { collectInputFiles, mapScanFindingToVerdictInput } from "./map-findings";
-import { getGitContext, resolveScopeFromArgs, resolveScopePaths } from "./git-scope";
+import { getGitContext, parseGitFileCounts, resolveScopeFromArgs, resolveScopePaths } from "./git-scope";
 import { normalizeWorkspaceRoot } from "./workspace";
 import { createLocalScanId, type LocalAnalysisScope } from "./constants";
 import { resolveLocalIdentity } from "./local-identity";
+import { openLocalPersistenceStore, LocalPersistenceError, type LocalPersistenceStore } from "./local-persistence";
 
 export type VerdictFinding = VerdictEngineInput["findings"][number];
 
@@ -46,6 +48,17 @@ export type LocalOrchestratorResult = {
   findings: VerdictFinding[];
   engines: LocalEngineOutcome[];
   durationMs: number;
+  /**
+   * Present only when `phase` allowed a meaningful verdict to be computed
+   * (native engine succeeded) -- reuses generateProductionVerdict()
+   * unchanged (STEP 8/19: no second verdict engine, no altered
+   * thresholds). A HISTORICAL result tied to this scan's commit/dirty
+   * state -- never re-interpreted as the current working tree's status
+   * (STEP 32).
+   */
+  verdict?: ProductionVerdictV1;
+  /** Present only when `persist: true` was requested. Never silently swallowed -- a write failure is reported here, not hidden behind a successful-looking result (STEP 11). */
+  persistence?: { status: "saved"; scanId: string } | { status: "unavailable"; error: string };
 };
 
 export type LocalOrchestratorInput = {
@@ -60,6 +73,10 @@ export type LocalOrchestratorInput = {
    * invent a second timeout mechanism").
    */
   signal?: AbortSignal;
+  /** L1.3: when true, persist the scan/findings/verdict to the local SQLite store. Default false -- a scan remains purely in-memory unless explicitly asked to be remembered. */
+  persist?: boolean;
+  /** Dependency injection for testing (STEP 20) -- when omitted and `persist: true`, a store is opened at the workspace's default .sequrai/sequrai.db and closed again before returning. */
+  persistenceStore?: LocalPersistenceStore;
 };
 
 const NATIVE_ENGINE_ID: EngineId = "native";
@@ -277,6 +294,79 @@ export async function runLocalSecurityOrchestrator(
   }
 
   const phase: LocalOrchestratorPhase = nativeFailed ? "incomplete" : externalPartialFailure ? "partial" : "complete";
+  const sortedFindings = sortFindings(findings);
+  const durationMs = Date.now() - startedAt;
+
+  // Only compute a verdict when the native engine actually produced a
+  // meaningful result -- an "incomplete" scan (native failed) has nothing
+  // a verdict could honestly be built from (STEP 3/19: never fabricate one).
+  let verdict: ProductionVerdictV1 | undefined;
+  if (!nativeFailed) {
+    verdict = generateProductionVerdict({
+      projectId: identity.projectId,
+      repositoryId: identity.repositoryId,
+      scanId,
+      commitSha: git.commitSha,
+      branch: git.branch,
+      scanStatus: "completed",
+      securityScore: null,
+      findings: sortedFindings,
+      partialScanFailure: externalPartialFailure,
+    }).verdict;
+  }
+
+  let persistence: LocalOrchestratorResult["persistence"];
+  if (input.persist) {
+    const fileCounts = parseGitFileCounts(git.status);
+    const dirty = fileCounts.modifiedFiles + fileCounts.untrackedFiles + fileCounts.deletedFiles > 0;
+    const ownStore = !input.persistenceStore;
+    let store: LocalPersistenceStore | undefined;
+    try {
+      store = input.persistenceStore ?? openLocalPersistenceStore(workspace);
+      store.saveScanResult({
+        scan: {
+          scanId,
+          projectId: identity.projectId,
+          repositoryId: identity.repositoryId,
+          workspaceId: identity.workspaceId,
+          scope: resolvedScope,
+          phase,
+          branch: git.branch,
+          commitSha: git.commitSha,
+          dirty,
+          durationMs,
+          errorMessage: nativeFailed ? engineOutcomes.find((e) => e.engine === NATIVE_ENGINE_ID)?.errors[0]?.message ?? null : null,
+          engines: engineOutcomes.map((e) => ({ engine: e.engine, status: e.status, durationMs: e.durationMs, findingsCount: e.findingsCount })),
+        },
+        findings: sortedFindings,
+        verdict: verdict
+          ? {
+              projectId: identity.projectId,
+              repositoryId: identity.repositoryId,
+              workspaceId: identity.workspaceId,
+              status: verdict.status,
+              score: verdict.score,
+              blockersCount: verdict.blockersCount,
+              criticalBlockersCount: verdict.criticalBlockersCount,
+              highBlockersCount: verdict.highBlockersCount,
+              verdict,
+            }
+          : undefined,
+      });
+      persistence = { status: "saved", scanId };
+    } catch (error) {
+      // A persistence failure is reported explicitly, never hidden behind
+      // an otherwise-successful-looking result (STEP 11) -- the scan's own
+      // findings/verdict above are still returned as computed; only the
+      // "was this remembered" signal reflects the failure.
+      persistence = {
+        status: "unavailable",
+        error: error instanceof LocalPersistenceError ? `${error.code}: ${error.message}` : error instanceof Error ? error.message : "Unknown persistence failure.",
+      };
+    } finally {
+      if (ownStore) store?.close();
+    }
+  }
 
   return {
     source: "local",
@@ -284,8 +374,10 @@ export async function runLocalSecurityOrchestrator(
     workspace,
     scope: resolvedScope,
     phase,
-    findings: sortFindings(findings),
+    findings: sortedFindings,
     engines: engineOutcomes,
-    durationMs: Date.now() - startedAt,
+    durationMs,
+    verdict,
+    persistence,
   };
 }
