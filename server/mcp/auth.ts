@@ -65,13 +65,26 @@ async function resolveLegacyApiKey(rawKey: string): Promise<McpAuthContext | nul
   if (!row) return null;
 
   const now = new Date().toISOString();
-  void admin
+  // Awaited, not fire-and-forget: a Vercel serverless function can freeze
+  // execution the instant the HTTP response is sent, which was silently
+  // dropping this write before it ever reached Postgres. This is an
+  // observability signal, not part of the auth decision, so a failure here
+  // must never turn an already-valid, already-authenticated MCP call into a
+  // failed one -- the error is caught and logged (never the raw key or any
+  // secret, only the key id) rather than rethrown.
+  const { error: usageUpdateError } = await admin
     .from("mcp_api_keys")
     .update({
       last_used_at: now,
       ...(row.first_used_at ? {} : { first_used_at: now }),
     })
     .eq("id", row.id);
+  if (usageUpdateError) {
+    console.error("mcp_api_keys usage timestamp update failed", {
+      keyId: row.id,
+      message: usageUpdateError.message,
+    });
+  }
 
   return {
     authType: "api_key",
