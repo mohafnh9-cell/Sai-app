@@ -13,6 +13,7 @@ import {
   buildAttackSimulationVerdictOverlay,
 } from "@/server/attack-simulation/integration/build-verdict-overlay";
 import { emitOperationalEvent } from "@/server/observability/operational-events";
+import { loadExternalEngineFindingsForVerdict } from "@/server/security-orchestrator/verdict-integration";
 import {
   buildIdempotencyKey,
   hasCompletedSideEffect,
@@ -247,6 +248,23 @@ export async function generateAndPersistProductionVerdict(
       .eq("id", input.scanId);
   }
 
+  // Phase 37, workstream C: fold external-engine findings (OpenGrep/Trivy/
+  // Crypto/Scorecard) into the SAME scoring input native findings already
+  // use -- see verdict-integration.ts for the exact dedup/suppression
+  // rules. Best-effort: a failure here must never block verdict
+  // generation from native findings alone.
+  const nativeFindings = findings ?? [];
+  const nativeFindingIds = new Set(nativeFindings.map((f) => f.id as string).filter(Boolean));
+  const externalFindings = await loadExternalEngineFindingsForVerdict(admin, {
+    scanId: input.scanId,
+    organizationId: input.organizationId,
+    nativeFindingIds,
+  }).catch((error) => {
+    log("external_findings_merge_failed", { scanId: input.scanId, message: error instanceof Error ? error.message : String(error) });
+    return [];
+  });
+  const mergedFindings = [...nativeFindings, ...externalFindings];
+
   const baseVerdict = runEngine({
     projectId: input.projectId,
     repositoryId: scan.repository_id ?? input.projectId,
@@ -257,7 +275,7 @@ export async function generateAndPersistProductionVerdict(
     securityScore: scan.security_score,
     filesAnalyzed: coverage.filesAnalyzed,
     filesDiscovered: coverage.filesDiscovered,
-    findings: findings ?? [],
+    findings: mergedFindings,
     previousScore: previousVerdictParsed?.score ?? null,
     previousBlockersCount: previousBlockers,
     partialScanFailure: scan.status !== "completed",
