@@ -103,3 +103,47 @@ export async function loadExternalEngineFindingsForVerdict(
       } satisfies VerdictFinding;
     });
 }
+
+/**
+ * F10 pilot-readiness audit: a FAILED (or TIMED_OUT/REJECTED/still-in-
+ * flight) external-engine security_jobs row for this scan previously had
+ * NO effect on the Production Verdict's partialScanFailure flag --
+ * core.ts's generateAndPersistProductionVerdict only ever looked at the
+ * native scan's own `scans.status`. persistEngineResults() already never
+ * writes a finding row for a failed engine (this file's own comment above:
+ * "their absence here already can't be misread as clean"), but nothing
+ * upstream of that ever told the VERDICT that an engine's evidence was
+ * missing -- so a scan with, say, a crashed opengrep job could still
+ * receive a fully "complete" verdict with opengrep's findings silently
+ * absent. This existed because security_jobs was never queried anywhere in
+ * server/production-verdict/* or server/jobs/* (confirmed by repo-wide
+ * grep) -- not a deliberate design choice, a genuine gap. Reuses the same
+ * scanId/organizationId scoping every other query in this file already
+ * uses; adds no new persistence, verdict, or scoring logic.
+ *
+ * Returns false (no incomplete coverage) when no security_jobs rows exist
+ * for this scan at all -- that means external engines were never planned
+ * for this scan, which is not a failure, just a native-only scan the
+ * existing flow already represents honestly.
+ */
+export async function hasIncompleteExternalEngineCoverage(
+  admin: SupabaseClient,
+  input: { scanId: string; organizationId: string }
+): Promise<boolean> {
+  const { data, error } = await admin
+    .from("security_jobs")
+    .select("id")
+    .eq("scan_id", input.scanId)
+    .eq("organization_id", input.organizationId)
+    .neq("status", "COMPLETED")
+    .limit(1);
+
+  if (error) {
+    // A read failure here must never silently look like "full coverage" --
+    // the safer honest default is to assume coverage MIGHT be incomplete
+    // rather than assert it is complete without evidence.
+    return true;
+  }
+
+  return (data?.length ?? 0) > 0;
+}

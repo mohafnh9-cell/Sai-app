@@ -13,7 +13,10 @@ import {
   buildAttackSimulationVerdictOverlay,
 } from "@/server/attack-simulation/integration/build-verdict-overlay";
 import { emitOperationalEvent } from "@/server/observability/operational-events";
-import { loadExternalEngineFindingsForVerdict } from "@/server/security-orchestrator/verdict-integration";
+import {
+  hasIncompleteExternalEngineCoverage,
+  loadExternalEngineFindingsForVerdict,
+} from "@/server/security-orchestrator/verdict-integration";
 import {
   buildIdempotencyKey,
   hasCompletedSideEffect,
@@ -255,14 +258,25 @@ export async function generateAndPersistProductionVerdict(
   // generation from native findings alone.
   const nativeFindings = findings ?? [];
   const nativeFindingIds = new Set(nativeFindings.map((f) => f.id as string).filter(Boolean));
-  const externalFindings = await loadExternalEngineFindingsForVerdict(admin, {
-    scanId: input.scanId,
-    organizationId: input.organizationId,
-    nativeFindingIds,
-  }).catch((error) => {
-    log("external_findings_merge_failed", { scanId: input.scanId, message: error instanceof Error ? error.message : String(error) });
-    return [];
-  });
+  const [externalFindings, externalEngineCoverageIncomplete] = await Promise.all([
+    loadExternalEngineFindingsForVerdict(admin, {
+      scanId: input.scanId,
+      organizationId: input.organizationId,
+      nativeFindingIds,
+    }).catch((error) => {
+      log("external_findings_merge_failed", { scanId: input.scanId, message: error instanceof Error ? error.message : String(error) });
+      return [];
+    }),
+    // F10: a failed/incomplete external-engine job (opengrep/trivy/crypto)
+    // must make partialScanFailure true even when the native scan itself
+    // completed cleanly -- see hasIncompleteExternalEngineCoverage's own
+    // doc comment for the gap this closes. A read failure here defaults to
+    // true (assume incomplete) for the same honesty reason.
+    hasIncompleteExternalEngineCoverage(admin, {
+      scanId: input.scanId,
+      organizationId: input.organizationId,
+    }).catch(() => true),
+  ]);
   const mergedFindings = [...nativeFindings, ...externalFindings];
 
   const baseVerdict = runEngine({
@@ -278,7 +292,7 @@ export async function generateAndPersistProductionVerdict(
     findings: mergedFindings,
     previousScore: previousVerdictParsed?.score ?? null,
     previousBlockersCount: previousBlockers,
-    partialScanFailure: scan.status !== "completed",
+    partialScanFailure: scan.status !== "completed" || externalEngineCoverageIncomplete,
     aiExecutiveSummary: aiReport?.executive_summary ?? null,
   }).verdict;
 
