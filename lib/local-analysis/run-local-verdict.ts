@@ -1,31 +1,19 @@
 import { generateProductionVerdict, verdictHeadline } from "@/brain/production-verdict/engine";
-import { scanRepository } from "@/features/security-scanner/scanner";
-import { createLocalScanId, type LocalAnalysisScope } from "./constants";
-import { resolveLocalIdentity } from "./local-identity";
-import {
-  getGitContext,
-  parseGitFileCounts,
-  resolveScopeFromArgs,
-  resolveScopePaths,
-} from "./git-scope";
-import {
-  collectInputFiles,
-  mapFindingToPublic,
-  mapFindingsToPublic,
-  mapScanFindingToVerdictInput,
-} from "./map-findings";
+import { getGitContext, parseGitFileCounts, resolveScopeFromArgs } from "./git-scope";
+import { mapVerdictFindingsToPublic } from "./map-findings";
 import type {
   LocalFindingPublic,
   LocalGitMetadata,
   LocalProductionVerdictResult,
-  LocalSnapshotMetadata,
   RunLocalVerdictInput,
 } from "./types";
 import { buildLocalStatusSummary } from "./format-local-response";
 import { listWorkspaceFiles, normalizeWorkspaceRoot } from "./workspace";
 import { buildFindingHistory, type FindingHistoryResult } from "./finding-history";
-import { LocalPersistenceError, openLocalPersistenceStore, type LocalPersistenceStore } from "./local-persistence";
+import { openLocalPersistenceStore, type LocalPersistenceStore } from "./local-persistence";
 import { buildLocalSafeFix, type LocalSafeFixResult } from "./local-safe-fix";
+import { resolveLocalIdentity } from "./local-identity";
+import { runLocalSecurityOrchestrator, type LocalOrchestratorResult } from "./local-orchestrator";
 
 // Inlining every finding in the stdio-bridge response is the same mistake
 // the GitHub-connected full_product_audit tool made: fine for a handful of
@@ -49,7 +37,7 @@ function capLocalFindingsForResponse(findings: LocalFindingPublic[]): LocalFindi
     .slice(0, MAX_INLINE_LOCAL_FINDINGS);
 }
 
-function buildGitMetadata(git: ReturnType<typeof getGitContext>): LocalGitMetadata {
+function buildGitMetadata(git: LocalOrchestratorResult["git"]): LocalGitMetadata {
   const counts = parseGitFileCounts(git.status);
   return {
     branch: git.branch,
@@ -60,313 +48,122 @@ function buildGitMetadata(git: ReturnType<typeof getGitContext>): LocalGitMetada
   };
 }
 
-function buildInsufficientDataResult(input: {
-  workspace: string;
-  scope: LocalAnalysisScope;
-  git: ReturnType<typeof getGitContext>;
-  snapshot: LocalSnapshotMetadata;
-  reason: string;
-  identity: Awaited<ReturnType<typeof resolveLocalIdentity>>;
-}): LocalProductionVerdictResult {
-  const scanId = createLocalScanId();
-  const { verdict } = generateProductionVerdict({
-    projectId: input.identity.projectId,
-    repositoryId: input.identity.repositoryId,
-    scanId,
-    commitSha: input.git.commitSha,
-    branch: input.git.branch,
-    scanStatus: "completed",
-    securityScore: null,
-    filesAnalyzed: 0,
-    filesDiscovered: input.snapshot.filesAnalyzed,
-    findings: [],
-    partialScanFailure: input.snapshot.truncated,
-  });
-
-  return {
-    source: "local",
-    gitAvailable: input.git.isGitRepository,
-    scope: input.scope,
-    phase: input.snapshot.truncated ? "partial" : "complete",
-    workspace: input.workspace,
-    branch: input.git.branch,
-    commitSha: input.git.commitSha,
-    verdictStatus: verdict.status,
-    score: verdict.score,
-    blockersCount: verdict.blockersCount,
-    findings: [],
-    findingsOmittedCount: 0,
-    productionVerdict: verdict as unknown as Record<string, unknown>,
-    snapshot: input.snapshot,
-    git: buildGitMetadata(input.git),
-    scanMetrics: {
-      inputFiles: 0,
-      scannedFiles: 0,
-      rulesRun: 0,
-      truncated: input.snapshot.truncated,
-    },
-    narrative: buildLocalStatusSummary({
-      scope: input.scope,
-      verdictStatus: verdict.status,
-      score: verdict.score,
-      findings: [],
-      reason: input.reason,
-    }),
-    methodologyNote: verdict.methodologyNote,
-    identity: { projectId: input.identity.projectId, repositoryId: input.identity.repositoryId, workspaceId: input.identity.workspaceId },
-  };
-}
-
+/**
+ * F9: run-local-verdict.ts's MCP-facing entry point now DELEGATES to the
+ * existing local orchestrator instead of calling scanRepository() directly.
+ * Previously this function was the only real caller of scanRepository() in
+ * the live MCP path, while lib/local-analysis/local-orchestrator.ts's
+ * runLocalSecurityOrchestrator() -- the multi-engine coordinator built in
+ * L1.1, wired for cancellation in L1.4, and covered by its own test suite
+ * ever since -- had no production caller at all (confirmed repeatedly in
+ * the L1.6 and Runtime<->Cloud Integration audits). That meant every real
+ * sequrai_local_audit/findings call only ever ran the native engine;
+ * OpenGrep/Trivy/crypto/Scorecard existed but never executed for a real
+ * developer. This function is now a thin adapter: run the orchestrator
+ * once, then reshape its generic LocalOrchestratorResult into the existing
+ * LocalProductionVerdictResult MCP contract -- no scan/verdict/persistence
+ * logic is reimplemented here.
+ */
 export async function runLocalProductionVerdict(
   input: RunLocalVerdictInput = {}
 ): Promise<LocalProductionVerdictResult> {
   const workspace = normalizeWorkspaceRoot(input.workspacePath ?? process.cwd());
   const scope = resolveScopeFromArgs(input);
-  const git = getGitContext(workspace);
-  const listing = listWorkspaceFiles(workspace);
-  // L1.2: real, workspace-derived identity -- a local UUID (or, once a
-  // cloud resolver is wired in a later phase, the server-verified cloud
-  // project) instead of the same fixed LOCAL_PROJECT_ID/LOCAL_REPOSITORY_ID
-  // for every repository on the machine.
-  const identity = await resolveLocalIdentity(workspace);
-  const emptySnapshot: LocalSnapshotMetadata = {
-    filesAnalyzed: 0,
-    filesExcluded: listing.stats.filesExcluded,
-    bytesAnalyzed: 0,
-    truncated: listing.truncated,
-    credentialsSkipped: listing.stats.credentialsSkipped,
-  };
 
-  const { scope: resolvedScope, paths, requiresGit } = resolveScopePaths(git, scope);
-
-  if (requiresGit) {
-    return buildInsufficientDataResult({
-      workspace,
-      scope,
-      git,
-      snapshot: emptySnapshot,
-      reason:
-        "Git is not available in this workspace. Use scope=workspace or initialize a git repository.",
-      identity,
-    });
-  }
-
-  if (resolvedScope !== "workspace" && paths.size === 0) {
-    return buildInsufficientDataResult({
-      workspace,
-      scope: resolvedScope,
-      git,
-      snapshot: emptySnapshot,
-      reason: "No changed files detected for the selected scope.",
-      identity,
-    });
-  }
-
-  const scopedListing =
-    resolvedScope === "workspace"
-      ? listing
-      : listWorkspaceFiles(workspace, { onlyRelativePaths: paths });
-
-  const inputFiles = collectInputFiles(
-    workspace,
-    resolvedScope === "workspace" ? undefined : paths
-  );
-
-  if (inputFiles.length === 0) {
-    return buildInsufficientDataResult({
-      workspace,
-      scope: resolvedScope,
-      git,
-      snapshot: {
-        filesAnalyzed: 0,
-        filesExcluded: scopedListing.stats.filesExcluded,
-        bytesAnalyzed: 0,
-        truncated: scopedListing.truncated,
-        credentialsSkipped: scopedListing.stats.credentialsSkipped,
-      },
-      reason: "No readable source files found inside the authorized workspace.",
-      identity,
-    });
-  }
-
-  const scan = await scanRepository(inputFiles);
-  const scanId = createLocalScanId();
-  const bytesAnalyzed = inputFiles.reduce((sum, file) => sum + file.content.length, 0);
-  // L1.6: a rule can fail independently of the file-count/byte-limit
-  // truncation this flag previously covered alone (most notably
-  // osv-sbom-rule.ts on a network/offline failure -- see the L1.5 fix to
-  // features/security-analysis/rules/osv-sbom-rule.ts). scanRepository()
-  // already tracks this via ScanResult.omissions (reason: "rule-error"),
-  // exactly as lib/local-analysis/local-orchestrator.ts's own L1.5 fix
-  // reads it -- this is the same signal, read here for the first time by
-  // the actually-live MCP scan path (run-local-verdict.ts), which
-  // previously reported "complete" even when a rule had failed. Without
-  // this, L1.6's own history would have treated such a scan as authoritative
-  // for resolving prior findings -- exactly the false negative the PARTIAL/
-  // FAILED SCANS rule (ABSENCE OF EVIDENCE IS NOT EVIDENCE OF RESOLUTION)
-  // exists to prevent.
-  const ruleFailed = scan.omissions.some((o) => o.reason === "rule-error");
-  const snapshotTruncated = scopedListing.truncated || scan.metrics.truncated;
-  const partialScanFailure = snapshotTruncated || ruleFailed;
-  const snapshot: LocalSnapshotMetadata = {
-    filesAnalyzed: scan.metrics.scannedFiles,
-    filesExcluded: scopedListing.stats.filesExcluded,
-    bytesAnalyzed,
-    truncated: snapshotTruncated,
-    credentialsSkipped: scopedListing.stats.credentialsSkipped,
-  };
-
-  const { verdict } = generateProductionVerdict({
-    projectId: identity.projectId,
-    repositoryId: identity.repositoryId,
-    scanId,
-    commitSha: git.commitSha,
-    branch: git.branch,
-    scanStatus: "completed",
-    securityScore: scan.score.score,
-    filesAnalyzed: scan.metrics.scannedFiles,
-    filesDiscovered: scopedListing.stats.discoveredFiles,
-    findings: scan.findings.map(mapScanFindingToVerdictInput),
-    partialScanFailure,
+  const result = await runLocalSecurityOrchestrator({
+    workspacePath: workspace,
+    scope,
+    gitDiffOnly: input.gitDiffOnly,
+    persist: input.persist,
   });
 
-  const publicFindings = mapFindingsToPublic(scan.findings);
+  return buildLocalProductionVerdictResult(result);
+}
+
+function buildLocalProductionVerdictResult(result: LocalOrchestratorResult): LocalProductionVerdictResult {
+  const publicFindings = mapVerdictFindingsToPublic(result.findings);
   const actionableFindings = publicFindings.filter((finding) => !finding.safeToIgnore);
   const inlineFindings = capLocalFindingsForResponse(publicFindings);
-  const phase: "complete" | "partial" = partialScanFailure ? "partial" : "complete";
 
-  const persistence = input.persist
-    ? persistLocalScan({
-        workspace,
-        scanId,
-        identity,
-        scope: resolvedScope,
-        phase,
-        git,
-        durationMs: scan.metrics.durationMs,
-        findings: scan.findings.map(mapScanFindingToVerdictInput),
-        ruleFailed,
-        verdict: {
-          projectId: identity.projectId,
-          repositoryId: identity.repositoryId,
-          workspaceId: identity.workspaceId,
-          status: verdict.status,
-          score: verdict.score,
-          blockersCount: verdict.blockersCount,
-          criticalBlockersCount: verdict.criticalBlockersCount,
-          highBlockersCount: verdict.highBlockersCount,
-          verdict: verdict as never,
-        },
-      })
-    : undefined;
+  // The orchestrator only computes a verdict when phase allowed one
+  // (STEP 3/10/19 in local-orchestrator.ts: never fabricate a verdict for
+  // an incomplete or cancelled run). This MCP response's verdict fields
+  // are required, though -- every prior version of this function always
+  // returned one, including for its own "insufficient data" cases. Rather
+  // than widen the public contract to make verdictStatus/score optional
+  // (a bigger, less backward-compatible change), the same shared verdict
+  // engine is called a second time here with what's actually known (0
+  // findings, partialScanFailure: true) -- the exact same fallback pattern
+  // this function's own previous buildInsufficientDataResult already used,
+  // not a second verdict algorithm.
+  const engineErrorMessage = result.engines.flatMap((e) => e.errors).find(Boolean)?.message;
+  const verdict =
+    result.verdict ??
+    generateProductionVerdict({
+      projectId: result.identity.projectId,
+      repositoryId: result.identity.repositoryId,
+      scanId: result.scanId,
+      commitSha: result.git.commitSha,
+      branch: result.git.branch,
+      scanStatus: "completed",
+      securityScore: null,
+      filesAnalyzed: 0,
+      filesDiscovered: result.snapshot.discoveredFiles,
+      findings: [],
+      partialScanFailure: true,
+    }).verdict;
 
   return {
     source: "local",
-    gitAvailable: git.isGitRepository,
-    scope: resolvedScope,
-    phase,
-    workspace,
-    branch: git.branch,
-    commitSha: git.commitSha,
+    gitAvailable: result.git.isGitRepository,
+    scope: result.scope,
+    phase: result.phase,
+    workspace: result.workspace,
+    branch: result.git.branch,
+    commitSha: result.git.commitSha,
     verdictStatus: verdict.status,
     score: verdict.score,
     blockersCount: verdict.blockersCount,
     findings: inlineFindings,
     findingsOmittedCount: Math.max(0, publicFindings.length - inlineFindings.length),
     productionVerdict: verdict as unknown as Record<string, unknown>,
-    snapshot,
-    git: buildGitMetadata(git),
+    snapshot: {
+      filesAnalyzed: result.snapshot.scannedFiles,
+      filesExcluded: result.snapshot.filesExcluded,
+      bytesAnalyzed: result.snapshot.bytesAnalyzed,
+      truncated: result.snapshot.truncated,
+      credentialsSkipped: result.snapshot.credentialsSkipped,
+    },
+    git: buildGitMetadata(result.git),
     scanMetrics: {
-      inputFiles: scan.metrics.inputFiles,
-      scannedFiles: scan.metrics.scannedFiles,
-      rulesRun: scan.metrics.rulesRun,
-      truncated: snapshotTruncated,
+      inputFiles: result.snapshot.inputFiles,
+      scannedFiles: result.snapshot.scannedFiles,
+      rulesRun: result.snapshot.rulesRun,
+      truncated: result.snapshot.truncated,
     },
     narrative: buildLocalStatusSummary({
-      scope: resolvedScope,
+      scope: result.scope,
       verdictStatus: verdict.status,
       score: verdict.score,
       findings: actionableFindings,
       headline: verdictHeadline(verdict.status),
       executiveSummary: verdict.executiveSummary,
       topPriorities: verdict.topPriorities.map((priority) => priority.title),
+      reason: result.phase === "incomplete" || result.phase === "cancelled" ? engineErrorMessage : undefined,
     }),
     methodologyNote: verdict.methodologyNote,
+    engines: result.engines,
     correlation: {
-      ready: Boolean(git.commitSha),
-      commitSha: git.commitSha,
-      branch: git.branch,
-      reason: git.commitSha
+      ready: Boolean(result.git.commitSha),
+      commitSha: result.git.commitSha,
+      branch: result.git.branch,
+      reason: result.git.commitSha
         ? undefined
         : "Local analysis has no verified commit SHA for GitHub correlation.",
     },
-    identity: { projectId: identity.projectId, repositoryId: identity.repositoryId, workspaceId: identity.workspaceId },
-    persistence,
+    identity: result.identity,
+    persistence: result.persistence,
   };
-}
-
-/**
- * L1.6: opt-in persistence for the live scan path, reusing local-persistence
- * .ts exactly as lib/local-analysis/local-orchestrator.ts's own `persist`
- * option does (same store, same saveScanResult call shape) -- this is NOT a
- * second persistence system, it is the same one gaining a second caller.
- * A write failure is reported on the result, never thrown -- a scan's own
- * findings/verdict must never be withheld because remembering them failed.
- */
-function persistLocalScan(input: {
-  workspace: string;
-  scanId: string;
-  identity: { projectId: string; repositoryId: string; workspaceId: string };
-  scope: LocalAnalysisScope;
-  phase: "complete" | "partial";
-  git: ReturnType<typeof getGitContext>;
-  durationMs: number;
-  findings: ReturnType<typeof mapScanFindingToVerdictInput>[];
-  ruleFailed: boolean;
-  verdict: {
-    projectId: string;
-    repositoryId: string;
-    workspaceId: string;
-    status: string;
-    score: number | null;
-    blockersCount: number;
-    criticalBlockersCount: number;
-    highBlockersCount: number;
-    verdict: unknown;
-  };
-}): LocalProductionVerdictResult["persistence"] {
-  const counts = parseGitFileCounts(input.git.status);
-  const dirty = counts.modifiedFiles + counts.untrackedFiles + counts.deletedFiles > 0;
-  let store: LocalPersistenceStore | undefined;
-  try {
-    store = openLocalPersistenceStore(input.workspace);
-    store.saveScanResult({
-      scan: {
-        scanId: input.scanId,
-        projectId: input.identity.projectId,
-        repositoryId: input.identity.repositoryId,
-        workspaceId: input.identity.workspaceId,
-        scope: input.scope,
-        phase: input.phase,
-        branch: input.git.branch,
-        commitSha: input.git.commitSha,
-        dirty,
-        durationMs: input.durationMs,
-        errorMessage: input.ruleFailed ? "One or more security rules failed to complete." : null,
-        engines: [{ engine: "native", status: input.ruleFailed ? "PARTIAL" : "COMPLETED", durationMs: input.durationMs, findingsCount: input.findings.length }],
-      },
-      findings: input.findings,
-      verdict: input.verdict as Parameters<LocalPersistenceStore["saveScanResult"]>[0]["verdict"],
-    });
-    return { status: "saved", scanId: input.scanId };
-  } catch (error) {
-    return {
-      status: "unavailable",
-      error: error instanceof LocalPersistenceError ? `${error.code}: ${error.message}` : error instanceof Error ? error.message : "Unknown persistence failure.",
-    };
-  } finally {
-    store?.close();
-  }
 }
 
 /** Caps how many new/resolved findings are inlined in a history summary -- an MCP-facing payload, not a dashboard (see buildLocalFindings for the same discipline over the full findings list). */

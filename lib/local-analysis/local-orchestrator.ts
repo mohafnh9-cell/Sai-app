@@ -10,6 +10,8 @@ import { createLocalScanId, type LocalAnalysisScope } from "./constants";
 import { resolveLocalIdentity } from "./local-identity";
 import { openLocalPersistenceStore, LocalPersistenceError, type LocalPersistenceStore } from "./local-persistence";
 
+type LocalGitContext = ReturnType<typeof getGitContext>;
+
 export type VerdictFinding = VerdictEngineInput["findings"][number];
 
 /**
@@ -38,11 +40,37 @@ export type LocalEngineOutcome = {
  */
 export type LocalOrchestratorPhase = "complete" | "partial" | "incomplete" | "cancelled";
 
+/**
+ * F9: file-collection/scan-metric stats needed by the MCP-facing response
+ * shape (run-local-verdict.ts's LocalProductionVerdictResult) -- sourced
+ * from the SAME collectInputFiles()/scanRepository() calls this function
+ * already makes for its own purposes, never a second workspace walk or
+ * scan. Zeroed out (not fabricated as non-zero) whenever the corresponding
+ * step never ran -- e.g. requiresGit/cancelled-before-start/native-failed.
+ */
+export type LocalOrchestratorSnapshot = {
+  inputFiles: number;
+  scannedFiles: number;
+  discoveredFiles: number;
+  filesExcluded: number;
+  credentialsSkipped: number;
+  bytesAnalyzed: number;
+  rulesRun: number;
+  truncated: boolean;
+  /** The native engine's own deterministic score (features/security-scanner/scoring.ts), null whenever native didn't run. */
+  securityScore: number | null;
+};
+
 export type LocalOrchestratorResult = {
   source: "local";
   scanId: string;
   workspace: string;
   scope: LocalAnalysisScope;
+  /** F9: exposed so callers (run-local-verdict.ts) don't need a second getGitContext() subprocess call to build their own response. */
+  git: LocalGitContext;
+  snapshot: LocalOrchestratorSnapshot;
+  /** F9: exposed so callers don't need a second resolveLocalIdentity() call (which re-reads/re-writes .sequrai/project.json) to build their own response. */
+  identity: { projectId: string; repositoryId: string; workspaceId: string };
   /**
    * "cancelled": input.signal fired before the run finished -- never
    * reported as failed, successful, or as zero findings; whatever findings
@@ -176,6 +204,17 @@ export async function runLocalSecurityOrchestrator(
   const git = getGitContext(workspace);
   const scope = resolveScopeFromArgs({ scope: input.scope, gitDiffOnly: input.gitDiffOnly });
   const { scope: resolvedScope, paths, requiresGit } = resolveScopePaths(git, scope);
+  const emptySnapshot: LocalOrchestratorSnapshot = {
+    inputFiles: 0,
+    scannedFiles: 0,
+    discoveredFiles: 0,
+    filesExcluded: 0,
+    credentialsSkipped: 0,
+    bytesAnalyzed: 0,
+    rulesRun: 0,
+    truncated: false,
+    securityScore: null,
+  };
 
   // STEP 6: a scope this workspace genuinely cannot honor (staged/diff/
   // working_tree without git available) must be represented honestly, not
@@ -186,6 +225,9 @@ export async function runLocalSecurityOrchestrator(
       scanId,
       workspace,
       scope: resolvedScope,
+      git,
+      snapshot: emptySnapshot,
+      identity: { projectId: identity.projectId, repositoryId: identity.repositoryId, workspaceId: identity.workspaceId },
       phase: "incomplete",
       findings: [],
       engines: [
@@ -201,7 +243,16 @@ export async function runLocalSecurityOrchestrator(
     };
   }
 
-  const files = collectInputFiles(workspace, resolvedScope === "workspace" ? undefined : paths);
+  const { files, listing } = collectInputFiles(workspace, resolvedScope === "workspace" ? undefined : paths);
+  const listingSnapshot: LocalOrchestratorSnapshot = {
+    ...emptySnapshot,
+    inputFiles: files.length,
+    discoveredFiles: listing.stats.discoveredFiles,
+    filesExcluded: listing.stats.filesExcluded,
+    credentialsSkipped: listing.stats.credentialsSkipped,
+    bytesAnalyzed: listing.totalBytes,
+    truncated: listing.truncated,
+  };
 
   if (input.signal?.aborted) {
     return {
@@ -209,6 +260,9 @@ export async function runLocalSecurityOrchestrator(
       scanId,
       workspace,
       scope: resolvedScope,
+      git,
+      snapshot: listingSnapshot,
+      identity: { projectId: identity.projectId, repositoryId: identity.repositoryId, workspaceId: identity.workspaceId },
       phase: "cancelled",
       findings: [],
       engines: [{ engine: NATIVE_ENGINE_ID, status: "SKIPPED", durationMs: 0, findingsCount: 0, errors: [{ code: "aborted", message: "Cancelled before analysis started." }] }],
@@ -237,10 +291,18 @@ export async function runLocalSecurityOrchestrator(
   let findings: VerdictFinding[] = [];
   let nativeFailed = false;
   let nativePartialFailure = false;
+  let snapshot = listingSnapshot;
 
   if (nativeOutcome.status === "fulfilled") {
     const nativeFindings = nativeOutcome.value.findings.map(mapScanFindingToVerdictInput);
     findings = findings.concat(nativeFindings);
+    snapshot = {
+      ...listingSnapshot,
+      scannedFiles: nativeOutcome.value.metrics.scannedFiles,
+      rulesRun: nativeOutcome.value.metrics.rulesRun,
+      truncated: listingSnapshot.truncated || nativeOutcome.value.metrics.truncated,
+      securityScore: nativeOutcome.value.score.score,
+    };
     // L1.5: a rule inside the native engine can fail independently (most
     // notably osv-sbom-rule.ts on a network/offline failure) while the
     // engine as a whole still succeeds -- scanRepository() already tracks
@@ -351,7 +413,15 @@ export async function runLocalSecurityOrchestrator(
       commitSha: git.commitSha,
       branch: git.branch,
       scanStatus: "completed",
-      securityScore: null,
+      // F9: previously always null here (this call path had no production
+      // caller until F9), unlike run-local-verdict.ts's own old direct
+      // scanRepository() call, which always passed the native engine's
+      // real score. Filled in from the same snapshot the MCP response now
+      // surfaces, not recomputed -- null whenever native didn't run
+      // (external findings alone don't produce a scorable security score).
+      securityScore: snapshot.securityScore,
+      filesAnalyzed: snapshot.scannedFiles,
+      filesDiscovered: snapshot.discoveredFiles,
       findings: sortedFindings,
       partialScanFailure: externalPartialFailure || nativePartialFailure,
     }).verdict;
@@ -415,6 +485,9 @@ export async function runLocalSecurityOrchestrator(
     scanId,
     workspace,
     scope: resolvedScope,
+    git,
+    snapshot,
+    identity: { projectId: identity.projectId, repositoryId: identity.repositoryId, workspaceId: identity.workspaceId },
     phase,
     findings: sortedFindings,
     engines: engineOutcomes,

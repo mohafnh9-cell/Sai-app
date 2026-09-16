@@ -15930,23 +15930,446 @@ function generateProductionVerdict(input) {
   };
 }
 
-// features/security-scanner/config.ts
-var DEFAULT_SCAN_CONFIG = {
+// lib/local-analysis/git-scope.ts
+import { execFileSync } from "node:child_process";
+import { existsSync as existsSync2 } from "node:fs";
+import { join } from "node:path";
+
+// lib/local-analysis/workspace.ts
+import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync } from "node:fs";
+import { basename, dirname, relative, resolve, sep } from "node:path";
+var WorkspaceBoundaryError = class extends Error {
+  constructor(code, message) {
+    super(message ?? code);
+    this.name = "WorkspaceBoundaryError";
+    this.code = code;
+  }
+};
+var DEFAULT_IGNORED_DIRS = /* @__PURE__ */ new Set([
+  "node_modules",
+  ".git",
+  ".next",
+  "dist",
+  "build",
+  "coverage",
+  "vendor",
+  "target",
+  ".cache",
+  ".turbo",
+  ".vercel",
+  // L1.2: .sequrai/project.json is local tooling identity, not application
+  // source -- excluded for the same reason .git/.vercel are, and so the
+  // orchestrator scanning a workspace never re-scans the very identity
+  // file resolveLocalIdentity() just wrote into it.
+  ".sequrai"
+]);
+var LOCAL_SCAN_LIMITS = {
+  maxFiles: 8e3,
   maxFileBytes: 1024 * 1024,
   maxTotalBytes: 40 * 1024 * 1024,
-  maxFiles: 8e3,
-  maxDurationMs: 12e4,
-  ignoredSegments: DEFAULT_IGNORED_SEGMENTS,
-  includeExtensions: [...SOURCE_EXTENSIONS],
-  now: () => Date.now()
+  maxDepth: 18
 };
-function resolveConfig(input = {}) {
+var MAX_FILE_BYTES = LOCAL_SCAN_LIMITS.maxFileBytes;
+var MAX_TOTAL_BYTES = LOCAL_SCAN_LIMITS.maxTotalBytes;
+var MAX_FILES = LOCAL_SCAN_LIMITS.maxFiles;
+var MAX_DEPTH = LOCAL_SCAN_LIMITS.maxDepth;
+var CREDENTIAL_BASENAME_PATTERNS = [
+  /^\.env$/i,
+  /^\.env\.(?!example$)/i,
+  /\.pem$/i,
+  /\.key$/i,
+  /\.p12$/i,
+  /\.pfx$/i,
+  /^id_rsa$/i,
+  /^id_ed25519$/i,
+  /credentials/i,
+  /secrets?/i,
+  /service-account.*\.json$/i
+];
+function isCredentialDeniedBasename(name) {
+  const base = basename(name);
+  return CREDENTIAL_BASENAME_PATTERNS.some((pattern) => pattern.test(base));
+}
+function decodePathSegment(input) {
+  try {
+    return decodeURIComponent(input);
+  } catch {
+    return input;
+  }
+}
+function normalizeWorkspaceRoot(input) {
+  const root = resolve(input ?? process.cwd());
+  if (!existsSync(root)) {
+    throw new WorkspaceBoundaryError("workspace_not_found");
+  }
+  const stat = lstatSync(root);
+  if (!stat.isDirectory()) {
+    throw new WorkspaceBoundaryError("workspace_not_directory");
+  }
+  return root;
+}
+function realpathResolved(path) {
+  try {
+    return realpathSync.native(path);
+  } catch (error51) {
+    const err = error51;
+    if (err.code === "ENOENT") {
+      const parent = dirname(path);
+      if (parent === path) {
+        throw new WorkspaceBoundaryError("workspace_not_found");
+      }
+      return resolve(realpathResolved(parent), basename(path));
+    }
+    throw error51;
+  }
+}
+function isDescendantPath(root, target) {
+  const normalizedRoot = root.endsWith(sep) ? root.slice(0, -1) : root;
+  const normalizedTarget = target.endsWith(sep) ? target.slice(0, -1) : target;
+  if (normalizedTarget === normalizedRoot) return true;
+  return normalizedTarget.startsWith(`${normalizedRoot}${sep}`);
+}
+function resolveAuthorizedWorkspacePath(authorizedRoot, requestedPath) {
+  const root = normalizeWorkspaceRoot(authorizedRoot);
+  const rootReal = realpathResolved(root);
+  if (!requestedPath?.trim()) {
+    return rootReal;
+  }
+  const decoded = decodePathSegment(requestedPath.trim());
+  if (decoded.includes("\0")) {
+    throw new WorkspaceBoundaryError("workspace_path_not_authorized");
+  }
+  const segments = decoded.split(/[/\\]+/).filter(Boolean);
+  for (const segment of segments) {
+    assertPathComponentSafe(segment);
+  }
+  const isAbsolute = decoded.startsWith("/") || /^[A-Za-z]:[\\/]/.test(decoded);
+  const candidate = isAbsolute ? resolve(decoded) : resolve(rootReal, decoded);
+  const candidateReal = realpathResolved(candidate);
+  if (!isDescendantPath(rootReal, candidateReal)) {
+    throw new WorkspaceBoundaryError("workspace_path_not_authorized");
+  }
+  if (!existsSync(candidateReal)) {
+    throw new WorkspaceBoundaryError("workspace_not_found");
+  }
+  const stat = lstatSync(candidateReal);
+  if (!stat.isDirectory()) {
+    throw new WorkspaceBoundaryError("workspace_not_directory");
+  }
+  return candidateReal;
+}
+function assertPathComponentSafe(component) {
+  const decoded = decodePathSegment(component);
+  if (decoded === ".." || decoded.includes("\0") || decoded.includes("/") || decoded.includes("\\")) {
+    throw new WorkspaceBoundaryError("workspace_path_not_authorized");
+  }
+}
+function resolveSafePath(workspaceRoot, candidatePath) {
+  const root = normalizeWorkspaceRoot(workspaceRoot);
+  if (!candidatePath) return root;
+  const decoded = decodePathSegment(candidatePath);
+  const segments = decoded.split(/[/\\]+/).filter(Boolean);
+  for (const segment of segments) {
+    assertPathComponentSafe(segment);
+  }
+  const target = resolve(root, ...segments);
+  const rootWithSep = root.endsWith(sep) ? root : `${root}${sep}`;
+  if (target !== root && !target.startsWith(rootWithSep)) {
+    throw new WorkspaceBoundaryError("workspace_path_not_authorized");
+  }
+  if (existsSync(target)) {
+    const stat = lstatSync(target);
+    if (stat.isSymbolicLink()) {
+      throw new Error("symlink_not_allowed");
+    }
+  }
+  return target;
+}
+function parseIgnoreLines(content) {
+  return content.split(/\r?\n/).map((line) => line.trim()).filter((line) => line && !line.startsWith("#"));
+}
+function loadIgnorePatterns(workspaceRoot) {
+  const patterns = [];
+  for (const fileName of [".gitignore", ".sequraiignore"]) {
+    const filePath = resolveSafePath(workspaceRoot, fileName);
+    if (!existsSync(filePath)) continue;
+    patterns.push(...parseIgnoreLines(readFileSync(filePath, "utf8")));
+  }
+  return patterns;
+}
+function pathMatchesPattern(relativePath, pattern) {
+  const normalized = relativePath.replace(/\\/g, "/");
+  if (pattern.endsWith("/")) {
+    return normalized.split("/").includes(pattern.slice(0, -1));
+  }
+  if (pattern.includes("*")) {
+    const regex = new RegExp(
+      `^${pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*\*/g, "\xA7\xA7").replace(/\*/g, "[^/]*").replace(/§§/g, ".*")}$`
+    );
+    return regex.test(normalized);
+  }
+  return normalized === pattern || normalized.endsWith(`/${pattern}`);
+}
+function isIgnoredRelativePath(relativePath, workspaceRoot) {
+  const normalized = relativePath.replace(/\\/g, "/");
+  const firstSegment = normalized.split("/")[0];
+  if (DEFAULT_IGNORED_DIRS.has(firstSegment)) {
+    return true;
+  }
+  if (isCredentialDeniedBasename(normalized)) {
+    return true;
+  }
+  for (const pattern of loadIgnorePatterns(workspaceRoot)) {
+    if (pathMatchesPattern(normalized, pattern)) {
+      return true;
+    }
+  }
+  return false;
+}
+function isBinaryBuffer(buffer) {
+  const sample = buffer.subarray(0, Math.min(buffer.length, 4096));
+  for (const byte of sample) {
+    if (byte === 0) return true;
+  }
+  return false;
+}
+function listWorkspaceFiles(workspaceRoot, options = {}) {
+  const root = normalizeWorkspaceRoot(workspaceRoot);
+  const files = [];
+  const maxFiles = options.maxFiles ?? MAX_FILES;
+  const maxFileBytes = options.maxFileBytes ?? MAX_FILE_BYTES;
+  const maxTotalBytes = options.maxTotalBytes ?? MAX_TOTAL_BYTES;
+  const maxDepth = options.maxDepth ?? MAX_DEPTH;
+  let totalBytes = 0;
+  let filesExcluded = 0;
+  let credentialsSkipped = 0;
+  let discoveredFiles = 0;
+  let truncated = false;
+  function recordExcluded(relativePath) {
+    filesExcluded += 1;
+    if (isCredentialDeniedBasename(relativePath)) {
+      credentialsSkipped += 1;
+    }
+  }
+  function walk(currentDir, depth) {
+    if (files.length >= maxFiles) {
+      truncated = true;
+      return;
+    }
+    if (depth > maxDepth) {
+      truncated = true;
+      filesExcluded += 1;
+      return;
+    }
+    let entries;
+    try {
+      entries = readdirSync(currentDir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (files.length >= maxFiles) {
+        truncated = true;
+        break;
+      }
+      const absolutePath = resolve(currentDir, entry.name);
+      const rel = relative(root, absolutePath).replace(/\\/g, "/");
+      if (!rel || rel.startsWith("..")) continue;
+      if (entry.isSymbolicLink()) {
+        filesExcluded += 1;
+        continue;
+      }
+      if (entry.isDirectory()) {
+        if (isIgnoredRelativePath(`${rel}/`, root)) {
+          recordExcluded(`${rel}/`);
+          continue;
+        }
+        walk(absolutePath, depth + 1);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      discoveredFiles += 1;
+      if (isIgnoredRelativePath(rel, root)) {
+        recordExcluded(rel);
+        continue;
+      }
+      if (options.onlyRelativePaths && !options.onlyRelativePaths.has(rel)) {
+        continue;
+      }
+      let stat;
+      try {
+        stat = lstatSync(absolutePath);
+      } catch {
+        filesExcluded += 1;
+        continue;
+      }
+      if (stat.isSymbolicLink()) {
+        filesExcluded += 1;
+        continue;
+      }
+      if (stat.size > maxFileBytes) {
+        filesExcluded += 1;
+        truncated = true;
+        continue;
+      }
+      if (totalBytes + stat.size > maxTotalBytes) {
+        truncated = true;
+        break;
+      }
+      totalBytes += stat.size;
+      files.push({ relativePath: rel, absolutePath, size: stat.size });
+    }
+  }
+  walk(root, 0);
   return {
-    ...DEFAULT_SCAN_CONFIG,
-    ...input,
-    ignoredSegments: [...input.ignoredSegments ?? DEFAULT_SCAN_CONFIG.ignoredSegments],
-    now: input.now ?? DEFAULT_SCAN_CONFIG.now
+    files,
+    totalBytes,
+    truncated,
+    stats: {
+      filesExcluded,
+      credentialsSkipped,
+      discoveredFiles
+    }
   };
+}
+function readWorkspaceTextFile(workspaceRoot, relativePath) {
+  const root = normalizeWorkspaceRoot(workspaceRoot);
+  const safePath = resolveSafePath(root, relativePath);
+  if (!existsSync(safePath) || !lstatSync(safePath).isFile()) {
+    throw new Error("file_not_found");
+  }
+  const buffer = readFileSync(safePath);
+  if (buffer.length > MAX_FILE_BYTES) {
+    throw new Error("file_too_large");
+  }
+  if (isBinaryBuffer(buffer)) {
+    throw new Error("binary_file");
+  }
+  return buffer.toString("utf8");
+}
+
+// lib/local-analysis/git-scope.ts
+function runGit(workspaceRoot, args) {
+  try {
+    return execFileSync("git", args, {
+      cwd: workspaceRoot,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"]
+    }).trim();
+  } catch {
+    return null;
+  }
+}
+function getGitContext(workspaceRoot) {
+  const root = normalizeWorkspaceRoot(workspaceRoot);
+  const insideGit = existsSync2(join(root, ".git"));
+  if (!insideGit) {
+    return {
+      isGitRepository: false,
+      branch: null,
+      commitSha: null,
+      status: null,
+      diff: null,
+      stagedDiff: null
+    };
+  }
+  return {
+    isGitRepository: true,
+    branch: runGit(root, ["branch", "--show-current"]),
+    commitSha: runGit(root, ["rev-parse", "HEAD"]),
+    status: runGit(root, ["status", "--porcelain"]),
+    diff: runGit(root, ["diff"]),
+    stagedDiff: runGit(root, ["diff", "--cached"])
+  };
+}
+function parseChangedFilesFromStatus(status) {
+  if (!status) return [];
+  const files = /* @__PURE__ */ new Set();
+  for (const line of status.split(/\r?\n/)) {
+    if (line.length < 4) continue;
+    const raw = line.slice(3).trim();
+    if (!raw) continue;
+    const path = raw.includes(" -> ") ? raw.split(" -> ").pop().trim() : raw;
+    files.add(path.replace(/\\/g, "/"));
+  }
+  return [...files];
+}
+function parseGitFileCounts(status) {
+  if (!status) {
+    return { modifiedFiles: 0, untrackedFiles: 0, deletedFiles: 0 };
+  }
+  let modifiedFiles = 0;
+  let untrackedFiles = 0;
+  let deletedFiles = 0;
+  for (const line of status.split(/\r?\n/)) {
+    if (line.length < 4) continue;
+    const indexCode = line.slice(0, 2);
+    if (indexCode.includes("?")) {
+      untrackedFiles += 1;
+      continue;
+    }
+    if (indexCode.includes("D")) {
+      deletedFiles += 1;
+    }
+    if (/M|A|R|C|T|U/.test(indexCode)) {
+      modifiedFiles += 1;
+    }
+  }
+  return { modifiedFiles, untrackedFiles, deletedFiles };
+}
+function parseChangedFilesFromDiff(diff) {
+  if (!diff) return [];
+  const files = /* @__PURE__ */ new Set();
+  for (const line of diff.split(/\r?\n/)) {
+    if (line.startsWith("+++ b/")) {
+      const path = line.slice(6).trim();
+      if (path !== "/dev/null") {
+        files.add(path);
+      }
+    }
+  }
+  return [...files];
+}
+function resolveScopePaths(git, scope) {
+  if (!git.isGitRepository) {
+    if (scope === "workspace") {
+      return { scope, paths: /* @__PURE__ */ new Set(), requiresGit: false };
+    }
+    return { scope, paths: /* @__PURE__ */ new Set(), requiresGit: true };
+  }
+  if (scope === "workspace") {
+    return { scope, paths: /* @__PURE__ */ new Set(), requiresGit: false };
+  }
+  if (scope === "staged") {
+    const paths2 = new Set(parseChangedFilesFromDiff(git.stagedDiff));
+    return { scope, paths: paths2, requiresGit: false };
+  }
+  if (scope === "diff") {
+    const paths2 = new Set(parseChangedFilesFromDiff(git.diff));
+    return { scope, paths: paths2, requiresGit: false };
+  }
+  const paths = /* @__PURE__ */ new Set([
+    ...parseChangedFilesFromStatus(git.status),
+    ...parseChangedFilesFromDiff(git.diff),
+    ...parseChangedFilesFromDiff(git.stagedDiff)
+  ]);
+  return { scope: "working_tree", paths, requiresGit: false };
+}
+function resolveScopeFromArgs(input) {
+  if (input.gitDiffOnly) return "diff";
+  return input.scope ?? "workspace";
+}
+
+// features/security-scanner/redaction.ts
+var VALUE_ASSIGNMENT = /((?:api[_-]?key|secret|token|password|private[_-]?key)\s*[:=]\s*["']?)([^"'\s,;]{4,})/gi;
+var KNOWN_TOKEN = /\b(?:sk_(?:live|test)_[A-Za-z0-9]{8,}|gh[oprsu]_[A-Za-z0-9_]{12,}|AKIA[A-Z0-9]{12,}|eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,})\b/g;
+function maskSecret(value) {
+  if (value.length <= 6) return "[REDACTED]";
+  return `${value.slice(0, 3)}\u2026${value.slice(-2)}`;
+}
+function redactEvidence(value, maxLength = 240) {
+  const redacted = value.replace(VALUE_ASSIGNMENT, (_, prefix, secret) => `${prefix}${maskSecret(secret)}`).replace(KNOWN_TOKEN, (secret) => maskSecret(secret));
+  return redacted.length > maxLength ? `${redacted.slice(0, maxLength)}\u2026` : redacted;
 }
 
 // features/security-scanner/fingerprint.ts
@@ -15991,6 +16414,3055 @@ function buildFindingCorrelationKeyFromParts(input) {
     filePath: input.filePath,
     fingerprintMaterial: material
   });
+}
+
+// server/mcp/security/delimiters.ts
+var UNTRUSTED_DATA_START = "<<<SEQURAI_UNTRUSTED_REPOSITORY_DATA";
+var UNTRUSTED_DATA_END = "<<<END_SEQURAI_UNTRUSTED_REPOSITORY_DATA>>>";
+var ZERO_WIDTH_SPACE = "\u200B";
+function breakMarker(marker) {
+  return `${marker.slice(0, 1)}${ZERO_WIDTH_SPACE}${marker.slice(1)}`;
+}
+function neutralizeDelimiterLookalikes(content) {
+  return content.split(UNTRUSTED_DATA_START).join(breakMarker(UNTRUSTED_DATA_START)).split(UNTRUSTED_DATA_END).join(breakMarker(UNTRUSTED_DATA_END));
+}
+function wrapUntrustedRepositoryData(content, options) {
+  const pathAttr = options.path ? ` path="${options.path.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"` : "";
+  const safeContent = neutralizeDelimiterLookalikes(content);
+  return `${UNTRUSTED_DATA_START} source="${options.source}"${pathAttr}>>>
+${safeContent}
+${UNTRUSTED_DATA_END}`;
+}
+function containsUntrustedDelimiter(content) {
+  return content.includes(UNTRUSTED_DATA_START) || content.includes(UNTRUSTED_DATA_END);
+}
+function extractBarePromptRegions(prompt) {
+  if (!containsUntrustedDelimiter(prompt)) {
+    return [prompt];
+  }
+  const regions = [];
+  let cursor = 0;
+  while (cursor < prompt.length) {
+    const start = prompt.indexOf(UNTRUSTED_DATA_START, cursor);
+    if (start === -1) {
+      regions.push(prompt.slice(cursor));
+      break;
+    }
+    if (start > cursor) {
+      regions.push(prompt.slice(cursor, start));
+    }
+    const end = prompt.indexOf(UNTRUSTED_DATA_END, start);
+    if (end === -1) {
+      regions.push(prompt.slice(start));
+      break;
+    }
+    cursor = end + UNTRUSTED_DATA_END.length;
+  }
+  return regions.filter((region) => region.trim().length > 0);
+}
+
+// features/security-analysis/prompt-injection/rules-content.ts
+function p(source, flags = "i") {
+  return new RegExp(source, flags);
+}
+var PROMPT_CONTENT_RULES = [
+  {
+    id: "generic.prompt.security.ignore-previous-instructions",
+    severity: "ERROR",
+    category: "prompt-injection-jailbreak",
+    message: "Prompt injection detected: instruction override attempt trying to bypass system instructions.",
+    patterns: [
+      p("ignore\\s+(all\\s+)?(previous|prior|above|earlier)\\s+(instructions?|prompts?|rules?|guidelines?)"),
+      p("disregard\\s+(all\\s+)?(previous|prior|above)\\s+(instructions?|prompts?)"),
+      p("forget\\s+(all\\s+)?(previous|prior|earlier)\\s+(instructions?|prompts?)")
+    ],
+    confidence: "HIGH",
+    action: "BLOCK"
+  },
+  {
+    id: "generic.prompt.security.new-instructions-injection",
+    severity: "ERROR",
+    category: "malicious-injection",
+    message: "Prompt injection detected: attempt to inject new instructions replacing system behavior.",
+    patterns: [
+      p("your\\s+new\\s+(instructions?|task|role|purpose)\\s+(is|are)\\s*:"),
+      p("from\\s+now\\s+on\\s*,?\\s+(you|your)\\s+(will|must|should|are)"),
+      p("new\\s+system\\s+prompt\\s*:")
+    ],
+    confidence: "HIGH",
+    action: "BLOCK"
+  },
+  {
+    id: "generic.prompt.security.jailbreak-dan",
+    severity: "ERROR",
+    category: "prompt-injection-jailbreak",
+    message: "Jailbreak attempt detected: DAN-style attack attempting to bypass safety measures.",
+    patterns: [p("you\\s+are\\s+(now\\s+)?DAN"), p("do\\s+anything\\s+now")],
+    confidence: "HIGH",
+    action: "BLOCK"
+  },
+  {
+    id: "generic.prompt.security.system-prompt-extraction",
+    severity: "ERROR",
+    category: "prompt-injection-content",
+    message: "System prompt extraction attempt detected.",
+    patterns: [
+      p("(reveal|show|display|print|output|repeat|tell\\s+me)\\s+(your|the)\\s+(system\\s+)?prompt"),
+      p("what\\s+(is|are)\\s+your\\s+(system\\s+)?instructions?")
+    ],
+    confidence: "MEDIUM",
+    action: "WARN"
+  },
+  {
+    id: "generic.prompt.security.delimiter-injection",
+    severity: "ERROR",
+    category: "prompt-injection-delimiter",
+    message: "Delimiter injection attack: attempting to escape context boundaries.",
+    patterns: [p("---+\\s*(system|assistant|user)\\s*---+"), p("<\\|.*\\|>")],
+    confidence: "HIGH",
+    action: "BLOCK"
+  },
+  {
+    id: "generic.prompt.security.jailbreak-developer-mode",
+    severity: "ERROR",
+    category: "prompt-injection-jailbreak",
+    message: "Developer/debug mode jailbreak: fake mode activation attempt.",
+    patterns: [
+      p("(enable|activate|enter|switch\\s+to)\\s+(developer|debug|admin|unrestricted)\\s+mode"),
+      p("you\\s+(now\\s+)?have\\s+(no|zero)\\s+(restrictions|limitations|filters|guardrails)")
+    ],
+    confidence: "HIGH",
+    action: "BLOCK"
+  },
+  {
+    id: "generic.prompt.security.natural-language-exfiltration",
+    severity: "ERROR",
+    category: "exfiltration",
+    message: "Data exfiltration attempt in prompt-like text.",
+    patterns: [
+      p("send\\s+.{0,40}(secret|password|key|token|credential|env).{0,40}to\\s+\\S+"),
+      p("(show|print|display|read|cat|output)\\s+(me\\s+)?(the\\s+)?(\\.env|env\\s+file|environment\\s+variable)")
+    ],
+    confidence: "HIGH",
+    action: "BLOCK"
+  },
+  {
+    id: "generic.prompt.security.output-manipulation",
+    severity: "ERROR",
+    category: "prompt-injection-output",
+    message: "Output manipulation attempt in prompt-like text.",
+    patterns: [
+      p("(start|begin)\\s+(your|every|all)\\s+(response|reply|output|answer)\\s+with"),
+      p("(always|must|shall)\\s+(include|prepend|append|add).{0,30}(response|reply|output)")
+    ],
+    confidence: "MEDIUM",
+    action: "WARN"
+  },
+  {
+    id: "agent.exfil.security.env-file-access",
+    severity: "ERROR",
+    category: "exfiltration",
+    message: "Explicit request for .env or environment secrets in prompt-like text.",
+    patterns: [
+      p("(show|print|display|read|cat|output|echo)\\s+(me\\s+)?(the\\s+)?(\\.env|env\\s+file|environment\\s+variable)"),
+      p("what\\s+(are|is)\\s+(in\\s+)?(the|my)\\s+\\.?env\\s+(file)?")
+    ],
+    confidence: "HIGH",
+    action: "BLOCK"
+  }
+];
+
+// server/mcp/security/input-guard.ts
+function lineNumberForMatch(content, index) {
+  return content.slice(0, Math.max(0, index)).split("\n").length;
+}
+function excerpt(content, index, length = 120) {
+  const start = Math.max(0, index - 20);
+  const end = Math.min(content.length, index + length);
+  return content.slice(start, end).replace(/\s+/g, " ").trim();
+}
+function scanInjectionPatterns(content, options) {
+  if (!content?.trim()) return [];
+  const detections = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const rule of PROMPT_CONTENT_RULES) {
+    for (const pattern of rule.patterns) {
+      const match = pattern.exec(content);
+      if (!match || match.index == null) continue;
+      const key = `${rule.id}:${match.index}:${match[0]}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      detections.push({
+        ruleId: rule.id,
+        category: rule.category,
+        message: rule.message,
+        action: rule.action === "BLOCK" ? "BLOCK" : "WARN",
+        matchedText: excerpt(content, match.index, match[0].length + 40),
+        line: lineNumberForMatch(content, match.index),
+        source: options.source,
+        path: options.path ?? null
+      });
+    }
+  }
+  return detections;
+}
+function guardUntrustedInput(content, options) {
+  const original = content ?? "";
+  const detections = scanInjectionPatterns(original, options);
+  const hadInjectionPattern = detections.some((d) => d.action === "BLOCK") || detections.length > 0;
+  const shouldWrap = options.forceWrap === true || hadInjectionPattern;
+  const forPrompt = shouldWrap ? wrapUntrustedRepositoryData(original, { source: options.source, path: options.path ?? null }) : original;
+  return {
+    original,
+    forPrompt,
+    detections,
+    hadInjectionPattern
+  };
+}
+
+// server/mcp/security/output-guard.ts
+var REQUIRED_SAFE_FIX_SECTIONS = [
+  "PROJECT CONTEXT",
+  "PRODUCTION BLOCKER",
+  "SAFE IMPLEMENTATION PRINCIPLES",
+  "DO NOT MODIFY"
+];
+var INSTRUCTION_OVERRIDE_OUTSIDE_DELIMITERS = /ignore\s+(all\s+)?(previous|prior|above)\s+(instructions?|prompts?)/i;
+function redactBareInjectionLines(prompt) {
+  const lines = prompt.split("\n");
+  return lines.filter((line) => !INSTRUCTION_OVERRIDE_OUTSIDE_DELIMITERS.test(line)).join("\n");
+}
+function sanitizeBareRegions(prompt) {
+  if (!extractBarePromptRegions(prompt).length) {
+    return redactBareInjectionLines(prompt);
+  }
+  let sanitized = "";
+  let cursor = 0;
+  const startTag = "<<<SEQURAI_UNTRUSTED_REPOSITORY_DATA";
+  const endTag = "<<<END_SEQURAI_UNTRUSTED_REPOSITORY_DATA>>>";
+  while (cursor < prompt.length) {
+    const start = prompt.indexOf(startTag, cursor);
+    if (start === -1) {
+      sanitized += redactBareInjectionLines(prompt.slice(cursor));
+      break;
+    }
+    sanitized += redactBareInjectionLines(prompt.slice(cursor, start));
+    const end = prompt.indexOf(endTag, start);
+    if (end === -1) {
+      sanitized += prompt.slice(start);
+      break;
+    }
+    sanitized += prompt.slice(start, end + endTag.length);
+    cursor = end + endTag.length;
+  }
+  return sanitized;
+}
+function guardFixPromptOutput(prompt) {
+  const violations = [];
+  for (const section2 of REQUIRED_SAFE_FIX_SECTIONS) {
+    if (!prompt.includes(section2)) {
+      violations.push({ kind: "missing_section", detail: section2 });
+    }
+  }
+  const bareRegions = extractBarePromptRegions(prompt);
+  for (const region of bareRegions) {
+    if (INSTRUCTION_OVERRIDE_OUTSIDE_DELIMITERS.test(region)) {
+      violations.push({
+        kind: "injection_in_output",
+        detail: "Instruction override language outside repository-data delimiters",
+        ruleId: "platform.output.instruction-override"
+      });
+    }
+    for (const detection of scanInjectionPatterns(region, {
+      source: "finding_field",
+      path: "safe-fix-output"
+    })) {
+      if (detection.action !== "BLOCK") continue;
+      violations.push({
+        kind: "injection_in_output",
+        detail: detection.message,
+        ruleId: detection.ruleId
+      });
+    }
+  }
+  if (prompt.includes("<<<SEQURAI_UNTRUSTED_REPOSITORY_DATA") && !prompt.includes("<<<END_SEQURAI_UNTRUSTED_REPOSITORY_DATA>>>")) {
+    violations.push({
+      kind: "delimiter_escape",
+      detail: "Unclosed repository-data delimiter block"
+    });
+  }
+  const sanitizedPrompt = sanitizeBareRegions(prompt);
+  return {
+    ok: violations.length === 0,
+    prompt,
+    violations,
+    sanitizedPrompt
+  };
+}
+function assertFixPromptOutputSafe(prompt) {
+  const result = guardFixPromptOutput(prompt);
+  if (result.ok) return result.prompt;
+  return result.sanitizedPrompt;
+}
+
+// server/mcp/security/platform-confidence.ts
+function derivePlatformInjectionConfidenceLevel() {
+  const level = deriveConfidenceLevel({
+    detectionMethod: "STATIC_ANALYSIS",
+    verificationStatus: "UNVERIFIED",
+    llmOnly: false,
+    // Heuristic pattern match only — cap below INFERRED threshold (0.55).
+    numericScore: 0.35
+  });
+  assertConfidenceVerificationInvariant("UNVERIFIED", level);
+  if (level === "VERIFIED" || level === "PROBABLE") {
+    throw new Error("Platform prompt injection findings must never be VERIFIED or PROBABLE");
+  }
+  return level;
+}
+function platformInjectionLegacyConfidenceBand() {
+  return legacyBandFromConfidenceLevel(derivePlatformInjectionConfidenceLevel());
+}
+
+// server/mcp/security/platform-finding.ts
+var PLATFORM_INJECTION_RULE_ID = "platform.prompt_injection_attempt";
+var PLATFORM_INJECTION_CATEGORY = "prompt_injection_attempt";
+function locationForDetection(detection) {
+  const path = detection.path ?? (detection.source === "dependency_metadata" ? "dependency-metadata" : detection.source === "commit_history" ? "commit-history" : "platform-untrusted-input");
+  return { path, line: detection.line ?? 1 };
+}
+function platformInjectionToFindingDraft(detection) {
+  const location = locationForDetection(detection);
+  return {
+    ruleId: `${PLATFORM_INJECTION_RULE_ID}.${detection.ruleId}`,
+    title: "Prompt injection attempt detected in repository content",
+    description: [
+      "SequrAI detected instruction-override patterns in untrusted repository content while preparing analysis.",
+      "This content was isolated and treated as data \u2014 it cannot change verdict confidence or Safe Fix instructions.",
+      "",
+      detection.message
+    ].join("\n"),
+    severity: detection.action === "BLOCK" ? "high" : "medium",
+    confidence: platformInjectionLegacyConfidenceBand(),
+    category: PLATFORM_INJECTION_CATEGORY,
+    location,
+    evidence: detection.matchedText,
+    remediation: "Review the flagged file or metadata for hostile instructions embedded in comments, README text, commit messages, or dependency descriptions. Remove or rewrite the content so it cannot influence downstream AI analysis.",
+    metadata: {
+      platformInjectionGuard: {
+        source: detection.source,
+        path: detection.path ?? null,
+        ruleId: detection.ruleId,
+        action: detection.action,
+        patternCategory: detection.category
+      }
+    }
+  };
+}
+function platformInjectionFingerprintMaterial(detection) {
+  return [
+    PLATFORM_INJECTION_RULE_ID,
+    detection.source,
+    detection.path ?? "",
+    detection.ruleId,
+    detection.matchedText.slice(0, 120)
+  ].join("|");
+}
+function isPlatformInjectionFinding(finding) {
+  return finding.category === PLATFORM_INJECTION_CATEGORY || finding.ruleId.startsWith(`${PLATFORM_INJECTION_RULE_ID}.`);
+}
+
+// features/security-scanner/rules/known-safe-patterns.ts
+var RECOGNIZED_AUTH_PATTERN = /(?:auth\(|getServerSession|getServerAuthContext|getCachedServerAuthContext|getScanRequestContext|getScanAccessContext|resolveMcpAuth|assertInternalOpsAuthorized|verifyInternalOpsRequest|serve\s*\(|signingKey|verifyGitHubWebhookSignature|verifyStripeWebhookSignature|constructEvent|webhookSecret|exchangeCodeForSession|currentUser|getUser|verifyToken|requireAuth|Authorization|supabase\.auth\.getUser|requireCiProjectAccess|requireProjectApiAccess|code_verifier|codeVerifier|assertActiveOAuthClient)/i;
+var RECOGNIZED_AUTHZ_PATTERN = /(?:authorize|permission|role|ownerId|organizationId|organization_id|userId\s*[=!]==?|can\w+\(|policy|getServerAuthContext|getCachedServerAuthContext|getScanRequestContext|getScanAccessContext|resolveMcpAuth|assertInternalOpsAuthorized|verifyInternalOpsRequest|requireProjectApiAccess|getProjectAccessForUser|canAccessRepository|verifyGitHubWebhookSignature|verifyStripeWebhookSignature|constructEvent|requireCiProjectAccess)/i;
+var TEST_OR_EXAMPLE_PATH = /(?:^|\/)(?:test|tests|__tests__|fixtures?|examples?)(?:\/|$)|\.(?:test|spec)\./i;
+var MACHINE_ENDPOINT_PATH = /\/oauth\/(?:register|revoke|token)(?:\/|$)|\/\.well-known\/|\/auth\/callback\/|\/webhooks?\/|\/api\/internal\//i;
+
+// server/mcp/security/platform-scan.ts
+var README_LIKE = /\.(md|markdown|txt)$/i;
+var COMMIT_MESSAGE_LIKE = /(commit|changelog|history)/i;
+function draftToFinding(draft, detection) {
+  const material = platformInjectionFingerprintMaterial(detection);
+  const fingerprint = findingFingerprint(
+    draft.ruleId,
+    draft.location.path,
+    draft.location.line,
+    material
+  );
+  return {
+    id: `platform-${fingerprint}`,
+    fingerprint,
+    correlationKey: buildFindingCorrelationKey({
+      ruleId: draft.ruleId,
+      filePath: draft.location.path,
+      fingerprintMaterial: material
+    }),
+    ...draft
+  };
+}
+function scanFindingFields(finding) {
+  const path = finding.location?.path ?? null;
+  if (path && TEST_OR_EXAMPLE_PATH.test(path)) return [];
+  const fields = [
+    ["title", finding.title],
+    ["description", finding.description],
+    ["evidence", finding.evidence],
+    ["remediation", finding.remediation]
+  ];
+  return fields.flatMap(([field, value]) => {
+    if (!value?.trim()) return [];
+    return scanInjectionPatterns(value, {
+      source: "finding_field",
+      path: path ? `${path}#${field}` : field
+    });
+  });
+}
+function scanRepositoryFiles(files) {
+  return files.flatMap((file2) => {
+    const source = README_LIKE.test(file2.path) ? "repository_file" : COMMIT_MESSAGE_LIKE.test(file2.path) ? "commit_history" : null;
+    if (!source) return [];
+    return scanInjectionPatterns(file2.content, { source, path: file2.path });
+  });
+}
+function collectPlatformInjectionFindings(findings, normalizedFiles) {
+  const detections = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const finding of findings) {
+    for (const detection of scanFindingFields(finding)) {
+      const key = platformInjectionFingerprintMaterial(detection);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      detections.push(detection);
+    }
+  }
+  if (normalizedFiles?.length) {
+    for (const detection of scanRepositoryFiles(normalizedFiles)) {
+      const key = platformInjectionFingerprintMaterial(detection);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      detections.push(detection);
+    }
+  }
+  return detections.map(
+    (detection) => draftToFinding(platformInjectionToFindingDraft(detection), detection)
+  );
+}
+
+// server/mcp/security/safe-fix-input.ts
+function guardField(value, source, path) {
+  return guardUntrustedInput(value, { source, path, forceWrap: true }).forPrompt;
+}
+function sanitizeProductionFixPromptInput(input) {
+  const basePath = input.affectedFiles[0] ?? "safe-fix-input";
+  return {
+    ...input,
+    issueTitle: guardField(input.issueTitle, "finding_field", `${basePath}#title`),
+    issueDescription: guardField(input.issueDescription, "finding_field", `${basePath}#description`),
+    whyItMatters: guardField(input.whyItMatters, "finding_field", `${basePath}#why`),
+    recommendedAction: guardField(
+      input.recommendedAction,
+      "finding_field",
+      `${basePath}#recommendedAction`
+    ),
+    estimatedImpact: input.estimatedImpact ? guardField(input.estimatedImpact, "finding_field", `${basePath}#impact`) : input.estimatedImpact
+  };
+}
+
+// lib/local-analysis/map-findings.ts
+function guardFindingText(value, path, field) {
+  if (!value) return value;
+  return guardUntrustedInput(value, { source: "finding_field", path: `${path}#${field}` }).forPrompt;
+}
+function collectInputFiles(workspaceRoot, onlyRelativePaths) {
+  const listing = listWorkspaceFiles(workspaceRoot, {
+    onlyRelativePaths: onlyRelativePaths && onlyRelativePaths.size > 0 ? onlyRelativePaths : void 0
+  });
+  const files = [];
+  for (const file2 of listing.files) {
+    try {
+      const content = readWorkspaceTextFile(workspaceRoot, file2.relativePath);
+      files.push({ path: file2.relativePath, content });
+    } catch {
+      continue;
+    }
+  }
+  return { files, listing };
+}
+function mapScanFindingToVerdictInput(finding) {
+  return {
+    id: finding.id,
+    title: finding.title,
+    severity: finding.severity,
+    category: finding.category,
+    rule_id: finding.ruleId,
+    file_path: finding.location.path,
+    start_line: finding.location.line,
+    recommendation: finding.remediation,
+    confidence: finding.confidence,
+    evidence: finding.evidence ?? null,
+    metadata: finding.metadata ?? null
+  };
+}
+function mapVerdictFindingToPublic(finding) {
+  const ruleId = finding.rule_id ?? "";
+  const filePath = finding.file_path ?? null;
+  const severity = finding.severity ?? "info";
+  const category = finding.category ?? "security";
+  const confidence = typeof finding.confidence === "string" ? finding.confidence : finding.confidence != null ? String(finding.confidence) : "low";
+  const remediationText = finding.recommendation ?? "";
+  const safeToIgnore = isNonBlockingSecretFinding({
+    ruleId,
+    file_path: filePath,
+    evidence: finding.evidence ?? null,
+    metadata: finding.metadata ?? null
+  });
+  const correlationKey = buildFindingCorrelationKeyFromParts({
+    ruleId,
+    filePath: filePath ?? "",
+    title: finding.title,
+    metadata: finding.metadata ?? null
+  });
+  const guardPath = filePath ?? ruleId;
+  const redactedEvidence = finding.evidence ? redactEvidence(finding.evidence) : void 0;
+  return {
+    id: finding.id ?? `${ruleId}:${correlationKey}`,
+    ruleId,
+    title: guardFindingText(finding.title, guardPath, "title"),
+    description: guardFindingText(remediationText || finding.title, guardPath, "description"),
+    severity,
+    category,
+    filePath,
+    line: finding.start_line ?? null,
+    correlationKey,
+    evidence: redactedEvidence ? guardFindingText(redactedEvidence, guardPath, "evidence") : void 0,
+    remediation: guardFindingText(remediationText, guardPath, "remediation"),
+    confidence,
+    safeToIgnore
+  };
+}
+function mapVerdictFindingsToPublic(findings) {
+  return findings.map(mapVerdictFindingToPublic);
+}
+
+// lib/local-analysis/format-local-response.ts
+function buildLocalStatusSummary(input) {
+  const lines = [
+    "SEQURAI \u2014 Production Verdict (Local Workspace)",
+    "",
+    "SOURCE: Local workspace",
+    `SCOPE: ${formatScopeLabel(input.scope)}`,
+    "",
+    "STATUS",
+    input.headline ?? input.verdictStatus.toUpperCase()
+  ];
+  if (input.score != null) {
+    lines.push(`SCORE: ${input.score}/100`);
+  } else {
+    lines.push("SCORE: unavailable (insufficient evidence for a numeric score)");
+  }
+  if (input.executiveSummary) {
+    lines.push("", "SUMMARY", input.executiveSummary);
+  }
+  if (input.reason) {
+    lines.push("", "NOTE", input.reason);
+  }
+  const actionable = input.findings.filter(
+    (finding) => !finding.safeToIgnore && (finding.severity === "critical" || finding.severity === "high" || finding.severity === "medium")
+  );
+  if (actionable.length > 0) {
+    lines.push("", "MAIN FINDINGS");
+    for (const finding of actionable.slice(0, 6)) {
+      const location = finding.filePath ? finding.line != null ? `${finding.filePath}:${finding.line}` : finding.filePath : "location not tied to a single file";
+      lines.push(
+        "",
+        `${finding.severity.toUpperCase()} \u2014 ${finding.title}`,
+        `File: ${location}`,
+        finding.description
+      );
+      if (finding.evidence) {
+        lines.push(`Evidence: ${finding.evidence}`);
+      }
+      lines.push(`What to do: ${finding.remediation}`);
+    }
+  }
+  if (input.topPriorities && input.topPriorities.length > 0) {
+    lines.push("", "TOP PRIORITIES");
+    for (const priority of input.topPriorities) {
+      lines.push(`- ${priority}`);
+    }
+  }
+  const hasSecretFinding = actionable.some(
+    (finding) => `${finding.title} ${finding.category} ${finding.ruleId}`.toLowerCase().match(/secret|credential|api key/)
+  );
+  if (hasSecretFinding) {
+    lines.push("", "NEXT STEPS");
+    lines.push("1. Review the highlighted values in your local workspace.");
+    lines.push("2. Remove real credentials from source and rotate them if they were ever exposed.");
+    lines.push("3. Re-run sequrai_local_audit after fixing.");
+  } else if (actionable.length > 0) {
+    lines.push("", "NEXT STEPS");
+    lines.push("1. Address the findings above in your local workspace.");
+    lines.push("2. Re-run sequrai_local_audit to verify.");
+  }
+  lines.push(
+    "",
+    "LIMITATION",
+    "This verdict analyzes files on disk in your authorized workspace only. Remote MCP tools analyze your connected repository separately."
+  );
+  return lines.join("\n");
+}
+function formatScopeLabel(scope) {
+  switch (scope) {
+    case "workspace":
+      return "Full workspace";
+    case "working_tree":
+      return "Working tree changes";
+    case "staged":
+      return "Staged changes";
+    case "diff":
+      return "Unstaged diff";
+    default:
+      return scope;
+  }
+}
+
+// lib/correlation/scan-finding-resolution.ts
+function correlationKeyForScanFinding(finding) {
+  return buildFindingCorrelationKeyFromParts({
+    ruleId: finding.ruleId,
+    filePath: finding.filePath,
+    title: finding.title,
+    metadata: finding.metadata ?? null
+  });
+}
+function groupByCorrelationKey(findings) {
+  const map2 = /* @__PURE__ */ new Map();
+  for (const finding of findings) {
+    const key = correlationKeyForScanFinding(finding);
+    const group = map2.get(key);
+    if (group) group.push(finding);
+    else map2.set(key, [finding]);
+  }
+  return map2;
+}
+function diffScanFindingsByIdentity(input) {
+  const { projectId } = input;
+  for (const finding of [...input.previous, ...input.current]) {
+    if (finding.projectId !== projectId) {
+      throw new Error(
+        `diffScanFindingsByIdentity: finding ${finding.id} belongs to project ${finding.projectId}, not the requested project ${projectId}. Refusing to compare findings across projects.`
+      );
+    }
+  }
+  const previousGroups = groupByCorrelationKey(input.previous);
+  const currentGroups = groupByCorrelationKey(input.current);
+  const unchanged = [];
+  const resolved = [];
+  const newEntries = [];
+  const ambiguous = [];
+  const allKeys = /* @__PURE__ */ new Set([...previousGroups.keys(), ...currentGroups.keys()]);
+  for (const key of allKeys) {
+    const previousMatches = previousGroups.get(key) ?? [];
+    const currentMatches = currentGroups.get(key) ?? [];
+    if (previousMatches.length > 1 || currentMatches.length > 1) {
+      ambiguous.push({
+        correlationKey: key,
+        status: "ambiguous",
+        previous: previousMatches[0],
+        current: currentMatches[0],
+        reason: "More than one finding in a single scan shares this correlation identity; resolution cannot be determined safely."
+      });
+      continue;
+    }
+    const previous = previousMatches[0];
+    const current = currentMatches[0];
+    if (previous && current) {
+      unchanged.push({ correlationKey: key, status: "unchanged", previous, current });
+    } else if (previous && !current) {
+      resolved.push({ correlationKey: key, status: "resolved", previous });
+    } else if (current && !previous) {
+      newEntries.push({ correlationKey: key, status: "new", current });
+    }
+  }
+  return { projectId, unchanged, resolved, new: newEntries, ambiguous };
+}
+
+// lib/local-analysis/finding-history.ts
+var DEFAULT_SCAN_WINDOW = 20;
+function findingToSnapshot(finding, workspaceId) {
+  return {
+    // finding.id is always set on a row read back from local-persistence.ts
+    // (rowToFinding() always assigns `${scan_id}:${row_id}`) -- the fallback
+    // only guards the wider VerdictFinding type, which declares id optional.
+    id: finding.id ?? `${finding.scanId}:unknown`,
+    projectId: workspaceId,
+    ruleId: finding.rule_id ?? "",
+    filePath: finding.file_path ?? "",
+    title: finding.title,
+    severity: finding.severity ?? void 0,
+    metadata: finding.metadata ?? null
+  };
+}
+function correlationKeyForPersistedFinding(finding, workspaceId) {
+  return correlationKeyForScanFinding(findingToSnapshot(finding, workspaceId));
+}
+function loadComparableScans(store, workspaceId, repositoryId, limit = DEFAULT_SCAN_WINDOW) {
+  return store.listScans(workspaceId, limit).filter((scan) => scan.repositoryId === repositoryId).slice().sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.scanId.localeCompare(b.scanId));
+}
+function computeScanDelta(input) {
+  const currentComplete = input.current.scan.phase === "complete";
+  const previousById = new Map((input.previous?.findings ?? []).map((f) => [f.id, f]));
+  const currentById = new Map(input.current.findings.map((f) => [f.id, f]));
+  const previousSnapshots = (input.previous?.findings ?? []).map((f) => findingToSnapshot(f, input.workspaceId));
+  const currentSnapshots = input.current.findings.map((f) => findingToSnapshot(f, input.workspaceId));
+  const diff = diffScanFindingsByIdentity({
+    projectId: input.workspaceId,
+    previous: previousSnapshots,
+    current: currentSnapshots
+  });
+  function buildEntry(lifecycle, currentSnapshot, previousSnapshot) {
+    const finding = currentById.get(currentSnapshot.id);
+    const prevFinding = previousSnapshot ? previousById.get(previousSnapshot.id) : void 0;
+    const severity = finding.severity ?? null;
+    const previousSeverity = prevFinding?.severity ?? null;
+    return {
+      correlationKey: correlationKeyForScanFinding(currentSnapshot),
+      ruleId: finding.rule_id ?? "",
+      title: finding.title,
+      severity,
+      category: finding.category ?? null,
+      filePath: finding.file_path ?? null,
+      lifecycle,
+      firstSeenScanId: input.current.scan.scanId,
+      firstSeenAt: input.current.scan.createdAt,
+      lastSeenScanId: input.current.scan.scanId,
+      lastSeenAt: input.current.scan.createdAt,
+      severityChanged: Boolean(prevFinding) && previousSeverity !== severity,
+      previousSeverity
+    };
+  }
+  const persistingFindings = diff.unchanged.map((entry) => buildEntry("PERSISTING", entry.current, entry.previous));
+  const newFindings = diff.new.map((entry) => buildEntry("NEW", entry.current, void 0));
+  function buildResolvedSummary(previousSnapshot) {
+    const finding = previousById.get(previousSnapshot.id);
+    return {
+      correlationKey: correlationKeyForScanFinding(previousSnapshot),
+      ruleId: finding.rule_id ?? "",
+      title: finding.title,
+      severity: finding.severity ?? null,
+      filePath: finding.file_path ?? null,
+      lastSeenScanId: input.previous.scan.scanId,
+      lastSeenAt: input.previous.scan.createdAt
+    };
+  }
+  const resolvedCandidates = diff.resolved.map((entry) => buildResolvedSummary(entry.previous));
+  const resolvedFindings = currentComplete ? resolvedCandidates : [];
+  const lifecycleUnknownFindings = currentComplete ? [] : resolvedCandidates;
+  return {
+    previousScanId: input.previous?.scan.scanId ?? null,
+    currentScanId: input.current.scan.scanId,
+    currentScanComplete: currentComplete,
+    newFindings,
+    persistingFindings,
+    resolvedFindings,
+    lifecycleUnknownFindings,
+    ambiguousCount: diff.ambiguous.length,
+    counts: {
+      newCount: newFindings.length,
+      persistingCount: persistingFindings.length,
+      resolvedCount: resolvedFindings.length,
+      lifecycleUnknownCount: lifecycleUnknownFindings.length
+    }
+  };
+}
+function verdictSnapshot(verdict) {
+  return verdict ? { scanId: verdict.scanId, status: verdict.status, score: verdict.score, createdAt: verdict.createdAt } : null;
+}
+function buildVerdictHistory(store, current, previous) {
+  const latest = verdictSnapshot(store.getVerdictForScan(current.scanId));
+  const previousVerdict = previous ? verdictSnapshot(store.getVerdictForScan(previous.scanId)) : null;
+  return {
+    latest,
+    previous: previousVerdict,
+    statusChanged: Boolean(latest && previousVerdict && latest.status !== previousVerdict.status)
+  };
+}
+function buildFindingHistory(store, identity, options = {}) {
+  const scans = loadComparableScans(store, identity.workspaceId, identity.repositoryId, options.scanWindow ?? DEFAULT_SCAN_WINDOW);
+  if (scans.length === 0) return null;
+  const findingsByScan = /* @__PURE__ */ new Map();
+  for (const scan of scans) {
+    findingsByScan.set(scan.scanId, store.getFindingsForScan(scan.scanId));
+  }
+  const firstSeen = /* @__PURE__ */ new Map();
+  const lastSeen = /* @__PURE__ */ new Map();
+  for (const scan of scans) {
+    for (const finding of findingsByScan.get(scan.scanId) ?? []) {
+      const key = correlationKeyForScanFinding(findingToSnapshot(finding, identity.workspaceId));
+      if (!firstSeen.has(key)) firstSeen.set(key, { scanId: scan.scanId, createdAt: scan.createdAt });
+      lastSeen.set(key, { scanId: scan.scanId, createdAt: scan.createdAt });
+    }
+  }
+  const currentScan = scans[scans.length - 1];
+  const previousScan = scans.length > 1 ? scans[scans.length - 2] : null;
+  const delta = computeScanDelta({
+    workspaceId: identity.workspaceId,
+    previous: previousScan ? { scan: previousScan, findings: findingsByScan.get(previousScan.scanId) ?? [] } : null,
+    current: { scan: currentScan, findings: findingsByScan.get(currentScan.scanId) ?? [] }
+  });
+  const withWindowHistory = (entry) => {
+    const seen = firstSeen.get(entry.correlationKey);
+    const last = lastSeen.get(entry.correlationKey);
+    return {
+      ...entry,
+      firstSeenScanId: seen?.scanId ?? entry.firstSeenScanId,
+      firstSeenAt: seen?.createdAt ?? entry.firstSeenAt,
+      lastSeenScanId: last?.scanId ?? entry.lastSeenScanId,
+      lastSeenAt: last?.createdAt ?? entry.lastSeenAt
+    };
+  };
+  const newFindings = delta.newFindings.map(withWindowHistory);
+  const persistingFindings = delta.persistingFindings.map(withWindowHistory);
+  const currentFindings = [...newFindings, ...persistingFindings].sort(
+    (a, b) => a.correlationKey.localeCompare(b.correlationKey)
+  );
+  return {
+    workspaceId: identity.workspaceId,
+    repositoryId: identity.repositoryId,
+    scanCount: scans.length,
+    currentScan,
+    previousScan,
+    currentFindings,
+    delta: { ...delta, newFindings, persistingFindings },
+    verdictHistory: buildVerdictHistory(store, currentScan, previousScan)
+  };
+}
+
+// lib/local-analysis/local-persistence.ts
+import { DatabaseSync } from "node:sqlite";
+import { existsSync as existsSync3, lstatSync as lstatSync2, mkdirSync } from "node:fs";
+import { join as join2 } from "node:path";
+var DB_DIRNAME = ".sequrai";
+var DB_FILENAME = "sequrai.db";
+var LocalPersistenceError = class extends Error {
+  constructor(code, message) {
+    super(message);
+    this.code = code;
+    this.name = "LocalPersistenceError";
+  }
+};
+function resolveSecureDatabasePath(workspaceRoot) {
+  const root = normalizeWorkspaceRoot(workspaceRoot);
+  const rootReal = realpathResolved(root);
+  const dbDir = join2(rootReal, DB_DIRNAME);
+  if (existsSync3(dbDir)) {
+    const dirStat = lstatSync2(dbDir);
+    if (dirStat.isSymbolicLink()) {
+      throw new LocalPersistenceError("LOCAL_PERSISTENCE_UNAVAILABLE", "Refusing to use a symlinked .sequrai directory.");
+    }
+    const dirReal = realpathResolved(dbDir);
+    if (!isDescendantPath(rootReal, dirReal)) {
+      throw new LocalPersistenceError("LOCAL_PERSISTENCE_UNAVAILABLE", "Refusing a .sequrai directory outside the workspace.");
+    }
+  } else {
+    mkdirSync(dbDir, { recursive: true });
+  }
+  const dbPath = join2(dbDir, DB_FILENAME);
+  if (existsSync3(dbPath) && lstatSync2(dbPath).isSymbolicLink()) {
+    throw new LocalPersistenceError("LOCAL_PERSISTENCE_UNAVAILABLE", "Refusing a symlinked database file.");
+  }
+  return dbPath;
+}
+function runMigrations(db) {
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS schema_migrations (
+        version INTEGER PRIMARY KEY,
+        applied_at TEXT NOT NULL
+      );
+    `);
+    const row = db.prepare("SELECT MAX(version) AS version FROM schema_migrations").get();
+    const currentVersion = row?.version ?? 0;
+    if (currentVersion < 1) {
+      db.exec("BEGIN");
+      try {
+        db.exec(`
+          CREATE TABLE IF NOT EXISTS scans (
+            id TEXT PRIMARY KEY,
+            project_id TEXT NOT NULL,
+            repository_id TEXT NOT NULL,
+            workspace_id TEXT NOT NULL,
+            scope TEXT NOT NULL,
+            phase TEXT NOT NULL,
+            branch TEXT,
+            commit_sha TEXT,
+            dirty INTEGER NOT NULL,
+            duration_ms INTEGER NOT NULL,
+            error_message TEXT,
+            engines_json TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            completed_at TEXT NOT NULL
+          );
+
+          CREATE INDEX IF NOT EXISTS idx_scans_workspace_created
+            ON scans (workspace_id, created_at);
+
+          CREATE TABLE IF NOT EXISTS findings (
+            row_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            scan_id TEXT NOT NULL REFERENCES scans (id),
+            repository_id TEXT NOT NULL,
+            workspace_id TEXT NOT NULL,
+            rule_id TEXT,
+            title TEXT NOT NULL,
+            severity TEXT,
+            category TEXT,
+            file_path TEXT,
+            start_line INTEGER,
+            recommendation TEXT,
+            confidence TEXT,
+            evidence TEXT,
+            metadata_json TEXT,
+            created_at TEXT NOT NULL
+          );
+
+          CREATE INDEX IF NOT EXISTS idx_findings_scan ON findings (scan_id);
+
+          CREATE TABLE IF NOT EXISTS verdicts (
+            scan_id TEXT PRIMARY KEY REFERENCES scans (id),
+            project_id TEXT NOT NULL,
+            repository_id TEXT NOT NULL,
+            workspace_id TEXT NOT NULL,
+            status TEXT NOT NULL,
+            score INTEGER,
+            blockers_count INTEGER NOT NULL,
+            critical_blockers_count INTEGER NOT NULL,
+            high_blockers_count INTEGER NOT NULL,
+            verdict_json TEXT NOT NULL,
+            created_at TEXT NOT NULL
+          );
+        `);
+        db.prepare("INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)").run(
+          1,
+          (/* @__PURE__ */ new Date()).toISOString()
+        );
+        db.exec("COMMIT");
+      } catch (error51) {
+        db.exec("ROLLBACK");
+        throw error51;
+      }
+    }
+  } catch (error51) {
+    throw new LocalPersistenceError(
+      "LOCAL_PERSISTENCE_MIGRATION_FAILED",
+      error51 instanceof Error ? error51.message : "Local database migration failed."
+    );
+  }
+}
+function findingRow(scanId, finding, createdAt) {
+  return [
+    scanId,
+    finding.rule_id ?? null,
+    finding.title,
+    finding.severity ?? null,
+    finding.category ?? null,
+    finding.file_path ?? null,
+    finding.start_line ?? null,
+    finding.recommendation ?? null,
+    typeof finding.confidence === "string" ? finding.confidence : finding.confidence != null ? String(finding.confidence) : null,
+    finding.evidence ?? null,
+    finding.metadata ? JSON.stringify(finding.metadata) : null,
+    createdAt
+  ];
+}
+function rowToScan(row) {
+  return {
+    scanId: row.id,
+    projectId: row.project_id,
+    repositoryId: row.repository_id,
+    workspaceId: row.workspace_id,
+    scope: row.scope,
+    phase: row.phase,
+    branch: row.branch ?? null,
+    commitSha: row.commit_sha ?? null,
+    dirty: Boolean(row.dirty),
+    durationMs: Number(row.duration_ms),
+    errorMessage: row.error_message ?? null,
+    engines: JSON.parse(row.engines_json),
+    createdAt: row.created_at,
+    completedAt: row.completed_at
+  };
+}
+function rowToFinding(row) {
+  return {
+    id: `${row.scan_id}:${row.row_id}`,
+    scanId: row.scan_id,
+    title: row.title,
+    severity: row.severity ?? void 0,
+    category: row.category ?? void 0,
+    rule_id: row.rule_id ?? void 0,
+    file_path: row.file_path ?? void 0,
+    start_line: row.start_line ?? void 0,
+    recommendation: row.recommendation ?? void 0,
+    confidence: row.confidence ?? void 0,
+    evidence: row.evidence ?? void 0,
+    metadata: row.metadata_json ? JSON.parse(row.metadata_json) : void 0
+  };
+}
+function rowToVerdict(row) {
+  let verdict;
+  try {
+    verdict = JSON.parse(row.verdict_json);
+  } catch {
+    throw new LocalPersistenceError("LOCAL_PERSISTENCE_CORRUPT", `Stored verdict for scan ${row.scan_id} is not valid JSON.`);
+  }
+  return {
+    scanId: row.scan_id,
+    projectId: row.project_id,
+    repositoryId: row.repository_id,
+    workspaceId: row.workspace_id,
+    status: row.status,
+    score: row.score ?? null,
+    blockersCount: Number(row.blockers_count),
+    criticalBlockersCount: Number(row.critical_blockers_count),
+    highBlockersCount: Number(row.high_blockers_count),
+    verdict,
+    createdAt: row.created_at
+  };
+}
+function openLocalPersistenceStore(workspaceRoot) {
+  const dbPath = resolveSecureDatabasePath(workspaceRoot);
+  let db;
+  try {
+    db = new DatabaseSync(dbPath);
+  } catch (error51) {
+    throw new LocalPersistenceError(
+      "LOCAL_PERSISTENCE_UNAVAILABLE",
+      error51 instanceof Error ? error51.message : "Could not open the local database."
+    );
+  }
+  try {
+    db.exec("PRAGMA journal_mode = WAL");
+    db.exec("PRAGMA synchronous = NORMAL");
+    db.exec("PRAGMA foreign_keys = ON");
+    db.exec("PRAGMA busy_timeout = 5000");
+  } catch (error51) {
+    db.close();
+    throw new LocalPersistenceError(
+      "LOCAL_PERSISTENCE_UNAVAILABLE",
+      error51 instanceof Error ? error51.message : "Could not configure the local database."
+    );
+  }
+  runMigrations(db);
+  return {
+    saveScanResult(input) {
+      const now = (/* @__PURE__ */ new Date()).toISOString();
+      const createdAt = input.scan.createdAt ?? now;
+      const completedAt = input.scan.completedAt ?? now;
+      try {
+        db.exec("BEGIN");
+        db.prepare(
+          `INSERT INTO scans
+            (id, project_id, repository_id, workspace_id, scope, phase, branch, commit_sha, dirty, duration_ms, error_message, engines_json, created_at, completed_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ).run(
+          input.scan.scanId,
+          input.scan.projectId,
+          input.scan.repositoryId,
+          input.scan.workspaceId,
+          input.scan.scope,
+          input.scan.phase,
+          input.scan.branch,
+          input.scan.commitSha,
+          input.scan.dirty ? 1 : 0,
+          input.scan.durationMs,
+          input.scan.errorMessage,
+          JSON.stringify(input.scan.engines),
+          createdAt,
+          completedAt
+        );
+        const insertFinding = db.prepare(
+          `INSERT INTO findings
+            (scan_id, repository_id, workspace_id, rule_id, title, severity, category, file_path, start_line, recommendation, confidence, evidence, metadata_json, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        );
+        for (const finding of input.findings) {
+          const [, ruleId, title, severity, category, filePath, startLine, recommendation, confidence, evidence, metadataJson, createdAtCol] = findingRow(input.scan.scanId, finding, createdAt);
+          insertFinding.run(
+            input.scan.scanId,
+            input.scan.repositoryId,
+            input.scan.workspaceId,
+            ruleId,
+            title,
+            severity,
+            category,
+            filePath,
+            startLine,
+            recommendation,
+            confidence,
+            evidence,
+            metadataJson,
+            createdAtCol
+          );
+        }
+        if (input.verdict) {
+          db.prepare(
+            `INSERT INTO verdicts
+              (scan_id, project_id, repository_id, workspace_id, status, score, blockers_count, critical_blockers_count, high_blockers_count, verdict_json, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          ).run(
+            input.scan.scanId,
+            input.verdict.projectId,
+            input.verdict.repositoryId,
+            input.verdict.workspaceId,
+            input.verdict.status,
+            input.verdict.score,
+            input.verdict.blockersCount,
+            input.verdict.criticalBlockersCount,
+            input.verdict.highBlockersCount,
+            JSON.stringify(input.verdict.verdict),
+            createdAt
+          );
+        }
+        db.exec("COMMIT");
+      } catch (error51) {
+        try {
+          db.exec("ROLLBACK");
+        } catch {
+        }
+        throw new LocalPersistenceError(
+          "LOCAL_PERSISTENCE_WRITE_FAILED",
+          error51 instanceof Error ? error51.message : "Failed to persist the scan result."
+        );
+      }
+    },
+    getScan(scanId) {
+      try {
+        const row = db.prepare("SELECT * FROM scans WHERE id = ?").get(scanId);
+        return row ? rowToScan(row) : null;
+      } catch (error51) {
+        throw new LocalPersistenceError(
+          "LOCAL_PERSISTENCE_READ_FAILED",
+          error51 instanceof Error ? error51.message : "Failed to read scan."
+        );
+      }
+    },
+    getLatestScan(workspaceId) {
+      try {
+        const row = db.prepare("SELECT * FROM scans WHERE workspace_id = ? ORDER BY created_at DESC, id DESC LIMIT 1").get(workspaceId);
+        return row ? rowToScan(row) : null;
+      } catch (error51) {
+        throw new LocalPersistenceError(
+          "LOCAL_PERSISTENCE_READ_FAILED",
+          error51 instanceof Error ? error51.message : "Failed to read the latest scan."
+        );
+      }
+    },
+    listScans(workspaceId, limit = 20) {
+      try {
+        const rows = db.prepare("SELECT * FROM scans WHERE workspace_id = ? ORDER BY created_at DESC, id DESC LIMIT ?").all(workspaceId, limit);
+        return rows.map(rowToScan);
+      } catch (error51) {
+        throw new LocalPersistenceError(
+          "LOCAL_PERSISTENCE_READ_FAILED",
+          error51 instanceof Error ? error51.message : "Failed to list scans."
+        );
+      }
+    },
+    getFindingsForScan(scanId) {
+      try {
+        const rows = db.prepare("SELECT * FROM findings WHERE scan_id = ? ORDER BY row_id ASC").all(scanId);
+        return rows.map(rowToFinding);
+      } catch (error51) {
+        throw new LocalPersistenceError(
+          "LOCAL_PERSISTENCE_READ_FAILED",
+          error51 instanceof Error ? error51.message : "Failed to read findings."
+        );
+      }
+    },
+    getVerdictForScan(scanId) {
+      let row;
+      try {
+        row = db.prepare("SELECT * FROM verdicts WHERE scan_id = ?").get(scanId);
+      } catch (error51) {
+        throw new LocalPersistenceError(
+          "LOCAL_PERSISTENCE_READ_FAILED",
+          error51 instanceof Error ? error51.message : "Failed to read verdict."
+        );
+      }
+      return row ? rowToVerdict(row) : null;
+    },
+    close() {
+      db.close();
+    }
+  };
+}
+
+// brain/fix-prompt/format-stack.ts
+function formatStackLines(stack) {
+  const lines = [];
+  for (const language of stack.languages) lines.push(`- ${language}`);
+  for (const framework of stack.frameworks) lines.push(`- ${framework}`);
+  for (const service of stack.services) lines.push(`- ${service}`);
+  return lines.length > 0 ? lines : ["- TypeScript (detected during static analysis)"];
+}
+
+// brain/fix-prompt/category-guidance.ts
+var DEFAULT_GUIDANCE = {
+  preserve: [
+    "Existing user-facing functionality and navigation flows.",
+    "Current API contracts consumed by the frontend.",
+    "Database schema unless this issue explicitly requires a migration.",
+    "Existing third-party integrations and environment variable names."
+  ],
+  doNotModify: [
+    "Unrelated files, routes, or components.",
+    "Project architecture or folder structure.",
+    "Existing business logic outside the affected area.",
+    "Styling or UI layout outside what is required for the fix."
+  ],
+  regressionTests: [
+    "Authorized users can still access protected resources.",
+    "Unauthorized users are still blocked appropriately.",
+    "Existing happy-path flows continue to work.",
+    "Error states remain handled without exposing sensitive data."
+  ],
+  buildRequirements: ["npm run build", "npm run typecheck", "npm test", "npm run lint"]
+};
+var CATEGORY_GUIDANCE = {
+  authentication: {
+    preserve: [
+      "Existing sign-in, sign-up, and session refresh flows.",
+      "Current auth provider configuration and callback URLs.",
+      "User identity fields and session token shape."
+    ],
+    regressionTests: [
+      "Valid credentials still authenticate successfully.",
+      "Invalid credentials are rejected without leaking account details.",
+      "Expired or missing sessions redirect to sign-in.",
+      "Protected routes remain inaccessible without authentication."
+    ]
+  },
+  authorization: {
+    preserve: [
+      "Existing role and permission model.",
+      "Row-level security policies for unrelated tables.",
+      "API authorization checks on other endpoints."
+    ],
+    regressionTests: [
+      "Users can only access their own resources.",
+      "Cross-tenant or cross-user access attempts are denied.",
+      "Admin-only routes remain restricted to authorized roles."
+    ]
+  },
+  security: {
+    preserve: [
+      "Public endpoints that are intentionally unauthenticated.",
+      "Existing input validation on unrelated forms.",
+      "Current logging and monitoring hooks."
+    ],
+    regressionTests: [
+      "Malicious or malformed input is rejected safely.",
+      "Rate limits or throttles apply only to intended endpoints.",
+      "No new sensitive data appears in logs or client responses."
+    ]
+  },
+  data_protection: {
+    preserve: [
+      "Existing secret and environment variable naming conventions.",
+      "Encryption or hashing already applied to unrelated secrets.",
+      "Current deployment environment configuration."
+    ],
+    doNotModify: [
+      "Committed secrets in git history (rotate and remove from active use instead).",
+      "Production credentials in client bundles."
+    ],
+    regressionTests: [
+      "No secrets or service-role keys are exposed in client bundles.",
+      "Environment variables are read only on the server where required.",
+      "Rotated credentials work in development and production."
+    ]
+  },
+  secrets: {
+    preserve: DEFAULT_GUIDANCE.preserve,
+    doNotModify: [
+      "Client-side code paths unless moving secret usage server-side.",
+      "Git history (rotate credentials; do not rewrite history unless requested)."
+    ],
+    regressionTests: [
+      "Server-only secrets are not importable from client components.",
+      "Build output contains no raw API keys or service role tokens."
+    ]
+  },
+  deployment: {
+    preserve: [
+      "Current hosting configuration and environment separation.",
+      "CI/CD pipeline steps unrelated to this fix.",
+      "Production domain and redirect settings."
+    ],
+    regressionTests: [
+      "Application builds and starts in production mode.",
+      "Environment-specific configuration loads correctly.",
+      "Health checks and deployment hooks still pass."
+    ]
+  },
+  database: {
+    preserve: [
+      "Existing migrations and seed data.",
+      "Unrelated table schemas and indexes.",
+      "Database connection pooling configuration."
+    ],
+    doNotModify: ["Unrelated tables, views, or RLS policies."],
+    regressionTests: [
+      "Migrations apply cleanly on a fresh database.",
+      "Existing queries return expected results.",
+      "RLS policies enforce the intended access model."
+    ]
+  }
+};
+function guidanceForCategory(category) {
+  const key = category.toLowerCase().replace(/\s+/g, "_");
+  const match = CATEGORY_GUIDANCE[key] ?? Object.entries(CATEGORY_GUIDANCE).find(([name]) => key.includes(name))?.[1] ?? {};
+  return {
+    preserve: match.preserve ?? DEFAULT_GUIDANCE.preserve,
+    doNotModify: match.doNotModify ?? DEFAULT_GUIDANCE.doNotModify,
+    regressionTests: match.regressionTests ?? DEFAULT_GUIDANCE.regressionTests,
+    buildRequirements: match.buildRequirements ?? DEFAULT_GUIDANCE.buildRequirements
+  };
+}
+
+// brain/fix-prompt/assessment.ts
+var HIGH_RISK_CATEGORIES = /* @__PURE__ */ new Set(["authorization", "database"]);
+var MEDIUM_RISK_CATEGORIES = /* @__PURE__ */ new Set(["authentication", "security"]);
+function normalizeCategory(category) {
+  return category.toLowerCase().replace(/\s+/g, "_");
+}
+function complexityLabel(complexity) {
+  switch (complexity) {
+    case "low":
+      return "Low \u2014 localized change in one or two files.";
+    case "medium":
+      return "Medium \u2014 coordinated changes across a small set of files.";
+    case "high":
+      return "High \u2014 cross-cutting change requiring careful validation.";
+  }
+}
+function assessRisk(input) {
+  const category = normalizeCategory(input.category);
+  const fileCount = Math.max(input.affectedFiles.length, 1);
+  const severity = input.severity.toLowerCase();
+  if (HIGH_RISK_CATEGORIES.has(category) || severity === "critical" && fileCount >= 3) {
+    return {
+      implementationRisk: "HIGH",
+      riskReason: category === "authorization" || category === "database" ? "Database or authorization policy changes can affect access for all users." : "Multiple critical touchpoints increase regression risk."
+    };
+  }
+  if (MEDIUM_RISK_CATEGORIES.has(category) || severity === "critical" || fileCount >= 2) {
+    const reason = category === "authentication" ? "Authentication flow updates affect sign-in and session behaviour." : category === "security" ? "Security hardening may touch request handling or middleware." : "More than one file may need a coordinated safe change.";
+    return { implementationRisk: "MEDIUM", riskReason: reason };
+  }
+  return {
+    implementationRisk: "LOW",
+    riskReason: "Single-file or configuration-level change with narrow blast radius."
+  };
+}
+function assessConfidence(input, risk) {
+  let score = 88;
+  const fileCount = input.affectedFiles.length;
+  if (fileCount === 1) score += 6;
+  else if (fileCount === 2) score += 3;
+  else if (fileCount === 0) score -= 8;
+  else if (fileCount >= 4) score -= 6;
+  if (input.recommendedAction.trim().length >= 40) score += 4;
+  const severity = input.severity.toLowerCase();
+  if (severity === "critical") score -= 6;
+  if (severity === "high") score -= 2;
+  const category = normalizeCategory(input.category);
+  if (HIGH_RISK_CATEGORIES.has(category)) score -= 10;
+  else if (MEDIUM_RISK_CATEGORIES.has(category)) score -= 5;
+  if (risk === "LOW") score += 4;
+  if (risk === "HIGH") score -= 6;
+  if (input.estimatedFixMinutes != null && input.estimatedFixMinutes <= 10) score += 3;
+  return Math.max(70, Math.min(98, score));
+}
+function assessScope(input, risk) {
+  const filesExpected = Math.max(input.affectedFiles.length, 1);
+  const minutes = input.estimatedFixMinutes ?? Math.max(5, filesExpected * 8);
+  let complexity = "low";
+  if (risk === "HIGH" || filesExpected >= 3) complexity = "high";
+  else if (risk === "MEDIUM" || filesExpected === 2) complexity = "medium";
+  const locPerMinute = complexity === "low" ? 3 : complexity === "medium" ? 4 : 5;
+  const estimatedLocMin = Math.max(3, Math.round(minutes * locPerMinute * 0.4));
+  const estimatedLocMax = Math.max(
+    estimatedLocMin + 5,
+    Math.round(minutes * locPerMinute * 1.1)
+  );
+  return {
+    filesExpected,
+    estimatedLocMin,
+    estimatedLocMax,
+    complexity,
+    complexityLabel: complexityLabel(complexity)
+  };
+}
+function assessSafeFix(input) {
+  const { implementationRisk, riskReason } = assessRisk(input);
+  const safeFixConfidence = assessConfidence(input, implementationRisk);
+  const estimatedScope = assessScope(input, implementationRisk);
+  return {
+    safeFixConfidence,
+    implementationRisk,
+    riskReason,
+    estimatedScope
+  };
+}
+function formatEstimatedFixTime(minutes) {
+  if (minutes == null || minutes <= 0) return "5 minutes";
+  if (minutes === 1) return "1 minute";
+  return `${minutes} minutes`;
+}
+
+// features/security-scanner/components/types.ts
+var findingFile = (finding) => finding.file_path ?? finding.filePath ?? finding.file ?? "";
+
+// brain/fix-prompt/build-production-fix-prompt.ts
+function bulletList(items) {
+  return items.map((item) => `- ${item}`).join("\n");
+}
+function section(title, body) {
+  return `${title}
+
+${body}`;
+}
+function severityImpact(severity) {
+  switch (severity.toLowerCase()) {
+    case "critical":
+      return "Critical \u2014 blocks safe production deployment until resolved.";
+    case "high":
+      return "High \u2014 prevents shipping until this production blocker is fixed.";
+    case "medium":
+      return "Medium \u2014 improves production readiness but does not block deployment.";
+    default:
+      return "Low \u2014 incremental improvement to production readiness.";
+  }
+}
+var SAFE_IMPLEMENTATION_PRINCIPLES = [
+  "Make the smallest possible safe change that fully resolves this blocker.",
+  "Do not introduce breaking changes to existing behaviour.",
+  "Preserve the user's project intent, architecture, and UX.",
+  "Prefer additive or narrowly scoped edits over refactors.",
+  "Stop once the blocker is resolved \u2014 do not improve unrelated code."
+];
+function projectedScoreAfterFix(input) {
+  const raw = (input.currentScore ?? 0) + (input.projectedScoreImpact ?? 0);
+  return Math.max(0, Math.min(100, Math.round(raw)));
+}
+function projectedVerdictStatusAfterFix(input) {
+  const current = input.currentVerdictStatus ?? "not_ready";
+  const projectedScore = projectedScoreAfterFix(input);
+  if (projectedScore >= 85 && current !== "ready_to_ship") {
+    return "ready_to_ship";
+  }
+  if (projectedScore >= 70) {
+    return "almost_ready";
+  }
+  if (projectedScore >= 55) {
+    return "needs_improvement";
+  }
+  if (current === "insufficient_data" || current === "analysis_failed") {
+    return current;
+  }
+  return "not_ready";
+}
+function projectedVerdictAfterFix(input) {
+  return VERDICT_STATUS_LABELS[projectedVerdictStatusAfterFix(input)];
+}
+function buildProductionFixPrompt(input) {
+  const guardedInput = sanitizeProductionFixPromptInput(input);
+  const guidance = guidanceForCategory(guardedInput.category);
+  const buildCommands = guardedInput.buildCommands ?? guidance.buildRequirements;
+  const projectedVerdictLabel = projectedVerdictAfterFix(guardedInput);
+  const currentVerdictLabel = guardedInput.currentVerdictStatus ? VERDICT_STATUS_LABELS[guardedInput.currentVerdictStatus] : "Not Ready to Ship";
+  const assessment = assessSafeFix(guardedInput);
+  const files = guardedInput.affectedFiles.length > 0 ? bulletList(guardedInput.affectedFiles) : "- Review the codebase area related to this issue during implementation.";
+  const stackLines = formatStackLines(guardedInput.stack).join("\n");
+  const severityLabel = guardedInput.severity.charAt(0).toUpperCase() + guardedInput.severity.slice(1);
+  const promptBody = [
+    section(
+      "PROJECT CONTEXT",
+      [
+        guardedInput.projectName ? `Project: ${guardedInput.projectName}` : null,
+        "Detected stack:",
+        stackLines
+      ].filter(Boolean).join("\n")
+    ),
+    section(
+      "PRODUCTION BLOCKER",
+      [
+        `Title: ${guardedInput.issueTitle}`,
+        `Severity: ${severityLabel}`,
+        guardedInput.affectedFiles[0] ? `Location: ${guardedInput.affectedFiles[0]}` : null,
+        "",
+        guardedInput.issueDescription,
+        "",
+        `Estimated impact: ${guardedInput.estimatedImpact ?? severityImpact(guardedInput.severity)}`
+      ].filter(Boolean).join("\n")
+    ),
+    section(
+      "WHY THIS MATTERS",
+      [
+        guardedInput.whyItMatters,
+        "",
+        `Production risk: ${assessment.riskReason}`,
+        `Implementation risk: ${assessment.implementationRisk}`
+      ].join("\n")
+    ),
+    section(
+      "GOAL",
+      [
+        `Fix this ${guardedInput.category.replace(/_/g, " ")} production blocker with the smallest possible safe change.`,
+        guardedInput.recommendedAction
+      ].join("\n")
+    ),
+    section("FILES TO REVIEW", files),
+    section("PRESERVE THE FOLLOWING", bulletList(guidance.preserve)),
+    section("DO NOT MODIFY", bulletList(guidance.doNotModify)),
+    section("IMPLEMENTATION REQUIREMENTS", [
+      "Apply the minimum required code changes using the safest possible approach.",
+      "Match existing project conventions, naming, and file structure.",
+      "",
+      guardedInput.recommendedAction
+    ].join("\n")),
+    section("SAFE IMPLEMENTATION PRINCIPLES", bulletList(SAFE_IMPLEMENTATION_PRINCIPLES)),
+    section("REGRESSION TESTS", bulletList(guidance.regressionTests)),
+    section(
+      "BUILD REQUIREMENTS",
+      [
+        "Before finishing, run:",
+        bulletList(buildCommands),
+        "",
+        "Confirm the fix does not introduce new TypeScript, lint, or test failures."
+      ].join("\n")
+    ),
+    section("CONFIDENCE SCORE", [
+      `Safe Fix Confidence: ${assessment.safeFixConfidence}%`,
+      "",
+      "This score represents how confident SequrAI is that this change can be implemented safely without introducing regressions."
+    ].join("\n")),
+    section("IMPLEMENTATION RISK", [
+      assessment.implementationRisk,
+      "",
+      assessment.riskReason
+    ].join("\n")),
+    section("ESTIMATED FIX TIME", formatEstimatedFixTime(guardedInput.estimatedFixMinutes)),
+    section("ESTIMATED SCOPE", [
+      `Files expected to change: ${assessment.estimatedScope.filesExpected}`,
+      `Estimated LOC modifications: ${assessment.estimatedScope.estimatedLocMin}\u2013${assessment.estimatedScope.estimatedLocMax}`,
+      `Complexity: ${assessment.estimatedScope.complexityLabel}`
+    ].join("\n")),
+    section(
+      "PROJECTED PRODUCTION VERDICT",
+      [
+        "Current:",
+        currentVerdictLabel,
+        "",
+        "Projected:",
+        projectedVerdictLabel,
+        guardedInput.projectedScoreImpact ? `(Estimated score improvement: +${guardedInput.projectedScoreImpact} points)` : null
+      ].filter(Boolean).join("\n")
+    )
+  ].join("\n\n------------------------------------------------------------\n\n");
+  const prompt = assertFixPromptOutputSafe(promptBody);
+  return { prompt, projectedVerdictLabel, assessment };
+}
+function fixPromptInputFromFinding(finding, options = {}) {
+  const path = findingFile(finding);
+  return {
+    projectName: options.projectName,
+    issueTitle: finding.title ?? "Production blocker",
+    issueDescription: finding.description ?? finding.recommendation ?? "",
+    category: finding.category ?? "security",
+    severity: finding.severity ?? "high",
+    whyItMatters: finding.impact ?? finding.description ?? "This issue prevents safe production deployment.",
+    estimatedImpact: finding.impact,
+    affectedFiles: path ? [path] : [],
+    stack: options.stack ?? { languages: [], frameworks: [], services: [] },
+    recommendedAction: options.recommendedAction ?? finding.recommendation ?? "Apply the smallest safe fix that resolves this production blocker.",
+    estimatedFixMinutes: options.estimatedFixMinutes,
+    currentVerdictStatus: options.currentVerdictStatus,
+    currentScore: options.currentScore,
+    projectedScoreImpact: options.projectedScoreImpact
+  };
+}
+
+// lib/local-analysis/local-safe-fix.ts
+var LocalSafeFixError = class extends Error {
+  constructor(code, message) {
+    super(message);
+    this.code = code;
+    this.name = "LocalSafeFixError";
+  }
+};
+var MAX_FIX_CANDIDATES = 8;
+var SEVERITY_RANK = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
+function loadCurrentFindingsForFix(store, identity) {
+  const scan = store.getLatestScan(identity.workspaceId);
+  if (!scan || scan.repositoryId !== identity.repositoryId) {
+    throw new LocalSafeFixError(
+      "no_scan_yet",
+      "No local scan has been recorded for this workspace yet. Run sequrai_local_audit (or audit_local_project) first."
+    );
+  }
+  return { scan, findings: store.getFindingsForScan(scan.scanId) };
+}
+function toCandidate(finding, correlationKey) {
+  return {
+    correlationKey,
+    ruleId: finding.rule_id ?? "",
+    title: finding.title,
+    severity: finding.severity ?? null,
+    filePath: finding.file_path ?? null
+  };
+}
+function buildLocalSafeFix(store, identity, input) {
+  const { scan, findings } = loadCurrentFindingsForFix(store, identity);
+  const verdict = store.getVerdictForScan(scan.scanId);
+  const candidates = findings.map((finding) => ({ finding, correlationKey: correlationKeyForPersistedFinding(finding, identity.workspaceId) })).sort(
+    (a, b) => (SEVERITY_RANK[a.finding.severity ?? ""] ?? 5) - (SEVERITY_RANK[b.finding.severity ?? ""] ?? 5) || a.correlationKey.localeCompare(b.correlationKey)
+  );
+  if (candidates.length === 0) {
+    return {
+      status: "no_findings",
+      scanId: scan.scanId,
+      note: "No findings in the latest scan -- nothing to fix."
+    };
+  }
+  const requested = input.correlationKey?.trim();
+  if (!requested) {
+    return {
+      status: "choose_finding",
+      scanId: scan.scanId,
+      candidates: candidates.slice(0, MAX_FIX_CANDIDATES).map((c) => toCandidate(c.finding, c.correlationKey)),
+      note: "Pass one of these correlationKey values as `correlationKey` to get a fix prompt for that specific finding."
+    };
+  }
+  const match = candidates.find((c) => c.correlationKey === requested);
+  if (!match) {
+    throw new LocalSafeFixError(
+      "finding_not_found",
+      `No finding with correlationKey "${requested}" was found in the latest scan (${scan.scanId}) for this workspace.`
+    );
+  }
+  const promptInput = fixPromptInputFromFinding(
+    {
+      id: match.finding.id,
+      title: match.finding.title,
+      severity: match.finding.severity ?? void 0,
+      category: match.finding.category ?? void 0,
+      rule_id: match.finding.rule_id ?? void 0,
+      file_path: match.finding.file_path ?? void 0,
+      start_line: match.finding.start_line ?? void 0,
+      recommendation: match.finding.recommendation ?? void 0,
+      evidence: match.finding.evidence ?? void 0
+    },
+    {
+      projectName: identity.projectName,
+      currentVerdictStatus: verdict?.status,
+      currentScore: verdict?.score ?? null
+    }
+  );
+  const result = buildProductionFixPrompt(promptInput);
+  return {
+    status: "prompt_ready",
+    scanId: scan.scanId,
+    finding: toCandidate(match.finding, match.correlationKey),
+    fixPrompt: result.prompt,
+    safeFixConfidence: result.assessment.safeFixConfidence,
+    implementationRisk: result.assessment.implementationRisk,
+    estimatedFixTime: formatEstimatedFixTime(promptInput.estimatedFixMinutes),
+    projectedScore: projectedScoreAfterFix(promptInput),
+    projectedVerdict: projectedVerdictStatusAfterFix(promptInput),
+    note: `SequrAI does not execute this fix. Review and apply it yourself, then run sequrai_local_audit (or audit_local_project) again -- the rescan's finding history will show this finding as RESOLVED if it is no longer detected in a complete scan, or PERSISTING if it still is. "Resolved" means not detected in the latest complete scan, not proven fixed or secure.`
+  };
+}
+
+// lib/local-analysis/local-identity.ts
+import { createHash, randomUUID } from "node:crypto";
+import { existsSync as existsSync4, mkdirSync as mkdirSync2, readFileSync as readFileSync2, realpathSync as realpathSync2, writeFileSync } from "node:fs";
+import { execFileSync as execFileSync2 } from "node:child_process";
+import { dirname as dirname2 } from "node:path";
+
+// lib/github/repository-reference.ts
+var OWNER_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
+var REPO_PATTERN = /^[A-Za-z0-9._-]{1,100}$/;
+function assertOwnerRepo(owner, repo) {
+  if (!OWNER_PATTERN.test(owner) || !REPO_PATTERN.test(repo)) {
+    throw new Error("GitHub repository must be in owner/repository format");
+  }
+  return { owner, repo };
+}
+function normalizeRepositoryPathParts(parts) {
+  const segments = parts.filter(Boolean);
+  if (segments.length === 2) {
+    return assertOwnerRepo(segments[0], segments[1]);
+  }
+  if (segments.length === 3 && segments[0] === segments[1]) {
+    return assertOwnerRepo(segments[0], segments[2]);
+  }
+  throw new Error("GitHub repository must be in owner/repository format");
+}
+function toGitHubHtmlUrl(ref) {
+  return `https://github.com/${ref.owner}/${ref.repo}`;
+}
+function normalizeStoredGitHubRepository(value) {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  const ref = parseGitHubRepository(trimmed);
+  return toGitHubHtmlUrl(ref);
+}
+function parseGitHubRepository(value) {
+  const trimmed = value.trim().replace(/\.git$/, "").replace(/\/+$/, "");
+  let path = trimmed;
+  if (trimmed.startsWith("git@github.com:")) {
+    path = trimmed.slice("git@github.com:".length);
+  } else if (/^https?:\/\//i.test(trimmed)) {
+    let url2;
+    try {
+      url2 = new URL(trimmed);
+    } catch {
+      throw new Error("Invalid GitHub repository");
+    }
+    if (url2.protocol !== "https:" || url2.hostname.toLowerCase() !== "github.com") {
+      throw new Error("Repository must be hosted on github.com");
+    }
+    path = url2.pathname;
+  }
+  const parts = path.split("/").filter(Boolean);
+  return normalizeRepositoryPathParts(parts);
+}
+
+// lib/local-analysis/local-identity.ts
+var PROJECT_FILE_RELATIVE_PATH = ".sequrai/project.json";
+var MAX_PROJECT_FILE_BYTES = 4096;
+function normalizeSshUrl(value) {
+  const match = /^ssh:\/\/git@github\.com\/(.+)$/i.exec(value.trim());
+  return match ? `git@github.com:${match[1]}` : value;
+}
+function canonicalRepositoryIdentity(remoteUrl, noRemoteFallbackSeed) {
+  const trimmed = remoteUrl?.trim();
+  if (!trimmed) {
+    const seed = noRemoteFallbackSeed ? `no-remote:${noRemoteFallbackSeed}` : "no-remote";
+    return { githubRepo: null, repositoryId: deterministicUuid(seed) };
+  }
+  let githubRepo = null;
+  try {
+    githubRepo = normalizeStoredGitHubRepository(normalizeSshUrl(trimmed));
+  } catch {
+    githubRepo = null;
+  }
+  if (githubRepo) {
+    return { githubRepo, repositoryId: deterministicUuid(githubRepo) };
+  }
+  return { githubRepo: null, repositoryId: deterministicUuid(trimmed) };
+}
+function sha256(value) {
+  return createHash("sha256").update(value).digest("hex");
+}
+function deterministicUuid(value) {
+  const bytes = createHash("sha256").update(value).digest();
+  bytes[6] = bytes[6] & 15 | 80;
+  bytes[8] = bytes[8] & 63 | 128;
+  const hex3 = bytes.subarray(0, 16).toString("hex");
+  return `${hex3.slice(0, 8)}-${hex3.slice(8, 12)}-${hex3.slice(12, 16)}-${hex3.slice(16, 20)}-${hex3.slice(20, 32)}`;
+}
+function readGitRemote(workspaceRoot) {
+  try {
+    return execFileSync2("git", ["remote", "get-url", "origin"], {
+      cwd: workspaceRoot,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"]
+    }).trim() || null;
+  } catch {
+    return null;
+  }
+}
+function readGitRootCommit(workspaceRoot) {
+  try {
+    return execFileSync2("git", ["rev-list", "--max-parents=0", "HEAD"], {
+      cwd: workspaceRoot,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"]
+    }).trim().split("\n")[0] || null;
+  } catch {
+    return null;
+  }
+}
+function resolveWorkspaceIdentity(workspaceRoot) {
+  const realPath = realpathSync2.native(workspaceRoot);
+  const remote = readGitRemote(workspaceRoot);
+  const fallbackSeed = remote ? null : readGitRootCommit(workspaceRoot);
+  return {
+    workspaceId: sha256(realPath),
+    repository: canonicalRepositoryIdentity(remote, fallbackSeed)
+  };
+}
+function readLocalProjectFile(workspaceRoot) {
+  let target;
+  try {
+    target = resolveSafePath(workspaceRoot, PROJECT_FILE_RELATIVE_PATH);
+  } catch (error51) {
+    if (error51 instanceof WorkspaceBoundaryError || error51.message === "symlink_not_allowed") {
+      return null;
+    }
+    throw error51;
+  }
+  if (!existsSync4(target)) return null;
+  let raw;
+  try {
+    raw = readFileSync2(target, "utf8");
+  } catch {
+    return null;
+  }
+  if (raw.length > MAX_PROJECT_FILE_BYTES) return null;
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  return validateProjectFileShape(parsed) ? parsed : null;
+}
+function validateProjectFileShape(value) {
+  if (!value || typeof value !== "object") return false;
+  const v = value;
+  if (v.version !== 1) return false;
+  if (typeof v.projectId !== "string" || !UUID_PATTERN.test(v.projectId)) return false;
+  if (typeof v.repositoryId !== "string" || !UUID_PATTERN.test(v.repositoryId)) return false;
+  if (typeof v.createdAt !== "string") return false;
+  if (!v.repository || typeof v.repository !== "object") return false;
+  const repo = v.repository;
+  if (repo.remote !== null && typeof repo.remote !== "string") return false;
+  const allowedTopKeys = /* @__PURE__ */ new Set(["version", "projectId", "repositoryId", "createdAt", "repository"]);
+  const allowedRepoKeys = /* @__PURE__ */ new Set(["remote"]);
+  if (Object.keys(v).some((k) => !allowedTopKeys.has(k))) return false;
+  if (Object.keys(repo).some((k) => !allowedRepoKeys.has(k))) return false;
+  return true;
+}
+var UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function ensureLocalProjectFile(workspaceRoot, repository) {
+  const existing = readLocalProjectFile(workspaceRoot);
+  if (existing && existing.repositoryId === repository.repositoryId) {
+    return existing;
+  }
+  const file2 = {
+    version: 1,
+    projectId: randomUUID(),
+    repositoryId: repository.repositoryId,
+    createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+    repository: { remote: repository.githubRepo }
+  };
+  try {
+    const target = resolveSafePath(workspaceRoot, PROJECT_FILE_RELATIVE_PATH);
+    mkdirSync2(dirname2(target), { recursive: true });
+    writeFileSync(target, `${JSON.stringify(file2, null, 2)}
+`, { mode: 420 });
+  } catch {
+  }
+  return file2;
+}
+async function resolveCloudBinding(githubRepo, resolve3) {
+  return resolve3(githubRepo);
+}
+async function resolveLocalIdentity(workspaceRoot, cloudResolver) {
+  const { workspaceId, repository } = resolveWorkspaceIdentity(workspaceRoot);
+  const projectFile = ensureLocalProjectFile(workspaceRoot, repository);
+  if (cloudResolver && repository.githubRepo) {
+    const bound = await resolveCloudBinding(repository.githubRepo, cloudResolver);
+    if (bound) {
+      return {
+        mode: "cloud-bound",
+        projectId: bound.projectId,
+        organizationId: bound.organizationId,
+        projectName: bound.projectName,
+        repositoryId: repository.repositoryId,
+        workspaceId
+      };
+    }
+  }
+  return {
+    mode: "local-only",
+    projectId: projectFile.projectId,
+    repositoryId: repository.repositoryId,
+    workspaceId
+  };
+}
+
+// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/server-only/index.js
+throw new Error(
+  "This module cannot be imported from a Client Component module. It should only be used from a Server Component."
+);
+
+// server/security-engines/opengrep/engine.ts
+import { randomUUID as randomUUID3 } from "node:crypto";
+import { writeFile } from "node:fs/promises";
+import { join as join4 } from "node:path";
+
+// server/security-engines/subprocess/safe-exec.ts
+import { spawn } from "node:child_process";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join as join3, resolve as resolve2, sep as sep2 } from "node:path";
+var DEFAULT_MAX_OUTPUT_BYTES = 32 * 1024 * 1024;
+function safeExec(options) {
+  const maxOutputBytes = options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES;
+  const started = Date.now();
+  if (options.signal?.aborted) {
+    return Promise.resolve({
+      exitCode: null,
+      stdout: "",
+      stderr: "",
+      timedOut: false,
+      aborted: true,
+      truncated: false,
+      durationMs: 0
+    });
+  }
+  return new Promise((resolve3) => {
+    const child = spawn(options.command, options.args, {
+      cwd: options.cwd,
+      // Explicit allowlist only -- never `env: process.env`. PATH is required
+      // for the child binary's own dynamic-library/subprocess resolution on
+      // some platforms; nothing credential-shaped is ever included here.
+      env: {
+        NODE_ENV: process.env.NODE_ENV ?? "production",
+        PATH: process.env.PATH ?? "",
+        ...options.envAllowlist ?? {}
+      },
+      // No shell: argv is passed directly to execve, so shell metacharacters
+      // in file paths/content can never be interpreted.
+      shell: false,
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    let stdout = "";
+    let stderr = "";
+    let stdoutBytes = 0;
+    let truncated = false;
+    let timedOut = false;
+    let aborted2 = false;
+    let settled = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill("SIGKILL");
+    }, options.timeoutMs);
+    const onAbort = () => {
+      aborted2 = true;
+      child.kill("SIGKILL");
+    };
+    options.signal?.addEventListener("abort", onAbort, { once: true });
+    child.stdout.on("data", (chunk) => {
+      if (stdoutBytes >= maxOutputBytes) {
+        truncated = true;
+        return;
+      }
+      stdoutBytes += chunk.length;
+      if (stdoutBytes > maxOutputBytes) {
+        truncated = true;
+        stdout += chunk.toString("utf8").slice(0, Math.max(0, maxOutputBytes - (stdoutBytes - chunk.length)));
+        return;
+      }
+      stdout += chunk.toString("utf8");
+    });
+    child.stderr.on("data", (chunk) => {
+      if (stderr.length < 64 * 1024) stderr += chunk.toString("utf8");
+    });
+    const finish = (exitCode) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      options.signal?.removeEventListener("abort", onAbort);
+      resolve3({
+        exitCode,
+        stdout,
+        stderr,
+        timedOut,
+        aborted: aborted2,
+        truncated,
+        durationMs: Date.now() - started
+      });
+    };
+    child.on("error", () => finish(null));
+    child.on("close", (code) => finish(code));
+  });
+}
+var WorkspacePathEscapeError = class extends Error {
+  constructor(attemptedPath) {
+    super(`Path escapes the isolated workspace: ${attemptedPath}`);
+    this.attemptedPath = attemptedPath;
+    this.name = "WorkspacePathEscapeError";
+  }
+};
+function resolveSafeWorkspacePath(workspaceDir, relativePath) {
+  const workspaceRoot = resolve2(workspaceDir);
+  const resolved = resolve2(workspaceRoot, relativePath);
+  if (resolved !== workspaceRoot && !resolved.startsWith(workspaceRoot + sep2)) {
+    throw new WorkspacePathEscapeError(relativePath);
+  }
+  return resolved;
+}
+async function withIsolatedWorkspace(prefix, fn) {
+  const dir = await mkdtemp(join3(tmpdir(), `${prefix}-`));
+  try {
+    return await fn(dir);
+  } finally {
+    await rm(dir, { recursive: true, force: true }).catch(() => void 0);
+  }
+}
+
+// server/security-engines/opengrep/normalize.ts
+import { createHash as createHash2, randomUUID as randomUUID2 } from "node:crypto";
+
+// server/security-evidence/canonical-finding.ts
+function deriveExploitability(input) {
+  const evidenceIds = input.evidence.map((e) => e.id);
+  const hasRuntimeEvidence = input.evidence.some(
+    (e) => e.kind === "DYNAMIC_TEST" || e.kind === "PENTEST" || e.kind === "HTTP_RESPONSE"
+  );
+  const severeEnough = input.severity === "critical" || input.severity === "high";
+  if (input.verificationStatus === "FALSE_POSITIVE" || input.verificationStatus === "NOT_APPLICABLE") {
+    return { level: "UNKNOWN", confidence: 0, evidenceIds };
+  }
+  if (input.verificationStatus === "CONFIRMED" && hasRuntimeEvidence) {
+    return { level: input.severity === "critical" ? "CRITICAL" : "HIGH", confidence: 0.95, evidenceIds };
+  }
+  if ((input.verificationStatus === "VALIDATED" || input.verificationStatus === "LIKELY") && evidenceIds.length > 0) {
+    return { level: severeEnough ? "HIGH" : "MEDIUM", confidence: 0.7, evidenceIds };
+  }
+  if (input.verificationStatus === "PARTIALLY_VALIDATED" && evidenceIds.length > 0) {
+    return { level: "MEDIUM", confidence: 0.55, evidenceIds };
+  }
+  if (input.verificationStatus === "POTENTIAL") {
+    return { level: "LOW", confidence: 0.4, evidenceIds };
+  }
+  return { level: "UNKNOWN", confidence: 0.2, evidenceIds };
+}
+
+// server/security-engines/opengrep/normalize.ts
+var SEVERITY_BY_RULE_ID = {
+  "js-sql-injection-taint": "high",
+  "js-command-injection-taint": "high",
+  "js-ssrf-taint": "high",
+  "py-sql-injection-taint": "high",
+  "py-command-injection-taint": "high",
+  "py-ssrf-taint": "high"
+};
+function severityForRule(ruleId) {
+  return SEVERITY_BY_RULE_ID[ruleId] ?? "medium";
+}
+function fromOpenGrepMatch(matches, ctx) {
+  const now = ctx.now ?? (/* @__PURE__ */ new Date()).toISOString();
+  const findings = [];
+  const evidence = [];
+  for (const match of matches) {
+    const hasTaintTrace = Boolean(match.extra.dataflow_trace);
+    const evidenceItem = {
+      id: randomUUID2(),
+      kind: hasTaintTrace ? "TAINT_FLOW" : "AST",
+      label: match.extra.message.slice(0, 160),
+      detail: JSON.stringify({
+        message: match.extra.message,
+        location: { path: match.path, ...match.start },
+        dataflowTrace: match.extra.dataflow_trace ?? null
+      }),
+      redacted: false,
+      capturedAt: now
+    };
+    evidence.push(evidenceItem);
+    const severity = severityForRule(match.check_id);
+    const verificationStatus = hasTaintTrace ? "LIKELY" : "POTENTIAL";
+    const fingerprint = createHash2("sha256").update(`opengrep:${match.check_id}:${match.path}:${match.start.line}:${match.start.col}`).digest("hex").slice(0, 32);
+    findings.push({
+      id: `opengrep:${fingerprint}`,
+      fingerprint,
+      title: `${match.check_id}: ${match.extra.message.split(".")[0]?.slice(0, 120) ?? match.extra.message.slice(0, 120)}`,
+      description: match.extra.message,
+      category: match.extra.metadata?.category ?? "injection",
+      severity,
+      confidence: hasTaintTrace ? "high" : "medium",
+      exploitability: deriveExploitability({ verificationStatus, severity, evidence: [evidenceItem] }),
+      verificationStatus,
+      sources: ["external_engine"],
+      evidence: [evidenceItem],
+      affectedFiles: [match.path],
+      affectedEndpoints: [],
+      affectedAssets: [],
+      remediation: "Use a parameterized query, an argument-array process API, or validate/allowlist the destination before this value reaches its sink.",
+      references: [],
+      cwe: match.extra.metadata?.cwe ? [match.extra.metadata.cwe] : [],
+      owasp: match.extra.metadata?.owasp ? [match.extra.metadata.owasp] : [],
+      mitre: [],
+      scanId: ctx.scanId,
+      projectId: ctx.projectId,
+      organizationId: ctx.organizationId,
+      createdAt: now,
+      updatedAt: now
+    });
+  }
+  return { findings, evidence };
+}
+
+// server/security-engines/opengrep/engine.ts
+var OPENGREP_VERSION = "1.30.0";
+var RULES_FILE = process.env.OPENGREP_RULES_PATH?.trim() || join4(__dirname, "rules", "taint-rules.yaml");
+var DEFAULT_PER_FILE_TIMEOUT_MS = 15e3;
+var MAX_FILES_PER_EXECUTION = 60;
+var MAX_TARGET_FILE_BYTES = 1e6;
+var LANGUAGE_BY_EXTENSION = {
+  ".js": "javascript",
+  ".jsx": "javascript",
+  ".mjs": "javascript",
+  ".cjs": "javascript",
+  ".ts": "typescript",
+  ".tsx": "typescript",
+  ".py": "python"
+};
+function resolveBinaryPath() {
+  return process.env.OPENGREP_BINARY_PATH?.trim() || null;
+}
+function detectLanguage(path) {
+  const ext = path.slice(path.lastIndexOf(".")).toLowerCase();
+  return LANGUAGE_BY_EXTENSION[ext] ?? null;
+}
+function parseOpenGrepJson(stdout) {
+  const start = stdout.indexOf("{");
+  if (start === -1) return null;
+  try {
+    return JSON.parse(stdout.slice(start));
+  } catch {
+    return null;
+  }
+}
+async function runOnSingleFile(binary, workspaceDir, originalPath, content, language, timeoutMs, signal) {
+  const safeName = `${randomUUID3()}${originalPath.slice(originalPath.lastIndexOf("."))}`;
+  const targetPath = join4(workspaceDir, safeName);
+  await writeFile(targetPath, content, "utf8");
+  const result = await safeExec({
+    command: binary,
+    args: ["-json", "-lang", language, "-rules", RULES_FILE, "-max_memory", "1024", "-timeout", "10", targetPath],
+    cwd: workspaceDir,
+    timeoutMs,
+    signal
+  });
+  if (result.aborted) {
+    return { matches: [], errorMessage: "cancelled" };
+  }
+  if (result.timedOut) {
+    return { matches: [], errorMessage: "per-file timeout exceeded" };
+  }
+  if (result.exitCode !== 0 && result.exitCode !== 1) {
+    const stderrExcerpt = result.stderr.trim().slice(-500);
+    return {
+      matches: [],
+      errorMessage: `opengrep-core exited ${result.exitCode}${stderrExcerpt ? `: ${stderrExcerpt}` : ""}`
+    };
+  }
+  const parsed = parseOpenGrepJson(result.stdout);
+  if (!parsed) {
+    return { matches: [], errorMessage: "could not parse opengrep-core JSON output" };
+  }
+  const matches = (parsed.results ?? []).map((m) => ({ ...m, path: originalPath }));
+  return { matches, errorMessage: null };
+}
+function createOpenGrepEngine() {
+  return {
+    id: "opengrep",
+    name: "OpenGrep",
+    version: OPENGREP_VERSION,
+    capabilities: [
+      { id: "ast", engine: "opengrep", expensive: true, networkRequired: false, requiresExternalBinary: true },
+      { id: "taint", engine: "opengrep", expensive: true, networkRequired: false, requiresExternalBinary: true },
+      { id: "dataflow", engine: "opengrep", expensive: true, networkRequired: false, requiresExternalBinary: true },
+      { id: "semantic", engine: "opengrep", expensive: true, networkRequired: false, requiresExternalBinary: true }
+    ],
+    applicability(input) {
+      const applicableFiles = input.files.filter((f) => detectLanguage(f.path) != null);
+      if (applicableFiles.length === 0) {
+        return { applicable: false, reason: "no JS/TS/Python source files found", matchedCapabilities: [] };
+      }
+      return {
+        applicable: true,
+        reason: `${applicableFiles.length} JS/TS/Python file(s) found`,
+        matchedCapabilities: ["ast", "taint", "dataflow", "semantic"]
+      };
+    },
+    async healthCheck() {
+      const binary = resolveBinaryPath();
+      if (!binary) {
+        return { healthy: false, reason: "OPENGREP_BINARY_PATH is not configured" };
+      }
+      const result = await safeExec({ command: binary, args: ["-version"], cwd: "/tmp", timeoutMs: 5e3 });
+      if (result.exitCode !== 0) {
+        return { healthy: false, reason: `opengrep-core -version exited ${result.exitCode}` };
+      }
+      const versionMatch = result.stdout.match(/([\d.]+)/);
+      return { healthy: true, reason: "opengrep-core responded to -version", detectedVersion: versionMatch?.[1] };
+    },
+    async execute(input) {
+      const executionId = randomUUID3();
+      const startedAt = (/* @__PURE__ */ new Date()).toISOString();
+      const started = Date.now();
+      const binary = resolveBinaryPath();
+      const base = {
+        engine: "opengrep",
+        engineVersion: OPENGREP_VERSION,
+        executionId,
+        scanId: input.scanId,
+        projectId: input.projectId,
+        organizationId: input.organizationId,
+        startedAt,
+        capabilitiesAttempted: ["ast", "taint", "dataflow", "semantic"]
+      };
+      if (!binary) {
+        return {
+          ...base,
+          status: "SKIPPED",
+          completedAt: (/* @__PURE__ */ new Date()).toISOString(),
+          durationMs: Date.now() - started,
+          capabilitiesCompleted: [],
+          findings: [],
+          evidence: [],
+          metrics: {},
+          errors: [{ code: "not_configured", message: "OPENGREP_BINARY_PATH is not set for this environment" }]
+        };
+      }
+      const targets = input.files.map((f) => ({ ...f, language: detectLanguage(f.path) })).filter((f) => f.language != null && f.content.length <= MAX_TARGET_FILE_BYTES).slice(0, MAX_FILES_PER_EXECUTION);
+      const allMatches = [];
+      const errors = [];
+      let filesScanned = 0;
+      try {
+        await withIsolatedWorkspace("opengrep-scan", async (workspaceDir) => {
+          for (const target of targets) {
+            if (input.signal?.aborted) break;
+            const perFileTimeout = Math.min(DEFAULT_PER_FILE_TIMEOUT_MS, input.timeoutMs);
+            let outcome = await runOnSingleFile(
+              binary,
+              workspaceDir,
+              target.path,
+              target.content,
+              target.language,
+              perFileTimeout,
+              input.signal
+            );
+            if (outcome.errorMessage?.startsWith("opengrep-core exited") && !input.signal?.aborted) {
+              const retry = await runOnSingleFile(
+                binary,
+                workspaceDir,
+                target.path,
+                target.content,
+                target.language,
+                perFileTimeout,
+                input.signal
+              );
+              if (retry.errorMessage) {
+                outcome = { matches: retry.matches, errorMessage: `${outcome.errorMessage} (retry also failed: ${retry.errorMessage})` };
+              } else {
+                outcome = retry;
+              }
+            }
+            const { matches, errorMessage } = outcome;
+            filesScanned += 1;
+            allMatches.push(...matches);
+            if (errorMessage) {
+              errors.push({ code: "file_scan_failed", message: `${target.path}: ${errorMessage}` });
+            }
+          }
+        });
+      } catch (error51) {
+        errors.push({ code: "workspace_error", message: error51 instanceof Error ? error51.message : String(error51) });
+      }
+      const { findings, evidence } = fromOpenGrepMatch(allMatches, {
+        scanId: input.scanId,
+        projectId: input.projectId,
+        organizationId: input.organizationId
+      });
+      const failedAll = filesScanned > 0 && errors.length >= filesScanned;
+      const status = failedAll ? "FAILED" : errors.length > 0 ? "PARTIAL" : "COMPLETED";
+      return {
+        ...base,
+        status,
+        completedAt: (/* @__PURE__ */ new Date()).toISOString(),
+        durationMs: Date.now() - started,
+        capabilitiesCompleted: status === "FAILED" ? [] : ["ast", "taint", "dataflow", "semantic"],
+        findings,
+        evidence,
+        metrics: { filesScanned, matchesFound: allMatches.length },
+        errors
+      };
+    }
+  };
+}
+
+// server/security-engines/trivy/engine.ts
+import { randomUUID as randomUUID5 } from "node:crypto";
+import { mkdir, writeFile as writeFile2 } from "node:fs/promises";
+import { dirname as dirname3 } from "node:path";
+
+// server/security-engines/trivy/normalize.ts
+import { createHash as createHash3, randomUUID as randomUUID4 } from "node:crypto";
+function mapSeverity(trivySeverity) {
+  switch (trivySeverity.toUpperCase()) {
+    case "CRITICAL":
+      return "critical";
+    case "HIGH":
+      return "high";
+    case "MEDIUM":
+      return "medium";
+    case "LOW":
+      return "low";
+    default:
+      return "info";
+  }
+}
+function fromTrivyReport(report, ctx) {
+  const now = ctx.now ?? (/* @__PURE__ */ new Date()).toISOString();
+  const findings = [];
+  const evidence = [];
+  for (const result of report.Results ?? []) {
+    for (const vuln of result.Vulnerabilities ?? []) {
+      const severity = mapSeverity(vuln.Severity);
+      const cvss = vuln.CVSS?.nvd?.V3Score ?? vuln.CVSS?.ghsa?.V3Score ?? null;
+      const evidenceItem = {
+        id: randomUUID4(),
+        kind: "DEPENDENCY",
+        label: `${vuln.VulnerabilityID} in ${vuln.PkgName}@${vuln.InstalledVersion}`,
+        detail: JSON.stringify({
+          vulnerabilityId: vuln.VulnerabilityID,
+          package: vuln.PkgName,
+          installedVersion: vuln.InstalledVersion,
+          fixedVersion: vuln.FixedVersion ?? null,
+          trivySeverity: vuln.Severity,
+          cvssV3: cvss,
+          target: result.Target
+        }),
+        redacted: false,
+        capturedAt: now
+      };
+      evidence.push(evidenceItem);
+      const verificationStatus = "LIKELY";
+      const fingerprint = createHash3("sha256").update(`trivy:${vuln.VulnerabilityID}:${vuln.PkgName}:${vuln.InstalledVersion}`).digest("hex").slice(0, 32);
+      findings.push({
+        id: `trivy:${fingerprint}`,
+        fingerprint,
+        title: `${vuln.VulnerabilityID}: ${vuln.Title ?? vuln.PkgName}`,
+        description: vuln.Description ?? `${vuln.PkgName}@${vuln.InstalledVersion} is affected by ${vuln.VulnerabilityID}.`,
+        category: "dependency",
+        severity,
+        confidence: "high",
+        exploitability: deriveExploitability({ verificationStatus, severity, evidence: [evidenceItem] }),
+        verificationStatus,
+        sources: ["external_engine"],
+        evidence: [evidenceItem],
+        affectedFiles: [result.Target],
+        affectedEndpoints: [],
+        affectedAssets: [`pkg:${vuln.PkgName}@${vuln.InstalledVersion}`],
+        remediation: vuln.FixedVersion ? `Upgrade ${vuln.PkgName} from ${vuln.InstalledVersion} to ${vuln.FixedVersion} or later.` : `No fixed version is published yet for ${vuln.PkgName} ${vuln.VulnerabilityID} -- track the advisory and consider a mitigating control.`,
+        references: vuln.PrimaryURL ? [vuln.PrimaryURL] : [],
+        cwe: vuln.CweIDs ?? [],
+        owasp: [],
+        mitre: [],
+        scanId: ctx.scanId,
+        projectId: ctx.projectId,
+        organizationId: ctx.organizationId,
+        createdAt: now,
+        updatedAt: now
+      });
+    }
+  }
+  return { findings, evidence };
+}
+
+// server/security-engines/trivy/engine.ts
+var TRIVY_VERSION = "0.74.0";
+var DEPENDENCY_MANIFESTS = [
+  "package.json",
+  "package-lock.json",
+  "pnpm-lock.yaml",
+  "yarn.lock",
+  "requirements.txt",
+  "poetry.lock",
+  "Pipfile.lock",
+  "Cargo.lock",
+  "go.sum",
+  "Gemfile.lock",
+  "composer.lock"
+];
+var DOCKERFILE_PATTERN = /(^|\/)Dockerfile(\.[a-zA-Z0-9_-]+)?$/;
+var TERRAFORM_PATTERN = /\.tf$/;
+var K8S_HINT_PATTERN = /(^|\/)(k8s|kubernetes)\//i;
+function resolveBinaryPath2() {
+  return process.env.TRIVY_BINARY_PATH?.trim() || null;
+}
+function resolveCacheDir() {
+  return process.env.TRIVY_CACHE_DIR?.trim() || "/tmp/sequrai-trivy-cache";
+}
+function hasDependencyManifest(files) {
+  return files.some((f) => DEPENDENCY_MANIFESTS.some((name) => f.path.endsWith(name)));
+}
+function hasDockerfile(files) {
+  return files.some((f) => DOCKERFILE_PATTERN.test(f.path));
+}
+function hasTerraform(files) {
+  return files.some((f) => TERRAFORM_PATTERN.test(f.path));
+}
+function hasKubernetesManifest(files) {
+  return files.some((f) => K8S_HINT_PATTERN.test(f.path) && (f.path.endsWith(".yaml") || f.path.endsWith(".yml")));
+}
+async function ensureVulnerabilityDbWarm(binary, cacheDir, timeoutMs) {
+  const result = await safeExec({
+    command: binary,
+    args: ["fs", "--cache-dir", cacheDir, "--download-db-only", "/tmp"],
+    cwd: "/tmp",
+    timeoutMs,
+    envAllowlist: { DOCKER_CONFIG: cacheDir }
+  });
+  return result.exitCode === 0;
+}
+function createTrivyEngine() {
+  return {
+    id: "trivy",
+    name: "Trivy",
+    version: TRIVY_VERSION,
+    capabilities: [
+      { id: "dependencies", engine: "trivy", expensive: true, networkRequired: true, requiresExternalBinary: true },
+      { id: "containers", engine: "trivy", expensive: true, networkRequired: true, requiresExternalBinary: true },
+      { id: "iac", engine: "trivy", expensive: false, networkRequired: false, requiresExternalBinary: true },
+      { id: "sbom", engine: "trivy", expensive: true, networkRequired: true, requiresExternalBinary: true }
+    ],
+    applicability(input) {
+      const matched = [];
+      if (hasDependencyManifest(input.files)) matched.push("dependencies", "sbom");
+      if (hasDockerfile(input.files)) matched.push("containers");
+      if (hasTerraform(input.files) || hasKubernetesManifest(input.files)) matched.push("iac");
+      if (matched.length === 0) {
+        return { applicable: false, reason: "no dependency manifest, Dockerfile, or IaC file found", matchedCapabilities: [] };
+      }
+      return { applicable: true, reason: `matched: ${matched.join(", ")}`, matchedCapabilities: matched };
+    },
+    async healthCheck() {
+      const binary = resolveBinaryPath2();
+      if (!binary) return { healthy: false, reason: "TRIVY_BINARY_PATH is not configured" };
+      const result = await safeExec({ command: binary, args: ["--version"], cwd: "/tmp", timeoutMs: 5e3 });
+      if (result.exitCode !== 0) return { healthy: false, reason: `trivy --version exited ${result.exitCode}` };
+      const versionMatch = result.stdout.match(/Version:\s*([\d.]+)/);
+      return { healthy: true, reason: "trivy responded to --version", detectedVersion: versionMatch?.[1] };
+    },
+    async execute(input) {
+      const executionId = randomUUID5();
+      const startedAt = (/* @__PURE__ */ new Date()).toISOString();
+      const started = Date.now();
+      const binary = resolveBinaryPath2();
+      const capabilitiesAttempted = ["dependencies", "sbom", "containers", "iac"];
+      const base = {
+        engine: "trivy",
+        engineVersion: TRIVY_VERSION,
+        executionId,
+        scanId: input.scanId,
+        projectId: input.projectId,
+        organizationId: input.organizationId,
+        startedAt,
+        capabilitiesAttempted: [...capabilitiesAttempted]
+      };
+      if (!binary) {
+        return {
+          ...base,
+          status: "SKIPPED",
+          completedAt: (/* @__PURE__ */ new Date()).toISOString(),
+          durationMs: Date.now() - started,
+          capabilitiesCompleted: [],
+          findings: [],
+          evidence: [],
+          metrics: {},
+          errors: [{ code: "not_configured", message: "TRIVY_BINARY_PATH is not set for this environment" }]
+        };
+      }
+      const cacheDir = resolveCacheDir();
+      const errors = [];
+      if (input.signal?.aborted) {
+        return {
+          ...base,
+          status: "SKIPPED",
+          completedAt: (/* @__PURE__ */ new Date()).toISOString(),
+          durationMs: Date.now() - started,
+          capabilitiesCompleted: [],
+          findings: [],
+          evidence: [],
+          metrics: {},
+          errors: [{ code: "cancelled", message: "Cancelled before Trivy started." }]
+        };
+      }
+      try {
+        const dbWarm = await ensureVulnerabilityDbWarm(binary, cacheDir, Math.min(6e4, input.timeoutMs));
+        if (!dbWarm) {
+          errors.push({ code: "db_update_failed", message: "vulnerability database could not be updated/verified" });
+        }
+      } catch (error51) {
+        errors.push({ code: "db_update_error", message: error51 instanceof Error ? error51.message : String(error51) });
+      }
+      let report = null;
+      try {
+        report = await withIsolatedWorkspace("trivy-scan", async (workspaceDir) => {
+          for (const file2 of input.files) {
+            let target;
+            try {
+              target = resolveSafeWorkspacePath(workspaceDir, file2.path);
+            } catch (pathError) {
+              if (pathError instanceof WorkspacePathEscapeError) {
+                errors.push({ code: "unsafe_path_skipped", message: pathError.message });
+                continue;
+              }
+              throw pathError;
+            }
+            await mkdir(dirname3(target), { recursive: true });
+            await writeFile2(target, file2.content, "utf8");
+          }
+          const result = await safeExec({
+            command: binary,
+            args: [
+              "fs",
+              "--cache-dir",
+              cacheDir,
+              "--skip-db-update",
+              "--offline-scan",
+              "--scanners",
+              "vuln,misconfig",
+              "--format",
+              "json",
+              workspaceDir
+            ],
+            cwd: workspaceDir,
+            timeoutMs: input.timeoutMs,
+            envAllowlist: { DOCKER_CONFIG: cacheDir },
+            signal: input.signal
+          });
+          if (result.aborted) {
+            errors.push({ code: "cancelled", message: "trivy fs scan was cancelled" });
+            return null;
+          }
+          if (result.timedOut) {
+            errors.push({ code: "timeout", message: "trivy fs scan exceeded the execution timeout" });
+            return null;
+          }
+          if (result.exitCode !== 0) {
+            errors.push({ code: "scan_failed", message: `trivy exited ${result.exitCode}` });
+            return null;
+          }
+          try {
+            return JSON.parse(result.stdout);
+          } catch {
+            errors.push({ code: "parse_failed", message: "could not parse trivy JSON output" });
+            return null;
+          }
+        });
+      } catch (error51) {
+        errors.push({ code: "workspace_error", message: error51 instanceof Error ? error51.message : String(error51) });
+      }
+      const { findings, evidence } = report ? fromTrivyReport(report, { scanId: input.scanId, projectId: input.projectId, organizationId: input.organizationId }) : { findings: [], evidence: [] };
+      const status = report ? errors.length > 0 ? "PARTIAL" : "COMPLETED" : "FAILED";
+      return {
+        ...base,
+        status,
+        completedAt: (/* @__PURE__ */ new Date()).toISOString(),
+        durationMs: Date.now() - started,
+        capabilitiesCompleted: report ? [...capabilitiesAttempted] : [],
+        findings,
+        evidence,
+        metrics: { vulnerabilitiesFound: findings.length },
+        errors
+      };
+    }
+  };
+}
+
+// server/security-engines/crypto/engine.ts
+import { createHash as createHash4, randomUUID as randomUUID6 } from "node:crypto";
+
+// server/security-engines/crypto/rules.ts
+var SECURITY_CONTEXT = /password|passwd|secret|token|session|auth|credential|login|signin|api[_-]?key/i;
+var SAFE_CONTEXT = /cache|etag|fingerprint|checksum|dedupe|dedup|thumbnail|asset[_-]?hash|test|fixture|mock|example/i;
+function contextWindow2(lines, lineIndex, radius = 3) {
+  const start = Math.max(0, lineIndex - radius);
+  const end = Math.min(lines.length, lineIndex + radius + 1);
+  return lines.slice(start, end).join("\n");
+}
+function isSafeContext(window) {
+  return SAFE_CONTEXT.test(window) && !SECURITY_CONTEXT.test(window);
+}
+var RULES = [
+  {
+    id: "crypto.weak-hash-password",
+    // createHash("md5"/"sha1") -- only flagged when nearby context looks
+    // security-sensitive (section 15); a plain md5 used for a cache key is
+    // not this rule's concern and is suppressed by isSafeContext().
+    pattern: /createHash\(\s*["'](md5|sha1)["']\s*\)/i,
+    requiresSecurityContext: true,
+    severity: "high",
+    cwe: ["CWE-327", "CWE-916"],
+    message: "MD5/SHA-1 used in a security-sensitive context (password/token/credential nearby) -- these are not password-hashing algorithms and are trivially reversible/collidable.",
+    remediation: "Use Argon2id, scrypt, or bcrypt for password hashing. Never use MD5/SHA-1 to derive or verify a password, token, or session identifier."
+  },
+  {
+    id: "crypto.aes-ecb-mode",
+    pattern: /createCipheriv\(\s*["']aes-\d+-ecb["']/i,
+    requiresSecurityContext: false,
+    severity: "high",
+    cwe: ["CWE-327"],
+    message: "AES in ECB mode was used -- ECB does not use an IV and leaks structural patterns in the plaintext (identical plaintext blocks produce identical ciphertext blocks).",
+    remediation: "Use an authenticated mode such as AES-256-GCM instead of AES-ECB."
+  },
+  {
+    id: "crypto.hardcoded-key-or-iv",
+    // A literal string/hex assigned to a variable named like a key/IV/secret,
+    // NOT read from process.env/config/KMS.
+    pattern: /(const|let|var)\s+\w*(secret|encryptionKey|cipherKey|iv|nonce)\w*\s*[:=]\s*["'][A-Za-z0-9+/=]{8,}["']/i,
+    requiresSecurityContext: false,
+    severity: "critical",
+    cwe: ["CWE-798", "CWE-321"],
+    message: "A cryptographic key, IV, or nonce appears to be hardcoded as a string literal rather than loaded from an environment variable or key-management system.",
+    remediation: "Load encryption keys/IVs from an environment variable or KMS, generate IVs/nonces fresh per operation with a CSPRNG, and rotate any key that was ever committed to source control."
+  },
+  {
+    id: "crypto.insecure-random-token",
+    // Math.random() feeding something that looks like a token/session/password.
+    pattern: /Math\.random\(\)/,
+    requiresSecurityContext: true,
+    severity: "high",
+    cwe: ["CWE-338"],
+    message: "Math.random() was used in a security-sensitive context (token/session/password nearby) -- it is not cryptographically secure and its output is predictable.",
+    remediation: "Use crypto.randomBytes()/crypto.randomUUID() (Node) or an equivalent CSPRNG for any token, session identifier, password-reset code, or similar security-sensitive value."
+  },
+  {
+    id: "crypto.jwt-none-algorithm",
+    pattern: /algorithm[s]?\s*:\s*\[?\s*["']none["']/i,
+    requiresSecurityContext: false,
+    severity: "critical",
+    cwe: ["CWE-347"],
+    message: 'JWT verification explicitly allows the "none" algorithm, which accepts an unsigned token as valid.',
+    remediation: 'Remove "none" from the allowed algorithms list and explicitly pin verification to a single strong algorithm (e.g. RS256 or ES256).'
+  },
+  {
+    id: "crypto.jwt-weak-algorithm",
+    pattern: /algorithm[s]?\s*:\s*\[?\s*["'](HS1|RS1)["']/i,
+    requiresSecurityContext: false,
+    severity: "high",
+    cwe: ["CWE-327"],
+    message: "JWT verification allows a deprecated/weak signing algorithm.",
+    remediation: "Pin JWT verification to a modern algorithm such as RS256 or ES256."
+  },
+  {
+    id: "crypto.tls-verification-disabled",
+    pattern: /rejectUnauthorized\s*:\s*false|NODE_TLS_REJECT_UNAUTHORIZED\s*=\s*["']?0["']?/,
+    requiresSecurityContext: false,
+    severity: "critical",
+    cwe: ["CWE-295"],
+    message: "TLS certificate verification is explicitly disabled, allowing man-in-the-middle attacks against this connection.",
+    remediation: "Remove the override and fix the underlying certificate issue (e.g. install a proper CA bundle) instead of disabling verification."
+  }
+];
+function runCryptoRules(files) {
+  const matches = [];
+  for (const file2 of files) {
+    const lines = file2.content.split("\n");
+    for (const rule of RULES) {
+      for (let i = 0; i < lines.length; i += 1) {
+        const line = lines[i] ?? "";
+        if (!rule.pattern.test(line)) continue;
+        const window = contextWindow2(lines, i);
+        if (rule.requiresSecurityContext && !SECURITY_CONTEXT.test(window)) continue;
+        if (isSafeContext(window)) continue;
+        matches.push({
+          ruleId: rule.id,
+          path: file2.path,
+          line: i + 1,
+          snippet: line.trim().slice(0, 200),
+          message: rule.message,
+          severity: rule.severity,
+          cwe: rule.cwe,
+          remediation: rule.remediation
+        });
+      }
+    }
+  }
+  return matches;
+}
+
+// server/security-engines/crypto/engine.ts
+var CRYPTO_ENGINE_VERSION = "1.0.0";
+var SOURCE_EXTENSIONS2 = [".js", ".jsx", ".ts", ".tsx", ".py", ".go", ".rb", ".java"];
+function createCryptoEngine() {
+  return {
+    id: "crypto",
+    name: "SequrAI Native Cryptography Engine",
+    version: CRYPTO_ENGINE_VERSION,
+    capabilities: [
+      { id: "cryptography", engine: "crypto", expensive: false, networkRequired: false, requiresExternalBinary: false }
+    ],
+    applicability(input) {
+      const applicableFiles = input.files.filter((f) => SOURCE_EXTENSIONS2.some((ext) => f.path.endsWith(ext)));
+      if (applicableFiles.length === 0) {
+        return { applicable: false, reason: "no source files in a supported language", matchedCapabilities: [] };
+      }
+      return { applicable: true, reason: `${applicableFiles.length} source file(s) found`, matchedCapabilities: ["cryptography"] };
+    },
+    async healthCheck() {
+      return { healthy: true, reason: "native engine, no external dependency", detectedVersion: CRYPTO_ENGINE_VERSION };
+    },
+    async execute(input) {
+      const executionId = randomUUID6();
+      const startedAt = (/* @__PURE__ */ new Date()).toISOString();
+      const started = Date.now();
+      const now = (/* @__PURE__ */ new Date()).toISOString();
+      const filesWithContent = input.files.filter((f) => SOURCE_EXTENSIONS2.some((ext) => f.path.endsWith(ext)));
+      const matches = runCryptoRules(filesWithContent);
+      const findings = [];
+      const evidence = [];
+      for (const match of matches) {
+        const evidenceItem = {
+          id: randomUUID6(),
+          kind: "SOURCE_CODE",
+          label: `${match.ruleId} at ${match.path}:${match.line}`,
+          detail: match.snippet,
+          redacted: false,
+          capturedAt: now
+        };
+        evidence.push(evidenceItem);
+        const fingerprint = createHash4("sha256").update(`crypto:${match.ruleId}:${match.path}:${match.line}`).digest("hex").slice(0, 32);
+        const verificationStatus = "POTENTIAL";
+        findings.push({
+          id: `crypto:${fingerprint}`,
+          fingerprint,
+          title: `${match.ruleId}: ${match.message.split(".")[0]?.slice(0, 120) ?? match.message.slice(0, 120)}`,
+          description: match.message,
+          category: "cryptography",
+          severity: match.severity,
+          confidence: "medium",
+          exploitability: deriveExploitability({ verificationStatus, severity: match.severity, evidence: [evidenceItem] }),
+          verificationStatus,
+          sources: ["native_scanner"],
+          evidence: [evidenceItem],
+          affectedFiles: [match.path],
+          affectedEndpoints: [],
+          affectedAssets: [],
+          remediation: match.remediation,
+          references: [],
+          cwe: match.cwe,
+          owasp: [],
+          mitre: [],
+          scanId: input.scanId,
+          projectId: input.projectId,
+          organizationId: input.organizationId,
+          createdAt: now,
+          updatedAt: now
+        });
+      }
+      return {
+        engine: "crypto",
+        engineVersion: CRYPTO_ENGINE_VERSION,
+        executionId,
+        scanId: input.scanId,
+        projectId: input.projectId,
+        organizationId: input.organizationId,
+        status: "COMPLETED",
+        startedAt,
+        completedAt: (/* @__PURE__ */ new Date()).toISOString(),
+        durationMs: Date.now() - started,
+        capabilitiesAttempted: ["cryptography"],
+        capabilitiesCompleted: ["cryptography"],
+        findings,
+        evidence,
+        metrics: { filesScanned: filesWithContent.length, matchesFound: matches.length },
+        errors: []
+      };
+    }
+  };
+}
+
+// server/security-engines/scorecard/engine.ts
+import { createHash as createHash5, randomUUID as randomUUID7 } from "node:crypto";
+var SCORECARD_API_BASE = "https://api.securityscorecards.dev";
+var REQUEST_TIMEOUT_MS = 8e3;
+var WEAK_CHECK_THRESHOLD = 5;
+function severityForCheckScore(score) {
+  if (score <= 0) return "high";
+  if (score <= 3) return "medium";
+  return "low";
+}
+function parseGithubRepo(githubRepo) {
+  const match = githubRepo.match(/^([^/\s]+)\/([^/\s]+)$/);
+  if (!match) return null;
+  return { owner: match[1], repo: match[2] };
+}
+function createScorecardEngine() {
+  return {
+    id: "scorecard",
+    name: "OpenSSF Scorecard",
+    version: "api-live",
+    capabilities: [
+      { id: "supply-chain-posture", engine: "scorecard", expensive: false, networkRequired: true, requiresExternalBinary: false }
+    ],
+    applicability(input) {
+      if (!input.githubRepo || !parseGithubRepo(input.githubRepo)) {
+        return { applicable: false, reason: "no connected GitHub repository", matchedCapabilities: [] };
+      }
+      return { applicable: true, reason: `GitHub repository ${input.githubRepo} available`, matchedCapabilities: ["supply-chain-posture"] };
+    },
+    async healthCheck() {
+      try {
+        const response = await fetch(`${SCORECARD_API_BASE}/projects/github.com/ossf/scorecard`, {
+          signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+        });
+        return { healthy: response.ok, reason: response.ok ? "Scorecard API reachable" : `Scorecard API returned ${response.status}` };
+      } catch (error51) {
+        return { healthy: false, reason: error51 instanceof Error ? error51.message : "Scorecard API unreachable" };
+      }
+    },
+    async execute(input) {
+      const executionId = randomUUID7();
+      const startedAt = (/* @__PURE__ */ new Date()).toISOString();
+      const started = Date.now();
+      const now = (/* @__PURE__ */ new Date()).toISOString();
+      const base = {
+        engine: "scorecard",
+        engineVersion: "api-live",
+        executionId,
+        scanId: input.scanId,
+        projectId: input.projectId,
+        organizationId: input.organizationId,
+        startedAt,
+        capabilitiesAttempted: ["supply-chain-posture"]
+      };
+      const parsed = input.githubRepo ? parseGithubRepo(input.githubRepo) : null;
+      if (!parsed) {
+        return {
+          ...base,
+          status: "SKIPPED",
+          completedAt: (/* @__PURE__ */ new Date()).toISOString(),
+          durationMs: Date.now() - started,
+          capabilitiesCompleted: [],
+          findings: [],
+          evidence: [],
+          metrics: {},
+          errors: [{ code: "not_applicable", message: "no connected GitHub repository to query" }]
+        };
+      }
+      try {
+        const response = await fetch(`${SCORECARD_API_BASE}/projects/github.com/${parsed.owner}/${parsed.repo}`, {
+          signal: AbortSignal.timeout(Math.min(REQUEST_TIMEOUT_MS, input.timeoutMs))
+        });
+        if (response.status === 404) {
+          return {
+            ...base,
+            status: "SKIPPED",
+            completedAt: (/* @__PURE__ */ new Date()).toISOString(),
+            durationMs: Date.now() - started,
+            capabilitiesCompleted: [],
+            findings: [],
+            evidence: [],
+            metrics: {},
+            errors: [{ code: "not_indexed", message: "OpenSSF Scorecard has not indexed this repository (common for private repos)" }]
+          };
+        }
+        if (!response.ok) {
+          return {
+            ...base,
+            status: "FAILED",
+            completedAt: (/* @__PURE__ */ new Date()).toISOString(),
+            durationMs: Date.now() - started,
+            capabilitiesCompleted: [],
+            findings: [],
+            evidence: [],
+            metrics: {},
+            errors: [{ code: "http_error", message: `Scorecard API returned ${response.status}` }]
+          };
+        }
+        const data = await response.json();
+        const findings = [];
+        const evidence = [];
+        for (const check2 of data.checks ?? []) {
+          if (check2.score > WEAK_CHECK_THRESHOLD || check2.score < 0) continue;
+          const evidenceItem = {
+            id: randomUUID7(),
+            kind: "CONFIGURATION",
+            label: `Scorecard check "${check2.name}": ${check2.score}/10`,
+            detail: check2.reason,
+            redacted: false,
+            capturedAt: now
+          };
+          evidence.push(evidenceItem);
+          const severity = severityForCheckScore(check2.score);
+          const verificationStatus = "POTENTIAL";
+          const fingerprint = createHash5("sha256").update(`scorecard:${input.githubRepo}:${check2.name}`).digest("hex").slice(0, 32);
+          findings.push({
+            id: `scorecard:${fingerprint}`,
+            fingerprint,
+            title: `Supply-chain posture weakness: ${check2.name}`,
+            description: check2.reason,
+            category: "supply-chain-posture",
+            severity,
+            confidence: "medium",
+            exploitability: deriveExploitability({ verificationStatus, severity, evidence: [evidenceItem] }),
+            verificationStatus,
+            sources: ["external_engine"],
+            evidence: [evidenceItem],
+            affectedFiles: [],
+            affectedEndpoints: [],
+            affectedAssets: [`github.com/${parsed.owner}/${parsed.repo}`],
+            remediation: `See the Scorecard "${check2.name}" check documentation for the specific remediation steps.`,
+            references: check2.documentation?.url ? [check2.documentation.url] : [],
+            cwe: [],
+            owasp: [],
+            mitre: [],
+            scanId: input.scanId,
+            projectId: input.projectId,
+            organizationId: input.organizationId,
+            createdAt: now,
+            updatedAt: now
+          });
+        }
+        return {
+          ...base,
+          status: "COMPLETED",
+          completedAt: (/* @__PURE__ */ new Date()).toISOString(),
+          durationMs: Date.now() - started,
+          capabilitiesCompleted: ["supply-chain-posture"],
+          findings,
+          evidence,
+          metrics: { overallScore: data.score, weakChecksFound: findings.length },
+          errors: []
+        };
+      } catch (error51) {
+        return {
+          ...base,
+          status: "FAILED",
+          completedAt: (/* @__PURE__ */ new Date()).toISOString(),
+          durationMs: Date.now() - started,
+          capabilitiesCompleted: [],
+          findings: [],
+          evidence: [],
+          metrics: {},
+          errors: [{ code: "request_failed", message: error51 instanceof Error ? error51.message : String(error51) }]
+        };
+      }
+    }
+  };
+}
+
+// server/security-engines/registry.ts
+function listExternalAndNativeAdjacentEngines() {
+  return [createOpenGrepEngine(), createTrivyEngine(), createCryptoEngine(), createScorecardEngine()];
+}
+
+// server/security-engines/orchestrate.ts
+var DEFAULT_TIMEOUT_MS = 6e4;
+async function runSecurityEngines(input, engines = listExternalAndNativeAdjacentEngines()) {
+  const timeoutMs = input.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const applicabilityInput = { files: input.files, githubRepo: input.githubRepo };
+  const results = await Promise.all(
+    engines.map(async (engine) => {
+      const applicability = engine.applicability(applicabilityInput);
+      if (!applicability.applicable) {
+        return {
+          engine: engine.id,
+          engineVersion: engine.version,
+          executionId: `${engine.id}-skipped`,
+          scanId: input.scanId,
+          projectId: input.projectId,
+          organizationId: input.organizationId,
+          status: "SKIPPED",
+          startedAt: (/* @__PURE__ */ new Date()).toISOString(),
+          completedAt: (/* @__PURE__ */ new Date()).toISOString(),
+          durationMs: 0,
+          capabilitiesAttempted: [],
+          capabilitiesCompleted: [],
+          findings: [],
+          evidence: [],
+          metrics: {},
+          errors: [{ code: "not_applicable", message: applicability.reason }]
+        };
+      }
+      if (input.signal?.aborted) {
+        return {
+          engine: engine.id,
+          engineVersion: engine.version,
+          executionId: `${engine.id}-cancelled`,
+          scanId: input.scanId,
+          projectId: input.projectId,
+          organizationId: input.organizationId,
+          status: "SKIPPED",
+          startedAt: (/* @__PURE__ */ new Date()).toISOString(),
+          completedAt: (/* @__PURE__ */ new Date()).toISOString(),
+          durationMs: 0,
+          capabilitiesAttempted: [],
+          capabilitiesCompleted: [],
+          findings: [],
+          evidence: [],
+          metrics: {},
+          errors: [{ code: "cancelled", message: "Cancelled before this engine started." }]
+        };
+      }
+      try {
+        return await engine.execute({
+          scanId: input.scanId,
+          projectId: input.projectId,
+          organizationId: input.organizationId,
+          files: input.files,
+          githubRepo: input.githubRepo,
+          timeoutMs,
+          signal: input.signal
+        });
+      } catch (error51) {
+        return {
+          engine: engine.id,
+          engineVersion: engine.version,
+          executionId: `${engine.id}-crashed`,
+          scanId: input.scanId,
+          projectId: input.projectId,
+          organizationId: input.organizationId,
+          status: "FAILED",
+          startedAt: (/* @__PURE__ */ new Date()).toISOString(),
+          completedAt: (/* @__PURE__ */ new Date()).toISOString(),
+          durationMs: 0,
+          capabilitiesAttempted: [],
+          capabilitiesCompleted: [],
+          findings: [],
+          evidence: [],
+          metrics: {},
+          errors: [{ code: "engine_crashed", message: error51 instanceof Error ? error51.message : String(error51) }]
+        };
+      }
+    })
+  );
+  return {
+    results,
+    findings: results.flatMap((r) => r.findings),
+    evidence: results.flatMap((r) => r.evidence)
+  };
+}
+
+// features/security-scanner/config.ts
+var DEFAULT_SCAN_CONFIG = {
+  maxFileBytes: 1024 * 1024,
+  maxTotalBytes: 40 * 1024 * 1024,
+  maxFiles: 8e3,
+  maxDurationMs: 12e4,
+  ignoredSegments: DEFAULT_IGNORED_SEGMENTS,
+  includeExtensions: [...SOURCE_EXTENSIONS],
+  now: () => Date.now()
+};
+function resolveConfig(input = {}) {
+  return {
+    ...DEFAULT_SCAN_CONFIG,
+    ...input,
+    ignoredSegments: [...input.ignoredSegments ?? DEFAULT_SCAN_CONFIG.ignoredSegments],
+    now: input.now ?? DEFAULT_SCAN_CONFIG.now
+  };
 }
 
 // features/security-analysis/sbom/purl.ts
@@ -16048,7 +19520,7 @@ function createSbomComponent(input) {
 }
 
 // features/security-analysis/sbom/lockfile-parsers.ts
-function basename(path) {
+function basename2(path) {
   const parts = path.split("/");
   return parts[parts.length - 1] ?? path;
 }
@@ -16284,7 +19756,7 @@ var LOCKFILE_PARSERS = {
   "package.json": parsePackageJson
 };
 function parseLockfile(path, content) {
-  const fileName = basename(path);
+  const fileName = basename2(path);
   const parser = LOCKFILE_PARSERS[fileName];
   if (!parser) return [];
   try {
@@ -16308,7 +19780,7 @@ function discoverComponentsFromFiles(files, options = {}) {
     "go.sum"
   ];
   for (const file2 of files) {
-    const name = basename(file2.path);
+    const name = basename2(file2.path);
     if (!lockfileNames.includes(name)) continue;
     const parsed = parseLockfile(file2.path, file2.content);
     if (parsed.length === 0) continue;
@@ -16320,7 +19792,7 @@ function discoverComponentsFromFiles(files, options = {}) {
   }
   if (components.length === 0) {
     for (const file2 of files) {
-      if (basename(file2.path) !== "package.json") continue;
+      if (basename2(file2.path) !== "package.json") continue;
       const parsed = parseLockfile(file2.path, file2.content);
       if (parsed.length > 0) {
         lockfiles.push(file2.path);
@@ -16333,7 +19805,7 @@ function discoverComponentsFromFiles(files, options = {}) {
   } else {
     const existing = new Set(components.map((component) => `${component.ecosystem}:${component.name}`));
     for (const file2 of files) {
-      if (basename(file2.path) !== "package.json") continue;
+      if (basename2(file2.path) !== "package.json") continue;
       const parsed = parseLockfile(file2.path, file2.content);
       for (const component of parsed) {
         const key = `${component.ecosystem}:${component.name}`;
@@ -16351,7 +19823,7 @@ function discoverComponentsFromFiles(files, options = {}) {
 }
 function buildSbomSnapshot(files, options = {}) {
   const components = discoverComponentsFromFiles(files, options);
-  const pkg = files.find((file2) => basename(file2.path) === "package.json");
+  const pkg = files.find((file2) => basename2(file2.path) === "package.json");
   let projectName = "unknown";
   let projectVersion = "0.0.0";
   if (pkg) {
@@ -16575,14 +20047,14 @@ async function fetchWithRetry(url2, init, fetchImpl, timeoutMs, retries = 1) {
     const response = await fetchImpl(url2, { ...init, signal: controller.signal });
     clearTimeout(timeout);
     if (response.status === 429 && retries > 0) {
-      await new Promise((resolve2) => setTimeout(resolve2, 2e3));
+      await new Promise((resolve3) => setTimeout(resolve3, 2e3));
       return fetchWithRetry(url2, init, fetchImpl, timeoutMs, retries - 1);
     }
     return response;
   } catch (error51) {
     clearTimeout(timeout);
     if (retries > 0) {
-      await new Promise((resolve2) => setTimeout(resolve2, 1e3));
+      await new Promise((resolve3) => setTimeout(resolve3, 1e3));
       return fetchWithRetry(url2, init, fetchImpl, timeoutMs, retries - 1);
     }
     if (error51 instanceof Error && error51.name === "AbortError") {
@@ -16727,11 +20199,6 @@ var NPM_BUILTIN_PACKAGES = /* @__PURE__ */ new Set([
   "process"
 ]);
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/server-only/index.js
-throw new Error(
-  "This module cannot be imported from a Client Component module. It should only be used from a Server Component."
-);
-
 // features/security-analysis/shared/dependency-process-cache.ts
 var TRUTHY = /* @__PURE__ */ new Set(["1", "true", "yes", "on"]);
 function isExplicitlyTruthy(value) {
@@ -16848,10 +20315,10 @@ var Semaphore = class {
       this.active += 1;
       return () => this.release();
     }
-    return new Promise((resolve2) => {
+    return new Promise((resolve3) => {
       this.waiters.push(() => {
         this.active += 1;
-        resolve2(() => this.release());
+        resolve3(() => this.release());
       });
     });
   }
@@ -17156,18 +20623,6 @@ function stubNormalizedFile(path, content = "") {
   };
 }
 
-// features/security-scanner/redaction.ts
-var VALUE_ASSIGNMENT = /((?:api[_-]?key|secret|token|password|private[_-]?key)\s*[:=]\s*["']?)([^"'\s,;]{4,})/gi;
-var KNOWN_TOKEN = /\b(?:sk_(?:live|test)_[A-Za-z0-9]{8,}|gh[oprsu]_[A-Za-z0-9_]{12,}|AKIA[A-Z0-9]{12,}|eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,})\b/g;
-function maskSecret(value) {
-  if (value.length <= 6) return "[REDACTED]";
-  return `${value.slice(0, 3)}\u2026${value.slice(-2)}`;
-}
-function redactEvidence(value, maxLength = 240) {
-  const redacted = value.replace(VALUE_ASSIGNMENT, (_, prefix, secret) => `${prefix}${maskSecret(secret)}`).replace(KNOWN_TOKEN, (secret) => maskSecret(secret));
-  return redacted.length > maxLength ? `${redacted.slice(0, maxLength)}\u2026` : redacted;
-}
-
 // features/security-scanner/rules/helpers.ts
 function patternFindings(ruleId, files, specs) {
   const findings = [];
@@ -17232,12 +20687,6 @@ var POSTGREST_EXPOSURE_SIGNAL = /NEXT_PUBLIC_SUPABASE_(?:URL|ANON_KEY)|SUPABASE_
 function repoExposesPostgresToClients(files) {
   return files.some((file2) => SUPABASE_CONFIG_PATH.test(file2.path) || POSTGREST_EXPOSURE_SIGNAL.test(file2.content));
 }
-
-// features/security-scanner/rules/known-safe-patterns.ts
-var RECOGNIZED_AUTH_PATTERN = /(?:auth\(|getServerSession|getServerAuthContext|getCachedServerAuthContext|getScanRequestContext|getScanAccessContext|resolveMcpAuth|assertInternalOpsAuthorized|verifyInternalOpsRequest|serve\s*\(|signingKey|verifyGitHubWebhookSignature|verifyStripeWebhookSignature|constructEvent|webhookSecret|exchangeCodeForSession|currentUser|getUser|verifyToken|requireAuth|Authorization|supabase\.auth\.getUser|requireCiProjectAccess|requireProjectApiAccess|code_verifier|codeVerifier|assertActiveOAuthClient)/i;
-var RECOGNIZED_AUTHZ_PATTERN = /(?:authorize|permission|role|ownerId|organizationId|organization_id|userId\s*[=!]==?|can\w+\(|policy|getServerAuthContext|getCachedServerAuthContext|getScanRequestContext|getScanAccessContext|resolveMcpAuth|assertInternalOpsAuthorized|verifyInternalOpsRequest|requireProjectApiAccess|getProjectAccessForUser|canAccessRepository|verifyGitHubWebhookSignature|verifyStripeWebhookSignature|constructEvent|requireCiProjectAccess)/i;
-var TEST_OR_EXAMPLE_PATH = /(?:^|\/)(?:test|tests|__tests__|fixtures?|examples?)(?:\/|$)|\.(?:test|spec)\./i;
-var MACHINE_ENDPOINT_PATH = /\/oauth\/(?:register|revoke|token)(?:\/|$)|\/\.well-known\/|\/auth\/callback\/|\/webhooks?\/|\/api\/internal\//i;
 
 // features/security-scanner/rules/builtin.ts
 var TEST_OR_EXAMPLE2 = /(?:^|\/)(?:test|tests|__tests__|fixtures?|examples?)(?:\/|$)|\.(?:test|spec)\./i;
@@ -19429,11 +22878,11 @@ var MCP_SECURITY_RULE_ID = "mcp.security";
 var MCP_SECURITY_SOURCE_TOOL = "scan_mcp_server";
 
 // features/security-analysis/mcp/discover.ts
-function basename2(path) {
+function basename3(path) {
   const parts = path.split("/");
   return parts[parts.length - 1] ?? path;
 }
-function dirname(path) {
+function dirname4(path) {
   const index = path.lastIndexOf("/");
   return index >= 0 ? path.slice(0, index) : "";
 }
@@ -19466,10 +22915,10 @@ function discoverMcpTargets(files) {
   const seenSourcePaths = /* @__PURE__ */ new Set();
   for (const file2 of files) {
     if (shouldSkipMcpPath(file2.path)) continue;
-    const name = basename2(file2.path);
+    const name = basename3(file2.path);
     if (name === MCP_MANIFEST_FILENAME) {
       manifestFiles.push(file2);
-      manifestDirs.add(dirname(file2.path));
+      manifestDirs.add(dirname4(file2.path));
     }
     if (name === MCP_BASELINE_FILENAME) {
       baselineFiles.push(file2);
@@ -19478,7 +22927,7 @@ function discoverMcpTargets(files) {
   for (const file2 of files) {
     if (shouldSkipMcpPath(file2.path)) continue;
     if (!isScannableSource(file2.path)) continue;
-    const dir = dirname(file2.path);
+    const dir = dirname4(file2.path);
     const nearManifest = manifestDirs.has(dir);
     const mcpPath = isMcpRelatedPath(file2.path);
     const mcpContent = hasMcpServerContent(file2.content);
@@ -19492,8 +22941,8 @@ function discoverMcpTargets(files) {
   return { sourceFiles, manifestFiles, baselineFiles };
 }
 function findBaselineForManifest(manifestPath, baselineFiles) {
-  const dir = dirname(manifestPath);
-  return baselineFiles.find((file2) => dirname(file2.path) === dir);
+  const dir = dirname4(manifestPath);
+  return baselineFiles.find((file2) => dirname4(file2.path) === dir);
 }
 
 // features/security-analysis/mcp/spoofing.ts
@@ -19910,12 +23359,12 @@ function dedupeMcpFindings(findings) {
 }
 
 // features/security-analysis/mcp/scan-manifest.ts
-import { createHash } from "node:crypto";
+import { createHash as createHash6 } from "node:crypto";
 function escapeRegex2(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 function hashTool(tool) {
-  return createHash("sha256").update(JSON.stringify({ name: tool.name, description: tool.description })).digest("hex");
+  return createHash6("sha256").update(JSON.stringify({ name: tool.name, description: tool.description })).digest("hex");
 }
 function checkSchemaManipulation(tool, manifestPath) {
   const findings = [];
@@ -20528,7 +23977,7 @@ function checkDependencyConfusion(packageName, ecosystem) {
 }
 
 // features/security-analysis/package-security/extract-dependencies.ts
-function basename3(path) {
+function basename4(path) {
   return path.split("/").pop() ?? path;
 }
 function lineAt(content, needle) {
@@ -20688,7 +24137,7 @@ function extractDeclaredDependencies(files, options) {
   const deps = [];
   const workspaceNames = /* @__PURE__ */ new Set();
   for (const file2 of files) {
-    const name = basename3(file2.path);
+    const name = basename4(file2.path);
     if (name !== "package.json") continue;
     try {
       const manifest = JSON.parse(file2.content);
@@ -20701,7 +24150,7 @@ function extractDeclaredDependencies(files, options) {
     }
   }
   for (const file2 of files) {
-    const name = basename3(file2.path);
+    const name = basename4(file2.path);
     try {
       switch (name) {
         case "package.json":
@@ -20768,7 +24217,7 @@ function sourcePriority(source) {
 function detectPrimaryEcosystems(files) {
   const ecosystems = /* @__PURE__ */ new Set();
   for (const file2 of files) {
-    const name = basename3(file2.path);
+    const name = basename4(file2.path);
     if (name === "package.json" || name.endsWith("package-lock.json") || name === "yarn.lock") {
       ecosystems.add("npm");
     }
@@ -21028,7 +24477,7 @@ function percentiles(valuesMs) {
 function remediationFor2(finding) {
   return PACKAGE_SECURITY_CATEGORY_REMEDIATION[finding.category] ?? "Review this dependency declaration and confirm the package identity before production use.";
 }
-function mapSeverity(severity) {
+function mapSeverity2(severity) {
   switch (severity) {
     case "CRITICAL":
       return "CRITICAL";
@@ -21058,7 +24507,7 @@ function packageSecurityRawFindingToSecurityAnalysis(finding) {
   const normalized = normalizeExternalFinding(
     {
       ruleId: finding.rule,
-      severity: mapSeverity(finding.severity),
+      severity: mapSeverity2(finding.severity),
       category: mapCategory2(finding.category),
       message: finding.message,
       file: finding.file,
@@ -21186,7 +24635,7 @@ var PROMPT_CATEGORY_REMEDIATION = {
 };
 
 // features/security-analysis/prompt-injection/context.ts
-function basename4(path) {
+function basename5(path) {
   return path.split("/").pop() ?? path;
 }
 function hasLlmIntegration(content) {
@@ -21194,7 +24643,7 @@ function hasLlmIntegration(content) {
 }
 function classifyFileContext(path, content) {
   const lowerPath = path.toLowerCase();
-  const name = basename4(lowerPath);
+  const name = basename5(lowerPath);
   if (/\.(md|mdx|rst|txt)$/i.test(path) || /(^|\/)docs?\//.test(lowerPath) || /^readme/i.test(name)) {
     return {
       kind: "documentation",
@@ -21402,117 +24851,6 @@ var PROMPT_CODE_RULES = [
     fileTypes: [".py"],
     confidence: "HIGH",
     tier: "likely-exploitable",
-    action: "BLOCK"
-  }
-];
-
-// features/security-analysis/prompt-injection/rules-content.ts
-function p(source, flags = "i") {
-  return new RegExp(source, flags);
-}
-var PROMPT_CONTENT_RULES = [
-  {
-    id: "generic.prompt.security.ignore-previous-instructions",
-    severity: "ERROR",
-    category: "prompt-injection-jailbreak",
-    message: "Prompt injection detected: instruction override attempt trying to bypass system instructions.",
-    patterns: [
-      p("ignore\\s+(all\\s+)?(previous|prior|above|earlier)\\s+(instructions?|prompts?|rules?|guidelines?)"),
-      p("disregard\\s+(all\\s+)?(previous|prior|above)\\s+(instructions?|prompts?)"),
-      p("forget\\s+(all\\s+)?(previous|prior|earlier)\\s+(instructions?|prompts?)")
-    ],
-    confidence: "HIGH",
-    action: "BLOCK"
-  },
-  {
-    id: "generic.prompt.security.new-instructions-injection",
-    severity: "ERROR",
-    category: "malicious-injection",
-    message: "Prompt injection detected: attempt to inject new instructions replacing system behavior.",
-    patterns: [
-      p("your\\s+new\\s+(instructions?|task|role|purpose)\\s+(is|are)\\s*:"),
-      p("from\\s+now\\s+on\\s*,?\\s+(you|your)\\s+(will|must|should|are)"),
-      p("new\\s+system\\s+prompt\\s*:")
-    ],
-    confidence: "HIGH",
-    action: "BLOCK"
-  },
-  {
-    id: "generic.prompt.security.jailbreak-dan",
-    severity: "ERROR",
-    category: "prompt-injection-jailbreak",
-    message: "Jailbreak attempt detected: DAN-style attack attempting to bypass safety measures.",
-    patterns: [p("you\\s+are\\s+(now\\s+)?DAN"), p("do\\s+anything\\s+now")],
-    confidence: "HIGH",
-    action: "BLOCK"
-  },
-  {
-    id: "generic.prompt.security.system-prompt-extraction",
-    severity: "ERROR",
-    category: "prompt-injection-content",
-    message: "System prompt extraction attempt detected.",
-    patterns: [
-      p("(reveal|show|display|print|output|repeat|tell\\s+me)\\s+(your|the)\\s+(system\\s+)?prompt"),
-      p("what\\s+(is|are)\\s+your\\s+(system\\s+)?instructions?")
-    ],
-    confidence: "MEDIUM",
-    action: "WARN"
-  },
-  {
-    id: "generic.prompt.security.delimiter-injection",
-    severity: "ERROR",
-    category: "prompt-injection-delimiter",
-    message: "Delimiter injection attack: attempting to escape context boundaries.",
-    patterns: [p("---+\\s*(system|assistant|user)\\s*---+"), p("<\\|.*\\|>")],
-    confidence: "HIGH",
-    action: "BLOCK"
-  },
-  {
-    id: "generic.prompt.security.jailbreak-developer-mode",
-    severity: "ERROR",
-    category: "prompt-injection-jailbreak",
-    message: "Developer/debug mode jailbreak: fake mode activation attempt.",
-    patterns: [
-      p("(enable|activate|enter|switch\\s+to)\\s+(developer|debug|admin|unrestricted)\\s+mode"),
-      p("you\\s+(now\\s+)?have\\s+(no|zero)\\s+(restrictions|limitations|filters|guardrails)")
-    ],
-    confidence: "HIGH",
-    action: "BLOCK"
-  },
-  {
-    id: "generic.prompt.security.natural-language-exfiltration",
-    severity: "ERROR",
-    category: "exfiltration",
-    message: "Data exfiltration attempt in prompt-like text.",
-    patterns: [
-      p("send\\s+.{0,40}(secret|password|key|token|credential|env).{0,40}to\\s+\\S+"),
-      p("(show|print|display|read|cat|output)\\s+(me\\s+)?(the\\s+)?(\\.env|env\\s+file|environment\\s+variable)")
-    ],
-    confidence: "HIGH",
-    action: "BLOCK"
-  },
-  {
-    id: "generic.prompt.security.output-manipulation",
-    severity: "ERROR",
-    category: "prompt-injection-output",
-    message: "Output manipulation attempt in prompt-like text.",
-    patterns: [
-      p("(start|begin)\\s+(your|every|all)\\s+(response|reply|output|answer)\\s+with"),
-      p("(always|must|shall)\\s+(include|prepend|append|add).{0,30}(response|reply|output)")
-    ],
-    confidence: "MEDIUM",
-    action: "WARN"
-  },
-  {
-    id: "agent.exfil.security.env-file-access",
-    severity: "ERROR",
-    category: "exfiltration",
-    message: "Explicit request for .env or environment secrets in prompt-like text.",
-    patterns: [
-      p("(show|print|display|read|cat|output|echo)\\s+(me\\s+)?(the\\s+)?(\\.env|env\\s+file|environment\\s+variable)"),
-      p("what\\s+(are|is)\\s+(in\\s+)?(the|my)\\s+\\.?env\\s+(file)?")
-    ],
-    confidence: "HIGH",
     action: "BLOCK"
   }
 ];
@@ -21797,341 +25135,6 @@ var promptInjectionRule = {
     return securityAnalysisFindingsToDrafts(findings);
   }
 };
-
-// server/mcp/security/delimiters.ts
-var UNTRUSTED_DATA_START = "<<<SEQURAI_UNTRUSTED_REPOSITORY_DATA";
-var UNTRUSTED_DATA_END = "<<<END_SEQURAI_UNTRUSTED_REPOSITORY_DATA>>>";
-var ZERO_WIDTH_SPACE = "\u200B";
-function breakMarker(marker) {
-  return `${marker.slice(0, 1)}${ZERO_WIDTH_SPACE}${marker.slice(1)}`;
-}
-function neutralizeDelimiterLookalikes(content) {
-  return content.split(UNTRUSTED_DATA_START).join(breakMarker(UNTRUSTED_DATA_START)).split(UNTRUSTED_DATA_END).join(breakMarker(UNTRUSTED_DATA_END));
-}
-function wrapUntrustedRepositoryData(content, options) {
-  const pathAttr = options.path ? ` path="${options.path.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"` : "";
-  const safeContent = neutralizeDelimiterLookalikes(content);
-  return `${UNTRUSTED_DATA_START} source="${options.source}"${pathAttr}>>>
-${safeContent}
-${UNTRUSTED_DATA_END}`;
-}
-function containsUntrustedDelimiter(content) {
-  return content.includes(UNTRUSTED_DATA_START) || content.includes(UNTRUSTED_DATA_END);
-}
-function extractBarePromptRegions(prompt) {
-  if (!containsUntrustedDelimiter(prompt)) {
-    return [prompt];
-  }
-  const regions = [];
-  let cursor = 0;
-  while (cursor < prompt.length) {
-    const start = prompt.indexOf(UNTRUSTED_DATA_START, cursor);
-    if (start === -1) {
-      regions.push(prompt.slice(cursor));
-      break;
-    }
-    if (start > cursor) {
-      regions.push(prompt.slice(cursor, start));
-    }
-    const end = prompt.indexOf(UNTRUSTED_DATA_END, start);
-    if (end === -1) {
-      regions.push(prompt.slice(start));
-      break;
-    }
-    cursor = end + UNTRUSTED_DATA_END.length;
-  }
-  return regions.filter((region) => region.trim().length > 0);
-}
-
-// server/mcp/security/input-guard.ts
-function lineNumberForMatch(content, index) {
-  return content.slice(0, Math.max(0, index)).split("\n").length;
-}
-function excerpt(content, index, length = 120) {
-  const start = Math.max(0, index - 20);
-  const end = Math.min(content.length, index + length);
-  return content.slice(start, end).replace(/\s+/g, " ").trim();
-}
-function scanInjectionPatterns(content, options) {
-  if (!content?.trim()) return [];
-  const detections = [];
-  const seen = /* @__PURE__ */ new Set();
-  for (const rule of PROMPT_CONTENT_RULES) {
-    for (const pattern of rule.patterns) {
-      const match = pattern.exec(content);
-      if (!match || match.index == null) continue;
-      const key = `${rule.id}:${match.index}:${match[0]}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      detections.push({
-        ruleId: rule.id,
-        category: rule.category,
-        message: rule.message,
-        action: rule.action === "BLOCK" ? "BLOCK" : "WARN",
-        matchedText: excerpt(content, match.index, match[0].length + 40),
-        line: lineNumberForMatch(content, match.index),
-        source: options.source,
-        path: options.path ?? null
-      });
-    }
-  }
-  return detections;
-}
-function guardUntrustedInput(content, options) {
-  const original = content ?? "";
-  const detections = scanInjectionPatterns(original, options);
-  const hadInjectionPattern = detections.some((d) => d.action === "BLOCK") || detections.length > 0;
-  const shouldWrap = options.forceWrap === true || hadInjectionPattern;
-  const forPrompt = shouldWrap ? wrapUntrustedRepositoryData(original, { source: options.source, path: options.path ?? null }) : original;
-  return {
-    original,
-    forPrompt,
-    detections,
-    hadInjectionPattern
-  };
-}
-
-// server/mcp/security/output-guard.ts
-var REQUIRED_SAFE_FIX_SECTIONS = [
-  "PROJECT CONTEXT",
-  "PRODUCTION BLOCKER",
-  "SAFE IMPLEMENTATION PRINCIPLES",
-  "DO NOT MODIFY"
-];
-var INSTRUCTION_OVERRIDE_OUTSIDE_DELIMITERS = /ignore\s+(all\s+)?(previous|prior|above)\s+(instructions?|prompts?)/i;
-function redactBareInjectionLines(prompt) {
-  const lines = prompt.split("\n");
-  return lines.filter((line) => !INSTRUCTION_OVERRIDE_OUTSIDE_DELIMITERS.test(line)).join("\n");
-}
-function sanitizeBareRegions(prompt) {
-  if (!extractBarePromptRegions(prompt).length) {
-    return redactBareInjectionLines(prompt);
-  }
-  let sanitized = "";
-  let cursor = 0;
-  const startTag = "<<<SEQURAI_UNTRUSTED_REPOSITORY_DATA";
-  const endTag = "<<<END_SEQURAI_UNTRUSTED_REPOSITORY_DATA>>>";
-  while (cursor < prompt.length) {
-    const start = prompt.indexOf(startTag, cursor);
-    if (start === -1) {
-      sanitized += redactBareInjectionLines(prompt.slice(cursor));
-      break;
-    }
-    sanitized += redactBareInjectionLines(prompt.slice(cursor, start));
-    const end = prompt.indexOf(endTag, start);
-    if (end === -1) {
-      sanitized += prompt.slice(start);
-      break;
-    }
-    sanitized += prompt.slice(start, end + endTag.length);
-    cursor = end + endTag.length;
-  }
-  return sanitized;
-}
-function guardFixPromptOutput(prompt) {
-  const violations = [];
-  for (const section2 of REQUIRED_SAFE_FIX_SECTIONS) {
-    if (!prompt.includes(section2)) {
-      violations.push({ kind: "missing_section", detail: section2 });
-    }
-  }
-  const bareRegions = extractBarePromptRegions(prompt);
-  for (const region of bareRegions) {
-    if (INSTRUCTION_OVERRIDE_OUTSIDE_DELIMITERS.test(region)) {
-      violations.push({
-        kind: "injection_in_output",
-        detail: "Instruction override language outside repository-data delimiters",
-        ruleId: "platform.output.instruction-override"
-      });
-    }
-    for (const detection of scanInjectionPatterns(region, {
-      source: "finding_field",
-      path: "safe-fix-output"
-    })) {
-      if (detection.action !== "BLOCK") continue;
-      violations.push({
-        kind: "injection_in_output",
-        detail: detection.message,
-        ruleId: detection.ruleId
-      });
-    }
-  }
-  if (prompt.includes("<<<SEQURAI_UNTRUSTED_REPOSITORY_DATA") && !prompt.includes("<<<END_SEQURAI_UNTRUSTED_REPOSITORY_DATA>>>")) {
-    violations.push({
-      kind: "delimiter_escape",
-      detail: "Unclosed repository-data delimiter block"
-    });
-  }
-  const sanitizedPrompt = sanitizeBareRegions(prompt);
-  return {
-    ok: violations.length === 0,
-    prompt,
-    violations,
-    sanitizedPrompt
-  };
-}
-function assertFixPromptOutputSafe(prompt) {
-  const result = guardFixPromptOutput(prompt);
-  if (result.ok) return result.prompt;
-  return result.sanitizedPrompt;
-}
-
-// server/mcp/security/platform-confidence.ts
-function derivePlatformInjectionConfidenceLevel() {
-  const level = deriveConfidenceLevel({
-    detectionMethod: "STATIC_ANALYSIS",
-    verificationStatus: "UNVERIFIED",
-    llmOnly: false,
-    // Heuristic pattern match only — cap below INFERRED threshold (0.55).
-    numericScore: 0.35
-  });
-  assertConfidenceVerificationInvariant("UNVERIFIED", level);
-  if (level === "VERIFIED" || level === "PROBABLE") {
-    throw new Error("Platform prompt injection findings must never be VERIFIED or PROBABLE");
-  }
-  return level;
-}
-function platformInjectionLegacyConfidenceBand() {
-  return legacyBandFromConfidenceLevel(derivePlatformInjectionConfidenceLevel());
-}
-
-// server/mcp/security/platform-finding.ts
-var PLATFORM_INJECTION_RULE_ID = "platform.prompt_injection_attempt";
-var PLATFORM_INJECTION_CATEGORY = "prompt_injection_attempt";
-function locationForDetection(detection) {
-  const path = detection.path ?? (detection.source === "dependency_metadata" ? "dependency-metadata" : detection.source === "commit_history" ? "commit-history" : "platform-untrusted-input");
-  return { path, line: detection.line ?? 1 };
-}
-function platformInjectionToFindingDraft(detection) {
-  const location = locationForDetection(detection);
-  return {
-    ruleId: `${PLATFORM_INJECTION_RULE_ID}.${detection.ruleId}`,
-    title: "Prompt injection attempt detected in repository content",
-    description: [
-      "SequrAI detected instruction-override patterns in untrusted repository content while preparing analysis.",
-      "This content was isolated and treated as data \u2014 it cannot change verdict confidence or Safe Fix instructions.",
-      "",
-      detection.message
-    ].join("\n"),
-    severity: detection.action === "BLOCK" ? "high" : "medium",
-    confidence: platformInjectionLegacyConfidenceBand(),
-    category: PLATFORM_INJECTION_CATEGORY,
-    location,
-    evidence: detection.matchedText,
-    remediation: "Review the flagged file or metadata for hostile instructions embedded in comments, README text, commit messages, or dependency descriptions. Remove or rewrite the content so it cannot influence downstream AI analysis.",
-    metadata: {
-      platformInjectionGuard: {
-        source: detection.source,
-        path: detection.path ?? null,
-        ruleId: detection.ruleId,
-        action: detection.action,
-        patternCategory: detection.category
-      }
-    }
-  };
-}
-function platformInjectionFingerprintMaterial(detection) {
-  return [
-    PLATFORM_INJECTION_RULE_ID,
-    detection.source,
-    detection.path ?? "",
-    detection.ruleId,
-    detection.matchedText.slice(0, 120)
-  ].join("|");
-}
-function isPlatformInjectionFinding(finding) {
-  return finding.category === PLATFORM_INJECTION_CATEGORY || finding.ruleId.startsWith(`${PLATFORM_INJECTION_RULE_ID}.`);
-}
-
-// server/mcp/security/platform-scan.ts
-var README_LIKE = /\.(md|markdown|txt)$/i;
-var COMMIT_MESSAGE_LIKE = /(commit|changelog|history)/i;
-function draftToFinding(draft, detection) {
-  const material = platformInjectionFingerprintMaterial(detection);
-  const fingerprint = findingFingerprint(
-    draft.ruleId,
-    draft.location.path,
-    draft.location.line,
-    material
-  );
-  return {
-    id: `platform-${fingerprint}`,
-    fingerprint,
-    correlationKey: buildFindingCorrelationKey({
-      ruleId: draft.ruleId,
-      filePath: draft.location.path,
-      fingerprintMaterial: material
-    }),
-    ...draft
-  };
-}
-function scanFindingFields(finding) {
-  const path = finding.location?.path ?? null;
-  if (path && TEST_OR_EXAMPLE_PATH.test(path)) return [];
-  const fields = [
-    ["title", finding.title],
-    ["description", finding.description],
-    ["evidence", finding.evidence],
-    ["remediation", finding.remediation]
-  ];
-  return fields.flatMap(([field, value]) => {
-    if (!value?.trim()) return [];
-    return scanInjectionPatterns(value, {
-      source: "finding_field",
-      path: path ? `${path}#${field}` : field
-    });
-  });
-}
-function scanRepositoryFiles(files) {
-  return files.flatMap((file2) => {
-    const source = README_LIKE.test(file2.path) ? "repository_file" : COMMIT_MESSAGE_LIKE.test(file2.path) ? "commit_history" : null;
-    if (!source) return [];
-    return scanInjectionPatterns(file2.content, { source, path: file2.path });
-  });
-}
-function collectPlatformInjectionFindings(findings, normalizedFiles) {
-  const detections = [];
-  const seen = /* @__PURE__ */ new Set();
-  for (const finding of findings) {
-    for (const detection of scanFindingFields(finding)) {
-      const key = platformInjectionFingerprintMaterial(detection);
-      if (seen.has(key)) continue;
-      seen.add(key);
-      detections.push(detection);
-    }
-  }
-  if (normalizedFiles?.length) {
-    for (const detection of scanRepositoryFiles(normalizedFiles)) {
-      const key = platformInjectionFingerprintMaterial(detection);
-      if (seen.has(key)) continue;
-      seen.add(key);
-      detections.push(detection);
-    }
-  }
-  return detections.map(
-    (detection) => draftToFinding(platformInjectionToFindingDraft(detection), detection)
-  );
-}
-
-// server/mcp/security/safe-fix-input.ts
-function guardField(value, source, path) {
-  return guardUntrustedInput(value, { source, path, forceWrap: true }).forPrompt;
-}
-function sanitizeProductionFixPromptInput(input) {
-  const basePath = input.affectedFiles[0] ?? "safe-fix-input";
-  return {
-    ...input,
-    issueTitle: guardField(input.issueTitle, "finding_field", `${basePath}#title`),
-    issueDescription: guardField(input.issueDescription, "finding_field", `${basePath}#description`),
-    whyItMatters: guardField(input.whyItMatters, "finding_field", `${basePath}#why`),
-    recommendedAction: guardField(
-      input.recommendedAction,
-      "finding_field",
-      `${basePath}#recommendedAction`
-    ),
-    estimatedImpact: input.estimatedImpact ? guardField(input.estimatedImpact, "finding_field", `${basePath}#impact`) : input.estimatedImpact
-  };
-}
 
 // features/security-analysis/osv/enrich-sbom.ts
 var OSV_SBOM_RULE_ID = "dependencies.osv-sbom";
@@ -22650,7 +25653,7 @@ function scoreFindings(findings) {
 }
 
 // features/security-scanner/stack.ts
-var LANGUAGE_BY_EXTENSION = {
+var LANGUAGE_BY_EXTENSION2 = {
   ".js": "JavaScript",
   ".jsx": "JavaScript",
   ".mjs": "JavaScript",
@@ -22702,7 +25705,7 @@ function detectStack(files) {
   if (hasPackage("pg") || hasPackage("postgres")) services.add("PostgreSQL");
   if (hasPackage("mongodb") || hasPackage("mongoose")) services.add("MongoDB");
   for (const file2 of files) {
-    const language = LANGUAGE_BY_EXTENSION[file2.extension];
+    const language = LANGUAGE_BY_EXTENSION2[file2.extension];
     if (language) languages.add(language);
     if (/^next\.config\.[cm]?[jt]s$/.test(file2.path)) frameworks.add("Next.js");
     if (/^vite\.config\.(?:[cm]?[jt]s|mts)$/.test(file2.path)) frameworks.add("Vite");
@@ -23757,1851 +26760,289 @@ function deduplicateFindings(findings) {
 }
 
 // lib/local-analysis/constants.ts
-import { randomUUID } from "node:crypto";
+import { randomUUID as randomUUID8 } from "node:crypto";
 function createLocalScanId() {
-  return randomUUID();
+  return randomUUID8();
 }
 
-// lib/local-analysis/local-identity.ts
-import { createHash as createHash2, randomUUID as randomUUID2 } from "node:crypto";
-import { existsSync as existsSync2, mkdirSync, readFileSync as readFileSync2, realpathSync as realpathSync2, writeFileSync } from "node:fs";
-import { execFileSync } from "node:child_process";
-import { dirname as dirname3 } from "node:path";
-
-// lib/github/repository-reference.ts
-var OWNER_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
-var REPO_PATTERN = /^[A-Za-z0-9._-]{1,100}$/;
-function assertOwnerRepo(owner, repo) {
-  if (!OWNER_PATTERN.test(owner) || !REPO_PATTERN.test(repo)) {
-    throw new Error("GitHub repository must be in owner/repository format");
-  }
-  return { owner, repo };
-}
-function normalizeRepositoryPathParts(parts) {
-  const segments = parts.filter(Boolean);
-  if (segments.length === 2) {
-    return assertOwnerRepo(segments[0], segments[1]);
-  }
-  if (segments.length === 3 && segments[0] === segments[1]) {
-    return assertOwnerRepo(segments[0], segments[2]);
-  }
-  throw new Error("GitHub repository must be in owner/repository format");
-}
-function toGitHubHtmlUrl(ref) {
-  return `https://github.com/${ref.owner}/${ref.repo}`;
-}
-function normalizeStoredGitHubRepository(value) {
-  const trimmed = value?.trim();
-  if (!trimmed) return null;
-  const ref = parseGitHubRepository(trimmed);
-  return toGitHubHtmlUrl(ref);
-}
-function parseGitHubRepository(value) {
-  const trimmed = value.trim().replace(/\.git$/, "").replace(/\/+$/, "");
-  let path = trimmed;
-  if (trimmed.startsWith("git@github.com:")) {
-    path = trimmed.slice("git@github.com:".length);
-  } else if (/^https?:\/\//i.test(trimmed)) {
-    let url2;
-    try {
-      url2 = new URL(trimmed);
-    } catch {
-      throw new Error("Invalid GitHub repository");
-    }
-    if (url2.protocol !== "https:" || url2.hostname.toLowerCase() !== "github.com") {
-      throw new Error("Repository must be hosted on github.com");
-    }
-    path = url2.pathname;
-  }
-  const parts = path.split("/").filter(Boolean);
-  return normalizeRepositoryPathParts(parts);
-}
-
-// lib/local-analysis/workspace.ts
-import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync } from "node:fs";
-import { basename as basename5, dirname as dirname2, relative, resolve, sep } from "node:path";
-var WorkspaceBoundaryError = class extends Error {
-  constructor(code, message) {
-    super(message ?? code);
-    this.name = "WorkspaceBoundaryError";
-    this.code = code;
-  }
-};
-var DEFAULT_IGNORED_DIRS = /* @__PURE__ */ new Set([
-  "node_modules",
-  ".git",
-  ".next",
-  "dist",
-  "build",
-  "coverage",
-  "vendor",
-  "target",
-  ".cache",
-  ".turbo",
-  ".vercel",
-  // L1.2: .sequrai/project.json is local tooling identity, not application
-  // source -- excluded for the same reason .git/.vercel are, and so the
-  // orchestrator scanning a workspace never re-scans the very identity
-  // file resolveLocalIdentity() just wrote into it.
-  ".sequrai"
-]);
-var LOCAL_SCAN_LIMITS = {
-  maxFiles: 8e3,
-  maxFileBytes: 1024 * 1024,
-  maxTotalBytes: 40 * 1024 * 1024,
-  maxDepth: 18
-};
-var MAX_FILE_BYTES = LOCAL_SCAN_LIMITS.maxFileBytes;
-var MAX_TOTAL_BYTES = LOCAL_SCAN_LIMITS.maxTotalBytes;
-var MAX_FILES = LOCAL_SCAN_LIMITS.maxFiles;
-var MAX_DEPTH = LOCAL_SCAN_LIMITS.maxDepth;
-var CREDENTIAL_BASENAME_PATTERNS = [
-  /^\.env$/i,
-  /^\.env\.(?!example$)/i,
-  /\.pem$/i,
-  /\.key$/i,
-  /\.p12$/i,
-  /\.pfx$/i,
-  /^id_rsa$/i,
-  /^id_ed25519$/i,
-  /credentials/i,
-  /secrets?/i,
-  /service-account.*\.json$/i
-];
-function isCredentialDeniedBasename(name) {
-  const base = basename5(name);
-  return CREDENTIAL_BASENAME_PATTERNS.some((pattern) => pattern.test(base));
-}
-function decodePathSegment(input) {
-  try {
-    return decodeURIComponent(input);
-  } catch {
-    return input;
-  }
-}
-function normalizeWorkspaceRoot(input) {
-  const root = resolve(input ?? process.cwd());
-  if (!existsSync(root)) {
-    throw new WorkspaceBoundaryError("workspace_not_found");
-  }
-  const stat = lstatSync(root);
-  if (!stat.isDirectory()) {
-    throw new WorkspaceBoundaryError("workspace_not_directory");
-  }
-  return root;
-}
-function realpathResolved(path) {
-  try {
-    return realpathSync.native(path);
-  } catch (error51) {
-    const err = error51;
-    if (err.code === "ENOENT") {
-      const parent = dirname2(path);
-      if (parent === path) {
-        throw new WorkspaceBoundaryError("workspace_not_found");
-      }
-      return resolve(realpathResolved(parent), basename5(path));
-    }
-    throw error51;
-  }
-}
-function isDescendantPath(root, target) {
-  const normalizedRoot = root.endsWith(sep) ? root.slice(0, -1) : root;
-  const normalizedTarget = target.endsWith(sep) ? target.slice(0, -1) : target;
-  if (normalizedTarget === normalizedRoot) return true;
-  return normalizedTarget.startsWith(`${normalizedRoot}${sep}`);
-}
-function resolveAuthorizedWorkspacePath(authorizedRoot, requestedPath) {
-  const root = normalizeWorkspaceRoot(authorizedRoot);
-  const rootReal = realpathResolved(root);
-  if (!requestedPath?.trim()) {
-    return rootReal;
-  }
-  const decoded = decodePathSegment(requestedPath.trim());
-  if (decoded.includes("\0")) {
-    throw new WorkspaceBoundaryError("workspace_path_not_authorized");
-  }
-  const segments = decoded.split(/[/\\]+/).filter(Boolean);
-  for (const segment of segments) {
-    assertPathComponentSafe(segment);
-  }
-  const isAbsolute = decoded.startsWith("/") || /^[A-Za-z]:[\\/]/.test(decoded);
-  const candidate = isAbsolute ? resolve(decoded) : resolve(rootReal, decoded);
-  const candidateReal = realpathResolved(candidate);
-  if (!isDescendantPath(rootReal, candidateReal)) {
-    throw new WorkspaceBoundaryError("workspace_path_not_authorized");
-  }
-  if (!existsSync(candidateReal)) {
-    throw new WorkspaceBoundaryError("workspace_not_found");
-  }
-  const stat = lstatSync(candidateReal);
-  if (!stat.isDirectory()) {
-    throw new WorkspaceBoundaryError("workspace_not_directory");
-  }
-  return candidateReal;
-}
-function assertPathComponentSafe(component) {
-  const decoded = decodePathSegment(component);
-  if (decoded === ".." || decoded.includes("\0") || decoded.includes("/") || decoded.includes("\\")) {
-    throw new WorkspaceBoundaryError("workspace_path_not_authorized");
-  }
-}
-function resolveSafePath(workspaceRoot, candidatePath) {
-  const root = normalizeWorkspaceRoot(workspaceRoot);
-  if (!candidatePath) return root;
-  const decoded = decodePathSegment(candidatePath);
-  const segments = decoded.split(/[/\\]+/).filter(Boolean);
-  for (const segment of segments) {
-    assertPathComponentSafe(segment);
-  }
-  const target = resolve(root, ...segments);
-  const rootWithSep = root.endsWith(sep) ? root : `${root}${sep}`;
-  if (target !== root && !target.startsWith(rootWithSep)) {
-    throw new WorkspaceBoundaryError("workspace_path_not_authorized");
-  }
-  if (existsSync(target)) {
-    const stat = lstatSync(target);
-    if (stat.isSymbolicLink()) {
-      throw new Error("symlink_not_allowed");
-    }
-  }
-  return target;
-}
-function parseIgnoreLines(content) {
-  return content.split(/\r?\n/).map((line) => line.trim()).filter((line) => line && !line.startsWith("#"));
-}
-function loadIgnorePatterns(workspaceRoot) {
-  const patterns = [];
-  for (const fileName of [".gitignore", ".sequraiignore"]) {
-    const filePath = resolveSafePath(workspaceRoot, fileName);
-    if (!existsSync(filePath)) continue;
-    patterns.push(...parseIgnoreLines(readFileSync(filePath, "utf8")));
-  }
-  return patterns;
-}
-function pathMatchesPattern(relativePath, pattern) {
-  const normalized = relativePath.replace(/\\/g, "/");
-  if (pattern.endsWith("/")) {
-    return normalized.split("/").includes(pattern.slice(0, -1));
-  }
-  if (pattern.includes("*")) {
-    const regex = new RegExp(
-      `^${pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*\*/g, "\xA7\xA7").replace(/\*/g, "[^/]*").replace(/§§/g, ".*")}$`
-    );
-    return regex.test(normalized);
-  }
-  return normalized === pattern || normalized.endsWith(`/${pattern}`);
-}
-function isIgnoredRelativePath(relativePath, workspaceRoot) {
-  const normalized = relativePath.replace(/\\/g, "/");
-  const firstSegment = normalized.split("/")[0];
-  if (DEFAULT_IGNORED_DIRS.has(firstSegment)) {
-    return true;
-  }
-  if (isCredentialDeniedBasename(normalized)) {
-    return true;
-  }
-  for (const pattern of loadIgnorePatterns(workspaceRoot)) {
-    if (pathMatchesPattern(normalized, pattern)) {
-      return true;
-    }
-  }
-  return false;
-}
-function isBinaryBuffer(buffer) {
-  const sample = buffer.subarray(0, Math.min(buffer.length, 4096));
-  for (const byte of sample) {
-    if (byte === 0) return true;
-  }
-  return false;
-}
-function listWorkspaceFiles(workspaceRoot, options = {}) {
-  const root = normalizeWorkspaceRoot(workspaceRoot);
-  const files = [];
-  const maxFiles = options.maxFiles ?? MAX_FILES;
-  const maxFileBytes = options.maxFileBytes ?? MAX_FILE_BYTES;
-  const maxTotalBytes = options.maxTotalBytes ?? MAX_TOTAL_BYTES;
-  const maxDepth = options.maxDepth ?? MAX_DEPTH;
-  let totalBytes = 0;
-  let filesExcluded = 0;
-  let credentialsSkipped = 0;
-  let discoveredFiles = 0;
-  let truncated = false;
-  function recordExcluded(relativePath) {
-    filesExcluded += 1;
-    if (isCredentialDeniedBasename(relativePath)) {
-      credentialsSkipped += 1;
-    }
-  }
-  function walk(currentDir, depth) {
-    if (files.length >= maxFiles) {
-      truncated = true;
-      return;
-    }
-    if (depth > maxDepth) {
-      truncated = true;
-      filesExcluded += 1;
-      return;
-    }
-    let entries;
-    try {
-      entries = readdirSync(currentDir, { withFileTypes: true });
-    } catch {
-      return;
-    }
-    for (const entry of entries) {
-      if (files.length >= maxFiles) {
-        truncated = true;
-        break;
-      }
-      const absolutePath = resolve(currentDir, entry.name);
-      const rel = relative(root, absolutePath).replace(/\\/g, "/");
-      if (!rel || rel.startsWith("..")) continue;
-      if (entry.isSymbolicLink()) {
-        filesExcluded += 1;
-        continue;
-      }
-      if (entry.isDirectory()) {
-        if (isIgnoredRelativePath(`${rel}/`, root)) {
-          recordExcluded(`${rel}/`);
-          continue;
-        }
-        walk(absolutePath, depth + 1);
-        continue;
-      }
-      if (!entry.isFile()) continue;
-      discoveredFiles += 1;
-      if (isIgnoredRelativePath(rel, root)) {
-        recordExcluded(rel);
-        continue;
-      }
-      if (options.onlyRelativePaths && !options.onlyRelativePaths.has(rel)) {
-        continue;
-      }
-      let stat;
-      try {
-        stat = lstatSync(absolutePath);
-      } catch {
-        filesExcluded += 1;
-        continue;
-      }
-      if (stat.isSymbolicLink()) {
-        filesExcluded += 1;
-        continue;
-      }
-      if (stat.size > maxFileBytes) {
-        filesExcluded += 1;
-        truncated = true;
-        continue;
-      }
-      if (totalBytes + stat.size > maxTotalBytes) {
-        truncated = true;
-        break;
-      }
-      totalBytes += stat.size;
-      files.push({ relativePath: rel, absolutePath, size: stat.size });
-    }
-  }
-  walk(root, 0);
-  return {
-    files,
-    totalBytes,
-    truncated,
-    stats: {
-      filesExcluded,
-      credentialsSkipped,
-      discoveredFiles
-    }
-  };
-}
-function readWorkspaceTextFile(workspaceRoot, relativePath) {
-  const root = normalizeWorkspaceRoot(workspaceRoot);
-  const safePath = resolveSafePath(root, relativePath);
-  if (!existsSync(safePath) || !lstatSync(safePath).isFile()) {
-    throw new Error("file_not_found");
-  }
-  const buffer = readFileSync(safePath);
-  if (buffer.length > MAX_FILE_BYTES) {
-    throw new Error("file_too_large");
-  }
-  if (isBinaryBuffer(buffer)) {
-    throw new Error("binary_file");
-  }
-  return buffer.toString("utf8");
-}
-
-// lib/local-analysis/local-identity.ts
-var PROJECT_FILE_RELATIVE_PATH = ".sequrai/project.json";
-var MAX_PROJECT_FILE_BYTES = 4096;
-function normalizeSshUrl(value) {
-  const match = /^ssh:\/\/git@github\.com\/(.+)$/i.exec(value.trim());
-  return match ? `git@github.com:${match[1]}` : value;
-}
-function canonicalRepositoryIdentity(remoteUrl, noRemoteFallbackSeed) {
-  const trimmed = remoteUrl?.trim();
-  if (!trimmed) {
-    const seed = noRemoteFallbackSeed ? `no-remote:${noRemoteFallbackSeed}` : "no-remote";
-    return { githubRepo: null, repositoryId: deterministicUuid(seed) };
-  }
-  let githubRepo = null;
-  try {
-    githubRepo = normalizeStoredGitHubRepository(normalizeSshUrl(trimmed));
-  } catch {
-    githubRepo = null;
-  }
-  if (githubRepo) {
-    return { githubRepo, repositoryId: deterministicUuid(githubRepo) };
-  }
-  return { githubRepo: null, repositoryId: deterministicUuid(trimmed) };
-}
-function sha256(value) {
-  return createHash2("sha256").update(value).digest("hex");
-}
-function deterministicUuid(value) {
-  const bytes = createHash2("sha256").update(value).digest();
-  bytes[6] = bytes[6] & 15 | 80;
-  bytes[8] = bytes[8] & 63 | 128;
-  const hex3 = bytes.subarray(0, 16).toString("hex");
-  return `${hex3.slice(0, 8)}-${hex3.slice(8, 12)}-${hex3.slice(12, 16)}-${hex3.slice(16, 20)}-${hex3.slice(20, 32)}`;
-}
-function readGitRemote(workspaceRoot) {
-  try {
-    return execFileSync("git", ["remote", "get-url", "origin"], {
-      cwd: workspaceRoot,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"]
-    }).trim() || null;
-  } catch {
-    return null;
-  }
-}
-function readGitRootCommit(workspaceRoot) {
-  try {
-    return execFileSync("git", ["rev-list", "--max-parents=0", "HEAD"], {
-      cwd: workspaceRoot,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"]
-    }).trim().split("\n")[0] || null;
-  } catch {
-    return null;
-  }
-}
-function resolveWorkspaceIdentity(workspaceRoot) {
-  const realPath = realpathSync2.native(workspaceRoot);
-  const remote = readGitRemote(workspaceRoot);
-  const fallbackSeed = remote ? null : readGitRootCommit(workspaceRoot);
-  return {
-    workspaceId: sha256(realPath),
-    repository: canonicalRepositoryIdentity(remote, fallbackSeed)
-  };
-}
-function readLocalProjectFile(workspaceRoot) {
-  let target;
-  try {
-    target = resolveSafePath(workspaceRoot, PROJECT_FILE_RELATIVE_PATH);
-  } catch (error51) {
-    if (error51 instanceof WorkspaceBoundaryError || error51.message === "symlink_not_allowed") {
-      return null;
-    }
-    throw error51;
-  }
-  if (!existsSync2(target)) return null;
-  let raw;
-  try {
-    raw = readFileSync2(target, "utf8");
-  } catch {
-    return null;
-  }
-  if (raw.length > MAX_PROJECT_FILE_BYTES) return null;
-  let parsed;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return null;
-  }
-  return validateProjectFileShape(parsed) ? parsed : null;
-}
-function validateProjectFileShape(value) {
-  if (!value || typeof value !== "object") return false;
-  const v = value;
-  if (v.version !== 1) return false;
-  if (typeof v.projectId !== "string" || !UUID_PATTERN.test(v.projectId)) return false;
-  if (typeof v.repositoryId !== "string" || !UUID_PATTERN.test(v.repositoryId)) return false;
-  if (typeof v.createdAt !== "string") return false;
-  if (!v.repository || typeof v.repository !== "object") return false;
-  const repo = v.repository;
-  if (repo.remote !== null && typeof repo.remote !== "string") return false;
-  const allowedTopKeys = /* @__PURE__ */ new Set(["version", "projectId", "repositoryId", "createdAt", "repository"]);
-  const allowedRepoKeys = /* @__PURE__ */ new Set(["remote"]);
-  if (Object.keys(v).some((k) => !allowedTopKeys.has(k))) return false;
-  if (Object.keys(repo).some((k) => !allowedRepoKeys.has(k))) return false;
-  return true;
-}
-var UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-function ensureLocalProjectFile(workspaceRoot, repository) {
-  const existing = readLocalProjectFile(workspaceRoot);
-  if (existing && existing.repositoryId === repository.repositoryId) {
-    return existing;
-  }
-  const file2 = {
-    version: 1,
-    projectId: randomUUID2(),
-    repositoryId: repository.repositoryId,
-    createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-    repository: { remote: repository.githubRepo }
-  };
-  try {
-    const target = resolveSafePath(workspaceRoot, PROJECT_FILE_RELATIVE_PATH);
-    mkdirSync(dirname3(target), { recursive: true });
-    writeFileSync(target, `${JSON.stringify(file2, null, 2)}
-`, { mode: 420 });
-  } catch {
-  }
-  return file2;
-}
-async function resolveCloudBinding(githubRepo, resolve2) {
-  return resolve2(githubRepo);
-}
-async function resolveLocalIdentity(workspaceRoot, cloudResolver) {
-  const { workspaceId, repository } = resolveWorkspaceIdentity(workspaceRoot);
-  const projectFile = ensureLocalProjectFile(workspaceRoot, repository);
-  if (cloudResolver && repository.githubRepo) {
-    const bound = await resolveCloudBinding(repository.githubRepo, cloudResolver);
-    if (bound) {
-      return {
-        mode: "cloud-bound",
-        projectId: bound.projectId,
-        organizationId: bound.organizationId,
-        projectName: bound.projectName,
-        repositoryId: repository.repositoryId,
-        workspaceId
-      };
-    }
-  }
-  return {
-    mode: "local-only",
-    projectId: projectFile.projectId,
-    repositoryId: repository.repositoryId,
-    workspaceId
-  };
-}
-
-// lib/local-analysis/git-scope.ts
-import { execFileSync as execFileSync2 } from "node:child_process";
-import { existsSync as existsSync3 } from "node:fs";
-import { join } from "node:path";
-function runGit(workspaceRoot, args) {
-  try {
-    return execFileSync2("git", args, {
-      cwd: workspaceRoot,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"]
-    }).trim();
-  } catch {
-    return null;
-  }
-}
-function getGitContext(workspaceRoot) {
-  const root = normalizeWorkspaceRoot(workspaceRoot);
-  const insideGit = existsSync3(join(root, ".git"));
-  if (!insideGit) {
-    return {
-      isGitRepository: false,
-      branch: null,
-      commitSha: null,
-      status: null,
-      diff: null,
-      stagedDiff: null
-    };
-  }
-  return {
-    isGitRepository: true,
-    branch: runGit(root, ["branch", "--show-current"]),
-    commitSha: runGit(root, ["rev-parse", "HEAD"]),
-    status: runGit(root, ["status", "--porcelain"]),
-    diff: runGit(root, ["diff"]),
-    stagedDiff: runGit(root, ["diff", "--cached"])
-  };
-}
-function parseChangedFilesFromStatus(status) {
-  if (!status) return [];
-  const files = /* @__PURE__ */ new Set();
-  for (const line of status.split(/\r?\n/)) {
-    if (line.length < 4) continue;
-    const raw = line.slice(3).trim();
-    if (!raw) continue;
-    const path = raw.includes(" -> ") ? raw.split(" -> ").pop().trim() : raw;
-    files.add(path.replace(/\\/g, "/"));
-  }
-  return [...files];
-}
-function parseGitFileCounts(status) {
-  if (!status) {
-    return { modifiedFiles: 0, untrackedFiles: 0, deletedFiles: 0 };
-  }
-  let modifiedFiles = 0;
-  let untrackedFiles = 0;
-  let deletedFiles = 0;
-  for (const line of status.split(/\r?\n/)) {
-    if (line.length < 4) continue;
-    const indexCode = line.slice(0, 2);
-    if (indexCode.includes("?")) {
-      untrackedFiles += 1;
-      continue;
-    }
-    if (indexCode.includes("D")) {
-      deletedFiles += 1;
-    }
-    if (/M|A|R|C|T|U/.test(indexCode)) {
-      modifiedFiles += 1;
-    }
-  }
-  return { modifiedFiles, untrackedFiles, deletedFiles };
-}
-function parseChangedFilesFromDiff(diff) {
-  if (!diff) return [];
-  const files = /* @__PURE__ */ new Set();
-  for (const line of diff.split(/\r?\n/)) {
-    if (line.startsWith("+++ b/")) {
-      const path = line.slice(6).trim();
-      if (path !== "/dev/null") {
-        files.add(path);
-      }
-    }
-  }
-  return [...files];
-}
-function resolveScopePaths(git, scope) {
-  if (!git.isGitRepository) {
-    if (scope === "workspace") {
-      return { scope, paths: /* @__PURE__ */ new Set(), requiresGit: false };
-    }
-    return { scope, paths: /* @__PURE__ */ new Set(), requiresGit: true };
-  }
-  if (scope === "workspace") {
-    return { scope, paths: /* @__PURE__ */ new Set(), requiresGit: false };
-  }
-  if (scope === "staged") {
-    const paths2 = new Set(parseChangedFilesFromDiff(git.stagedDiff));
-    return { scope, paths: paths2, requiresGit: false };
-  }
-  if (scope === "diff") {
-    const paths2 = new Set(parseChangedFilesFromDiff(git.diff));
-    return { scope, paths: paths2, requiresGit: false };
-  }
-  const paths = /* @__PURE__ */ new Set([
-    ...parseChangedFilesFromStatus(git.status),
-    ...parseChangedFilesFromDiff(git.diff),
-    ...parseChangedFilesFromDiff(git.stagedDiff)
-  ]);
-  return { scope: "working_tree", paths, requiresGit: false };
-}
-function resolveScopeFromArgs(input) {
-  if (input.gitDiffOnly) return "diff";
-  return input.scope ?? "workspace";
-}
-
-// lib/local-analysis/map-findings.ts
-function guardFindingText(value, path, field) {
-  if (!value) return value;
-  return guardUntrustedInput(value, { source: "finding_field", path: `${path}#${field}` }).forPrompt;
-}
-function collectInputFiles(workspaceRoot, onlyRelativePaths) {
-  const listing = listWorkspaceFiles(workspaceRoot, {
-    onlyRelativePaths: onlyRelativePaths && onlyRelativePaths.size > 0 ? onlyRelativePaths : void 0
-  });
-  const files = [];
-  for (const file2 of listing.files) {
-    try {
-      const content = readWorkspaceTextFile(workspaceRoot, file2.relativePath);
-      files.push({ path: file2.relativePath, content });
-    } catch {
-      continue;
-    }
-  }
-  return files;
-}
-function mapScanFindingToVerdictInput(finding) {
+// lib/local-analysis/local-orchestrator.ts
+var NATIVE_ENGINE_ID = "native";
+function mapExternalFindingToVerdictInput(engine, finding) {
+  const evidenceText = finding.evidence.map((e) => e.detail ?? "").filter(Boolean).join(" | ");
   return {
     id: finding.id,
     title: finding.title,
     severity: finding.severity,
     category: finding.category,
-    rule_id: finding.ruleId,
-    file_path: finding.location.path,
-    start_line: finding.location.line,
+    rule_id: `${engine}:${finding.id}`,
+    file_path: finding.affectedFiles[0] ?? null,
+    start_line: null,
     recommendation: finding.remediation,
     confidence: finding.confidence,
-    evidence: finding.evidence ?? null,
-    metadata: finding.metadata ?? null
+    evidence: evidenceText || null,
+    metadata: { engine, cwe: finding.cwe ?? [] }
   };
 }
-function mapFindingToPublic(finding) {
-  const safeToIgnore = isNonBlockingSecretFinding({
-    ruleId: finding.ruleId,
-    file_path: finding.location.path,
-    evidence: finding.evidence ?? null,
-    metadata: finding.metadata ?? null
+function sortFindings(findings) {
+  return [...findings].sort((a, b) => {
+    const ruleA = a.rule_id ?? "";
+    const ruleB = b.rule_id ?? "";
+    if (ruleA !== ruleB) return ruleA < ruleB ? -1 : 1;
+    const pathA = a.file_path ?? "";
+    const pathB = b.file_path ?? "";
+    if (pathA !== pathB) return pathA < pathB ? -1 : 1;
+    return (a.start_line ?? 0) - (b.start_line ?? 0);
   });
-  const path = finding.location.path;
-  const redactedEvidence = finding.evidence ? redactEvidence(finding.evidence) : void 0;
-  return {
-    id: finding.id,
-    ruleId: finding.ruleId,
-    title: guardFindingText(finding.title, path, "title"),
-    description: guardFindingText(finding.description, path, "description"),
-    severity: finding.severity,
-    category: finding.category,
-    filePath: path,
-    line: finding.location.line,
-    correlationKey: finding.correlationKey,
-    evidence: redactedEvidence ? guardFindingText(redactedEvidence, path, "evidence") : void 0,
-    remediation: guardFindingText(finding.remediation, path, "remediation"),
-    confidence: finding.confidence,
-    safeToIgnore
+}
+async function runLocalSecurityOrchestrator(input) {
+  const startedAt = Date.now();
+  const workspace = normalizeWorkspaceRoot(input.workspacePath);
+  const scanId = createLocalScanId();
+  const identity = await resolveLocalIdentity(workspace);
+  const git = getGitContext(workspace);
+  const scope = resolveScopeFromArgs({ scope: input.scope, gitDiffOnly: input.gitDiffOnly });
+  const { scope: resolvedScope, paths, requiresGit } = resolveScopePaths(git, scope);
+  const emptySnapshot = {
+    inputFiles: 0,
+    scannedFiles: 0,
+    discoveredFiles: 0,
+    filesExcluded: 0,
+    credentialsSkipped: 0,
+    bytesAnalyzed: 0,
+    rulesRun: 0,
+    truncated: false,
+    securityScore: null
   };
-}
-function mapFindingsToPublic(findings) {
-  return findings.map(mapFindingToPublic);
-}
-
-// lib/local-analysis/format-local-response.ts
-function buildLocalStatusSummary(input) {
-  const lines = [
-    "SEQURAI \u2014 Production Verdict (Local Workspace)",
-    "",
-    "SOURCE: Local workspace",
-    `SCOPE: ${formatScopeLabel(input.scope)}`,
-    "",
-    "STATUS",
-    input.headline ?? input.verdictStatus.toUpperCase()
-  ];
-  if (input.score != null) {
-    lines.push(`SCORE: ${input.score}/100`);
+  if (requiresGit) {
+    return {
+      source: "local",
+      scanId,
+      workspace,
+      scope: resolvedScope,
+      git,
+      snapshot: emptySnapshot,
+      identity: { projectId: identity.projectId, repositoryId: identity.repositoryId, workspaceId: identity.workspaceId },
+      phase: "incomplete",
+      findings: [],
+      engines: [
+        {
+          engine: NATIVE_ENGINE_ID,
+          status: "SKIPPED",
+          durationMs: 0,
+          findingsCount: 0,
+          errors: [{ code: "scope_requires_git", message: `Scope "${resolvedScope}" requires a git repository; none was found at ${workspace}. Use scope "workspace" or initialize git.` }]
+        }
+      ],
+      durationMs: Date.now() - startedAt
+    };
+  }
+  const { files, listing } = collectInputFiles(workspace, resolvedScope === "workspace" ? void 0 : paths);
+  const listingSnapshot = {
+    ...emptySnapshot,
+    inputFiles: files.length,
+    discoveredFiles: listing.stats.discoveredFiles,
+    filesExcluded: listing.stats.filesExcluded,
+    credentialsSkipped: listing.stats.credentialsSkipped,
+    bytesAnalyzed: listing.totalBytes,
+    truncated: listing.truncated
+  };
+  if (input.signal?.aborted) {
+    return {
+      source: "local",
+      scanId,
+      workspace,
+      scope: resolvedScope,
+      git,
+      snapshot: listingSnapshot,
+      identity: { projectId: identity.projectId, repositoryId: identity.repositoryId, workspaceId: identity.workspaceId },
+      phase: "cancelled",
+      findings: [],
+      engines: [{ engine: NATIVE_ENGINE_ID, status: "SKIPPED", durationMs: 0, findingsCount: 0, errors: [{ code: "aborted", message: "Cancelled before analysis started." }] }],
+      durationMs: Date.now() - startedAt
+    };
+  }
+  const nativeStartedAt = Date.now();
+  const [nativeOutcome, externalOutcome] = await Promise.allSettled([
+    scanRepository(files),
+    runSecurityEngines({
+      scanId,
+      projectId: identity.projectId,
+      // No real organization in local-only mode; the repository's own
+      // stable identity is reused here purely as EngineResult bookkeeping
+      // metadata (never authorization-checked locally) rather than a
+      // single constant shared by every repository on the machine.
+      organizationId: identity.mode === "cloud-bound" ? identity.organizationId : identity.repositoryId,
+      files,
+      githubRepo: null,
+      signal: input.signal
+    })
+  ]);
+  const engineOutcomes = [];
+  let findings = [];
+  let nativeFailed = false;
+  let nativePartialFailure = false;
+  let snapshot = listingSnapshot;
+  if (nativeOutcome.status === "fulfilled") {
+    const nativeFindings = nativeOutcome.value.findings.map(mapScanFindingToVerdictInput);
+    findings = findings.concat(nativeFindings);
+    snapshot = {
+      ...listingSnapshot,
+      scannedFiles: nativeOutcome.value.metrics.scannedFiles,
+      rulesRun: nativeOutcome.value.metrics.rulesRun,
+      truncated: listingSnapshot.truncated || nativeOutcome.value.metrics.truncated,
+      securityScore: nativeOutcome.value.score.score
+    };
+    const ruleErrorOmissions = nativeOutcome.value.omissions.filter((o) => o.reason === "rule-error");
+    if (ruleErrorOmissions.length > 0) nativePartialFailure = true;
+    engineOutcomes.push({
+      engine: NATIVE_ENGINE_ID,
+      status: ruleErrorOmissions.length > 0 ? "PARTIAL" : "COMPLETED",
+      durationMs: Date.now() - nativeStartedAt,
+      findingsCount: nativeFindings.length,
+      errors: ruleErrorOmissions.map((o) => ({
+        code: `native_rule_failed:${o.ruleId ?? "unknown"}`,
+        message: o.detail ?? "A native security rule failed to complete."
+      }))
+    });
   } else {
-    lines.push("SCORE: unavailable (insufficient evidence for a numeric score)");
+    nativeFailed = true;
+    const error51 = nativeOutcome.reason;
+    engineOutcomes.push({
+      engine: NATIVE_ENGINE_ID,
+      status: "FAILED",
+      durationMs: Date.now() - nativeStartedAt,
+      findingsCount: 0,
+      // Never the raw error object (could carry a stack trace with local
+      // paths) -- only a plain message, matching the sanitization already
+      // used for engine_crashed in server/security-engines/orchestrate.ts.
+      errors: [{ code: "native_engine_crashed", message: error51 instanceof Error ? error51.message : "Native engine failed." }]
+    });
   }
-  if (input.executiveSummary) {
-    lines.push("", "SUMMARY", input.executiveSummary);
-  }
-  if (input.reason) {
-    lines.push("", "NOTE", input.reason);
-  }
-  const actionable = input.findings.filter(
-    (finding) => !finding.safeToIgnore && (finding.severity === "critical" || finding.severity === "high" || finding.severity === "medium")
-  );
-  if (actionable.length > 0) {
-    lines.push("", "MAIN FINDINGS");
-    for (const finding of actionable.slice(0, 6)) {
-      lines.push(
-        "",
-        `${finding.severity.toUpperCase()} \u2014 ${finding.title}`,
-        `File: ${finding.filePath}:${finding.line}`,
-        finding.description
-      );
-      if (finding.evidence) {
-        lines.push(`Evidence: ${finding.evidence}`);
-      }
-      lines.push(`What to do: ${finding.remediation}`);
-    }
-  }
-  if (input.topPriorities && input.topPriorities.length > 0) {
-    lines.push("", "TOP PRIORITIES");
-    for (const priority of input.topPriorities) {
-      lines.push(`- ${priority}`);
-    }
-  }
-  const hasSecretFinding = actionable.some(
-    (finding) => `${finding.title} ${finding.category} ${finding.ruleId}`.toLowerCase().match(/secret|credential|api key/)
-  );
-  if (hasSecretFinding) {
-    lines.push("", "NEXT STEPS");
-    lines.push("1. Review the highlighted values in your local workspace.");
-    lines.push("2. Remove real credentials from source and rotate them if they were ever exposed.");
-    lines.push("3. Re-run sequrai_local_audit after fixing.");
-  } else if (actionable.length > 0) {
-    lines.push("", "NEXT STEPS");
-    lines.push("1. Address the findings above in your local workspace.");
-    lines.push("2. Re-run sequrai_local_audit to verify.");
-  }
-  lines.push(
-    "",
-    "LIMITATION",
-    "This verdict analyzes files on disk in your authorized workspace only. Remote MCP tools analyze your connected repository separately."
-  );
-  return lines.join("\n");
-}
-function formatScopeLabel(scope) {
-  switch (scope) {
-    case "workspace":
-      return "Full workspace";
-    case "working_tree":
-      return "Working tree changes";
-    case "staged":
-      return "Staged changes";
-    case "diff":
-      return "Unstaged diff";
-    default:
-      return scope;
-  }
-}
-
-// lib/correlation/scan-finding-resolution.ts
-function correlationKeyForScanFinding(finding) {
-  return buildFindingCorrelationKeyFromParts({
-    ruleId: finding.ruleId,
-    filePath: finding.filePath,
-    title: finding.title,
-    metadata: finding.metadata ?? null
-  });
-}
-function groupByCorrelationKey(findings) {
-  const map2 = /* @__PURE__ */ new Map();
-  for (const finding of findings) {
-    const key = correlationKeyForScanFinding(finding);
-    const group = map2.get(key);
-    if (group) group.push(finding);
-    else map2.set(key, [finding]);
-  }
-  return map2;
-}
-function diffScanFindingsByIdentity(input) {
-  const { projectId } = input;
-  for (const finding of [...input.previous, ...input.current]) {
-    if (finding.projectId !== projectId) {
-      throw new Error(
-        `diffScanFindingsByIdentity: finding ${finding.id} belongs to project ${finding.projectId}, not the requested project ${projectId}. Refusing to compare findings across projects.`
-      );
-    }
-  }
-  const previousGroups = groupByCorrelationKey(input.previous);
-  const currentGroups = groupByCorrelationKey(input.current);
-  const unchanged = [];
-  const resolved = [];
-  const newEntries = [];
-  const ambiguous = [];
-  const allKeys = /* @__PURE__ */ new Set([...previousGroups.keys(), ...currentGroups.keys()]);
-  for (const key of allKeys) {
-    const previousMatches = previousGroups.get(key) ?? [];
-    const currentMatches = currentGroups.get(key) ?? [];
-    if (previousMatches.length > 1 || currentMatches.length > 1) {
-      ambiguous.push({
-        correlationKey: key,
-        status: "ambiguous",
-        previous: previousMatches[0],
-        current: currentMatches[0],
-        reason: "More than one finding in a single scan shares this correlation identity; resolution cannot be determined safely."
+  let externalPartialFailure = false;
+  if (externalOutcome.status === "fulfilled") {
+    for (const result of externalOutcome.value.results) {
+      engineOutcomes.push({
+        engine: result.engine,
+        status: result.status,
+        durationMs: result.durationMs,
+        findingsCount: result.findings.length,
+        errors: result.errors
       });
-      continue;
-    }
-    const previous = previousMatches[0];
-    const current = currentMatches[0];
-    if (previous && current) {
-      unchanged.push({ correlationKey: key, status: "unchanged", previous, current });
-    } else if (previous && !current) {
-      resolved.push({ correlationKey: key, status: "resolved", previous });
-    } else if (current && !previous) {
-      newEntries.push({ correlationKey: key, status: "new", current });
-    }
-  }
-  return { projectId, unchanged, resolved, new: newEntries, ambiguous };
-}
-
-// lib/local-analysis/finding-history.ts
-var DEFAULT_SCAN_WINDOW = 20;
-function findingToSnapshot(finding, workspaceId) {
-  return {
-    // finding.id is always set on a row read back from local-persistence.ts
-    // (rowToFinding() always assigns `${scan_id}:${row_id}`) -- the fallback
-    // only guards the wider VerdictFinding type, which declares id optional.
-    id: finding.id ?? `${finding.scanId}:unknown`,
-    projectId: workspaceId,
-    ruleId: finding.rule_id ?? "",
-    filePath: finding.file_path ?? "",
-    title: finding.title,
-    severity: finding.severity ?? void 0,
-    metadata: finding.metadata ?? null
-  };
-}
-function correlationKeyForPersistedFinding(finding, workspaceId) {
-  return correlationKeyForScanFinding(findingToSnapshot(finding, workspaceId));
-}
-function loadComparableScans(store, workspaceId, repositoryId, limit = DEFAULT_SCAN_WINDOW) {
-  return store.listScans(workspaceId, limit).filter((scan) => scan.repositoryId === repositoryId).slice().sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.scanId.localeCompare(b.scanId));
-}
-function computeScanDelta(input) {
-  const currentComplete = input.current.scan.phase === "complete";
-  const previousById = new Map((input.previous?.findings ?? []).map((f) => [f.id, f]));
-  const currentById = new Map(input.current.findings.map((f) => [f.id, f]));
-  const previousSnapshots = (input.previous?.findings ?? []).map((f) => findingToSnapshot(f, input.workspaceId));
-  const currentSnapshots = input.current.findings.map((f) => findingToSnapshot(f, input.workspaceId));
-  const diff = diffScanFindingsByIdentity({
-    projectId: input.workspaceId,
-    previous: previousSnapshots,
-    current: currentSnapshots
-  });
-  function buildEntry(lifecycle, currentSnapshot, previousSnapshot) {
-    const finding = currentById.get(currentSnapshot.id);
-    const prevFinding = previousSnapshot ? previousById.get(previousSnapshot.id) : void 0;
-    const severity = finding.severity ?? null;
-    const previousSeverity = prevFinding?.severity ?? null;
-    return {
-      correlationKey: correlationKeyForScanFinding(currentSnapshot),
-      ruleId: finding.rule_id ?? "",
-      title: finding.title,
-      severity,
-      category: finding.category ?? null,
-      filePath: finding.file_path ?? null,
-      lifecycle,
-      firstSeenScanId: input.current.scan.scanId,
-      firstSeenAt: input.current.scan.createdAt,
-      lastSeenScanId: input.current.scan.scanId,
-      lastSeenAt: input.current.scan.createdAt,
-      severityChanged: Boolean(prevFinding) && previousSeverity !== severity,
-      previousSeverity
-    };
-  }
-  const persistingFindings = diff.unchanged.map((entry) => buildEntry("PERSISTING", entry.current, entry.previous));
-  const newFindings = diff.new.map((entry) => buildEntry("NEW", entry.current, void 0));
-  function buildResolvedSummary(previousSnapshot) {
-    const finding = previousById.get(previousSnapshot.id);
-    return {
-      correlationKey: correlationKeyForScanFinding(previousSnapshot),
-      ruleId: finding.rule_id ?? "",
-      title: finding.title,
-      severity: finding.severity ?? null,
-      filePath: finding.file_path ?? null,
-      lastSeenScanId: input.previous.scan.scanId,
-      lastSeenAt: input.previous.scan.createdAt
-    };
-  }
-  const resolvedCandidates = diff.resolved.map((entry) => buildResolvedSummary(entry.previous));
-  const resolvedFindings = currentComplete ? resolvedCandidates : [];
-  const lifecycleUnknownFindings = currentComplete ? [] : resolvedCandidates;
-  return {
-    previousScanId: input.previous?.scan.scanId ?? null,
-    currentScanId: input.current.scan.scanId,
-    currentScanComplete: currentComplete,
-    newFindings,
-    persistingFindings,
-    resolvedFindings,
-    lifecycleUnknownFindings,
-    ambiguousCount: diff.ambiguous.length,
-    counts: {
-      newCount: newFindings.length,
-      persistingCount: persistingFindings.length,
-      resolvedCount: resolvedFindings.length,
-      lifecycleUnknownCount: lifecycleUnknownFindings.length
-    }
-  };
-}
-function verdictSnapshot(verdict) {
-  return verdict ? { scanId: verdict.scanId, status: verdict.status, score: verdict.score, createdAt: verdict.createdAt } : null;
-}
-function buildVerdictHistory(store, current, previous) {
-  const latest = verdictSnapshot(store.getVerdictForScan(current.scanId));
-  const previousVerdict = previous ? verdictSnapshot(store.getVerdictForScan(previous.scanId)) : null;
-  return {
-    latest,
-    previous: previousVerdict,
-    statusChanged: Boolean(latest && previousVerdict && latest.status !== previousVerdict.status)
-  };
-}
-function buildFindingHistory(store, identity, options = {}) {
-  const scans = loadComparableScans(store, identity.workspaceId, identity.repositoryId, options.scanWindow ?? DEFAULT_SCAN_WINDOW);
-  if (scans.length === 0) return null;
-  const findingsByScan = /* @__PURE__ */ new Map();
-  for (const scan of scans) {
-    findingsByScan.set(scan.scanId, store.getFindingsForScan(scan.scanId));
-  }
-  const firstSeen = /* @__PURE__ */ new Map();
-  const lastSeen = /* @__PURE__ */ new Map();
-  for (const scan of scans) {
-    for (const finding of findingsByScan.get(scan.scanId) ?? []) {
-      const key = correlationKeyForScanFinding(findingToSnapshot(finding, identity.workspaceId));
-      if (!firstSeen.has(key)) firstSeen.set(key, { scanId: scan.scanId, createdAt: scan.createdAt });
-      lastSeen.set(key, { scanId: scan.scanId, createdAt: scan.createdAt });
-    }
-  }
-  const currentScan = scans[scans.length - 1];
-  const previousScan = scans.length > 1 ? scans[scans.length - 2] : null;
-  const delta = computeScanDelta({
-    workspaceId: identity.workspaceId,
-    previous: previousScan ? { scan: previousScan, findings: findingsByScan.get(previousScan.scanId) ?? [] } : null,
-    current: { scan: currentScan, findings: findingsByScan.get(currentScan.scanId) ?? [] }
-  });
-  const withWindowHistory = (entry) => {
-    const seen = firstSeen.get(entry.correlationKey);
-    const last = lastSeen.get(entry.correlationKey);
-    return {
-      ...entry,
-      firstSeenScanId: seen?.scanId ?? entry.firstSeenScanId,
-      firstSeenAt: seen?.createdAt ?? entry.firstSeenAt,
-      lastSeenScanId: last?.scanId ?? entry.lastSeenScanId,
-      lastSeenAt: last?.createdAt ?? entry.lastSeenAt
-    };
-  };
-  const newFindings = delta.newFindings.map(withWindowHistory);
-  const persistingFindings = delta.persistingFindings.map(withWindowHistory);
-  const currentFindings = [...newFindings, ...persistingFindings].sort(
-    (a, b) => a.correlationKey.localeCompare(b.correlationKey)
-  );
-  return {
-    workspaceId: identity.workspaceId,
-    repositoryId: identity.repositoryId,
-    scanCount: scans.length,
-    currentScan,
-    previousScan,
-    currentFindings,
-    delta: { ...delta, newFindings, persistingFindings },
-    verdictHistory: buildVerdictHistory(store, currentScan, previousScan)
-  };
-}
-
-// lib/local-analysis/local-persistence.ts
-import { DatabaseSync } from "node:sqlite";
-import { existsSync as existsSync4, lstatSync as lstatSync2, mkdirSync as mkdirSync2 } from "node:fs";
-import { join as join2 } from "node:path";
-var DB_DIRNAME = ".sequrai";
-var DB_FILENAME = "sequrai.db";
-var LocalPersistenceError = class extends Error {
-  constructor(code, message) {
-    super(message);
-    this.code = code;
-    this.name = "LocalPersistenceError";
-  }
-};
-function resolveSecureDatabasePath(workspaceRoot) {
-  const root = normalizeWorkspaceRoot(workspaceRoot);
-  const rootReal = realpathResolved(root);
-  const dbDir = join2(rootReal, DB_DIRNAME);
-  if (existsSync4(dbDir)) {
-    const dirStat = lstatSync2(dbDir);
-    if (dirStat.isSymbolicLink()) {
-      throw new LocalPersistenceError("LOCAL_PERSISTENCE_UNAVAILABLE", "Refusing to use a symlinked .sequrai directory.");
-    }
-    const dirReal = realpathResolved(dbDir);
-    if (!isDescendantPath(rootReal, dirReal)) {
-      throw new LocalPersistenceError("LOCAL_PERSISTENCE_UNAVAILABLE", "Refusing a .sequrai directory outside the workspace.");
+      if (result.status === "FAILED") externalPartialFailure = true;
+      if (result.status === "COMPLETED" || result.status === "PARTIAL") {
+        findings = findings.concat(
+          result.findings.map(
+            (f) => mapExternalFindingToVerdictInput(result.engine, {
+              id: f.id,
+              title: f.title,
+              severity: f.severity,
+              category: f.category,
+              affectedFiles: f.affectedFiles,
+              remediation: f.remediation,
+              confidence: f.confidence,
+              evidence: f.evidence,
+              cwe: f.cwe
+            })
+          )
+        );
+      }
     }
   } else {
-    mkdirSync2(dbDir, { recursive: true });
+    externalPartialFailure = true;
+    const error51 = externalOutcome.reason;
+    engineOutcomes.push({
+      engine: "opengrep",
+      status: "FAILED",
+      durationMs: 0,
+      findingsCount: 0,
+      errors: [{ code: "external_engines_batch_crashed", message: error51 instanceof Error ? error51.message : "External engine batch failed." }]
+    });
   }
-  const dbPath = join2(dbDir, DB_FILENAME);
-  if (existsSync4(dbPath) && lstatSync2(dbPath).isSymbolicLink()) {
-    throw new LocalPersistenceError("LOCAL_PERSISTENCE_UNAVAILABLE", "Refusing a symlinked database file.");
-  }
-  return dbPath;
-}
-function runMigrations(db) {
-  try {
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS schema_migrations (
-        version INTEGER PRIMARY KEY,
-        applied_at TEXT NOT NULL
-      );
-    `);
-    const row = db.prepare("SELECT MAX(version) AS version FROM schema_migrations").get();
-    const currentVersion = row?.version ?? 0;
-    if (currentVersion < 1) {
-      db.exec("BEGIN");
-      try {
-        db.exec(`
-          CREATE TABLE IF NOT EXISTS scans (
-            id TEXT PRIMARY KEY,
-            project_id TEXT NOT NULL,
-            repository_id TEXT NOT NULL,
-            workspace_id TEXT NOT NULL,
-            scope TEXT NOT NULL,
-            phase TEXT NOT NULL,
-            branch TEXT,
-            commit_sha TEXT,
-            dirty INTEGER NOT NULL,
-            duration_ms INTEGER NOT NULL,
-            error_message TEXT,
-            engines_json TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            completed_at TEXT NOT NULL
-          );
-
-          CREATE INDEX IF NOT EXISTS idx_scans_workspace_created
-            ON scans (workspace_id, created_at);
-
-          CREATE TABLE IF NOT EXISTS findings (
-            row_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            scan_id TEXT NOT NULL REFERENCES scans (id),
-            repository_id TEXT NOT NULL,
-            workspace_id TEXT NOT NULL,
-            rule_id TEXT,
-            title TEXT NOT NULL,
-            severity TEXT,
-            category TEXT,
-            file_path TEXT,
-            start_line INTEGER,
-            recommendation TEXT,
-            confidence TEXT,
-            evidence TEXT,
-            metadata_json TEXT,
-            created_at TEXT NOT NULL
-          );
-
-          CREATE INDEX IF NOT EXISTS idx_findings_scan ON findings (scan_id);
-
-          CREATE TABLE IF NOT EXISTS verdicts (
-            scan_id TEXT PRIMARY KEY REFERENCES scans (id),
-            project_id TEXT NOT NULL,
-            repository_id TEXT NOT NULL,
-            workspace_id TEXT NOT NULL,
-            status TEXT NOT NULL,
-            score INTEGER,
-            blockers_count INTEGER NOT NULL,
-            critical_blockers_count INTEGER NOT NULL,
-            high_blockers_count INTEGER NOT NULL,
-            verdict_json TEXT NOT NULL,
-            created_at TEXT NOT NULL
-          );
-        `);
-        db.prepare("INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)").run(
-          1,
-          (/* @__PURE__ */ new Date()).toISOString()
-        );
-        db.exec("COMMIT");
-      } catch (error51) {
-        db.exec("ROLLBACK");
-        throw error51;
-      }
-    }
-  } catch (error51) {
-    throw new LocalPersistenceError(
-      "LOCAL_PERSISTENCE_MIGRATION_FAILED",
-      error51 instanceof Error ? error51.message : "Local database migration failed."
-    );
-  }
-}
-function findingRow(scanId, finding, createdAt) {
-  return [
-    scanId,
-    finding.rule_id ?? null,
-    finding.title,
-    finding.severity ?? null,
-    finding.category ?? null,
-    finding.file_path ?? null,
-    finding.start_line ?? null,
-    finding.recommendation ?? null,
-    typeof finding.confidence === "string" ? finding.confidence : finding.confidence != null ? String(finding.confidence) : null,
-    finding.evidence ?? null,
-    finding.metadata ? JSON.stringify(finding.metadata) : null,
-    createdAt
-  ];
-}
-function rowToScan(row) {
-  return {
-    scanId: row.id,
-    projectId: row.project_id,
-    repositoryId: row.repository_id,
-    workspaceId: row.workspace_id,
-    scope: row.scope,
-    phase: row.phase,
-    branch: row.branch ?? null,
-    commitSha: row.commit_sha ?? null,
-    dirty: Boolean(row.dirty),
-    durationMs: Number(row.duration_ms),
-    errorMessage: row.error_message ?? null,
-    engines: JSON.parse(row.engines_json),
-    createdAt: row.created_at,
-    completedAt: row.completed_at
-  };
-}
-function rowToFinding(row) {
-  return {
-    id: `${row.scan_id}:${row.row_id}`,
-    scanId: row.scan_id,
-    title: row.title,
-    severity: row.severity ?? void 0,
-    category: row.category ?? void 0,
-    rule_id: row.rule_id ?? void 0,
-    file_path: row.file_path ?? void 0,
-    start_line: row.start_line ?? void 0,
-    recommendation: row.recommendation ?? void 0,
-    confidence: row.confidence ?? void 0,
-    evidence: row.evidence ?? void 0,
-    metadata: row.metadata_json ? JSON.parse(row.metadata_json) : void 0
-  };
-}
-function rowToVerdict(row) {
+  const phase = input.signal?.aborted ? "cancelled" : nativeFailed ? "incomplete" : externalPartialFailure || nativePartialFailure ? "partial" : "complete";
+  const sortedFindings = sortFindings(findings);
+  const durationMs = Date.now() - startedAt;
   let verdict;
-  try {
-    verdict = JSON.parse(row.verdict_json);
-  } catch {
-    throw new LocalPersistenceError("LOCAL_PERSISTENCE_CORRUPT", `Stored verdict for scan ${row.scan_id} is not valid JSON.`);
+  if (phase !== "incomplete" && phase !== "cancelled") {
+    verdict = generateProductionVerdict({
+      projectId: identity.projectId,
+      repositoryId: identity.repositoryId,
+      scanId,
+      commitSha: git.commitSha,
+      branch: git.branch,
+      scanStatus: "completed",
+      // F9: previously always null here (this call path had no production
+      // caller until F9), unlike run-local-verdict.ts's own old direct
+      // scanRepository() call, which always passed the native engine's
+      // real score. Filled in from the same snapshot the MCP response now
+      // surfaces, not recomputed -- null whenever native didn't run
+      // (external findings alone don't produce a scorable security score).
+      securityScore: snapshot.securityScore,
+      filesAnalyzed: snapshot.scannedFiles,
+      filesDiscovered: snapshot.discoveredFiles,
+      findings: sortedFindings,
+      partialScanFailure: externalPartialFailure || nativePartialFailure
+    }).verdict;
+  }
+  let persistence;
+  if (input.persist) {
+    const fileCounts = parseGitFileCounts(git.status);
+    const dirty = fileCounts.modifiedFiles + fileCounts.untrackedFiles + fileCounts.deletedFiles > 0;
+    const ownStore = !input.persistenceStore;
+    let store;
+    try {
+      store = input.persistenceStore ?? openLocalPersistenceStore(workspace);
+      store.saveScanResult({
+        scan: {
+          scanId,
+          projectId: identity.projectId,
+          repositoryId: identity.repositoryId,
+          workspaceId: identity.workspaceId,
+          scope: resolvedScope,
+          phase,
+          branch: git.branch,
+          commitSha: git.commitSha,
+          dirty,
+          durationMs,
+          errorMessage: nativeFailed ? engineOutcomes.find((e) => e.engine === NATIVE_ENGINE_ID)?.errors[0]?.message ?? null : null,
+          engines: engineOutcomes.map((e) => ({ engine: e.engine, status: e.status, durationMs: e.durationMs, findingsCount: e.findingsCount }))
+        },
+        findings: sortedFindings,
+        verdict: verdict ? {
+          projectId: identity.projectId,
+          repositoryId: identity.repositoryId,
+          workspaceId: identity.workspaceId,
+          status: verdict.status,
+          score: verdict.score,
+          blockersCount: verdict.blockersCount,
+          criticalBlockersCount: verdict.criticalBlockersCount,
+          highBlockersCount: verdict.highBlockersCount,
+          verdict
+        } : void 0
+      });
+      persistence = { status: "saved", scanId };
+    } catch (error51) {
+      persistence = {
+        status: "unavailable",
+        error: error51 instanceof LocalPersistenceError ? `${error51.code}: ${error51.message}` : error51 instanceof Error ? error51.message : "Unknown persistence failure."
+      };
+    } finally {
+      if (ownStore) store?.close();
+    }
   }
   return {
-    scanId: row.scan_id,
-    projectId: row.project_id,
-    repositoryId: row.repository_id,
-    workspaceId: row.workspace_id,
-    status: row.status,
-    score: row.score ?? null,
-    blockersCount: Number(row.blockers_count),
-    criticalBlockersCount: Number(row.critical_blockers_count),
-    highBlockersCount: Number(row.high_blockers_count),
+    source: "local",
+    scanId,
+    workspace,
+    scope: resolvedScope,
+    git,
+    snapshot,
+    identity: { projectId: identity.projectId, repositoryId: identity.repositoryId, workspaceId: identity.workspaceId },
+    phase,
+    findings: sortedFindings,
+    engines: engineOutcomes,
+    durationMs,
     verdict,
-    createdAt: row.created_at
-  };
-}
-function openLocalPersistenceStore(workspaceRoot) {
-  const dbPath = resolveSecureDatabasePath(workspaceRoot);
-  let db;
-  try {
-    db = new DatabaseSync(dbPath);
-  } catch (error51) {
-    throw new LocalPersistenceError(
-      "LOCAL_PERSISTENCE_UNAVAILABLE",
-      error51 instanceof Error ? error51.message : "Could not open the local database."
-    );
-  }
-  try {
-    db.exec("PRAGMA journal_mode = WAL");
-    db.exec("PRAGMA synchronous = NORMAL");
-    db.exec("PRAGMA foreign_keys = ON");
-    db.exec("PRAGMA busy_timeout = 5000");
-  } catch (error51) {
-    db.close();
-    throw new LocalPersistenceError(
-      "LOCAL_PERSISTENCE_UNAVAILABLE",
-      error51 instanceof Error ? error51.message : "Could not configure the local database."
-    );
-  }
-  runMigrations(db);
-  return {
-    saveScanResult(input) {
-      const now = (/* @__PURE__ */ new Date()).toISOString();
-      const createdAt = input.scan.createdAt ?? now;
-      const completedAt = input.scan.completedAt ?? now;
-      try {
-        db.exec("BEGIN");
-        db.prepare(
-          `INSERT INTO scans
-            (id, project_id, repository_id, workspace_id, scope, phase, branch, commit_sha, dirty, duration_ms, error_message, engines_json, created_at, completed_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        ).run(
-          input.scan.scanId,
-          input.scan.projectId,
-          input.scan.repositoryId,
-          input.scan.workspaceId,
-          input.scan.scope,
-          input.scan.phase,
-          input.scan.branch,
-          input.scan.commitSha,
-          input.scan.dirty ? 1 : 0,
-          input.scan.durationMs,
-          input.scan.errorMessage,
-          JSON.stringify(input.scan.engines),
-          createdAt,
-          completedAt
-        );
-        const insertFinding = db.prepare(
-          `INSERT INTO findings
-            (scan_id, repository_id, workspace_id, rule_id, title, severity, category, file_path, start_line, recommendation, confidence, evidence, metadata_json, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        );
-        for (const finding of input.findings) {
-          const [, ruleId, title, severity, category, filePath, startLine, recommendation, confidence, evidence, metadataJson, createdAtCol] = findingRow(input.scan.scanId, finding, createdAt);
-          insertFinding.run(
-            input.scan.scanId,
-            input.scan.repositoryId,
-            input.scan.workspaceId,
-            ruleId,
-            title,
-            severity,
-            category,
-            filePath,
-            startLine,
-            recommendation,
-            confidence,
-            evidence,
-            metadataJson,
-            createdAtCol
-          );
-        }
-        if (input.verdict) {
-          db.prepare(
-            `INSERT INTO verdicts
-              (scan_id, project_id, repository_id, workspace_id, status, score, blockers_count, critical_blockers_count, high_blockers_count, verdict_json, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-          ).run(
-            input.scan.scanId,
-            input.verdict.projectId,
-            input.verdict.repositoryId,
-            input.verdict.workspaceId,
-            input.verdict.status,
-            input.verdict.score,
-            input.verdict.blockersCount,
-            input.verdict.criticalBlockersCount,
-            input.verdict.highBlockersCount,
-            JSON.stringify(input.verdict.verdict),
-            createdAt
-          );
-        }
-        db.exec("COMMIT");
-      } catch (error51) {
-        try {
-          db.exec("ROLLBACK");
-        } catch {
-        }
-        throw new LocalPersistenceError(
-          "LOCAL_PERSISTENCE_WRITE_FAILED",
-          error51 instanceof Error ? error51.message : "Failed to persist the scan result."
-        );
-      }
-    },
-    getScan(scanId) {
-      try {
-        const row = db.prepare("SELECT * FROM scans WHERE id = ?").get(scanId);
-        return row ? rowToScan(row) : null;
-      } catch (error51) {
-        throw new LocalPersistenceError(
-          "LOCAL_PERSISTENCE_READ_FAILED",
-          error51 instanceof Error ? error51.message : "Failed to read scan."
-        );
-      }
-    },
-    getLatestScan(workspaceId) {
-      try {
-        const row = db.prepare("SELECT * FROM scans WHERE workspace_id = ? ORDER BY created_at DESC, id DESC LIMIT 1").get(workspaceId);
-        return row ? rowToScan(row) : null;
-      } catch (error51) {
-        throw new LocalPersistenceError(
-          "LOCAL_PERSISTENCE_READ_FAILED",
-          error51 instanceof Error ? error51.message : "Failed to read the latest scan."
-        );
-      }
-    },
-    listScans(workspaceId, limit = 20) {
-      try {
-        const rows = db.prepare("SELECT * FROM scans WHERE workspace_id = ? ORDER BY created_at DESC, id DESC LIMIT ?").all(workspaceId, limit);
-        return rows.map(rowToScan);
-      } catch (error51) {
-        throw new LocalPersistenceError(
-          "LOCAL_PERSISTENCE_READ_FAILED",
-          error51 instanceof Error ? error51.message : "Failed to list scans."
-        );
-      }
-    },
-    getFindingsForScan(scanId) {
-      try {
-        const rows = db.prepare("SELECT * FROM findings WHERE scan_id = ? ORDER BY row_id ASC").all(scanId);
-        return rows.map(rowToFinding);
-      } catch (error51) {
-        throw new LocalPersistenceError(
-          "LOCAL_PERSISTENCE_READ_FAILED",
-          error51 instanceof Error ? error51.message : "Failed to read findings."
-        );
-      }
-    },
-    getVerdictForScan(scanId) {
-      let row;
-      try {
-        row = db.prepare("SELECT * FROM verdicts WHERE scan_id = ?").get(scanId);
-      } catch (error51) {
-        throw new LocalPersistenceError(
-          "LOCAL_PERSISTENCE_READ_FAILED",
-          error51 instanceof Error ? error51.message : "Failed to read verdict."
-        );
-      }
-      return row ? rowToVerdict(row) : null;
-    },
-    close() {
-      db.close();
-    }
-  };
-}
-
-// brain/fix-prompt/format-stack.ts
-function formatStackLines(stack) {
-  const lines = [];
-  for (const language of stack.languages) lines.push(`- ${language}`);
-  for (const framework of stack.frameworks) lines.push(`- ${framework}`);
-  for (const service of stack.services) lines.push(`- ${service}`);
-  return lines.length > 0 ? lines : ["- TypeScript (detected during static analysis)"];
-}
-
-// brain/fix-prompt/category-guidance.ts
-var DEFAULT_GUIDANCE = {
-  preserve: [
-    "Existing user-facing functionality and navigation flows.",
-    "Current API contracts consumed by the frontend.",
-    "Database schema unless this issue explicitly requires a migration.",
-    "Existing third-party integrations and environment variable names."
-  ],
-  doNotModify: [
-    "Unrelated files, routes, or components.",
-    "Project architecture or folder structure.",
-    "Existing business logic outside the affected area.",
-    "Styling or UI layout outside what is required for the fix."
-  ],
-  regressionTests: [
-    "Authorized users can still access protected resources.",
-    "Unauthorized users are still blocked appropriately.",
-    "Existing happy-path flows continue to work.",
-    "Error states remain handled without exposing sensitive data."
-  ],
-  buildRequirements: ["npm run build", "npm run typecheck", "npm test", "npm run lint"]
-};
-var CATEGORY_GUIDANCE = {
-  authentication: {
-    preserve: [
-      "Existing sign-in, sign-up, and session refresh flows.",
-      "Current auth provider configuration and callback URLs.",
-      "User identity fields and session token shape."
-    ],
-    regressionTests: [
-      "Valid credentials still authenticate successfully.",
-      "Invalid credentials are rejected without leaking account details.",
-      "Expired or missing sessions redirect to sign-in.",
-      "Protected routes remain inaccessible without authentication."
-    ]
-  },
-  authorization: {
-    preserve: [
-      "Existing role and permission model.",
-      "Row-level security policies for unrelated tables.",
-      "API authorization checks on other endpoints."
-    ],
-    regressionTests: [
-      "Users can only access their own resources.",
-      "Cross-tenant or cross-user access attempts are denied.",
-      "Admin-only routes remain restricted to authorized roles."
-    ]
-  },
-  security: {
-    preserve: [
-      "Public endpoints that are intentionally unauthenticated.",
-      "Existing input validation on unrelated forms.",
-      "Current logging and monitoring hooks."
-    ],
-    regressionTests: [
-      "Malicious or malformed input is rejected safely.",
-      "Rate limits or throttles apply only to intended endpoints.",
-      "No new sensitive data appears in logs or client responses."
-    ]
-  },
-  data_protection: {
-    preserve: [
-      "Existing secret and environment variable naming conventions.",
-      "Encryption or hashing already applied to unrelated secrets.",
-      "Current deployment environment configuration."
-    ],
-    doNotModify: [
-      "Committed secrets in git history (rotate and remove from active use instead).",
-      "Production credentials in client bundles."
-    ],
-    regressionTests: [
-      "No secrets or service-role keys are exposed in client bundles.",
-      "Environment variables are read only on the server where required.",
-      "Rotated credentials work in development and production."
-    ]
-  },
-  secrets: {
-    preserve: DEFAULT_GUIDANCE.preserve,
-    doNotModify: [
-      "Client-side code paths unless moving secret usage server-side.",
-      "Git history (rotate credentials; do not rewrite history unless requested)."
-    ],
-    regressionTests: [
-      "Server-only secrets are not importable from client components.",
-      "Build output contains no raw API keys or service role tokens."
-    ]
-  },
-  deployment: {
-    preserve: [
-      "Current hosting configuration and environment separation.",
-      "CI/CD pipeline steps unrelated to this fix.",
-      "Production domain and redirect settings."
-    ],
-    regressionTests: [
-      "Application builds and starts in production mode.",
-      "Environment-specific configuration loads correctly.",
-      "Health checks and deployment hooks still pass."
-    ]
-  },
-  database: {
-    preserve: [
-      "Existing migrations and seed data.",
-      "Unrelated table schemas and indexes.",
-      "Database connection pooling configuration."
-    ],
-    doNotModify: ["Unrelated tables, views, or RLS policies."],
-    regressionTests: [
-      "Migrations apply cleanly on a fresh database.",
-      "Existing queries return expected results.",
-      "RLS policies enforce the intended access model."
-    ]
-  }
-};
-function guidanceForCategory(category) {
-  const key = category.toLowerCase().replace(/\s+/g, "_");
-  const match = CATEGORY_GUIDANCE[key] ?? Object.entries(CATEGORY_GUIDANCE).find(([name]) => key.includes(name))?.[1] ?? {};
-  return {
-    preserve: match.preserve ?? DEFAULT_GUIDANCE.preserve,
-    doNotModify: match.doNotModify ?? DEFAULT_GUIDANCE.doNotModify,
-    regressionTests: match.regressionTests ?? DEFAULT_GUIDANCE.regressionTests,
-    buildRequirements: match.buildRequirements ?? DEFAULT_GUIDANCE.buildRequirements
-  };
-}
-
-// brain/fix-prompt/assessment.ts
-var HIGH_RISK_CATEGORIES = /* @__PURE__ */ new Set(["authorization", "database"]);
-var MEDIUM_RISK_CATEGORIES = /* @__PURE__ */ new Set(["authentication", "security"]);
-function normalizeCategory(category) {
-  return category.toLowerCase().replace(/\s+/g, "_");
-}
-function complexityLabel(complexity) {
-  switch (complexity) {
-    case "low":
-      return "Low \u2014 localized change in one or two files.";
-    case "medium":
-      return "Medium \u2014 coordinated changes across a small set of files.";
-    case "high":
-      return "High \u2014 cross-cutting change requiring careful validation.";
-  }
-}
-function assessRisk(input) {
-  const category = normalizeCategory(input.category);
-  const fileCount = Math.max(input.affectedFiles.length, 1);
-  const severity = input.severity.toLowerCase();
-  if (HIGH_RISK_CATEGORIES.has(category) || severity === "critical" && fileCount >= 3) {
-    return {
-      implementationRisk: "HIGH",
-      riskReason: category === "authorization" || category === "database" ? "Database or authorization policy changes can affect access for all users." : "Multiple critical touchpoints increase regression risk."
-    };
-  }
-  if (MEDIUM_RISK_CATEGORIES.has(category) || severity === "critical" || fileCount >= 2) {
-    const reason = category === "authentication" ? "Authentication flow updates affect sign-in and session behaviour." : category === "security" ? "Security hardening may touch request handling or middleware." : "More than one file may need a coordinated safe change.";
-    return { implementationRisk: "MEDIUM", riskReason: reason };
-  }
-  return {
-    implementationRisk: "LOW",
-    riskReason: "Single-file or configuration-level change with narrow blast radius."
-  };
-}
-function assessConfidence(input, risk) {
-  let score = 88;
-  const fileCount = input.affectedFiles.length;
-  if (fileCount === 1) score += 6;
-  else if (fileCount === 2) score += 3;
-  else if (fileCount === 0) score -= 8;
-  else if (fileCount >= 4) score -= 6;
-  if (input.recommendedAction.trim().length >= 40) score += 4;
-  const severity = input.severity.toLowerCase();
-  if (severity === "critical") score -= 6;
-  if (severity === "high") score -= 2;
-  const category = normalizeCategory(input.category);
-  if (HIGH_RISK_CATEGORIES.has(category)) score -= 10;
-  else if (MEDIUM_RISK_CATEGORIES.has(category)) score -= 5;
-  if (risk === "LOW") score += 4;
-  if (risk === "HIGH") score -= 6;
-  if (input.estimatedFixMinutes != null && input.estimatedFixMinutes <= 10) score += 3;
-  return Math.max(70, Math.min(98, score));
-}
-function assessScope(input, risk) {
-  const filesExpected = Math.max(input.affectedFiles.length, 1);
-  const minutes = input.estimatedFixMinutes ?? Math.max(5, filesExpected * 8);
-  let complexity = "low";
-  if (risk === "HIGH" || filesExpected >= 3) complexity = "high";
-  else if (risk === "MEDIUM" || filesExpected === 2) complexity = "medium";
-  const locPerMinute = complexity === "low" ? 3 : complexity === "medium" ? 4 : 5;
-  const estimatedLocMin = Math.max(3, Math.round(minutes * locPerMinute * 0.4));
-  const estimatedLocMax = Math.max(
-    estimatedLocMin + 5,
-    Math.round(minutes * locPerMinute * 1.1)
-  );
-  return {
-    filesExpected,
-    estimatedLocMin,
-    estimatedLocMax,
-    complexity,
-    complexityLabel: complexityLabel(complexity)
-  };
-}
-function assessSafeFix(input) {
-  const { implementationRisk, riskReason } = assessRisk(input);
-  const safeFixConfidence = assessConfidence(input, implementationRisk);
-  const estimatedScope = assessScope(input, implementationRisk);
-  return {
-    safeFixConfidence,
-    implementationRisk,
-    riskReason,
-    estimatedScope
-  };
-}
-function formatEstimatedFixTime(minutes) {
-  if (minutes == null || minutes <= 0) return "5 minutes";
-  if (minutes === 1) return "1 minute";
-  return `${minutes} minutes`;
-}
-
-// features/security-scanner/components/types.ts
-var findingFile = (finding) => finding.file_path ?? finding.filePath ?? finding.file ?? "";
-
-// brain/fix-prompt/build-production-fix-prompt.ts
-function bulletList(items) {
-  return items.map((item) => `- ${item}`).join("\n");
-}
-function section(title, body) {
-  return `${title}
-
-${body}`;
-}
-function severityImpact(severity) {
-  switch (severity.toLowerCase()) {
-    case "critical":
-      return "Critical \u2014 blocks safe production deployment until resolved.";
-    case "high":
-      return "High \u2014 prevents shipping until this production blocker is fixed.";
-    case "medium":
-      return "Medium \u2014 improves production readiness but does not block deployment.";
-    default:
-      return "Low \u2014 incremental improvement to production readiness.";
-  }
-}
-var SAFE_IMPLEMENTATION_PRINCIPLES = [
-  "Make the smallest possible safe change that fully resolves this blocker.",
-  "Do not introduce breaking changes to existing behaviour.",
-  "Preserve the user's project intent, architecture, and UX.",
-  "Prefer additive or narrowly scoped edits over refactors.",
-  "Stop once the blocker is resolved \u2014 do not improve unrelated code."
-];
-function projectedScoreAfterFix(input) {
-  const raw = (input.currentScore ?? 0) + (input.projectedScoreImpact ?? 0);
-  return Math.max(0, Math.min(100, Math.round(raw)));
-}
-function projectedVerdictStatusAfterFix(input) {
-  const current = input.currentVerdictStatus ?? "not_ready";
-  const projectedScore = projectedScoreAfterFix(input);
-  if (projectedScore >= 85 && current !== "ready_to_ship") {
-    return "ready_to_ship";
-  }
-  if (projectedScore >= 70) {
-    return "almost_ready";
-  }
-  if (projectedScore >= 55) {
-    return "needs_improvement";
-  }
-  if (current === "insufficient_data" || current === "analysis_failed") {
-    return current;
-  }
-  return "not_ready";
-}
-function projectedVerdictAfterFix(input) {
-  return VERDICT_STATUS_LABELS[projectedVerdictStatusAfterFix(input)];
-}
-function buildProductionFixPrompt(input) {
-  const guardedInput = sanitizeProductionFixPromptInput(input);
-  const guidance = guidanceForCategory(guardedInput.category);
-  const buildCommands = guardedInput.buildCommands ?? guidance.buildRequirements;
-  const projectedVerdictLabel = projectedVerdictAfterFix(guardedInput);
-  const currentVerdictLabel = guardedInput.currentVerdictStatus ? VERDICT_STATUS_LABELS[guardedInput.currentVerdictStatus] : "Not Ready to Ship";
-  const assessment = assessSafeFix(guardedInput);
-  const files = guardedInput.affectedFiles.length > 0 ? bulletList(guardedInput.affectedFiles) : "- Review the codebase area related to this issue during implementation.";
-  const stackLines = formatStackLines(guardedInput.stack).join("\n");
-  const severityLabel = guardedInput.severity.charAt(0).toUpperCase() + guardedInput.severity.slice(1);
-  const promptBody = [
-    section(
-      "PROJECT CONTEXT",
-      [
-        guardedInput.projectName ? `Project: ${guardedInput.projectName}` : null,
-        "Detected stack:",
-        stackLines
-      ].filter(Boolean).join("\n")
-    ),
-    section(
-      "PRODUCTION BLOCKER",
-      [
-        `Title: ${guardedInput.issueTitle}`,
-        `Severity: ${severityLabel}`,
-        guardedInput.affectedFiles[0] ? `Location: ${guardedInput.affectedFiles[0]}` : null,
-        "",
-        guardedInput.issueDescription,
-        "",
-        `Estimated impact: ${guardedInput.estimatedImpact ?? severityImpact(guardedInput.severity)}`
-      ].filter(Boolean).join("\n")
-    ),
-    section(
-      "WHY THIS MATTERS",
-      [
-        guardedInput.whyItMatters,
-        "",
-        `Production risk: ${assessment.riskReason}`,
-        `Implementation risk: ${assessment.implementationRisk}`
-      ].join("\n")
-    ),
-    section(
-      "GOAL",
-      [
-        `Fix this ${guardedInput.category.replace(/_/g, " ")} production blocker with the smallest possible safe change.`,
-        guardedInput.recommendedAction
-      ].join("\n")
-    ),
-    section("FILES TO REVIEW", files),
-    section("PRESERVE THE FOLLOWING", bulletList(guidance.preserve)),
-    section("DO NOT MODIFY", bulletList(guidance.doNotModify)),
-    section("IMPLEMENTATION REQUIREMENTS", [
-      "Apply the minimum required code changes using the safest possible approach.",
-      "Match existing project conventions, naming, and file structure.",
-      "",
-      guardedInput.recommendedAction
-    ].join("\n")),
-    section("SAFE IMPLEMENTATION PRINCIPLES", bulletList(SAFE_IMPLEMENTATION_PRINCIPLES)),
-    section("REGRESSION TESTS", bulletList(guidance.regressionTests)),
-    section(
-      "BUILD REQUIREMENTS",
-      [
-        "Before finishing, run:",
-        bulletList(buildCommands),
-        "",
-        "Confirm the fix does not introduce new TypeScript, lint, or test failures."
-      ].join("\n")
-    ),
-    section("CONFIDENCE SCORE", [
-      `Safe Fix Confidence: ${assessment.safeFixConfidence}%`,
-      "",
-      "This score represents how confident SequrAI is that this change can be implemented safely without introducing regressions."
-    ].join("\n")),
-    section("IMPLEMENTATION RISK", [
-      assessment.implementationRisk,
-      "",
-      assessment.riskReason
-    ].join("\n")),
-    section("ESTIMATED FIX TIME", formatEstimatedFixTime(guardedInput.estimatedFixMinutes)),
-    section("ESTIMATED SCOPE", [
-      `Files expected to change: ${assessment.estimatedScope.filesExpected}`,
-      `Estimated LOC modifications: ${assessment.estimatedScope.estimatedLocMin}\u2013${assessment.estimatedScope.estimatedLocMax}`,
-      `Complexity: ${assessment.estimatedScope.complexityLabel}`
-    ].join("\n")),
-    section(
-      "PROJECTED PRODUCTION VERDICT",
-      [
-        "Current:",
-        currentVerdictLabel,
-        "",
-        "Projected:",
-        projectedVerdictLabel,
-        guardedInput.projectedScoreImpact ? `(Estimated score improvement: +${guardedInput.projectedScoreImpact} points)` : null
-      ].filter(Boolean).join("\n")
-    )
-  ].join("\n\n------------------------------------------------------------\n\n");
-  const prompt = assertFixPromptOutputSafe(promptBody);
-  return { prompt, projectedVerdictLabel, assessment };
-}
-function fixPromptInputFromFinding(finding, options = {}) {
-  const path = findingFile(finding);
-  return {
-    projectName: options.projectName,
-    issueTitle: finding.title ?? "Production blocker",
-    issueDescription: finding.description ?? finding.recommendation ?? "",
-    category: finding.category ?? "security",
-    severity: finding.severity ?? "high",
-    whyItMatters: finding.impact ?? finding.description ?? "This issue prevents safe production deployment.",
-    estimatedImpact: finding.impact,
-    affectedFiles: path ? [path] : [],
-    stack: options.stack ?? { languages: [], frameworks: [], services: [] },
-    recommendedAction: options.recommendedAction ?? finding.recommendation ?? "Apply the smallest safe fix that resolves this production blocker.",
-    estimatedFixMinutes: options.estimatedFixMinutes,
-    currentVerdictStatus: options.currentVerdictStatus,
-    currentScore: options.currentScore,
-    projectedScoreImpact: options.projectedScoreImpact
-  };
-}
-
-// lib/local-analysis/local-safe-fix.ts
-var LocalSafeFixError = class extends Error {
-  constructor(code, message) {
-    super(message);
-    this.code = code;
-    this.name = "LocalSafeFixError";
-  }
-};
-var MAX_FIX_CANDIDATES = 8;
-var SEVERITY_RANK = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
-function loadCurrentFindingsForFix(store, identity) {
-  const scan = store.getLatestScan(identity.workspaceId);
-  if (!scan || scan.repositoryId !== identity.repositoryId) {
-    throw new LocalSafeFixError(
-      "no_scan_yet",
-      "No local scan has been recorded for this workspace yet. Run sequrai_local_audit (or audit_local_project) first."
-    );
-  }
-  return { scan, findings: store.getFindingsForScan(scan.scanId) };
-}
-function toCandidate(finding, correlationKey) {
-  return {
-    correlationKey,
-    ruleId: finding.rule_id ?? "",
-    title: finding.title,
-    severity: finding.severity ?? null,
-    filePath: finding.file_path ?? null
-  };
-}
-function buildLocalSafeFix(store, identity, input) {
-  const { scan, findings } = loadCurrentFindingsForFix(store, identity);
-  const verdict = store.getVerdictForScan(scan.scanId);
-  const candidates = findings.map((finding) => ({ finding, correlationKey: correlationKeyForPersistedFinding(finding, identity.workspaceId) })).sort(
-    (a, b) => (SEVERITY_RANK[a.finding.severity ?? ""] ?? 5) - (SEVERITY_RANK[b.finding.severity ?? ""] ?? 5) || a.correlationKey.localeCompare(b.correlationKey)
-  );
-  if (candidates.length === 0) {
-    return {
-      status: "no_findings",
-      scanId: scan.scanId,
-      note: "No findings in the latest scan -- nothing to fix."
-    };
-  }
-  const requested = input.correlationKey?.trim();
-  if (!requested) {
-    return {
-      status: "choose_finding",
-      scanId: scan.scanId,
-      candidates: candidates.slice(0, MAX_FIX_CANDIDATES).map((c) => toCandidate(c.finding, c.correlationKey)),
-      note: "Pass one of these correlationKey values as `correlationKey` to get a fix prompt for that specific finding."
-    };
-  }
-  const match = candidates.find((c) => c.correlationKey === requested);
-  if (!match) {
-    throw new LocalSafeFixError(
-      "finding_not_found",
-      `No finding with correlationKey "${requested}" was found in the latest scan (${scan.scanId}) for this workspace.`
-    );
-  }
-  const promptInput = fixPromptInputFromFinding(
-    {
-      id: match.finding.id,
-      title: match.finding.title,
-      severity: match.finding.severity ?? void 0,
-      category: match.finding.category ?? void 0,
-      rule_id: match.finding.rule_id ?? void 0,
-      file_path: match.finding.file_path ?? void 0,
-      start_line: match.finding.start_line ?? void 0,
-      recommendation: match.finding.recommendation ?? void 0,
-      evidence: match.finding.evidence ?? void 0
-    },
-    {
-      projectName: identity.projectName,
-      currentVerdictStatus: verdict?.status,
-      currentScore: verdict?.score ?? null
-    }
-  );
-  const result = buildProductionFixPrompt(promptInput);
-  return {
-    status: "prompt_ready",
-    scanId: scan.scanId,
-    finding: toCandidate(match.finding, match.correlationKey),
-    fixPrompt: result.prompt,
-    safeFixConfidence: result.assessment.safeFixConfidence,
-    implementationRisk: result.assessment.implementationRisk,
-    estimatedFixTime: formatEstimatedFixTime(promptInput.estimatedFixMinutes),
-    projectedScore: projectedScoreAfterFix(promptInput),
-    projectedVerdict: projectedVerdictStatusAfterFix(promptInput),
-    note: `SequrAI does not execute this fix. Review and apply it yourself, then run sequrai_local_audit (or audit_local_project) again -- the rescan's finding history will show this finding as RESOLVED if it is no longer detected in a complete scan, or PERSISTING if it still is. "Resolved" means not detected in the latest complete scan, not proven fixed or secure.`
+    persistence
   };
 }
 
@@ -25628,236 +27069,84 @@ function buildGitMetadata(git) {
     deletedFiles: counts.deletedFiles
   };
 }
-function buildInsufficientDataResult(input) {
-  const scanId = createLocalScanId();
-  const { verdict } = generateProductionVerdict({
-    projectId: input.identity.projectId,
-    repositoryId: input.identity.repositoryId,
-    scanId,
-    commitSha: input.git.commitSha,
-    branch: input.git.branch,
-    scanStatus: "completed",
-    securityScore: null,
-    filesAnalyzed: 0,
-    filesDiscovered: input.snapshot.filesAnalyzed,
-    findings: [],
-    partialScanFailure: input.snapshot.truncated
-  });
-  return {
-    source: "local",
-    gitAvailable: input.git.isGitRepository,
-    scope: input.scope,
-    phase: input.snapshot.truncated ? "partial" : "complete",
-    workspace: input.workspace,
-    branch: input.git.branch,
-    commitSha: input.git.commitSha,
-    verdictStatus: verdict.status,
-    score: verdict.score,
-    blockersCount: verdict.blockersCount,
-    findings: [],
-    findingsOmittedCount: 0,
-    productionVerdict: verdict,
-    snapshot: input.snapshot,
-    git: buildGitMetadata(input.git),
-    scanMetrics: {
-      inputFiles: 0,
-      scannedFiles: 0,
-      rulesRun: 0,
-      truncated: input.snapshot.truncated
-    },
-    narrative: buildLocalStatusSummary({
-      scope: input.scope,
-      verdictStatus: verdict.status,
-      score: verdict.score,
-      findings: [],
-      reason: input.reason
-    }),
-    methodologyNote: verdict.methodologyNote,
-    identity: { projectId: input.identity.projectId, repositoryId: input.identity.repositoryId, workspaceId: input.identity.workspaceId }
-  };
-}
 async function runLocalProductionVerdict(input = {}) {
   const workspace = normalizeWorkspaceRoot(input.workspacePath ?? process.cwd());
   const scope = resolveScopeFromArgs(input);
-  const git = getGitContext(workspace);
-  const listing = listWorkspaceFiles(workspace);
-  const identity = await resolveLocalIdentity(workspace);
-  const emptySnapshot = {
-    filesAnalyzed: 0,
-    filesExcluded: listing.stats.filesExcluded,
-    bytesAnalyzed: 0,
-    truncated: listing.truncated,
-    credentialsSkipped: listing.stats.credentialsSkipped
-  };
-  const { scope: resolvedScope, paths, requiresGit } = resolveScopePaths(git, scope);
-  if (requiresGit) {
-    return buildInsufficientDataResult({
-      workspace,
-      scope,
-      git,
-      snapshot: emptySnapshot,
-      reason: "Git is not available in this workspace. Use scope=workspace or initialize a git repository.",
-      identity
-    });
-  }
-  if (resolvedScope !== "workspace" && paths.size === 0) {
-    return buildInsufficientDataResult({
-      workspace,
-      scope: resolvedScope,
-      git,
-      snapshot: emptySnapshot,
-      reason: "No changed files detected for the selected scope.",
-      identity
-    });
-  }
-  const scopedListing = resolvedScope === "workspace" ? listing : listWorkspaceFiles(workspace, { onlyRelativePaths: paths });
-  const inputFiles = collectInputFiles(
-    workspace,
-    resolvedScope === "workspace" ? void 0 : paths
-  );
-  if (inputFiles.length === 0) {
-    return buildInsufficientDataResult({
-      workspace,
-      scope: resolvedScope,
-      git,
-      snapshot: {
-        filesAnalyzed: 0,
-        filesExcluded: scopedListing.stats.filesExcluded,
-        bytesAnalyzed: 0,
-        truncated: scopedListing.truncated,
-        credentialsSkipped: scopedListing.stats.credentialsSkipped
-      },
-      reason: "No readable source files found inside the authorized workspace.",
-      identity
-    });
-  }
-  const scan = await scanRepository(inputFiles);
-  const scanId = createLocalScanId();
-  const bytesAnalyzed = inputFiles.reduce((sum, file2) => sum + file2.content.length, 0);
-  const ruleFailed = scan.omissions.some((o) => o.reason === "rule-error");
-  const snapshotTruncated = scopedListing.truncated || scan.metrics.truncated;
-  const partialScanFailure = snapshotTruncated || ruleFailed;
-  const snapshot = {
-    filesAnalyzed: scan.metrics.scannedFiles,
-    filesExcluded: scopedListing.stats.filesExcluded,
-    bytesAnalyzed,
-    truncated: snapshotTruncated,
-    credentialsSkipped: scopedListing.stats.credentialsSkipped
-  };
-  const { verdict } = generateProductionVerdict({
-    projectId: identity.projectId,
-    repositoryId: identity.repositoryId,
-    scanId,
-    commitSha: git.commitSha,
-    branch: git.branch,
-    scanStatus: "completed",
-    securityScore: scan.score.score,
-    filesAnalyzed: scan.metrics.scannedFiles,
-    filesDiscovered: scopedListing.stats.discoveredFiles,
-    findings: scan.findings.map(mapScanFindingToVerdictInput),
-    partialScanFailure
+  const result = await runLocalSecurityOrchestrator({
+    workspacePath: workspace,
+    scope,
+    gitDiffOnly: input.gitDiffOnly,
+    persist: input.persist
   });
-  const publicFindings = mapFindingsToPublic(scan.findings);
+  return buildLocalProductionVerdictResult(result);
+}
+function buildLocalProductionVerdictResult(result) {
+  const publicFindings = mapVerdictFindingsToPublic(result.findings);
   const actionableFindings = publicFindings.filter((finding) => !finding.safeToIgnore);
   const inlineFindings = capLocalFindingsForResponse(publicFindings);
-  const phase = partialScanFailure ? "partial" : "complete";
-  const persistence = input.persist ? persistLocalScan({
-    workspace,
-    scanId,
-    identity,
-    scope: resolvedScope,
-    phase,
-    git,
-    durationMs: scan.metrics.durationMs,
-    findings: scan.findings.map(mapScanFindingToVerdictInput),
-    ruleFailed,
-    verdict: {
-      projectId: identity.projectId,
-      repositoryId: identity.repositoryId,
-      workspaceId: identity.workspaceId,
-      status: verdict.status,
-      score: verdict.score,
-      blockersCount: verdict.blockersCount,
-      criticalBlockersCount: verdict.criticalBlockersCount,
-      highBlockersCount: verdict.highBlockersCount,
-      verdict
-    }
-  }) : void 0;
+  const engineErrorMessage = result.engines.flatMap((e) => e.errors).find(Boolean)?.message;
+  const verdict = result.verdict ?? generateProductionVerdict({
+    projectId: result.identity.projectId,
+    repositoryId: result.identity.repositoryId,
+    scanId: result.scanId,
+    commitSha: result.git.commitSha,
+    branch: result.git.branch,
+    scanStatus: "completed",
+    securityScore: null,
+    filesAnalyzed: 0,
+    filesDiscovered: result.snapshot.discoveredFiles,
+    findings: [],
+    partialScanFailure: true
+  }).verdict;
   return {
     source: "local",
-    gitAvailable: git.isGitRepository,
-    scope: resolvedScope,
-    phase,
-    workspace,
-    branch: git.branch,
-    commitSha: git.commitSha,
+    gitAvailable: result.git.isGitRepository,
+    scope: result.scope,
+    phase: result.phase,
+    workspace: result.workspace,
+    branch: result.git.branch,
+    commitSha: result.git.commitSha,
     verdictStatus: verdict.status,
     score: verdict.score,
     blockersCount: verdict.blockersCount,
     findings: inlineFindings,
     findingsOmittedCount: Math.max(0, publicFindings.length - inlineFindings.length),
     productionVerdict: verdict,
-    snapshot,
-    git: buildGitMetadata(git),
+    snapshot: {
+      filesAnalyzed: result.snapshot.scannedFiles,
+      filesExcluded: result.snapshot.filesExcluded,
+      bytesAnalyzed: result.snapshot.bytesAnalyzed,
+      truncated: result.snapshot.truncated,
+      credentialsSkipped: result.snapshot.credentialsSkipped
+    },
+    git: buildGitMetadata(result.git),
     scanMetrics: {
-      inputFiles: scan.metrics.inputFiles,
-      scannedFiles: scan.metrics.scannedFiles,
-      rulesRun: scan.metrics.rulesRun,
-      truncated: snapshotTruncated
+      inputFiles: result.snapshot.inputFiles,
+      scannedFiles: result.snapshot.scannedFiles,
+      rulesRun: result.snapshot.rulesRun,
+      truncated: result.snapshot.truncated
     },
     narrative: buildLocalStatusSummary({
-      scope: resolvedScope,
+      scope: result.scope,
       verdictStatus: verdict.status,
       score: verdict.score,
       findings: actionableFindings,
       headline: verdictHeadline(verdict.status),
       executiveSummary: verdict.executiveSummary,
-      topPriorities: verdict.topPriorities.map((priority) => priority.title)
+      topPriorities: verdict.topPriorities.map((priority) => priority.title),
+      reason: result.phase === "incomplete" || result.phase === "cancelled" ? engineErrorMessage : void 0
     }),
     methodologyNote: verdict.methodologyNote,
+    engines: result.engines,
     correlation: {
-      ready: Boolean(git.commitSha),
-      commitSha: git.commitSha,
-      branch: git.branch,
-      reason: git.commitSha ? void 0 : "Local analysis has no verified commit SHA for GitHub correlation."
+      ready: Boolean(result.git.commitSha),
+      commitSha: result.git.commitSha,
+      branch: result.git.branch,
+      reason: result.git.commitSha ? void 0 : "Local analysis has no verified commit SHA for GitHub correlation."
     },
-    identity: { projectId: identity.projectId, repositoryId: identity.repositoryId, workspaceId: identity.workspaceId },
-    persistence
+    identity: result.identity,
+    persistence: result.persistence
   };
-}
-function persistLocalScan(input) {
-  const counts = parseGitFileCounts(input.git.status);
-  const dirty = counts.modifiedFiles + counts.untrackedFiles + counts.deletedFiles > 0;
-  let store;
-  try {
-    store = openLocalPersistenceStore(input.workspace);
-    store.saveScanResult({
-      scan: {
-        scanId: input.scanId,
-        projectId: input.identity.projectId,
-        repositoryId: input.identity.repositoryId,
-        workspaceId: input.identity.workspaceId,
-        scope: input.scope,
-        phase: input.phase,
-        branch: input.git.branch,
-        commitSha: input.git.commitSha,
-        dirty,
-        durationMs: input.durationMs,
-        errorMessage: input.ruleFailed ? "One or more security rules failed to complete." : null,
-        engines: [{ engine: "native", status: input.ruleFailed ? "PARTIAL" : "COMPLETED", durationMs: input.durationMs, findingsCount: input.findings.length }]
-      },
-      findings: input.findings,
-      verdict: input.verdict
-    });
-    return { status: "saved", scanId: input.scanId };
-  } catch (error51) {
-    return {
-      status: "unavailable",
-      error: error51 instanceof LocalPersistenceError ? `${error51.code}: ${error51.message}` : error51 instanceof Error ? error51.message : "Unknown persistence failure."
-    };
-  } finally {
-    store?.close();
-  }
 }
 var MAX_INLINE_HISTORY_FINDINGS = 10;
 function readLocalHistorySummary(workspace, identity) {

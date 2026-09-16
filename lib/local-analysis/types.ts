@@ -18,8 +18,16 @@ export type LocalFindingPublic = {
   description: string;
   severity: string;
   category: string;
-  filePath: string;
-  line: number;
+  /**
+   * F9: nullable -- an external-engine finding (e.g. Trivy's dependency
+   * findings) can legitimately have no source line, and some have no single
+   * file path either. Previously always a string/number because only
+   * native findings (which always have a location) reached this type;
+   * widening rather than fabricating a fake "0"/"" value once external
+   * findings started flowing through the same mapper (F9).
+   */
+  filePath: string | null;
+  line: number | null;
   correlationKey: string;
   evidence?: string;
   remediation: string;
@@ -47,7 +55,16 @@ export type LocalProductionVerdictResult = {
   source: "local";
   gitAvailable: boolean;
   scope: LocalAnalysisScope;
-  phase: "complete" | "partial";
+  /**
+   * F9: widened from "complete"|"partial" to match
+   * LocalOrchestratorPhase (local-orchestrator.ts) now that this result is
+   * built from the orchestrator's own phase, not a bespoke two-value
+   * approximation. "incomplete": the native engine itself failed or the
+   * requested scope couldn't be honored -- findings/verdict here are a
+   * best-effort fallback (see runLocalProductionVerdict), never treated as
+   * authoritative history. "cancelled": the caller's AbortSignal fired.
+   */
+  phase: "complete" | "partial" | "incomplete" | "cancelled";
   workspace: string;
   branch: string | null;
   commitSha: string | null;
@@ -67,6 +84,13 @@ export type LocalProductionVerdictResult = {
   };
   narrative: string;
   methodologyNote: string;
+  /**
+   * F9: per-engine outcome (native + OpenGrep/Trivy/crypto/Scorecard),
+   * sourced directly from the orchestrator's own LocalEngineOutcome[] --
+   * additive, so a scan with an engine failure is observable through this
+   * field (status/errors) rather than only visible as an aggregate `phase`.
+   */
+  engines: Array<{ engine: string; status: string; durationMs: number; findingsCount: number; errors: Array<{ code: string; message: string }> }>;
   correlation?: {
     ready: boolean;
     commitSha: string | null;

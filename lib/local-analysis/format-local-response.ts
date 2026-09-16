@@ -46,10 +46,15 @@ export function buildLocalStatusSummary(input: {
   if (actionable.length > 0) {
     lines.push("", "MAIN FINDINGS");
     for (const finding of actionable.slice(0, 6)) {
+      const location = finding.filePath
+        ? finding.line != null
+          ? `${finding.filePath}:${finding.line}`
+          : finding.filePath
+        : "location not tied to a single file";
       lines.push(
         "",
         `${finding.severity.toUpperCase()} — ${finding.title}`,
-        `File: ${finding.filePath}:${finding.line}`,
+        `File: ${location}`,
         finding.description
       );
       if (finding.evidence) {
