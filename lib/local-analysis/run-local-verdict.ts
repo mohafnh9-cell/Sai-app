@@ -23,6 +23,8 @@ import type {
 } from "./types";
 import { buildLocalStatusSummary } from "./format-local-response";
 import { listWorkspaceFiles, normalizeWorkspaceRoot } from "./workspace";
+import { buildFindingHistory, type FindingHistoryResult } from "./finding-history";
+import { LocalPersistenceError, openLocalPersistenceStore, type LocalPersistenceStore } from "./local-persistence";
 
 // Inlining every finding in the stdio-bridge response is the same mistake
 // the GitHub-connected full_product_audit tool made: fine for a handful of
@@ -110,6 +112,7 @@ function buildInsufficientDataResult(input: {
       reason: input.reason,
     }),
     methodologyNote: verdict.methodologyNote,
+    identity: { projectId: input.identity.projectId, repositoryId: input.identity.repositoryId, workspaceId: input.identity.workspaceId },
   };
 }
 
@@ -188,7 +191,22 @@ export async function runLocalProductionVerdict(
   const scan = await scanRepository(inputFiles);
   const scanId = createLocalScanId();
   const bytesAnalyzed = inputFiles.reduce((sum, file) => sum + file.content.length, 0);
+  // L1.6: a rule can fail independently of the file-count/byte-limit
+  // truncation this flag previously covered alone (most notably
+  // osv-sbom-rule.ts on a network/offline failure -- see the L1.5 fix to
+  // features/security-analysis/rules/osv-sbom-rule.ts). scanRepository()
+  // already tracks this via ScanResult.omissions (reason: "rule-error"),
+  // exactly as lib/local-analysis/local-orchestrator.ts's own L1.5 fix
+  // reads it -- this is the same signal, read here for the first time by
+  // the actually-live MCP scan path (run-local-verdict.ts), which
+  // previously reported "complete" even when a rule had failed. Without
+  // this, L1.6's own history would have treated such a scan as authoritative
+  // for resolving prior findings -- exactly the false negative the PARTIAL/
+  // FAILED SCANS rule (ABSENCE OF EVIDENCE IS NOT EVIDENCE OF RESOLUTION)
+  // exists to prevent.
+  const ruleFailed = scan.omissions.some((o) => o.reason === "rule-error");
   const snapshotTruncated = scopedListing.truncated || scan.metrics.truncated;
+  const partialScanFailure = snapshotTruncated || ruleFailed;
   const snapshot: LocalSnapshotMetadata = {
     filesAnalyzed: scan.metrics.scannedFiles,
     filesExcluded: scopedListing.stats.filesExcluded,
@@ -208,18 +226,44 @@ export async function runLocalProductionVerdict(
     filesAnalyzed: scan.metrics.scannedFiles,
     filesDiscovered: scopedListing.stats.discoveredFiles,
     findings: scan.findings.map(mapScanFindingToVerdictInput),
-    partialScanFailure: snapshotTruncated,
+    partialScanFailure,
   });
 
   const publicFindings = mapFindingsToPublic(scan.findings);
   const actionableFindings = publicFindings.filter((finding) => !finding.safeToIgnore);
   const inlineFindings = capLocalFindingsForResponse(publicFindings);
+  const phase: "complete" | "partial" = partialScanFailure ? "partial" : "complete";
+
+  const persistence = input.persist
+    ? persistLocalScan({
+        workspace,
+        scanId,
+        identity,
+        scope: resolvedScope,
+        phase,
+        git,
+        durationMs: scan.metrics.durationMs,
+        findings: scan.findings.map(mapScanFindingToVerdictInput),
+        ruleFailed,
+        verdict: {
+          projectId: identity.projectId,
+          repositoryId: identity.repositoryId,
+          workspaceId: identity.workspaceId,
+          status: verdict.status,
+          score: verdict.score,
+          blockersCount: verdict.blockersCount,
+          criticalBlockersCount: verdict.criticalBlockersCount,
+          highBlockersCount: verdict.highBlockersCount,
+          verdict: verdict as never,
+        },
+      })
+    : undefined;
 
   return {
     source: "local",
     gitAvailable: git.isGitRepository,
     scope: resolvedScope,
-    phase: snapshotTruncated ? "partial" : "complete",
+    phase,
     workspace,
     branch: git.branch,
     commitSha: git.commitSha,
@@ -255,14 +299,159 @@ export async function runLocalProductionVerdict(
         ? undefined
         : "Local analysis has no verified commit SHA for GitHub correlation.",
     },
+    identity: { projectId: identity.projectId, repositoryId: identity.repositoryId, workspaceId: identity.workspaceId },
+    persistence,
   };
 }
 
-export function buildLocalWorkspaceStatus(workspacePath?: string) {
+/**
+ * L1.6: opt-in persistence for the live scan path, reusing local-persistence
+ * .ts exactly as lib/local-analysis/local-orchestrator.ts's own `persist`
+ * option does (same store, same saveScanResult call shape) -- this is NOT a
+ * second persistence system, it is the same one gaining a second caller.
+ * A write failure is reported on the result, never thrown -- a scan's own
+ * findings/verdict must never be withheld because remembering them failed.
+ */
+function persistLocalScan(input: {
+  workspace: string;
+  scanId: string;
+  identity: { projectId: string; repositoryId: string; workspaceId: string };
+  scope: LocalAnalysisScope;
+  phase: "complete" | "partial";
+  git: ReturnType<typeof getGitContext>;
+  durationMs: number;
+  findings: ReturnType<typeof mapScanFindingToVerdictInput>[];
+  ruleFailed: boolean;
+  verdict: {
+    projectId: string;
+    repositoryId: string;
+    workspaceId: string;
+    status: string;
+    score: number | null;
+    blockersCount: number;
+    criticalBlockersCount: number;
+    highBlockersCount: number;
+    verdict: unknown;
+  };
+}): LocalProductionVerdictResult["persistence"] {
+  const counts = parseGitFileCounts(input.git.status);
+  const dirty = counts.modifiedFiles + counts.untrackedFiles + counts.deletedFiles > 0;
+  let store: LocalPersistenceStore | undefined;
+  try {
+    store = openLocalPersistenceStore(input.workspace);
+    store.saveScanResult({
+      scan: {
+        scanId: input.scanId,
+        projectId: input.identity.projectId,
+        repositoryId: input.identity.repositoryId,
+        workspaceId: input.identity.workspaceId,
+        scope: input.scope,
+        phase: input.phase,
+        branch: input.git.branch,
+        commitSha: input.git.commitSha,
+        dirty,
+        durationMs: input.durationMs,
+        errorMessage: input.ruleFailed ? "One or more security rules failed to complete." : null,
+        engines: [{ engine: "native", status: input.ruleFailed ? "PARTIAL" : "COMPLETED", durationMs: input.durationMs, findingsCount: input.findings.length }],
+      },
+      findings: input.findings,
+      verdict: input.verdict as Parameters<LocalPersistenceStore["saveScanResult"]>[0]["verdict"],
+    });
+    return { status: "saved", scanId: input.scanId };
+  } catch (error) {
+    return {
+      status: "unavailable",
+      error: error instanceof LocalPersistenceError ? `${error.code}: ${error.message}` : error instanceof Error ? error.message : "Unknown persistence failure.",
+    };
+  } finally {
+    store?.close();
+  }
+}
+
+/** Caps how many new/resolved findings are inlined in a history summary -- an MCP-facing payload, not a dashboard (see buildLocalFindings for the same discipline over the full findings list). */
+const MAX_INLINE_HISTORY_FINDINGS = 10;
+
+export type LocalHistorySummary = {
+  latestScan: { scanId: string; createdAt: string; phase: string };
+  previousScan: { scanId: string; createdAt: string; phase: string } | null;
+  verdict: {
+    current: { status: string; score: number | null };
+    previous: { status: string; score: number | null } | null;
+    changed: boolean;
+  };
+  currentFindingsCount: number;
+  newCount: number;
+  persistingCount: number;
+  resolvedCount: number;
+  lifecycleUnknownCount: number;
+  newFindings: Array<{ ruleId: string; title: string; filePath: string | null; severity: string | null }>;
+  resolvedFindings: Array<{ ruleId: string; title: string; filePath: string | null; severity: string | null }>;
+  note: string;
+};
+
+/**
+ * L1.6: reads (never runs) persisted scan history for a workspace via
+ * finding-history.ts, then shapes it into a small, agent-friendly summary --
+ * the same MAX_INLINE_* discipline capLocalFindingsForResponse already
+ * applies to the plain findings list. Returns null when there is no
+ * persisted scan yet (a fresh workspace, or persist was never requested) --
+ * never a fabricated empty-but-present history.
+ */
+function readLocalHistorySummary(workspace: string, identity: { workspaceId: string; repositoryId: string }): LocalHistorySummary | null {
+  let store: LocalPersistenceStore | undefined;
+  try {
+    store = openLocalPersistenceStore(workspace);
+    const history = buildFindingHistory(store, identity);
+    if (!history) return null;
+    return summarizeHistory(history);
+  } catch {
+    // Persistence unavailable is never fatal to a status/findings response --
+    // it just means no history is available yet, matching this function's
+    // own "returns null" contract for "nothing persisted."
+    return null;
+  } finally {
+    store?.close();
+  }
+}
+
+function summarizeHistory(history: FindingHistoryResult): LocalHistorySummary {
+  const toInline = (entries: Array<{ ruleId: string; title: string; filePath: string | null; severity: string | null }>) =>
+    entries.slice(0, MAX_INLINE_HISTORY_FINDINGS).map((f) => ({ ruleId: f.ruleId, title: f.title, filePath: f.filePath, severity: f.severity }));
+
+  return {
+    latestScan: { scanId: history.currentScan.scanId, createdAt: history.currentScan.createdAt, phase: history.currentScan.phase },
+    previousScan: history.previousScan
+      ? { scanId: history.previousScan.scanId, createdAt: history.previousScan.createdAt, phase: history.previousScan.phase }
+      : null,
+    verdict: {
+      current: history.verdictHistory.latest
+        ? { status: history.verdictHistory.latest.status, score: history.verdictHistory.latest.score }
+        : { status: "unknown", score: null },
+      previous: history.verdictHistory.previous
+        ? { status: history.verdictHistory.previous.status, score: history.verdictHistory.previous.score }
+        : null,
+      changed: history.verdictHistory.statusChanged,
+    },
+    currentFindingsCount: history.currentFindings.length,
+    newCount: history.delta.counts.newCount,
+    persistingCount: history.delta.counts.persistingCount,
+    resolvedCount: history.delta.counts.resolvedCount,
+    lifecycleUnknownCount: history.delta.counts.lifecycleUnknownCount,
+    newFindings: toInline(history.delta.newFindings),
+    resolvedFindings: toInline(history.delta.resolvedFindings),
+    note: history.delta.currentScanComplete
+      ? "\"resolvedFindings\" means not detected in the latest complete scan -- not proven fixed or secure."
+      : "The latest scan was partial or incomplete; no findings are reported as resolved because their absence cannot be trusted (absence of evidence is not evidence of resolution).",
+  };
+}
+
+export async function buildLocalWorkspaceStatus(workspacePath?: string) {
   const workspace = normalizeWorkspaceRoot(workspacePath ?? process.cwd());
   const listing = listWorkspaceFiles(workspace);
   const git = getGitContext(workspace);
   const gitMeta = buildGitMetadata(git);
+  const identity = await resolveLocalIdentity(workspace);
+  const history = readLocalHistorySummary(workspace, identity);
   return {
     source: "local" as const,
     gitAvailable: git.isGitRepository,
@@ -284,6 +473,7 @@ export function buildLocalWorkspaceStatus(workspacePath?: string) {
     truncated: listing.truncated,
     analysisReadiness: listing.files.length > 0 ? "ready" : "empty",
     ignoredExamples: ["node_modules/", ".git/", ".env (credentials skipped)"],
+    history,
   };
 }
 
@@ -309,8 +499,15 @@ export function buildLocalReview(input: { workspacePath?: string; gitDiffOnly?: 
   };
 }
 
-export function buildLocalFindings(workspacePath?: string) {
-  return runLocalProductionVerdict({ workspacePath, scope: "workspace" }).then((result) => ({
+export async function buildLocalFindings(workspacePath?: string) {
+  const workspace = normalizeWorkspaceRoot(workspacePath ?? process.cwd());
+  // L1.6: persist=true so this call (a genuine fresh scan, same as
+  // sequrai_local_audit) is remembered and can be diffed against by future
+  // calls -- without this, sequrai_local_findings would never produce any
+  // history to read back.
+  const result = await runLocalProductionVerdict({ workspacePath, scope: "workspace", persist: true });
+  const history = readLocalHistorySummary(workspace, result.identity);
+  return {
     source: "local" as const,
     scope: "workspace" as const,
     findings: result.findings.filter(
@@ -319,7 +516,8 @@ export function buildLocalFindings(workspacePath?: string) {
         finding.severity === "high" ||
         !finding.safeToIgnore
     ),
-  }));
+    history,
+  };
 }
 
 export async function buildLocalPrepareManifest(workspacePath?: string) {

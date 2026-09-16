@@ -45,10 +45,14 @@ export async function executeLocalTool(name: string, args: LocalToolArgs = {}) {
   }
 
   if (isLocalAuditToolName(name)) {
+    // L1.6: persist=true -- this tool runs a genuine fresh scan, and
+    // remembering it is what makes sequrai_local_findings/status able to
+    // report NEW/PERSISTING/RESOLVED history at all.
     return runLocalProductionVerdict({
       workspacePath,
       scope: resolveScopeFromArgs(args),
       gitDiffOnly: args.gitDiffOnly,
+      persist: true,
     });
   }
 
