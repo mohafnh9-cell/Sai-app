@@ -25,3 +25,5 @@ export type {
   LocalGitMetadata,
 } from "./types";
 export { LOCAL_SCAN_LIMITS } from "./workspace";
+
+export { LocalSafeFixError, type LocalSafeFixResult, type LocalFixCandidate } from "./local-safe-fix";

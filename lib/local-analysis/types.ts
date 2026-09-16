@@ -87,4 +87,7 @@ export type RunLocalVerdictInput = {
   persist?: boolean;
 };
 
-export type LocalToolArgs = RunLocalVerdictInput;
+export type LocalToolArgs = RunLocalVerdictInput & {
+  /** L1.7/L1.8: identifies a specific finding for sequrai_local_fix, using the same correlationKey identity finding history already uses. */
+  correlationKey?: string;
+};

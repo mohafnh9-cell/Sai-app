@@ -25,6 +25,7 @@ import { buildLocalStatusSummary } from "./format-local-response";
 import { listWorkspaceFiles, normalizeWorkspaceRoot } from "./workspace";
 import { buildFindingHistory, type FindingHistoryResult } from "./finding-history";
 import { LocalPersistenceError, openLocalPersistenceStore, type LocalPersistenceStore } from "./local-persistence";
+import { buildLocalSafeFix, type LocalSafeFixResult } from "./local-safe-fix";
 
 // Inlining every finding in the stdio-bridge response is the same mistake
 // the GitHub-connected full_product_audit tool made: fine for a handful of
@@ -497,6 +498,26 @@ export function buildLocalReview(input: { workspacePath?: string; gitDiffOnly?: 
       ? "Local changes detected. Use sequrai_local_audit or audit_local_project with scope working_tree, staged, or diff."
       : "No local changes detected.",
   };
+}
+
+/**
+ * L1.7/L1.8: "explain this finding and give me a fix" for the latest
+ * persisted scan of THIS workspace -- identity is always resolved from the
+ * caller's own boundary-checked workspace path (never accepted as an
+ * override), so this cannot be pointed at another workspace's findings. See
+ * local-safe-fix.ts for the actual lookup/prompt-building logic; this
+ * wrapper only resolves identity and manages the store's lifetime, matching
+ * every other local-tool-handlers.ts entry point's own pattern.
+ */
+export async function buildLocalFix(workspacePath: string | undefined, correlationKey?: string): Promise<LocalSafeFixResult> {
+  const workspace = normalizeWorkspaceRoot(workspacePath ?? process.cwd());
+  const identity = await resolveLocalIdentity(workspace);
+  const store = openLocalPersistenceStore(workspace);
+  try {
+    return buildLocalSafeFix(store, { workspaceId: identity.workspaceId, repositoryId: identity.repositoryId }, { correlationKey });
+  } finally {
+    store.close();
+  }
 }
 
 export async function buildLocalFindings(workspacePath?: string) {

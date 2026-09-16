@@ -1,6 +1,7 @@
 import type { LocalToolArgs } from "./types";
 import {
   buildLocalFindings,
+  buildLocalFix,
   buildLocalPrepareManifest,
   buildLocalReview,
   buildLocalWorkspaceStatus,
@@ -16,6 +17,7 @@ export const LOCAL_TOOL_NAMES = [
   "sequrai_local_review",
   "sequrai_local_findings",
   "sequrai_local_prepare",
+  "sequrai_local_fix",
 ] as const;
 
 export const LOCAL_AUDIT_TOOL_NAMES = ["sequrai_local_audit", "audit_local_project"] as const;
@@ -65,6 +67,8 @@ export async function executeLocalTool(name: string, args: LocalToolArgs = {}) {
       return buildLocalFindings(workspacePath);
     case "sequrai_local_prepare":
       return buildLocalPrepareManifest(workspacePath);
+    case "sequrai_local_fix":
+      return buildLocalFix(workspacePath, args.correlationKey);
     default:
       throw new Error(`unknown_local_tool:${name}`);
   }

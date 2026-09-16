@@ -155,6 +155,15 @@ function findingToSnapshot(finding: PersistedFinding, workspaceId: string): Scan
 }
 
 /**
+ * L1.7: exposed so other local-analysis modules (local-safe-fix.ts) can look
+ * up a specific persisted finding by the SAME identity finding-history.ts
+ * already uses for lifecycle -- never a second identity computation.
+ */
+export function correlationKeyForPersistedFinding(finding: PersistedFinding, workspaceId: string): string {
+  return correlationKeyForScanFinding(findingToSnapshot(finding, workspaceId));
+}
+
+/**
  * Loads scans comparable to each other for lifecycle purposes: same
  * workspaceId and repositoryId, ordered oldest-first by (created_at, scanId)
  * -- deterministic even when two scans share a created_at timestamp
