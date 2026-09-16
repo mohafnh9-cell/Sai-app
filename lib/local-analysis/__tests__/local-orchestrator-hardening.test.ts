@@ -10,6 +10,7 @@ function tmpWorkspace(prefix: string): string {
 describe("L1.4 orchestration hardening", () => {
   afterEach(() => {
     vi.doUnmock("@/server/security-engines/orchestrate");
+    vi.doUnmock("@/features/security-scanner/scanner");
     vi.resetModules();
   });
 
@@ -278,6 +279,47 @@ describe("L1.4 orchestration hardening", () => {
       // false since the target doesn't exist) confirms the symlink itself
       // is still there, untouched -- never silently replaced with a real db file.
       expect(lstatSync(join(root, ".sequrai", "sequrai.db")).isSymbolicLink()).toBe(true);
+    });
+  });
+
+  describe("L1.5: NATIVE RULE FAILURE ≠ ZERO FINDINGS (e.g. OSV network outage)", () => {
+    it("a native rule-error omission (e.g. osv-sbom on a network failure) makes native PARTIAL, sets overall phase to partial, and is never silently absorbed as 'no findings'", async () => {
+      vi.resetModules();
+      vi.doMock("@/features/security-scanner/scanner", () => ({
+        scanRepository: vi.fn().mockResolvedValue({
+          findings: [],
+          score: { score: 100, grade: "A" },
+          omissions: [
+            { reason: "rule-error", ruleId: "agent-scanner.osv-sbom", detail: "OSV dependency check failed: OSV unavailable (503)" },
+          ],
+          metrics: { inputFiles: 1, scannedFiles: 1, rulesRun: 40, ruleFailures: 1, findings: 0, durationMs: 5 },
+        }),
+      }));
+      const { runLocalSecurityOrchestrator } = await import("../local-orchestrator");
+
+      const root = tmpWorkspace("seq-native-partial-");
+      writeFileSync(join(root, "app.ts"), "export const ok = true;\n");
+
+      const result = await runLocalSecurityOrchestrator({ workspacePath: root, scope: "workspace" });
+      const native = result.engines.find((e) => e.engine === "native");
+
+      expect(native?.status).toBe("PARTIAL");
+      expect(native?.errors[0]?.code).toContain("native_rule_failed");
+      expect(native?.errors[0]?.message).toContain("OSV unavailable");
+      expect(result.phase).toBe("partial");
+      // The verdict must reflect that analysis was incomplete, not silently
+      // claim a fully-confident result merely because zero findings surfaced.
+      expect(result.verdict?.status).not.toBe("ready_to_ship");
+    });
+
+    it("a clean native run (no rule-error omissions) still reports COMPLETED, not PARTIAL -- this is additive, not a downgrade of the normal case", async () => {
+      const root = tmpWorkspace("seq-native-clean-");
+      writeFileSync(join(root, "app.ts"), "export const ok = true;\n".repeat(5));
+      const { runLocalSecurityOrchestrator } = await import("../local-orchestrator");
+      const result = await runLocalSecurityOrchestrator({ workspacePath: root, scope: "workspace" });
+      const native = result.engines.find((e) => e.engine === "native");
+      expect(native?.status).toBe("COMPLETED");
+      expect(result.phase).toBe("complete");
     });
   });
 });

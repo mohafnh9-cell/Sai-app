@@ -236,16 +236,31 @@ export async function runLocalSecurityOrchestrator(
   const engineOutcomes: LocalEngineOutcome[] = [];
   let findings: VerdictFinding[] = [];
   let nativeFailed = false;
+  let nativePartialFailure = false;
 
   if (nativeOutcome.status === "fulfilled") {
     const nativeFindings = nativeOutcome.value.findings.map(mapScanFindingToVerdictInput);
     findings = findings.concat(nativeFindings);
+    // L1.5: a rule inside the native engine can fail independently (most
+    // notably osv-sbom-rule.ts on a network/offline failure) while the
+    // engine as a whole still succeeds -- scanRepository() already tracks
+    // this via ScanResult.omissions (reason: "rule-error"), previously
+    // never read by this orchestrator. Surfaced here as PARTIAL with an
+    // explicit error per failed rule, reusing the existing shape rather
+    // than inventing a new one, so "native ran but one of its checks
+    // (e.g. dependency vulnerabilities) didn't" is never silently
+    // indistinguishable from "native ran and found nothing there."
+    const ruleErrorOmissions = nativeOutcome.value.omissions.filter((o) => o.reason === "rule-error");
+    if (ruleErrorOmissions.length > 0) nativePartialFailure = true;
     engineOutcomes.push({
       engine: NATIVE_ENGINE_ID,
-      status: "COMPLETED",
+      status: ruleErrorOmissions.length > 0 ? "PARTIAL" : "COMPLETED",
       durationMs: Date.now() - nativeStartedAt,
       findingsCount: nativeFindings.length,
-      errors: [],
+      errors: ruleErrorOmissions.map((o) => ({
+        code: `native_rule_failed:${o.ruleId ?? "unknown"}`,
+        message: o.detail ?? "A native security rule failed to complete.",
+      })),
     });
   } else {
     nativeFailed = true;
@@ -315,7 +330,7 @@ export async function runLocalSecurityOrchestrator(
     ? "cancelled"
     : nativeFailed
       ? "incomplete"
-      : externalPartialFailure
+      : externalPartialFailure || nativePartialFailure
         ? "partial"
         : "complete";
   const sortedFindings = sortFindings(findings);
@@ -338,7 +353,7 @@ export async function runLocalSecurityOrchestrator(
       scanStatus: "completed",
       securityScore: null,
       findings: sortedFindings,
-      partialScanFailure: externalPartialFailure,
+      partialScanFailure: externalPartialFailure || nativePartialFailure,
     }).verdict;
   }
 
