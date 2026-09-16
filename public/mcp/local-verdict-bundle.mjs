@@ -15982,6 +15982,16 @@ function buildFindingCorrelationKey(input) {
   const material = (input.fingerprintMaterial ?? "").trim().toLowerCase();
   return stableHash(`${input.ruleId}\0${path}\0${material}`);
 }
+function buildFindingCorrelationKeyFromParts(input) {
+  const storedKey = typeof input.metadata?.correlationKey === "string" ? input.metadata.correlationKey.trim() : "";
+  if (storedKey) return storedKey;
+  const material = typeof input.metadata?.correlationMaterial === "string" ? input.metadata.correlationMaterial : input.title ?? "";
+  return buildFindingCorrelationKey({
+    ruleId: input.ruleId,
+    filePath: input.filePath,
+    fingerprintMaterial: material
+  });
+}
 
 // features/security-analysis/sbom/purl.ts
 var ECOSYSTEM_TO_PURL_TYPE = {
@@ -20645,8 +20655,8 @@ function parsePackageJsonManifest(path, content) {
     [manifest.devDependencies, true],
     [manifest.optionalDependencies, false]
   ];
-  for (const [section, isDev] of sections) {
-    for (const [name, versionRange] of Object.entries(section ?? {})) {
+  for (const [section2, isDev] of sections) {
+    for (const [name, versionRange] of Object.entries(section2 ?? {})) {
       pushDependency(deps, {
         name,
         version: versionRange.replace(/^[\^~>=<\s]+/, "").split(",")[0]?.trim() || "unknown",
@@ -21805,6 +21815,33 @@ function wrapUntrustedRepositoryData(content, options) {
 ${safeContent}
 ${UNTRUSTED_DATA_END}`;
 }
+function containsUntrustedDelimiter(content) {
+  return content.includes(UNTRUSTED_DATA_START) || content.includes(UNTRUSTED_DATA_END);
+}
+function extractBarePromptRegions(prompt) {
+  if (!containsUntrustedDelimiter(prompt)) {
+    return [prompt];
+  }
+  const regions = [];
+  let cursor = 0;
+  while (cursor < prompt.length) {
+    const start = prompt.indexOf(UNTRUSTED_DATA_START, cursor);
+    if (start === -1) {
+      regions.push(prompt.slice(cursor));
+      break;
+    }
+    if (start > cursor) {
+      regions.push(prompt.slice(cursor, start));
+    }
+    const end = prompt.indexOf(UNTRUSTED_DATA_END, start);
+    if (end === -1) {
+      regions.push(prompt.slice(start));
+      break;
+    }
+    cursor = end + UNTRUSTED_DATA_END.length;
+  }
+  return regions.filter((region) => region.trim().length > 0);
+}
 
 // server/mcp/security/input-guard.ts
 function lineNumberForMatch(content, index) {
@@ -21852,6 +21889,91 @@ function guardUntrustedInput(content, options) {
     detections,
     hadInjectionPattern
   };
+}
+
+// server/mcp/security/output-guard.ts
+var REQUIRED_SAFE_FIX_SECTIONS = [
+  "PROJECT CONTEXT",
+  "PRODUCTION BLOCKER",
+  "SAFE IMPLEMENTATION PRINCIPLES",
+  "DO NOT MODIFY"
+];
+var INSTRUCTION_OVERRIDE_OUTSIDE_DELIMITERS = /ignore\s+(all\s+)?(previous|prior|above)\s+(instructions?|prompts?)/i;
+function redactBareInjectionLines(prompt) {
+  const lines = prompt.split("\n");
+  return lines.filter((line) => !INSTRUCTION_OVERRIDE_OUTSIDE_DELIMITERS.test(line)).join("\n");
+}
+function sanitizeBareRegions(prompt) {
+  if (!extractBarePromptRegions(prompt).length) {
+    return redactBareInjectionLines(prompt);
+  }
+  let sanitized = "";
+  let cursor = 0;
+  const startTag = "<<<SEQURAI_UNTRUSTED_REPOSITORY_DATA";
+  const endTag = "<<<END_SEQURAI_UNTRUSTED_REPOSITORY_DATA>>>";
+  while (cursor < prompt.length) {
+    const start = prompt.indexOf(startTag, cursor);
+    if (start === -1) {
+      sanitized += redactBareInjectionLines(prompt.slice(cursor));
+      break;
+    }
+    sanitized += redactBareInjectionLines(prompt.slice(cursor, start));
+    const end = prompt.indexOf(endTag, start);
+    if (end === -1) {
+      sanitized += prompt.slice(start);
+      break;
+    }
+    sanitized += prompt.slice(start, end + endTag.length);
+    cursor = end + endTag.length;
+  }
+  return sanitized;
+}
+function guardFixPromptOutput(prompt) {
+  const violations = [];
+  for (const section2 of REQUIRED_SAFE_FIX_SECTIONS) {
+    if (!prompt.includes(section2)) {
+      violations.push({ kind: "missing_section", detail: section2 });
+    }
+  }
+  const bareRegions = extractBarePromptRegions(prompt);
+  for (const region of bareRegions) {
+    if (INSTRUCTION_OVERRIDE_OUTSIDE_DELIMITERS.test(region)) {
+      violations.push({
+        kind: "injection_in_output",
+        detail: "Instruction override language outside repository-data delimiters",
+        ruleId: "platform.output.instruction-override"
+      });
+    }
+    for (const detection of scanInjectionPatterns(region, {
+      source: "finding_field",
+      path: "safe-fix-output"
+    })) {
+      if (detection.action !== "BLOCK") continue;
+      violations.push({
+        kind: "injection_in_output",
+        detail: detection.message,
+        ruleId: detection.ruleId
+      });
+    }
+  }
+  if (prompt.includes("<<<SEQURAI_UNTRUSTED_REPOSITORY_DATA") && !prompt.includes("<<<END_SEQURAI_UNTRUSTED_REPOSITORY_DATA>>>")) {
+    violations.push({
+      kind: "delimiter_escape",
+      detail: "Unclosed repository-data delimiter block"
+    });
+  }
+  const sanitizedPrompt = sanitizeBareRegions(prompt);
+  return {
+    ok: violations.length === 0,
+    prompt,
+    violations,
+    sanitizedPrompt
+  };
+}
+function assertFixPromptOutputSafe(prompt) {
+  const result = guardFixPromptOutput(prompt);
+  if (result.ok) return result.prompt;
+  return result.sanitizedPrompt;
 }
 
 // server/mcp/security/platform-confidence.ts
@@ -21989,6 +22111,26 @@ function collectPlatformInjectionFindings(findings, normalizedFiles) {
   return detections.map(
     (detection) => draftToFinding(platformInjectionToFindingDraft(detection), detection)
   );
+}
+
+// server/mcp/security/safe-fix-input.ts
+function guardField(value, source, path) {
+  return guardUntrustedInput(value, { source, path, forceWrap: true }).forPrompt;
+}
+function sanitizeProductionFixPromptInput(input) {
+  const basePath = input.affectedFiles[0] ?? "safe-fix-input";
+  return {
+    ...input,
+    issueTitle: guardField(input.issueTitle, "finding_field", `${basePath}#title`),
+    issueDescription: guardField(input.issueDescription, "finding_field", `${basePath}#description`),
+    whyItMatters: guardField(input.whyItMatters, "finding_field", `${basePath}#why`),
+    recommendedAction: guardField(
+      input.recommendedAction,
+      "finding_field",
+      `${basePath}#recommendedAction`
+    ),
+    estimatedImpact: input.estimatedImpact ? guardField(input.estimatedImpact, "finding_field", `${basePath}#impact`) : input.estimatedImpact
+  };
 }
 
 // features/security-analysis/osv/enrich-sbom.ts
@@ -22173,11 +22315,14 @@ var osvSbomRule = {
   title: "OSV dependency vulnerability evidence",
   run: async ({ files, shared }) => {
     const repositoryFiles = shared?.repositoryFiles ?? toRepositoryFiles(files);
-    const { findings } = await analyzeOsvSbomEvidence(repositoryFiles, {
+    const { findings, osvError } = await analyzeOsvSbomEvidence(repositoryFiles, {
       includeDev: true,
       sbomSnapshot: shared?.sbomSnapshot,
       osv: shared?.osvCache ? { cache: shared.osvCache } : void 0
     });
+    if (osvError) {
+      throw new Error(`OSV dependency check failed: ${osvError}`);
+    }
     if (findings.length === 0) {
       return [];
     }
@@ -23613,16 +23758,64 @@ function deduplicateFindings(findings) {
 
 // lib/local-analysis/constants.ts
 import { randomUUID } from "node:crypto";
-var LOCAL_PROJECT_ID = "00000000-0000-4000-8000-000000000001";
-var LOCAL_REPOSITORY_ID = "00000000-0000-4000-8000-000000000002";
 function createLocalScanId() {
   return randomUUID();
 }
 
-// lib/local-analysis/git-scope.ts
+// lib/local-analysis/local-identity.ts
+import { createHash as createHash2, randomUUID as randomUUID2 } from "node:crypto";
+import { existsSync as existsSync2, mkdirSync, readFileSync as readFileSync2, realpathSync as realpathSync2, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
-import { existsSync as existsSync2 } from "node:fs";
-import { join } from "node:path";
+import { dirname as dirname3 } from "node:path";
+
+// lib/github/repository-reference.ts
+var OWNER_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
+var REPO_PATTERN = /^[A-Za-z0-9._-]{1,100}$/;
+function assertOwnerRepo(owner, repo) {
+  if (!OWNER_PATTERN.test(owner) || !REPO_PATTERN.test(repo)) {
+    throw new Error("GitHub repository must be in owner/repository format");
+  }
+  return { owner, repo };
+}
+function normalizeRepositoryPathParts(parts) {
+  const segments = parts.filter(Boolean);
+  if (segments.length === 2) {
+    return assertOwnerRepo(segments[0], segments[1]);
+  }
+  if (segments.length === 3 && segments[0] === segments[1]) {
+    return assertOwnerRepo(segments[0], segments[2]);
+  }
+  throw new Error("GitHub repository must be in owner/repository format");
+}
+function toGitHubHtmlUrl(ref) {
+  return `https://github.com/${ref.owner}/${ref.repo}`;
+}
+function normalizeStoredGitHubRepository(value) {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  const ref = parseGitHubRepository(trimmed);
+  return toGitHubHtmlUrl(ref);
+}
+function parseGitHubRepository(value) {
+  const trimmed = value.trim().replace(/\.git$/, "").replace(/\/+$/, "");
+  let path = trimmed;
+  if (trimmed.startsWith("git@github.com:")) {
+    path = trimmed.slice("git@github.com:".length);
+  } else if (/^https?:\/\//i.test(trimmed)) {
+    let url2;
+    try {
+      url2 = new URL(trimmed);
+    } catch {
+      throw new Error("Invalid GitHub repository");
+    }
+    if (url2.protocol !== "https:" || url2.hostname.toLowerCase() !== "github.com") {
+      throw new Error("Repository must be hosted on github.com");
+    }
+    path = url2.pathname;
+  }
+  const parts = path.split("/").filter(Boolean);
+  return normalizeRepositoryPathParts(parts);
+}
 
 // lib/local-analysis/workspace.ts
 import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync } from "node:fs";
@@ -23645,7 +23838,12 @@ var DEFAULT_IGNORED_DIRS = /* @__PURE__ */ new Set([
   "target",
   ".cache",
   ".turbo",
-  ".vercel"
+  ".vercel",
+  // L1.2: .sequrai/project.json is local tooling identity, not application
+  // source -- excluded for the same reason .git/.vercel are, and so the
+  // orchestrator scanning a workspace never re-scans the very identity
+  // file resolveLocalIdentity() just wrote into it.
+  ".sequrai"
 ]);
 var LOCAL_SCAN_LIMITS = {
   maxFiles: 8e3,
@@ -23932,10 +24130,169 @@ function readWorkspaceTextFile(workspaceRoot, relativePath) {
   return buffer.toString("utf8");
 }
 
+// lib/local-analysis/local-identity.ts
+var PROJECT_FILE_RELATIVE_PATH = ".sequrai/project.json";
+var MAX_PROJECT_FILE_BYTES = 4096;
+function normalizeSshUrl(value) {
+  const match = /^ssh:\/\/git@github\.com\/(.+)$/i.exec(value.trim());
+  return match ? `git@github.com:${match[1]}` : value;
+}
+function canonicalRepositoryIdentity(remoteUrl, noRemoteFallbackSeed) {
+  const trimmed = remoteUrl?.trim();
+  if (!trimmed) {
+    const seed = noRemoteFallbackSeed ? `no-remote:${noRemoteFallbackSeed}` : "no-remote";
+    return { githubRepo: null, repositoryId: deterministicUuid(seed) };
+  }
+  let githubRepo = null;
+  try {
+    githubRepo = normalizeStoredGitHubRepository(normalizeSshUrl(trimmed));
+  } catch {
+    githubRepo = null;
+  }
+  if (githubRepo) {
+    return { githubRepo, repositoryId: deterministicUuid(githubRepo) };
+  }
+  return { githubRepo: null, repositoryId: deterministicUuid(trimmed) };
+}
+function sha256(value) {
+  return createHash2("sha256").update(value).digest("hex");
+}
+function deterministicUuid(value) {
+  const bytes = createHash2("sha256").update(value).digest();
+  bytes[6] = bytes[6] & 15 | 80;
+  bytes[8] = bytes[8] & 63 | 128;
+  const hex3 = bytes.subarray(0, 16).toString("hex");
+  return `${hex3.slice(0, 8)}-${hex3.slice(8, 12)}-${hex3.slice(12, 16)}-${hex3.slice(16, 20)}-${hex3.slice(20, 32)}`;
+}
+function readGitRemote(workspaceRoot) {
+  try {
+    return execFileSync("git", ["remote", "get-url", "origin"], {
+      cwd: workspaceRoot,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"]
+    }).trim() || null;
+  } catch {
+    return null;
+  }
+}
+function readGitRootCommit(workspaceRoot) {
+  try {
+    return execFileSync("git", ["rev-list", "--max-parents=0", "HEAD"], {
+      cwd: workspaceRoot,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"]
+    }).trim().split("\n")[0] || null;
+  } catch {
+    return null;
+  }
+}
+function resolveWorkspaceIdentity(workspaceRoot) {
+  const realPath = realpathSync2.native(workspaceRoot);
+  const remote = readGitRemote(workspaceRoot);
+  const fallbackSeed = remote ? null : readGitRootCommit(workspaceRoot);
+  return {
+    workspaceId: sha256(realPath),
+    repository: canonicalRepositoryIdentity(remote, fallbackSeed)
+  };
+}
+function readLocalProjectFile(workspaceRoot) {
+  let target;
+  try {
+    target = resolveSafePath(workspaceRoot, PROJECT_FILE_RELATIVE_PATH);
+  } catch (error51) {
+    if (error51 instanceof WorkspaceBoundaryError || error51.message === "symlink_not_allowed") {
+      return null;
+    }
+    throw error51;
+  }
+  if (!existsSync2(target)) return null;
+  let raw;
+  try {
+    raw = readFileSync2(target, "utf8");
+  } catch {
+    return null;
+  }
+  if (raw.length > MAX_PROJECT_FILE_BYTES) return null;
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  return validateProjectFileShape(parsed) ? parsed : null;
+}
+function validateProjectFileShape(value) {
+  if (!value || typeof value !== "object") return false;
+  const v = value;
+  if (v.version !== 1) return false;
+  if (typeof v.projectId !== "string" || !UUID_PATTERN.test(v.projectId)) return false;
+  if (typeof v.repositoryId !== "string" || !UUID_PATTERN.test(v.repositoryId)) return false;
+  if (typeof v.createdAt !== "string") return false;
+  if (!v.repository || typeof v.repository !== "object") return false;
+  const repo = v.repository;
+  if (repo.remote !== null && typeof repo.remote !== "string") return false;
+  const allowedTopKeys = /* @__PURE__ */ new Set(["version", "projectId", "repositoryId", "createdAt", "repository"]);
+  const allowedRepoKeys = /* @__PURE__ */ new Set(["remote"]);
+  if (Object.keys(v).some((k) => !allowedTopKeys.has(k))) return false;
+  if (Object.keys(repo).some((k) => !allowedRepoKeys.has(k))) return false;
+  return true;
+}
+var UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function ensureLocalProjectFile(workspaceRoot, repository) {
+  const existing = readLocalProjectFile(workspaceRoot);
+  if (existing && existing.repositoryId === repository.repositoryId) {
+    return existing;
+  }
+  const file2 = {
+    version: 1,
+    projectId: randomUUID2(),
+    repositoryId: repository.repositoryId,
+    createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+    repository: { remote: repository.githubRepo }
+  };
+  try {
+    const target = resolveSafePath(workspaceRoot, PROJECT_FILE_RELATIVE_PATH);
+    mkdirSync(dirname3(target), { recursive: true });
+    writeFileSync(target, `${JSON.stringify(file2, null, 2)}
+`, { mode: 420 });
+  } catch {
+  }
+  return file2;
+}
+async function resolveCloudBinding(githubRepo, resolve2) {
+  return resolve2(githubRepo);
+}
+async function resolveLocalIdentity(workspaceRoot, cloudResolver) {
+  const { workspaceId, repository } = resolveWorkspaceIdentity(workspaceRoot);
+  const projectFile = ensureLocalProjectFile(workspaceRoot, repository);
+  if (cloudResolver && repository.githubRepo) {
+    const bound = await resolveCloudBinding(repository.githubRepo, cloudResolver);
+    if (bound) {
+      return {
+        mode: "cloud-bound",
+        projectId: bound.projectId,
+        organizationId: bound.organizationId,
+        projectName: bound.projectName,
+        repositoryId: repository.repositoryId,
+        workspaceId
+      };
+    }
+  }
+  return {
+    mode: "local-only",
+    projectId: projectFile.projectId,
+    repositoryId: repository.repositoryId,
+    workspaceId
+  };
+}
+
 // lib/local-analysis/git-scope.ts
+import { execFileSync as execFileSync2 } from "node:child_process";
+import { existsSync as existsSync3 } from "node:fs";
+import { join } from "node:path";
 function runGit(workspaceRoot, args) {
   try {
-    return execFileSync("git", args, {
+    return execFileSync2("git", args, {
       cwd: workspaceRoot,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"]
@@ -23946,7 +24303,7 @@ function runGit(workspaceRoot, args) {
 }
 function getGitContext(workspaceRoot) {
   const root = normalizeWorkspaceRoot(workspaceRoot);
-  const insideGit = existsSync2(join(root, ".git"));
+  const insideGit = existsSync3(join(root, ".git"));
   if (!insideGit) {
     return {
       isGitRepository: false,
@@ -24045,6 +24402,10 @@ function resolveScopeFromArgs(input) {
 }
 
 // lib/local-analysis/map-findings.ts
+function guardFindingText(value, path, field) {
+  if (!value) return value;
+  return guardUntrustedInput(value, { source: "finding_field", path: `${path}#${field}` }).forPrompt;
+}
 function collectInputFiles(workspaceRoot, onlyRelativePaths) {
   const listing = listWorkspaceFiles(workspaceRoot, {
     onlyRelativePaths: onlyRelativePaths && onlyRelativePaths.size > 0 ? onlyRelativePaths : void 0
@@ -24082,18 +24443,20 @@ function mapFindingToPublic(finding) {
     evidence: finding.evidence ?? null,
     metadata: finding.metadata ?? null
   });
+  const path = finding.location.path;
+  const redactedEvidence = finding.evidence ? redactEvidence(finding.evidence) : void 0;
   return {
     id: finding.id,
     ruleId: finding.ruleId,
-    title: finding.title,
-    description: finding.description,
+    title: guardFindingText(finding.title, path, "title"),
+    description: guardFindingText(finding.description, path, "description"),
     severity: finding.severity,
     category: finding.category,
-    filePath: finding.location.path,
+    filePath: path,
     line: finding.location.line,
     correlationKey: finding.correlationKey,
-    evidence: finding.evidence ? redactEvidence(finding.evidence) : void 0,
-    remediation: finding.remediation,
+    evidence: redactedEvidence ? guardFindingText(redactedEvidence, path, "evidence") : void 0,
+    remediation: guardFindingText(finding.remediation, path, "remediation"),
     confidence: finding.confidence,
     safeToIgnore
   };
@@ -24183,6 +24546,1065 @@ function formatScopeLabel(scope) {
   }
 }
 
+// lib/correlation/scan-finding-resolution.ts
+function correlationKeyForScanFinding(finding) {
+  return buildFindingCorrelationKeyFromParts({
+    ruleId: finding.ruleId,
+    filePath: finding.filePath,
+    title: finding.title,
+    metadata: finding.metadata ?? null
+  });
+}
+function groupByCorrelationKey(findings) {
+  const map2 = /* @__PURE__ */ new Map();
+  for (const finding of findings) {
+    const key = correlationKeyForScanFinding(finding);
+    const group = map2.get(key);
+    if (group) group.push(finding);
+    else map2.set(key, [finding]);
+  }
+  return map2;
+}
+function diffScanFindingsByIdentity(input) {
+  const { projectId } = input;
+  for (const finding of [...input.previous, ...input.current]) {
+    if (finding.projectId !== projectId) {
+      throw new Error(
+        `diffScanFindingsByIdentity: finding ${finding.id} belongs to project ${finding.projectId}, not the requested project ${projectId}. Refusing to compare findings across projects.`
+      );
+    }
+  }
+  const previousGroups = groupByCorrelationKey(input.previous);
+  const currentGroups = groupByCorrelationKey(input.current);
+  const unchanged = [];
+  const resolved = [];
+  const newEntries = [];
+  const ambiguous = [];
+  const allKeys = /* @__PURE__ */ new Set([...previousGroups.keys(), ...currentGroups.keys()]);
+  for (const key of allKeys) {
+    const previousMatches = previousGroups.get(key) ?? [];
+    const currentMatches = currentGroups.get(key) ?? [];
+    if (previousMatches.length > 1 || currentMatches.length > 1) {
+      ambiguous.push({
+        correlationKey: key,
+        status: "ambiguous",
+        previous: previousMatches[0],
+        current: currentMatches[0],
+        reason: "More than one finding in a single scan shares this correlation identity; resolution cannot be determined safely."
+      });
+      continue;
+    }
+    const previous = previousMatches[0];
+    const current = currentMatches[0];
+    if (previous && current) {
+      unchanged.push({ correlationKey: key, status: "unchanged", previous, current });
+    } else if (previous && !current) {
+      resolved.push({ correlationKey: key, status: "resolved", previous });
+    } else if (current && !previous) {
+      newEntries.push({ correlationKey: key, status: "new", current });
+    }
+  }
+  return { projectId, unchanged, resolved, new: newEntries, ambiguous };
+}
+
+// lib/local-analysis/finding-history.ts
+var DEFAULT_SCAN_WINDOW = 20;
+function findingToSnapshot(finding, workspaceId) {
+  return {
+    // finding.id is always set on a row read back from local-persistence.ts
+    // (rowToFinding() always assigns `${scan_id}:${row_id}`) -- the fallback
+    // only guards the wider VerdictFinding type, which declares id optional.
+    id: finding.id ?? `${finding.scanId}:unknown`,
+    projectId: workspaceId,
+    ruleId: finding.rule_id ?? "",
+    filePath: finding.file_path ?? "",
+    title: finding.title,
+    severity: finding.severity ?? void 0,
+    metadata: finding.metadata ?? null
+  };
+}
+function correlationKeyForPersistedFinding(finding, workspaceId) {
+  return correlationKeyForScanFinding(findingToSnapshot(finding, workspaceId));
+}
+function loadComparableScans(store, workspaceId, repositoryId, limit = DEFAULT_SCAN_WINDOW) {
+  return store.listScans(workspaceId, limit).filter((scan) => scan.repositoryId === repositoryId).slice().sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.scanId.localeCompare(b.scanId));
+}
+function computeScanDelta(input) {
+  const currentComplete = input.current.scan.phase === "complete";
+  const previousById = new Map((input.previous?.findings ?? []).map((f) => [f.id, f]));
+  const currentById = new Map(input.current.findings.map((f) => [f.id, f]));
+  const previousSnapshots = (input.previous?.findings ?? []).map((f) => findingToSnapshot(f, input.workspaceId));
+  const currentSnapshots = input.current.findings.map((f) => findingToSnapshot(f, input.workspaceId));
+  const diff = diffScanFindingsByIdentity({
+    projectId: input.workspaceId,
+    previous: previousSnapshots,
+    current: currentSnapshots
+  });
+  function buildEntry(lifecycle, currentSnapshot, previousSnapshot) {
+    const finding = currentById.get(currentSnapshot.id);
+    const prevFinding = previousSnapshot ? previousById.get(previousSnapshot.id) : void 0;
+    const severity = finding.severity ?? null;
+    const previousSeverity = prevFinding?.severity ?? null;
+    return {
+      correlationKey: correlationKeyForScanFinding(currentSnapshot),
+      ruleId: finding.rule_id ?? "",
+      title: finding.title,
+      severity,
+      category: finding.category ?? null,
+      filePath: finding.file_path ?? null,
+      lifecycle,
+      firstSeenScanId: input.current.scan.scanId,
+      firstSeenAt: input.current.scan.createdAt,
+      lastSeenScanId: input.current.scan.scanId,
+      lastSeenAt: input.current.scan.createdAt,
+      severityChanged: Boolean(prevFinding) && previousSeverity !== severity,
+      previousSeverity
+    };
+  }
+  const persistingFindings = diff.unchanged.map((entry) => buildEntry("PERSISTING", entry.current, entry.previous));
+  const newFindings = diff.new.map((entry) => buildEntry("NEW", entry.current, void 0));
+  function buildResolvedSummary(previousSnapshot) {
+    const finding = previousById.get(previousSnapshot.id);
+    return {
+      correlationKey: correlationKeyForScanFinding(previousSnapshot),
+      ruleId: finding.rule_id ?? "",
+      title: finding.title,
+      severity: finding.severity ?? null,
+      filePath: finding.file_path ?? null,
+      lastSeenScanId: input.previous.scan.scanId,
+      lastSeenAt: input.previous.scan.createdAt
+    };
+  }
+  const resolvedCandidates = diff.resolved.map((entry) => buildResolvedSummary(entry.previous));
+  const resolvedFindings = currentComplete ? resolvedCandidates : [];
+  const lifecycleUnknownFindings = currentComplete ? [] : resolvedCandidates;
+  return {
+    previousScanId: input.previous?.scan.scanId ?? null,
+    currentScanId: input.current.scan.scanId,
+    currentScanComplete: currentComplete,
+    newFindings,
+    persistingFindings,
+    resolvedFindings,
+    lifecycleUnknownFindings,
+    ambiguousCount: diff.ambiguous.length,
+    counts: {
+      newCount: newFindings.length,
+      persistingCount: persistingFindings.length,
+      resolvedCount: resolvedFindings.length,
+      lifecycleUnknownCount: lifecycleUnknownFindings.length
+    }
+  };
+}
+function verdictSnapshot(verdict) {
+  return verdict ? { scanId: verdict.scanId, status: verdict.status, score: verdict.score, createdAt: verdict.createdAt } : null;
+}
+function buildVerdictHistory(store, current, previous) {
+  const latest = verdictSnapshot(store.getVerdictForScan(current.scanId));
+  const previousVerdict = previous ? verdictSnapshot(store.getVerdictForScan(previous.scanId)) : null;
+  return {
+    latest,
+    previous: previousVerdict,
+    statusChanged: Boolean(latest && previousVerdict && latest.status !== previousVerdict.status)
+  };
+}
+function buildFindingHistory(store, identity, options = {}) {
+  const scans = loadComparableScans(store, identity.workspaceId, identity.repositoryId, options.scanWindow ?? DEFAULT_SCAN_WINDOW);
+  if (scans.length === 0) return null;
+  const findingsByScan = /* @__PURE__ */ new Map();
+  for (const scan of scans) {
+    findingsByScan.set(scan.scanId, store.getFindingsForScan(scan.scanId));
+  }
+  const firstSeen = /* @__PURE__ */ new Map();
+  const lastSeen = /* @__PURE__ */ new Map();
+  for (const scan of scans) {
+    for (const finding of findingsByScan.get(scan.scanId) ?? []) {
+      const key = correlationKeyForScanFinding(findingToSnapshot(finding, identity.workspaceId));
+      if (!firstSeen.has(key)) firstSeen.set(key, { scanId: scan.scanId, createdAt: scan.createdAt });
+      lastSeen.set(key, { scanId: scan.scanId, createdAt: scan.createdAt });
+    }
+  }
+  const currentScan = scans[scans.length - 1];
+  const previousScan = scans.length > 1 ? scans[scans.length - 2] : null;
+  const delta = computeScanDelta({
+    workspaceId: identity.workspaceId,
+    previous: previousScan ? { scan: previousScan, findings: findingsByScan.get(previousScan.scanId) ?? [] } : null,
+    current: { scan: currentScan, findings: findingsByScan.get(currentScan.scanId) ?? [] }
+  });
+  const withWindowHistory = (entry) => {
+    const seen = firstSeen.get(entry.correlationKey);
+    const last = lastSeen.get(entry.correlationKey);
+    return {
+      ...entry,
+      firstSeenScanId: seen?.scanId ?? entry.firstSeenScanId,
+      firstSeenAt: seen?.createdAt ?? entry.firstSeenAt,
+      lastSeenScanId: last?.scanId ?? entry.lastSeenScanId,
+      lastSeenAt: last?.createdAt ?? entry.lastSeenAt
+    };
+  };
+  const newFindings = delta.newFindings.map(withWindowHistory);
+  const persistingFindings = delta.persistingFindings.map(withWindowHistory);
+  const currentFindings = [...newFindings, ...persistingFindings].sort(
+    (a, b) => a.correlationKey.localeCompare(b.correlationKey)
+  );
+  return {
+    workspaceId: identity.workspaceId,
+    repositoryId: identity.repositoryId,
+    scanCount: scans.length,
+    currentScan,
+    previousScan,
+    currentFindings,
+    delta: { ...delta, newFindings, persistingFindings },
+    verdictHistory: buildVerdictHistory(store, currentScan, previousScan)
+  };
+}
+
+// lib/local-analysis/local-persistence.ts
+import { DatabaseSync } from "node:sqlite";
+import { existsSync as existsSync4, lstatSync as lstatSync2, mkdirSync as mkdirSync2 } from "node:fs";
+import { join as join2 } from "node:path";
+var DB_DIRNAME = ".sequrai";
+var DB_FILENAME = "sequrai.db";
+var LocalPersistenceError = class extends Error {
+  constructor(code, message) {
+    super(message);
+    this.code = code;
+    this.name = "LocalPersistenceError";
+  }
+};
+function resolveSecureDatabasePath(workspaceRoot) {
+  const root = normalizeWorkspaceRoot(workspaceRoot);
+  const rootReal = realpathResolved(root);
+  const dbDir = join2(rootReal, DB_DIRNAME);
+  if (existsSync4(dbDir)) {
+    const dirStat = lstatSync2(dbDir);
+    if (dirStat.isSymbolicLink()) {
+      throw new LocalPersistenceError("LOCAL_PERSISTENCE_UNAVAILABLE", "Refusing to use a symlinked .sequrai directory.");
+    }
+    const dirReal = realpathResolved(dbDir);
+    if (!isDescendantPath(rootReal, dirReal)) {
+      throw new LocalPersistenceError("LOCAL_PERSISTENCE_UNAVAILABLE", "Refusing a .sequrai directory outside the workspace.");
+    }
+  } else {
+    mkdirSync2(dbDir, { recursive: true });
+  }
+  const dbPath = join2(dbDir, DB_FILENAME);
+  if (existsSync4(dbPath) && lstatSync2(dbPath).isSymbolicLink()) {
+    throw new LocalPersistenceError("LOCAL_PERSISTENCE_UNAVAILABLE", "Refusing a symlinked database file.");
+  }
+  return dbPath;
+}
+function runMigrations(db) {
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS schema_migrations (
+        version INTEGER PRIMARY KEY,
+        applied_at TEXT NOT NULL
+      );
+    `);
+    const row = db.prepare("SELECT MAX(version) AS version FROM schema_migrations").get();
+    const currentVersion = row?.version ?? 0;
+    if (currentVersion < 1) {
+      db.exec("BEGIN");
+      try {
+        db.exec(`
+          CREATE TABLE IF NOT EXISTS scans (
+            id TEXT PRIMARY KEY,
+            project_id TEXT NOT NULL,
+            repository_id TEXT NOT NULL,
+            workspace_id TEXT NOT NULL,
+            scope TEXT NOT NULL,
+            phase TEXT NOT NULL,
+            branch TEXT,
+            commit_sha TEXT,
+            dirty INTEGER NOT NULL,
+            duration_ms INTEGER NOT NULL,
+            error_message TEXT,
+            engines_json TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            completed_at TEXT NOT NULL
+          );
+
+          CREATE INDEX IF NOT EXISTS idx_scans_workspace_created
+            ON scans (workspace_id, created_at);
+
+          CREATE TABLE IF NOT EXISTS findings (
+            row_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            scan_id TEXT NOT NULL REFERENCES scans (id),
+            repository_id TEXT NOT NULL,
+            workspace_id TEXT NOT NULL,
+            rule_id TEXT,
+            title TEXT NOT NULL,
+            severity TEXT,
+            category TEXT,
+            file_path TEXT,
+            start_line INTEGER,
+            recommendation TEXT,
+            confidence TEXT,
+            evidence TEXT,
+            metadata_json TEXT,
+            created_at TEXT NOT NULL
+          );
+
+          CREATE INDEX IF NOT EXISTS idx_findings_scan ON findings (scan_id);
+
+          CREATE TABLE IF NOT EXISTS verdicts (
+            scan_id TEXT PRIMARY KEY REFERENCES scans (id),
+            project_id TEXT NOT NULL,
+            repository_id TEXT NOT NULL,
+            workspace_id TEXT NOT NULL,
+            status TEXT NOT NULL,
+            score INTEGER,
+            blockers_count INTEGER NOT NULL,
+            critical_blockers_count INTEGER NOT NULL,
+            high_blockers_count INTEGER NOT NULL,
+            verdict_json TEXT NOT NULL,
+            created_at TEXT NOT NULL
+          );
+        `);
+        db.prepare("INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)").run(
+          1,
+          (/* @__PURE__ */ new Date()).toISOString()
+        );
+        db.exec("COMMIT");
+      } catch (error51) {
+        db.exec("ROLLBACK");
+        throw error51;
+      }
+    }
+  } catch (error51) {
+    throw new LocalPersistenceError(
+      "LOCAL_PERSISTENCE_MIGRATION_FAILED",
+      error51 instanceof Error ? error51.message : "Local database migration failed."
+    );
+  }
+}
+function findingRow(scanId, finding, createdAt) {
+  return [
+    scanId,
+    finding.rule_id ?? null,
+    finding.title,
+    finding.severity ?? null,
+    finding.category ?? null,
+    finding.file_path ?? null,
+    finding.start_line ?? null,
+    finding.recommendation ?? null,
+    typeof finding.confidence === "string" ? finding.confidence : finding.confidence != null ? String(finding.confidence) : null,
+    finding.evidence ?? null,
+    finding.metadata ? JSON.stringify(finding.metadata) : null,
+    createdAt
+  ];
+}
+function rowToScan(row) {
+  return {
+    scanId: row.id,
+    projectId: row.project_id,
+    repositoryId: row.repository_id,
+    workspaceId: row.workspace_id,
+    scope: row.scope,
+    phase: row.phase,
+    branch: row.branch ?? null,
+    commitSha: row.commit_sha ?? null,
+    dirty: Boolean(row.dirty),
+    durationMs: Number(row.duration_ms),
+    errorMessage: row.error_message ?? null,
+    engines: JSON.parse(row.engines_json),
+    createdAt: row.created_at,
+    completedAt: row.completed_at
+  };
+}
+function rowToFinding(row) {
+  return {
+    id: `${row.scan_id}:${row.row_id}`,
+    scanId: row.scan_id,
+    title: row.title,
+    severity: row.severity ?? void 0,
+    category: row.category ?? void 0,
+    rule_id: row.rule_id ?? void 0,
+    file_path: row.file_path ?? void 0,
+    start_line: row.start_line ?? void 0,
+    recommendation: row.recommendation ?? void 0,
+    confidence: row.confidence ?? void 0,
+    evidence: row.evidence ?? void 0,
+    metadata: row.metadata_json ? JSON.parse(row.metadata_json) : void 0
+  };
+}
+function rowToVerdict(row) {
+  let verdict;
+  try {
+    verdict = JSON.parse(row.verdict_json);
+  } catch {
+    throw new LocalPersistenceError("LOCAL_PERSISTENCE_CORRUPT", `Stored verdict for scan ${row.scan_id} is not valid JSON.`);
+  }
+  return {
+    scanId: row.scan_id,
+    projectId: row.project_id,
+    repositoryId: row.repository_id,
+    workspaceId: row.workspace_id,
+    status: row.status,
+    score: row.score ?? null,
+    blockersCount: Number(row.blockers_count),
+    criticalBlockersCount: Number(row.critical_blockers_count),
+    highBlockersCount: Number(row.high_blockers_count),
+    verdict,
+    createdAt: row.created_at
+  };
+}
+function openLocalPersistenceStore(workspaceRoot) {
+  const dbPath = resolveSecureDatabasePath(workspaceRoot);
+  let db;
+  try {
+    db = new DatabaseSync(dbPath);
+  } catch (error51) {
+    throw new LocalPersistenceError(
+      "LOCAL_PERSISTENCE_UNAVAILABLE",
+      error51 instanceof Error ? error51.message : "Could not open the local database."
+    );
+  }
+  try {
+    db.exec("PRAGMA journal_mode = WAL");
+    db.exec("PRAGMA synchronous = NORMAL");
+    db.exec("PRAGMA foreign_keys = ON");
+    db.exec("PRAGMA busy_timeout = 5000");
+  } catch (error51) {
+    db.close();
+    throw new LocalPersistenceError(
+      "LOCAL_PERSISTENCE_UNAVAILABLE",
+      error51 instanceof Error ? error51.message : "Could not configure the local database."
+    );
+  }
+  runMigrations(db);
+  return {
+    saveScanResult(input) {
+      const now = (/* @__PURE__ */ new Date()).toISOString();
+      const createdAt = input.scan.createdAt ?? now;
+      const completedAt = input.scan.completedAt ?? now;
+      try {
+        db.exec("BEGIN");
+        db.prepare(
+          `INSERT INTO scans
+            (id, project_id, repository_id, workspace_id, scope, phase, branch, commit_sha, dirty, duration_ms, error_message, engines_json, created_at, completed_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ).run(
+          input.scan.scanId,
+          input.scan.projectId,
+          input.scan.repositoryId,
+          input.scan.workspaceId,
+          input.scan.scope,
+          input.scan.phase,
+          input.scan.branch,
+          input.scan.commitSha,
+          input.scan.dirty ? 1 : 0,
+          input.scan.durationMs,
+          input.scan.errorMessage,
+          JSON.stringify(input.scan.engines),
+          createdAt,
+          completedAt
+        );
+        const insertFinding = db.prepare(
+          `INSERT INTO findings
+            (scan_id, repository_id, workspace_id, rule_id, title, severity, category, file_path, start_line, recommendation, confidence, evidence, metadata_json, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        );
+        for (const finding of input.findings) {
+          const [, ruleId, title, severity, category, filePath, startLine, recommendation, confidence, evidence, metadataJson, createdAtCol] = findingRow(input.scan.scanId, finding, createdAt);
+          insertFinding.run(
+            input.scan.scanId,
+            input.scan.repositoryId,
+            input.scan.workspaceId,
+            ruleId,
+            title,
+            severity,
+            category,
+            filePath,
+            startLine,
+            recommendation,
+            confidence,
+            evidence,
+            metadataJson,
+            createdAtCol
+          );
+        }
+        if (input.verdict) {
+          db.prepare(
+            `INSERT INTO verdicts
+              (scan_id, project_id, repository_id, workspace_id, status, score, blockers_count, critical_blockers_count, high_blockers_count, verdict_json, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          ).run(
+            input.scan.scanId,
+            input.verdict.projectId,
+            input.verdict.repositoryId,
+            input.verdict.workspaceId,
+            input.verdict.status,
+            input.verdict.score,
+            input.verdict.blockersCount,
+            input.verdict.criticalBlockersCount,
+            input.verdict.highBlockersCount,
+            JSON.stringify(input.verdict.verdict),
+            createdAt
+          );
+        }
+        db.exec("COMMIT");
+      } catch (error51) {
+        try {
+          db.exec("ROLLBACK");
+        } catch {
+        }
+        throw new LocalPersistenceError(
+          "LOCAL_PERSISTENCE_WRITE_FAILED",
+          error51 instanceof Error ? error51.message : "Failed to persist the scan result."
+        );
+      }
+    },
+    getScan(scanId) {
+      try {
+        const row = db.prepare("SELECT * FROM scans WHERE id = ?").get(scanId);
+        return row ? rowToScan(row) : null;
+      } catch (error51) {
+        throw new LocalPersistenceError(
+          "LOCAL_PERSISTENCE_READ_FAILED",
+          error51 instanceof Error ? error51.message : "Failed to read scan."
+        );
+      }
+    },
+    getLatestScan(workspaceId) {
+      try {
+        const row = db.prepare("SELECT * FROM scans WHERE workspace_id = ? ORDER BY created_at DESC, id DESC LIMIT 1").get(workspaceId);
+        return row ? rowToScan(row) : null;
+      } catch (error51) {
+        throw new LocalPersistenceError(
+          "LOCAL_PERSISTENCE_READ_FAILED",
+          error51 instanceof Error ? error51.message : "Failed to read the latest scan."
+        );
+      }
+    },
+    listScans(workspaceId, limit = 20) {
+      try {
+        const rows = db.prepare("SELECT * FROM scans WHERE workspace_id = ? ORDER BY created_at DESC, id DESC LIMIT ?").all(workspaceId, limit);
+        return rows.map(rowToScan);
+      } catch (error51) {
+        throw new LocalPersistenceError(
+          "LOCAL_PERSISTENCE_READ_FAILED",
+          error51 instanceof Error ? error51.message : "Failed to list scans."
+        );
+      }
+    },
+    getFindingsForScan(scanId) {
+      try {
+        const rows = db.prepare("SELECT * FROM findings WHERE scan_id = ? ORDER BY row_id ASC").all(scanId);
+        return rows.map(rowToFinding);
+      } catch (error51) {
+        throw new LocalPersistenceError(
+          "LOCAL_PERSISTENCE_READ_FAILED",
+          error51 instanceof Error ? error51.message : "Failed to read findings."
+        );
+      }
+    },
+    getVerdictForScan(scanId) {
+      let row;
+      try {
+        row = db.prepare("SELECT * FROM verdicts WHERE scan_id = ?").get(scanId);
+      } catch (error51) {
+        throw new LocalPersistenceError(
+          "LOCAL_PERSISTENCE_READ_FAILED",
+          error51 instanceof Error ? error51.message : "Failed to read verdict."
+        );
+      }
+      return row ? rowToVerdict(row) : null;
+    },
+    close() {
+      db.close();
+    }
+  };
+}
+
+// brain/fix-prompt/format-stack.ts
+function formatStackLines(stack) {
+  const lines = [];
+  for (const language of stack.languages) lines.push(`- ${language}`);
+  for (const framework of stack.frameworks) lines.push(`- ${framework}`);
+  for (const service of stack.services) lines.push(`- ${service}`);
+  return lines.length > 0 ? lines : ["- TypeScript (detected during static analysis)"];
+}
+
+// brain/fix-prompt/category-guidance.ts
+var DEFAULT_GUIDANCE = {
+  preserve: [
+    "Existing user-facing functionality and navigation flows.",
+    "Current API contracts consumed by the frontend.",
+    "Database schema unless this issue explicitly requires a migration.",
+    "Existing third-party integrations and environment variable names."
+  ],
+  doNotModify: [
+    "Unrelated files, routes, or components.",
+    "Project architecture or folder structure.",
+    "Existing business logic outside the affected area.",
+    "Styling or UI layout outside what is required for the fix."
+  ],
+  regressionTests: [
+    "Authorized users can still access protected resources.",
+    "Unauthorized users are still blocked appropriately.",
+    "Existing happy-path flows continue to work.",
+    "Error states remain handled without exposing sensitive data."
+  ],
+  buildRequirements: ["npm run build", "npm run typecheck", "npm test", "npm run lint"]
+};
+var CATEGORY_GUIDANCE = {
+  authentication: {
+    preserve: [
+      "Existing sign-in, sign-up, and session refresh flows.",
+      "Current auth provider configuration and callback URLs.",
+      "User identity fields and session token shape."
+    ],
+    regressionTests: [
+      "Valid credentials still authenticate successfully.",
+      "Invalid credentials are rejected without leaking account details.",
+      "Expired or missing sessions redirect to sign-in.",
+      "Protected routes remain inaccessible without authentication."
+    ]
+  },
+  authorization: {
+    preserve: [
+      "Existing role and permission model.",
+      "Row-level security policies for unrelated tables.",
+      "API authorization checks on other endpoints."
+    ],
+    regressionTests: [
+      "Users can only access their own resources.",
+      "Cross-tenant or cross-user access attempts are denied.",
+      "Admin-only routes remain restricted to authorized roles."
+    ]
+  },
+  security: {
+    preserve: [
+      "Public endpoints that are intentionally unauthenticated.",
+      "Existing input validation on unrelated forms.",
+      "Current logging and monitoring hooks."
+    ],
+    regressionTests: [
+      "Malicious or malformed input is rejected safely.",
+      "Rate limits or throttles apply only to intended endpoints.",
+      "No new sensitive data appears in logs or client responses."
+    ]
+  },
+  data_protection: {
+    preserve: [
+      "Existing secret and environment variable naming conventions.",
+      "Encryption or hashing already applied to unrelated secrets.",
+      "Current deployment environment configuration."
+    ],
+    doNotModify: [
+      "Committed secrets in git history (rotate and remove from active use instead).",
+      "Production credentials in client bundles."
+    ],
+    regressionTests: [
+      "No secrets or service-role keys are exposed in client bundles.",
+      "Environment variables are read only on the server where required.",
+      "Rotated credentials work in development and production."
+    ]
+  },
+  secrets: {
+    preserve: DEFAULT_GUIDANCE.preserve,
+    doNotModify: [
+      "Client-side code paths unless moving secret usage server-side.",
+      "Git history (rotate credentials; do not rewrite history unless requested)."
+    ],
+    regressionTests: [
+      "Server-only secrets are not importable from client components.",
+      "Build output contains no raw API keys or service role tokens."
+    ]
+  },
+  deployment: {
+    preserve: [
+      "Current hosting configuration and environment separation.",
+      "CI/CD pipeline steps unrelated to this fix.",
+      "Production domain and redirect settings."
+    ],
+    regressionTests: [
+      "Application builds and starts in production mode.",
+      "Environment-specific configuration loads correctly.",
+      "Health checks and deployment hooks still pass."
+    ]
+  },
+  database: {
+    preserve: [
+      "Existing migrations and seed data.",
+      "Unrelated table schemas and indexes.",
+      "Database connection pooling configuration."
+    ],
+    doNotModify: ["Unrelated tables, views, or RLS policies."],
+    regressionTests: [
+      "Migrations apply cleanly on a fresh database.",
+      "Existing queries return expected results.",
+      "RLS policies enforce the intended access model."
+    ]
+  }
+};
+function guidanceForCategory(category) {
+  const key = category.toLowerCase().replace(/\s+/g, "_");
+  const match = CATEGORY_GUIDANCE[key] ?? Object.entries(CATEGORY_GUIDANCE).find(([name]) => key.includes(name))?.[1] ?? {};
+  return {
+    preserve: match.preserve ?? DEFAULT_GUIDANCE.preserve,
+    doNotModify: match.doNotModify ?? DEFAULT_GUIDANCE.doNotModify,
+    regressionTests: match.regressionTests ?? DEFAULT_GUIDANCE.regressionTests,
+    buildRequirements: match.buildRequirements ?? DEFAULT_GUIDANCE.buildRequirements
+  };
+}
+
+// brain/fix-prompt/assessment.ts
+var HIGH_RISK_CATEGORIES = /* @__PURE__ */ new Set(["authorization", "database"]);
+var MEDIUM_RISK_CATEGORIES = /* @__PURE__ */ new Set(["authentication", "security"]);
+function normalizeCategory(category) {
+  return category.toLowerCase().replace(/\s+/g, "_");
+}
+function complexityLabel(complexity) {
+  switch (complexity) {
+    case "low":
+      return "Low \u2014 localized change in one or two files.";
+    case "medium":
+      return "Medium \u2014 coordinated changes across a small set of files.";
+    case "high":
+      return "High \u2014 cross-cutting change requiring careful validation.";
+  }
+}
+function assessRisk(input) {
+  const category = normalizeCategory(input.category);
+  const fileCount = Math.max(input.affectedFiles.length, 1);
+  const severity = input.severity.toLowerCase();
+  if (HIGH_RISK_CATEGORIES.has(category) || severity === "critical" && fileCount >= 3) {
+    return {
+      implementationRisk: "HIGH",
+      riskReason: category === "authorization" || category === "database" ? "Database or authorization policy changes can affect access for all users." : "Multiple critical touchpoints increase regression risk."
+    };
+  }
+  if (MEDIUM_RISK_CATEGORIES.has(category) || severity === "critical" || fileCount >= 2) {
+    const reason = category === "authentication" ? "Authentication flow updates affect sign-in and session behaviour." : category === "security" ? "Security hardening may touch request handling or middleware." : "More than one file may need a coordinated safe change.";
+    return { implementationRisk: "MEDIUM", riskReason: reason };
+  }
+  return {
+    implementationRisk: "LOW",
+    riskReason: "Single-file or configuration-level change with narrow blast radius."
+  };
+}
+function assessConfidence(input, risk) {
+  let score = 88;
+  const fileCount = input.affectedFiles.length;
+  if (fileCount === 1) score += 6;
+  else if (fileCount === 2) score += 3;
+  else if (fileCount === 0) score -= 8;
+  else if (fileCount >= 4) score -= 6;
+  if (input.recommendedAction.trim().length >= 40) score += 4;
+  const severity = input.severity.toLowerCase();
+  if (severity === "critical") score -= 6;
+  if (severity === "high") score -= 2;
+  const category = normalizeCategory(input.category);
+  if (HIGH_RISK_CATEGORIES.has(category)) score -= 10;
+  else if (MEDIUM_RISK_CATEGORIES.has(category)) score -= 5;
+  if (risk === "LOW") score += 4;
+  if (risk === "HIGH") score -= 6;
+  if (input.estimatedFixMinutes != null && input.estimatedFixMinutes <= 10) score += 3;
+  return Math.max(70, Math.min(98, score));
+}
+function assessScope(input, risk) {
+  const filesExpected = Math.max(input.affectedFiles.length, 1);
+  const minutes = input.estimatedFixMinutes ?? Math.max(5, filesExpected * 8);
+  let complexity = "low";
+  if (risk === "HIGH" || filesExpected >= 3) complexity = "high";
+  else if (risk === "MEDIUM" || filesExpected === 2) complexity = "medium";
+  const locPerMinute = complexity === "low" ? 3 : complexity === "medium" ? 4 : 5;
+  const estimatedLocMin = Math.max(3, Math.round(minutes * locPerMinute * 0.4));
+  const estimatedLocMax = Math.max(
+    estimatedLocMin + 5,
+    Math.round(minutes * locPerMinute * 1.1)
+  );
+  return {
+    filesExpected,
+    estimatedLocMin,
+    estimatedLocMax,
+    complexity,
+    complexityLabel: complexityLabel(complexity)
+  };
+}
+function assessSafeFix(input) {
+  const { implementationRisk, riskReason } = assessRisk(input);
+  const safeFixConfidence = assessConfidence(input, implementationRisk);
+  const estimatedScope = assessScope(input, implementationRisk);
+  return {
+    safeFixConfidence,
+    implementationRisk,
+    riskReason,
+    estimatedScope
+  };
+}
+function formatEstimatedFixTime(minutes) {
+  if (minutes == null || minutes <= 0) return "5 minutes";
+  if (minutes === 1) return "1 minute";
+  return `${minutes} minutes`;
+}
+
+// features/security-scanner/components/types.ts
+var findingFile = (finding) => finding.file_path ?? finding.filePath ?? finding.file ?? "";
+
+// brain/fix-prompt/build-production-fix-prompt.ts
+function bulletList(items) {
+  return items.map((item) => `- ${item}`).join("\n");
+}
+function section(title, body) {
+  return `${title}
+
+${body}`;
+}
+function severityImpact(severity) {
+  switch (severity.toLowerCase()) {
+    case "critical":
+      return "Critical \u2014 blocks safe production deployment until resolved.";
+    case "high":
+      return "High \u2014 prevents shipping until this production blocker is fixed.";
+    case "medium":
+      return "Medium \u2014 improves production readiness but does not block deployment.";
+    default:
+      return "Low \u2014 incremental improvement to production readiness.";
+  }
+}
+var SAFE_IMPLEMENTATION_PRINCIPLES = [
+  "Make the smallest possible safe change that fully resolves this blocker.",
+  "Do not introduce breaking changes to existing behaviour.",
+  "Preserve the user's project intent, architecture, and UX.",
+  "Prefer additive or narrowly scoped edits over refactors.",
+  "Stop once the blocker is resolved \u2014 do not improve unrelated code."
+];
+function projectedScoreAfterFix(input) {
+  const raw = (input.currentScore ?? 0) + (input.projectedScoreImpact ?? 0);
+  return Math.max(0, Math.min(100, Math.round(raw)));
+}
+function projectedVerdictStatusAfterFix(input) {
+  const current = input.currentVerdictStatus ?? "not_ready";
+  const projectedScore = projectedScoreAfterFix(input);
+  if (projectedScore >= 85 && current !== "ready_to_ship") {
+    return "ready_to_ship";
+  }
+  if (projectedScore >= 70) {
+    return "almost_ready";
+  }
+  if (projectedScore >= 55) {
+    return "needs_improvement";
+  }
+  if (current === "insufficient_data" || current === "analysis_failed") {
+    return current;
+  }
+  return "not_ready";
+}
+function projectedVerdictAfterFix(input) {
+  return VERDICT_STATUS_LABELS[projectedVerdictStatusAfterFix(input)];
+}
+function buildProductionFixPrompt(input) {
+  const guardedInput = sanitizeProductionFixPromptInput(input);
+  const guidance = guidanceForCategory(guardedInput.category);
+  const buildCommands = guardedInput.buildCommands ?? guidance.buildRequirements;
+  const projectedVerdictLabel = projectedVerdictAfterFix(guardedInput);
+  const currentVerdictLabel = guardedInput.currentVerdictStatus ? VERDICT_STATUS_LABELS[guardedInput.currentVerdictStatus] : "Not Ready to Ship";
+  const assessment = assessSafeFix(guardedInput);
+  const files = guardedInput.affectedFiles.length > 0 ? bulletList(guardedInput.affectedFiles) : "- Review the codebase area related to this issue during implementation.";
+  const stackLines = formatStackLines(guardedInput.stack).join("\n");
+  const severityLabel = guardedInput.severity.charAt(0).toUpperCase() + guardedInput.severity.slice(1);
+  const promptBody = [
+    section(
+      "PROJECT CONTEXT",
+      [
+        guardedInput.projectName ? `Project: ${guardedInput.projectName}` : null,
+        "Detected stack:",
+        stackLines
+      ].filter(Boolean).join("\n")
+    ),
+    section(
+      "PRODUCTION BLOCKER",
+      [
+        `Title: ${guardedInput.issueTitle}`,
+        `Severity: ${severityLabel}`,
+        guardedInput.affectedFiles[0] ? `Location: ${guardedInput.affectedFiles[0]}` : null,
+        "",
+        guardedInput.issueDescription,
+        "",
+        `Estimated impact: ${guardedInput.estimatedImpact ?? severityImpact(guardedInput.severity)}`
+      ].filter(Boolean).join("\n")
+    ),
+    section(
+      "WHY THIS MATTERS",
+      [
+        guardedInput.whyItMatters,
+        "",
+        `Production risk: ${assessment.riskReason}`,
+        `Implementation risk: ${assessment.implementationRisk}`
+      ].join("\n")
+    ),
+    section(
+      "GOAL",
+      [
+        `Fix this ${guardedInput.category.replace(/_/g, " ")} production blocker with the smallest possible safe change.`,
+        guardedInput.recommendedAction
+      ].join("\n")
+    ),
+    section("FILES TO REVIEW", files),
+    section("PRESERVE THE FOLLOWING", bulletList(guidance.preserve)),
+    section("DO NOT MODIFY", bulletList(guidance.doNotModify)),
+    section("IMPLEMENTATION REQUIREMENTS", [
+      "Apply the minimum required code changes using the safest possible approach.",
+      "Match existing project conventions, naming, and file structure.",
+      "",
+      guardedInput.recommendedAction
+    ].join("\n")),
+    section("SAFE IMPLEMENTATION PRINCIPLES", bulletList(SAFE_IMPLEMENTATION_PRINCIPLES)),
+    section("REGRESSION TESTS", bulletList(guidance.regressionTests)),
+    section(
+      "BUILD REQUIREMENTS",
+      [
+        "Before finishing, run:",
+        bulletList(buildCommands),
+        "",
+        "Confirm the fix does not introduce new TypeScript, lint, or test failures."
+      ].join("\n")
+    ),
+    section("CONFIDENCE SCORE", [
+      `Safe Fix Confidence: ${assessment.safeFixConfidence}%`,
+      "",
+      "This score represents how confident SequrAI is that this change can be implemented safely without introducing regressions."
+    ].join("\n")),
+    section("IMPLEMENTATION RISK", [
+      assessment.implementationRisk,
+      "",
+      assessment.riskReason
+    ].join("\n")),
+    section("ESTIMATED FIX TIME", formatEstimatedFixTime(guardedInput.estimatedFixMinutes)),
+    section("ESTIMATED SCOPE", [
+      `Files expected to change: ${assessment.estimatedScope.filesExpected}`,
+      `Estimated LOC modifications: ${assessment.estimatedScope.estimatedLocMin}\u2013${assessment.estimatedScope.estimatedLocMax}`,
+      `Complexity: ${assessment.estimatedScope.complexityLabel}`
+    ].join("\n")),
+    section(
+      "PROJECTED PRODUCTION VERDICT",
+      [
+        "Current:",
+        currentVerdictLabel,
+        "",
+        "Projected:",
+        projectedVerdictLabel,
+        guardedInput.projectedScoreImpact ? `(Estimated score improvement: +${guardedInput.projectedScoreImpact} points)` : null
+      ].filter(Boolean).join("\n")
+    )
+  ].join("\n\n------------------------------------------------------------\n\n");
+  const prompt = assertFixPromptOutputSafe(promptBody);
+  return { prompt, projectedVerdictLabel, assessment };
+}
+function fixPromptInputFromFinding(finding, options = {}) {
+  const path = findingFile(finding);
+  return {
+    projectName: options.projectName,
+    issueTitle: finding.title ?? "Production blocker",
+    issueDescription: finding.description ?? finding.recommendation ?? "",
+    category: finding.category ?? "security",
+    severity: finding.severity ?? "high",
+    whyItMatters: finding.impact ?? finding.description ?? "This issue prevents safe production deployment.",
+    estimatedImpact: finding.impact,
+    affectedFiles: path ? [path] : [],
+    stack: options.stack ?? { languages: [], frameworks: [], services: [] },
+    recommendedAction: options.recommendedAction ?? finding.recommendation ?? "Apply the smallest safe fix that resolves this production blocker.",
+    estimatedFixMinutes: options.estimatedFixMinutes,
+    currentVerdictStatus: options.currentVerdictStatus,
+    currentScore: options.currentScore,
+    projectedScoreImpact: options.projectedScoreImpact
+  };
+}
+
+// lib/local-analysis/local-safe-fix.ts
+var LocalSafeFixError = class extends Error {
+  constructor(code, message) {
+    super(message);
+    this.code = code;
+    this.name = "LocalSafeFixError";
+  }
+};
+var MAX_FIX_CANDIDATES = 8;
+var SEVERITY_RANK = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
+function loadCurrentFindingsForFix(store, identity) {
+  const scan = store.getLatestScan(identity.workspaceId);
+  if (!scan || scan.repositoryId !== identity.repositoryId) {
+    throw new LocalSafeFixError(
+      "no_scan_yet",
+      "No local scan has been recorded for this workspace yet. Run sequrai_local_audit (or audit_local_project) first."
+    );
+  }
+  return { scan, findings: store.getFindingsForScan(scan.scanId) };
+}
+function toCandidate(finding, correlationKey) {
+  return {
+    correlationKey,
+    ruleId: finding.rule_id ?? "",
+    title: finding.title,
+    severity: finding.severity ?? null,
+    filePath: finding.file_path ?? null
+  };
+}
+function buildLocalSafeFix(store, identity, input) {
+  const { scan, findings } = loadCurrentFindingsForFix(store, identity);
+  const verdict = store.getVerdictForScan(scan.scanId);
+  const candidates = findings.map((finding) => ({ finding, correlationKey: correlationKeyForPersistedFinding(finding, identity.workspaceId) })).sort(
+    (a, b) => (SEVERITY_RANK[a.finding.severity ?? ""] ?? 5) - (SEVERITY_RANK[b.finding.severity ?? ""] ?? 5) || a.correlationKey.localeCompare(b.correlationKey)
+  );
+  if (candidates.length === 0) {
+    return {
+      status: "no_findings",
+      scanId: scan.scanId,
+      note: "No findings in the latest scan -- nothing to fix."
+    };
+  }
+  const requested = input.correlationKey?.trim();
+  if (!requested) {
+    return {
+      status: "choose_finding",
+      scanId: scan.scanId,
+      candidates: candidates.slice(0, MAX_FIX_CANDIDATES).map((c) => toCandidate(c.finding, c.correlationKey)),
+      note: "Pass one of these correlationKey values as `correlationKey` to get a fix prompt for that specific finding."
+    };
+  }
+  const match = candidates.find((c) => c.correlationKey === requested);
+  if (!match) {
+    throw new LocalSafeFixError(
+      "finding_not_found",
+      `No finding with correlationKey "${requested}" was found in the latest scan (${scan.scanId}) for this workspace.`
+    );
+  }
+  const promptInput = fixPromptInputFromFinding(
+    {
+      id: match.finding.id,
+      title: match.finding.title,
+      severity: match.finding.severity ?? void 0,
+      category: match.finding.category ?? void 0,
+      rule_id: match.finding.rule_id ?? void 0,
+      file_path: match.finding.file_path ?? void 0,
+      start_line: match.finding.start_line ?? void 0,
+      recommendation: match.finding.recommendation ?? void 0,
+      evidence: match.finding.evidence ?? void 0
+    },
+    {
+      projectName: identity.projectName,
+      currentVerdictStatus: verdict?.status,
+      currentScore: verdict?.score ?? null
+    }
+  );
+  const result = buildProductionFixPrompt(promptInput);
+  return {
+    status: "prompt_ready",
+    scanId: scan.scanId,
+    finding: toCandidate(match.finding, match.correlationKey),
+    fixPrompt: result.prompt,
+    safeFixConfidence: result.assessment.safeFixConfidence,
+    implementationRisk: result.assessment.implementationRisk,
+    estimatedFixTime: formatEstimatedFixTime(promptInput.estimatedFixMinutes),
+    projectedScore: projectedScoreAfterFix(promptInput),
+    projectedVerdict: projectedVerdictStatusAfterFix(promptInput),
+    note: `SequrAI does not execute this fix. Review and apply it yourself, then run sequrai_local_audit (or audit_local_project) again -- the rescan's finding history will show this finding as RESOLVED if it is no longer detected in a complete scan, or PERSISTING if it still is. "Resolved" means not detected in the latest complete scan, not proven fixed or secure.`
+  };
+}
+
 // lib/local-analysis/run-local-verdict.ts
 var MAX_INLINE_LOCAL_FINDINGS = 40;
 var LOCAL_SEVERITY_RANK = {
@@ -24209,8 +25631,8 @@ function buildGitMetadata(git) {
 function buildInsufficientDataResult(input) {
   const scanId = createLocalScanId();
   const { verdict } = generateProductionVerdict({
-    projectId: LOCAL_PROJECT_ID,
-    repositoryId: LOCAL_REPOSITORY_ID,
+    projectId: input.identity.projectId,
+    repositoryId: input.identity.repositoryId,
     scanId,
     commitSha: input.git.commitSha,
     branch: input.git.branch,
@@ -24250,7 +25672,8 @@ function buildInsufficientDataResult(input) {
       findings: [],
       reason: input.reason
     }),
-    methodologyNote: verdict.methodologyNote
+    methodologyNote: verdict.methodologyNote,
+    identity: { projectId: input.identity.projectId, repositoryId: input.identity.repositoryId, workspaceId: input.identity.workspaceId }
   };
 }
 async function runLocalProductionVerdict(input = {}) {
@@ -24258,6 +25681,7 @@ async function runLocalProductionVerdict(input = {}) {
   const scope = resolveScopeFromArgs(input);
   const git = getGitContext(workspace);
   const listing = listWorkspaceFiles(workspace);
+  const identity = await resolveLocalIdentity(workspace);
   const emptySnapshot = {
     filesAnalyzed: 0,
     filesExcluded: listing.stats.filesExcluded,
@@ -24272,7 +25696,8 @@ async function runLocalProductionVerdict(input = {}) {
       scope,
       git,
       snapshot: emptySnapshot,
-      reason: "Git is not available in this workspace. Use scope=workspace or initialize a git repository."
+      reason: "Git is not available in this workspace. Use scope=workspace or initialize a git repository.",
+      identity
     });
   }
   if (resolvedScope !== "workspace" && paths.size === 0) {
@@ -24281,7 +25706,8 @@ async function runLocalProductionVerdict(input = {}) {
       scope: resolvedScope,
       git,
       snapshot: emptySnapshot,
-      reason: "No changed files detected for the selected scope."
+      reason: "No changed files detected for the selected scope.",
+      identity
     });
   }
   const scopedListing = resolvedScope === "workspace" ? listing : listWorkspaceFiles(workspace, { onlyRelativePaths: paths });
@@ -24301,13 +25727,16 @@ async function runLocalProductionVerdict(input = {}) {
         truncated: scopedListing.truncated,
         credentialsSkipped: scopedListing.stats.credentialsSkipped
       },
-      reason: "No readable source files found inside the authorized workspace."
+      reason: "No readable source files found inside the authorized workspace.",
+      identity
     });
   }
   const scan = await scanRepository(inputFiles);
   const scanId = createLocalScanId();
   const bytesAnalyzed = inputFiles.reduce((sum, file2) => sum + file2.content.length, 0);
+  const ruleFailed = scan.omissions.some((o) => o.reason === "rule-error");
   const snapshotTruncated = scopedListing.truncated || scan.metrics.truncated;
+  const partialScanFailure = snapshotTruncated || ruleFailed;
   const snapshot = {
     filesAnalyzed: scan.metrics.scannedFiles,
     filesExcluded: scopedListing.stats.filesExcluded,
@@ -24316,8 +25745,8 @@ async function runLocalProductionVerdict(input = {}) {
     credentialsSkipped: scopedListing.stats.credentialsSkipped
   };
   const { verdict } = generateProductionVerdict({
-    projectId: LOCAL_PROJECT_ID,
-    repositoryId: LOCAL_REPOSITORY_ID,
+    projectId: identity.projectId,
+    repositoryId: identity.repositoryId,
     scanId,
     commitSha: git.commitSha,
     branch: git.branch,
@@ -24326,16 +25755,39 @@ async function runLocalProductionVerdict(input = {}) {
     filesAnalyzed: scan.metrics.scannedFiles,
     filesDiscovered: scopedListing.stats.discoveredFiles,
     findings: scan.findings.map(mapScanFindingToVerdictInput),
-    partialScanFailure: snapshotTruncated
+    partialScanFailure
   });
   const publicFindings = mapFindingsToPublic(scan.findings);
   const actionableFindings = publicFindings.filter((finding) => !finding.safeToIgnore);
   const inlineFindings = capLocalFindingsForResponse(publicFindings);
+  const phase = partialScanFailure ? "partial" : "complete";
+  const persistence = input.persist ? persistLocalScan({
+    workspace,
+    scanId,
+    identity,
+    scope: resolvedScope,
+    phase,
+    git,
+    durationMs: scan.metrics.durationMs,
+    findings: scan.findings.map(mapScanFindingToVerdictInput),
+    ruleFailed,
+    verdict: {
+      projectId: identity.projectId,
+      repositoryId: identity.repositoryId,
+      workspaceId: identity.workspaceId,
+      status: verdict.status,
+      score: verdict.score,
+      blockersCount: verdict.blockersCount,
+      criticalBlockersCount: verdict.criticalBlockersCount,
+      highBlockersCount: verdict.highBlockersCount,
+      verdict
+    }
+  }) : void 0;
   return {
     source: "local",
     gitAvailable: git.isGitRepository,
     scope: resolvedScope,
-    phase: snapshotTruncated ? "partial" : "complete",
+    phase,
     workspace,
     branch: git.branch,
     commitSha: git.commitSha,
@@ -24368,14 +25820,86 @@ async function runLocalProductionVerdict(input = {}) {
       commitSha: git.commitSha,
       branch: git.branch,
       reason: git.commitSha ? void 0 : "Local analysis has no verified commit SHA for GitHub correlation."
-    }
+    },
+    identity: { projectId: identity.projectId, repositoryId: identity.repositoryId, workspaceId: identity.workspaceId },
+    persistence
   };
 }
-function buildLocalWorkspaceStatus(workspacePath) {
+function persistLocalScan(input) {
+  const counts = parseGitFileCounts(input.git.status);
+  const dirty = counts.modifiedFiles + counts.untrackedFiles + counts.deletedFiles > 0;
+  let store;
+  try {
+    store = openLocalPersistenceStore(input.workspace);
+    store.saveScanResult({
+      scan: {
+        scanId: input.scanId,
+        projectId: input.identity.projectId,
+        repositoryId: input.identity.repositoryId,
+        workspaceId: input.identity.workspaceId,
+        scope: input.scope,
+        phase: input.phase,
+        branch: input.git.branch,
+        commitSha: input.git.commitSha,
+        dirty,
+        durationMs: input.durationMs,
+        errorMessage: input.ruleFailed ? "One or more security rules failed to complete." : null,
+        engines: [{ engine: "native", status: input.ruleFailed ? "PARTIAL" : "COMPLETED", durationMs: input.durationMs, findingsCount: input.findings.length }]
+      },
+      findings: input.findings,
+      verdict: input.verdict
+    });
+    return { status: "saved", scanId: input.scanId };
+  } catch (error51) {
+    return {
+      status: "unavailable",
+      error: error51 instanceof LocalPersistenceError ? `${error51.code}: ${error51.message}` : error51 instanceof Error ? error51.message : "Unknown persistence failure."
+    };
+  } finally {
+    store?.close();
+  }
+}
+var MAX_INLINE_HISTORY_FINDINGS = 10;
+function readLocalHistorySummary(workspace, identity) {
+  let store;
+  try {
+    store = openLocalPersistenceStore(workspace);
+    const history = buildFindingHistory(store, identity);
+    if (!history) return null;
+    return summarizeHistory(history);
+  } catch {
+    return null;
+  } finally {
+    store?.close();
+  }
+}
+function summarizeHistory(history) {
+  const toInline = (entries) => entries.slice(0, MAX_INLINE_HISTORY_FINDINGS).map((f) => ({ ruleId: f.ruleId, title: f.title, filePath: f.filePath, severity: f.severity }));
+  return {
+    latestScan: { scanId: history.currentScan.scanId, createdAt: history.currentScan.createdAt, phase: history.currentScan.phase },
+    previousScan: history.previousScan ? { scanId: history.previousScan.scanId, createdAt: history.previousScan.createdAt, phase: history.previousScan.phase } : null,
+    verdict: {
+      current: history.verdictHistory.latest ? { status: history.verdictHistory.latest.status, score: history.verdictHistory.latest.score } : { status: "unknown", score: null },
+      previous: history.verdictHistory.previous ? { status: history.verdictHistory.previous.status, score: history.verdictHistory.previous.score } : null,
+      changed: history.verdictHistory.statusChanged
+    },
+    currentFindingsCount: history.currentFindings.length,
+    newCount: history.delta.counts.newCount,
+    persistingCount: history.delta.counts.persistingCount,
+    resolvedCount: history.delta.counts.resolvedCount,
+    lifecycleUnknownCount: history.delta.counts.lifecycleUnknownCount,
+    newFindings: toInline(history.delta.newFindings),
+    resolvedFindings: toInline(history.delta.resolvedFindings),
+    note: history.delta.currentScanComplete ? '"resolvedFindings" means not detected in the latest complete scan -- not proven fixed or secure.' : "The latest scan was partial or incomplete; no findings are reported as resolved because their absence cannot be trusted (absence of evidence is not evidence of resolution)."
+  };
+}
+async function buildLocalWorkspaceStatus(workspacePath) {
   const workspace = normalizeWorkspaceRoot(workspacePath ?? process.cwd());
   const listing = listWorkspaceFiles(workspace);
   const git = getGitContext(workspace);
   const gitMeta = buildGitMetadata(git);
+  const identity = await resolveLocalIdentity(workspace);
+  const history = readLocalHistorySummary(workspace, identity);
   return {
     source: "local",
     gitAvailable: git.isGitRepository,
@@ -24396,7 +25920,8 @@ function buildLocalWorkspaceStatus(workspacePath) {
     totalBytes: listing.totalBytes,
     truncated: listing.truncated,
     analysisReadiness: listing.files.length > 0 ? "ready" : "empty",
-    ignoredExamples: ["node_modules/", ".git/", ".env (credentials skipped)"]
+    ignoredExamples: ["node_modules/", ".git/", ".env (credentials skipped)"],
+    history
   };
 }
 function buildLocalReview(input) {
@@ -24416,14 +25941,28 @@ ${git.diff ?? ""}`.trim();
     message: git.status?.trim() ? "Local changes detected. Use sequrai_local_audit or audit_local_project with scope working_tree, staged, or diff." : "No local changes detected."
   };
 }
-function buildLocalFindings(workspacePath) {
-  return runLocalProductionVerdict({ workspacePath, scope: "workspace" }).then((result) => ({
+async function buildLocalFix(workspacePath, correlationKey) {
+  const workspace = normalizeWorkspaceRoot(workspacePath ?? process.cwd());
+  const identity = await resolveLocalIdentity(workspace);
+  const store = openLocalPersistenceStore(workspace);
+  try {
+    return buildLocalSafeFix(store, { workspaceId: identity.workspaceId, repositoryId: identity.repositoryId }, { correlationKey });
+  } finally {
+    store.close();
+  }
+}
+async function buildLocalFindings(workspacePath) {
+  const workspace = normalizeWorkspaceRoot(workspacePath ?? process.cwd());
+  const result = await runLocalProductionVerdict({ workspacePath, scope: "workspace", persist: true });
+  const history = readLocalHistorySummary(workspace, result.identity);
+  return {
     source: "local",
     scope: "workspace",
     findings: result.findings.filter(
       (finding) => finding.severity === "critical" || finding.severity === "high" || !finding.safeToIgnore
-    )
-  }));
+    ),
+    history
+  };
 }
 async function buildLocalPrepareManifest(workspacePath) {
   const workspace = normalizeWorkspaceRoot(workspacePath ?? process.cwd());
@@ -24456,7 +25995,8 @@ var LOCAL_TOOL_NAMES = [
   "audit_local_project",
   "sequrai_local_review",
   "sequrai_local_findings",
-  "sequrai_local_prepare"
+  "sequrai_local_prepare",
+  "sequrai_local_fix"
 ];
 var LOCAL_AUDIT_TOOL_NAMES = ["sequrai_local_audit", "audit_local_project"];
 function isLocalToolName(name) {
@@ -24483,7 +26023,8 @@ async function executeLocalTool(name, args = {}) {
     return runLocalProductionVerdict({
       workspacePath,
       scope: resolveScopeFromArgs(args),
-      gitDiffOnly: args.gitDiffOnly
+      gitDiffOnly: args.gitDiffOnly,
+      persist: true
     });
   }
   switch (name) {
@@ -24495,6 +26036,8 @@ async function executeLocalTool(name, args = {}) {
       return buildLocalFindings(workspacePath);
     case "sequrai_local_prepare":
       return buildLocalPrepareManifest(workspacePath);
+    case "sequrai_local_fix":
+      return buildLocalFix(workspacePath, args.correlationKey);
     default:
       throw new Error(`unknown_local_tool:${name}`);
   }
@@ -24503,6 +26046,7 @@ export {
   DEFAULT_IGNORED_DIRS,
   LOCAL_SCAN_LIMITS,
   LOCAL_TOOL_NAMES,
+  LocalSafeFixError,
   WorkspaceBoundaryError,
   executeLocalTool,
   isBinaryBuffer,

@@ -146,7 +146,8 @@ export async function persistEngineResults(
   const { data: nativeRows } = await admin
     .from("scan_findings")
     .select("id, title, description, severity, category, file_path, start_line, recommendation, confidence, metadata")
-    .eq("scan_id", input.scanId);
+    .eq("scan_id", input.scanId)
+    .eq("organization_id", input.organizationId);
 
   const nativeFindings = (nativeRows ?? []).map((row) =>
     mapScanFindingRowToSequrAIFinding(row as Record<string, unknown>, {

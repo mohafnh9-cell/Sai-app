@@ -355,6 +355,13 @@ export function openLocalPersistenceStore(workspaceRoot: string): LocalPersisten
     db.exec("PRAGMA journal_mode = WAL");
     db.exec("PRAGMA synchronous = NORMAL");
     db.exec("PRAGMA foreign_keys = ON");
+    // Core hardening audit (F6): without a busy timeout, two local scans
+    // racing against the same workspace's db (e.g. an agent double-calling
+    // sequrai_local_audit) previously surfaced as an immediate SQLITE_BUSY
+    // persistence failure the instant one writer held the lock, rather than
+    // the second writer waiting briefly for its turn -- still handled
+    // honestly (see saveScanResult's catch), just needlessly less reliable.
+    db.exec("PRAGMA busy_timeout = 5000");
   } catch (error) {
     db.close();
     throw new LocalPersistenceError(
