@@ -52,8 +52,17 @@ export const MCP_SECURITY_RULES: McpSecurityRule[] = [
     category: "overly-broad-permissions",
     message:
       "Filesystem write operation without visible path validation. Ensure paths are validated with path.resolve and confined to an allowed directory.",
+    // The safe-call exclusion must be checked BEFORE consuming any
+    // identifier characters -- putting it after `[\w$.]*` (as this
+    // pattern previously did) let that greedy, dot-inclusive class
+    // consume the literal "path.resolve" text itself, leaving nothing
+    // for the lookahead to compare against, so the exclusion never
+    // actually excluded anything (found by the detection-accuracy
+    // benchmark: this pattern flagged its own recommended remediation,
+    // writeFileSync(path.resolve(...), data)). mcp.url-no-validation
+    // below already uses the correct before-the-match placement.
     pattern:
-      /\b(writeFileSync|writeFile|createWriteStream|appendFileSync|appendFile)\s*\(\s*[a-zA-Z_$][\w$.]*(?!\s*(?:path\.resolve|path\.join|path\.normalize))/g,
+      /\b(writeFileSync|writeFile|createWriteStream|appendFileSync|appendFile)\s*\(\s*(?!(?:path\.resolve|path\.join|path\.normalize)\s*\()[a-zA-Z_$][\w$.]*/g,
     fileTypes: [".js", ".ts"],
   },
   {

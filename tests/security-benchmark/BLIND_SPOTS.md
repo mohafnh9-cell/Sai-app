@@ -131,31 +131,60 @@ findings this benchmark is asked to close.
 ## V2: MCP / Prompt Injection / Agent Action finding-level coverage
 
 Full check-by-check inventory and coverage status for these three
-multi-check subsystems now lives in
-[`COVERAGE.md`](./COVERAGE.md) rather than being duplicated here. Three
-new structural gaps were discovered while building that coverage (all
-measurement-only findings, none fixed in this pass):
+multi-check subsystems lives in [`COVERAGE.md`](./COVERAGE.md) rather
+than being duplicated here. V2 discovered three structural gaps and two
+false positives, measurement-only at the time; **all five were fixed in
+the Detection Accuracy Hardening V1 pass** (see the next section) except
+where noted.
 
-1. **`.py` files never reach `scanRepository()` at all** (scanner-wide,
+## Detection Accuracy Hardening V1: fixes applied
+
+1. **`.py` files never reached `scanRepository()` at all** (scanner-wide,
    not subsystem-specific) — `DEFAULT_SCAN_CONFIG.includeExtensions`
-   (`features/security-scanner/config.ts`) omits `.py`, so every Python
-   file is dropped at `normalizeFiles()` with omission reason `"binary"`
-   before any rule runs. This silently disables 6 MCP checks, 4
-   prompt-injection checks, and any Python-language agent-action tool
-   file, and (structurally) every native rule's Python coverage too, not
-   just these three subsystems. Flagged as a P1 candidate.
+   (`features/security-scanner/config.ts`) omitted `.py`, so every Python
+   file was dropped at `normalizeFiles()` with omission reason `"binary"`
+   before any rule ran. **FIXED**: `.py` added to `SOURCE_EXTENSIONS`
+   (`features/security-scanner/constants.ts`). Verified: `.py` files now
+   reach every subsystem, no findings were fabricated, binary files and
+   still-unsupported languages remain correctly excluded (see
+   `features/security-scanner/__tests__/python-visibility.test.ts`).
+   Still out of scope: `.go`, `.rb`, `.java`, `.php` (referenced by the
+   native scanner's own `CODE_PATH` regex but not in `SOURCE_EXTENSIONS`)
+   remain excluded with the same misleading `"binary"` omission reason —
+   a related, real, but explicitly out-of-scope gap for this Python-only
+   pass.
 2. **Agent-action's `isRelevantValue()` pre-filter** (`discover.ts`)
-   silently drops any extracted string that doesn't contain one of 13
+   silently dropped any extracted string that didn't contain one of 13
    unrelated trigger keywords, before the actual per-actionType rule
-   check ever sees it — makes `bash.credential.ssh-key-read`,
+   check ever saw it — made `bash.credential.ssh-key-read`,
    `bash.credential.aws-creds`, and `cron.persistence.at-boot`
    unreachable under realistic phrasing even though each has its own
-   working regex.
-3. **`mcp.fs-write-no-path-validation`** false-positives on its own
-   recommended remediation (`writeFileSync(path.resolve(...))`) — same
-   regex-backtracking bug class as `web.next-xss` (V1): the "exclusion"
-   identifier match consumes the very text its negative lookahead is
-   supposed to check.
+   working regex. **FIXED**: added `cat` and an `@reboot` alternative to
+   the keyword whitelist — the minimal change that lets those three
+   checks' own existing patterns run, without loosening any pattern
+   itself or broadening any other actionType's noise floor. Verified
+   with both a malicious and a deliberately-unrelated safe "cat"
+   fixture (`features/security-analysis/__tests__/agent-action.test.ts`).
+3. **`mcp.fs-write-no-path-validation`** false-positived on its own
+   recommended remediation (`writeFileSync(path.resolve(...))`) because
+   the exclusion lookahead was checked AFTER a greedy, dot-inclusive
+   identifier match had already consumed the literal "path.resolve"
+   text. **FIXED**: moved the exclusion check to before the identifier
+   is matched (`features/security-analysis/mcp/rules.ts`) — the same
+   placement `mcp.url-no-validation` already used correctly, which is
+   why that check never had this bug.
+4. **`web.next-xss`** false-positived on properly-sanitized
+   `DOMPurify.sanitize()` calls (both the `dangerouslySetInnerHTML` and
+   `.innerHTML =` pattern specs had the same defect) because the outer
+   `\s*` before the exclusion lookahead was backtrackable to zero width.
+   **FIXED**: the whitespace absorption moved inside the lookahead
+   itself (`features/security-scanner/rules/builtin.ts`), so it always
+   evaluates against the real next token regardless of backtracking.
 
-See `COVERAGE.md` for exact check-by-check status and the full technical
-explanation of each.
+For all four fixes: the vulnerable case each rule was designed to catch
+is still caught (verified with a dedicated regression test per fix), and
+an adversarial "does this overreach" fixture was added per fix (e.g. a
+function merely named `maybeSanitize` must still be flagged by
+`web.next-xss`; an unrelated `cat package.json` must not start
+triggering `bash.credential.ssh-key-read`). See `COVERAGE.md` for the
+full check-by-check status after these fixes.

@@ -35,10 +35,19 @@ describe("SequrAI detection benchmark: case-level regression gate", () => {
     expect(mismatches.map((o) => ({ id: o.case.id, mismatch: o.severityMismatch }))).toEqual([]);
   });
 
-  it("every excluded case is still classified (documented, not silently dropped) and stays a known discrepancy", async () => {
+  it("every case marked excludedReason (if any exist) is still classified, not silently dropped, and carries a real reason", async () => {
+    // As of the Detection Accuracy Hardening V1 pass, zero fixtures are
+    // excluded -- both confirmed false positives (web.next-xss,
+    // mcp.fs-write-no-path-validation) were root-caused and fixed rather
+    // than merely documented. This assertion stays generic (not
+    // "length > 0") so it keeps proving the mechanism -- gatedOutcomes +
+    // excludedOutcomes always partition every outcome exactly once, and
+    // any future excluded case is still tracked, not dropped -- without
+    // hard-coding today's zero count as a permanent expectation.
     const result = await runBenchmark(ALL_BENCHMARK_CASES);
     const excluded = excludedOutcomes(result);
-    expect(excluded.length).toBeGreaterThan(0);
+    const gated = gatedOutcomes(result);
+    expect(gated.length + excluded.length).toBe(result.outcomes.length);
     for (const outcome of excluded) {
       expect(outcome.case.excludedReason).toBeTruthy();
     }

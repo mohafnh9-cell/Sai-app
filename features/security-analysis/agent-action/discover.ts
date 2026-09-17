@@ -105,7 +105,12 @@ function isRelevantValue(actionType: AgentActionType, value: string): boolean {
     case "cron":
     case "git":
     case "docker":
-      return /\b(rm|curl|wget|git|docker|sudo|chmod|dd|DROP|DELETE|spawn|exec|nc)\b/i.test(value);
+      // "cat" and "@reboot" cover checkAgentAction's own
+      // bash.credential.ssh-key-read / bash.credential.aws-creds /
+      // cron.persistence.at-boot patterns, which this pre-filter was
+      // otherwise silently dropping before they ever reached those
+      // checks (found by the detection-accuracy benchmark).
+      return /\b(rm|cat|curl|wget|git|docker|sudo|chmod|dd|DROP|DELETE|spawn|exec|nc)\b/i.test(value) || /@reboot/.test(value);
     case "file_write":
     case "file_read":
     case "file_delete":

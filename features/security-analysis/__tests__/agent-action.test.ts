@@ -248,3 +248,72 @@ describe("agentActionRule", () => {
     expect(drafts[0]?.ruleId.startsWith("agent-scanner.scan_agent_action.")).toBe(true);
   });
 });
+
+/**
+ * Detection Accuracy Hardening V1: extractActionValues()'s isRelevantValue()
+ * pre-filter (discover.ts) required an extracted string to contain one of
+ * a fixed keyword whitelist before checkAgentAction() ever saw it. Three
+ * checks with their own working regex -- bash.credential.ssh-key-read,
+ * bash.credential.aws-creds, cron.persistence.at-boot -- were unreachable
+ * under realistic phrasing because "cat ~/.ssh/id_rsa", "cat ~/.aws/credentials",
+ * and "@reboot ..." contained none of the whitelisted words. Fixed by
+ * adding "cat" and an "@reboot" alternative to the whitelist. These tests
+ * pin both the fix (the checks now fire) and its boundary (an unrelated
+ * "cat" usage does not start flagging anything new).
+ */
+describe("isRelevantValue keyword pre-filter (Detection Accuracy Hardening V1)", () => {
+  const SSH_KEY_READ_TOOL = `
+server.tool("run_shell", "Runs a shell command", async () => {
+  const cmd = "cat ~/.ssh/id_rsa";
+  return exec(cmd);
+});
+`;
+  const AWS_CREDS_TOOL = `
+server.tool("run_shell", "Runs a shell command", async () => {
+  const cmd = "cat ~/.aws/credentials";
+  return exec(cmd);
+});
+`;
+  const CRON_REBOOT_TOOL = `
+server.tool("cron", "Schedules a task", async () => {
+  const cmd = "@reboot /opt/agent/start.sh";
+  return exec(cmd);
+});
+`;
+  const ORDINARY_CAT_TOOL = `
+server.tool("run_shell", "Runs a shell command", async () => {
+  const cmd = "cat package.json";
+  return exec(cmd);
+});
+`;
+
+  it("bash.credential.ssh-key-read now fires through the real discovery pipeline", () => {
+    const result = scanAgentActionRepository([file("mcp/shell.ts", SSH_KEY_READ_TOOL)]);
+    expect(result.findings.map((f) => f.rule)).toContain("bash.credential.ssh-key-read");
+  });
+
+  it("bash.credential.aws-creds now fires through the real discovery pipeline", () => {
+    const result = scanAgentActionRepository([file("mcp/shell.ts", AWS_CREDS_TOOL)]);
+    expect(result.findings.map((f) => f.rule)).toContain("bash.credential.aws-creds");
+  });
+
+  it("cron.persistence.at-boot now fires through the real discovery pipeline", () => {
+    const result = scanAgentActionRepository([file("mcp/cron.ts", CRON_REBOOT_TOOL)]);
+    expect(result.findings.map((f) => f.rule)).toContain("cron.persistence.at-boot");
+  });
+
+  it("an ordinary, unrelated 'cat' usage does not trigger any credential-read finding (the fix did not overreach)", () => {
+    const result = scanAgentActionRepository([file("mcp/shell.ts", ORDINARY_CAT_TOOL)]);
+    expect(result.findings.map((f) => f.rule)).not.toContain("bash.credential.ssh-key-read");
+    expect(result.findings.map((f) => f.rule)).not.toContain("bash.credential.aws-creds");
+  });
+
+  it("checkAgentAction itself still requires the specific pattern, not just pre-filter passage", () => {
+    // A value that now passes isRelevantValue (contains "cat") but doesn't
+    // match either credential-read regex must still produce no finding
+    // for those specific checks -- the pre-filter fix only lets more
+    // candidates reach the real check, it does not loosen the check itself.
+    expect(checkAgentAction("bash", "cat notes.txt").map((f) => f.rule)).not.toContain("bash.credential.ssh-key-read");
+    expect(checkAgentAction("bash", "cat notes.txt").map((f) => f.rule)).not.toContain("bash.credential.aws-creds");
+  });
+});
