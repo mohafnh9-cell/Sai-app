@@ -1,3 +1,4 @@
+import { fileURLToPath as __sequraiFileURLToPath } from "node:url"; import { dirname as __sequraiDirname } from "node:path"; const __filename = __sequraiFileURLToPath(import.meta.url); const __dirname = __sequraiDirname(__filename);
 var __defProp = Object.defineProperty;
 var __export = (target, all) => {
   for (var name in all)
@@ -18296,11 +18297,6 @@ async function resolveLocalIdentity(workspaceRoot, cloudResolver) {
   };
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/server-only/index.js
-throw new Error(
-  "This module cannot be imported from a Client Component module. It should only be used from a Server Component."
-);
-
 // server/security-engines/opengrep/engine.ts
 import { randomUUID as randomUUID3 } from "node:crypto";
 import { writeFile } from "node:fs/promises";
@@ -27331,19 +27327,229 @@ async function executeLocalTool(name, args = {}) {
       throw new Error(`unknown_local_tool:${name}`);
   }
 }
+
+// lib/local-analysis/auto-security-trigger.ts
+import { createHash as createHash7 } from "node:crypto";
+import { existsSync as existsSync5, lstatSync as lstatSync3, mkdirSync as mkdirSync3, readFileSync as readFileSync3, writeFileSync as writeFileSync2 } from "node:fs";
+import { join as join5 } from "node:path";
+
+// lib/local-analysis/auto-security-classifier.ts
+var HIGH_RELEVANCE_PATTERNS = [
+  /\bauth\b/i,
+  /\blogin\b/i,
+  /\bsession\b/i,
+  /middleware\.[jt]sx?$/i,
+  /\bauthz\b|\bauthoriz/i,
+  /\b(permission|role|rbac|acl)s?\b/i,
+  /(^|\/)(app|pages)\/api\//i,
+  /\/route\.[jt]sx?$/i,
+  /(^|\/)server\//i,
+  /(^|\/)(db|database|prisma|migrations)\//i,
+  /\.sql$/i,
+  /\brls\b|row.level.security/i,
+  /security[._-]?config/i,
+  /\.env(\..+)?$/i,
+  /\bsecrets?\b/i,
+  /\bcredentials?\b/i,
+  /\.(pem|key|p12|pfx)$/i,
+  /(^|\/)package\.json$/i,
+  /(^|\/)(package-lock\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lock(b)?)$/i,
+  /(^|\/)\.github\/workflows\//i,
+  /(^|\/)\.gitlab-ci\.ya?ml$/i,
+  /(^|\/)dockerfile$/i,
+  /(^|\/)railway\.json$/i,
+  /(^|\/)vercel\.json$/i,
+  /\bcors\b|\bheaders?\b.*security|csp|content-security-policy/i,
+  /\bredirect/i,
+  /(^|\/)mcp\.json$/i,
+  /(^|\/)\.cursor\//i,
+  /(^|\/)\.claude\//i,
+  /stdio-bridge|install-manifest|local-verdict-bundle/i,
+  /\bfetch\(|axios|http\.request/i
+];
+var LOW_RELEVANCE_PATTERNS = [
+  /\.(md|mdx|txt)$/i,
+  /(^|\/)(readme|changelog|license|contributing)(\.[a-z]+)?$/i,
+  /\.(css|scss|less)$/i,
+  /(^|\/)\.prettierrc/i,
+  /(^|\/)\.editorconfig$/i
+];
+function isHighRelevance(path) {
+  return HIGH_RELEVANCE_PATTERNS.some((pattern) => pattern.test(path));
+}
+function isLowRelevanceOnly(path) {
+  return LOW_RELEVANCE_PATTERNS.some((pattern) => pattern.test(path)) && !isHighRelevance(path);
+}
+function classifySecurityRelevance(changedPaths) {
+  if (changedPaths.length === 0) {
+    return { relevant: false, matchedPaths: [], reason: "No changed files to evaluate." };
+  }
+  const highMatches = changedPaths.filter((path) => isHighRelevance(path));
+  if (highMatches.length > 0) {
+    return {
+      relevant: true,
+      matchedPaths: highMatches,
+      reason: `${highMatches.length} changed file(s) match a security-relevant pattern.`
+    };
+  }
+  const allLowRelevance = changedPaths.every((path) => isLowRelevanceOnly(path));
+  if (allLowRelevance) {
+    return {
+      relevant: false,
+      matchedPaths: [],
+      reason: "All changed files are documentation/formatting/styling only."
+    };
+  }
+  return {
+    relevant: true,
+    matchedPaths: [...changedPaths],
+    reason: "Changed files are not recognized as documentation/formatting-only; reviewing conservatively."
+  };
+}
+
+// lib/local-analysis/auto-security-trigger.ts
+var STATE_DIRNAME = ".sequrai";
+var STATE_FILENAME = "auto-security-state.json";
+var MAX_PENDING_PATHS = 200;
+function freshEmptyState() {
+  return {
+    pendingPaths: [],
+    lastTriggerFingerprint: null,
+    lastTriggerAt: null,
+    lastTriggerScanId: null
+  };
+}
+function resolveStatePath(workspaceRoot) {
+  const root = normalizeWorkspaceRoot(workspaceRoot);
+  const rootReal = realpathResolved(root);
+  const dir = join5(rootReal, STATE_DIRNAME);
+  if (existsSync5(dir)) {
+    const dirStat = lstatSync3(dir);
+    if (dirStat.isSymbolicLink()) {
+      throw new Error("Refusing to use a symlinked .sequrai directory.");
+    }
+    const dirReal = realpathResolved(dir);
+    if (!isDescendantPath(rootReal, dirReal)) {
+      throw new Error("Refusing a .sequrai directory outside the workspace.");
+    }
+  } else {
+    mkdirSync3(dir, { recursive: true });
+  }
+  const statePath = join5(dir, STATE_FILENAME);
+  if (existsSync5(statePath) && lstatSync3(statePath).isSymbolicLink()) {
+    throw new Error("Refusing a symlinked auto-security state file.");
+  }
+  return statePath;
+}
+function readState(workspaceRoot) {
+  try {
+    const path = resolveStatePath(workspaceRoot);
+    if (!existsSync5(path)) return freshEmptyState();
+    const raw = JSON.parse(readFileSync3(path, "utf8"));
+    return {
+      pendingPaths: Array.isArray(raw.pendingPaths) ? raw.pendingPaths.filter((p2) => typeof p2 === "string") : [],
+      lastTriggerFingerprint: typeof raw.lastTriggerFingerprint === "string" ? raw.lastTriggerFingerprint : null,
+      lastTriggerAt: typeof raw.lastTriggerAt === "string" ? raw.lastTriggerAt : null,
+      lastTriggerScanId: typeof raw.lastTriggerScanId === "string" ? raw.lastTriggerScanId : null
+    };
+  } catch {
+    return freshEmptyState();
+  }
+}
+function writeState(workspaceRoot, state) {
+  const path = resolveStatePath(workspaceRoot);
+  writeFileSync2(path, `${JSON.stringify(state, null, 2)}
+`, { mode: 384 });
+}
+function recordChangedPath(workspaceRoot, relativePath) {
+  if (!relativePath) return;
+  const state = readState(workspaceRoot);
+  if (!state.pendingPaths.includes(relativePath)) {
+    state.pendingPaths.push(relativePath);
+    if (state.pendingPaths.length > MAX_PENDING_PATHS) {
+      state.pendingPaths = state.pendingPaths.slice(-MAX_PENDING_PATHS);
+    }
+  }
+  writeState(workspaceRoot, state);
+}
+function computeGitStateFingerprint(git) {
+  return createHash7("sha256").update(`${git.commitSha ?? ""}
+${git.status ?? ""}`).digest("hex");
+}
+async function evaluateAutoSecurityTrigger(workspacePath) {
+  const workspace = normalizeWorkspaceRoot(workspacePath);
+  const state = readState(workspace);
+  if (state.pendingPaths.length === 0) {
+    return { action: "skipped", reason: "No recorded file changes since the last check." };
+  }
+  const classification = classifySecurityRelevance(state.pendingPaths);
+  if (!classification.relevant) {
+    writeState(workspace, { ...state, pendingPaths: [] });
+    return { action: "skipped", reason: classification.reason, classification };
+  }
+  const git = getGitContext(workspace);
+  const fingerprint = computeGitStateFingerprint(git);
+  if (state.lastTriggerFingerprint && fingerprint === state.lastTriggerFingerprint) {
+    writeState(workspace, { ...state, pendingPaths: [] });
+    return {
+      action: "skipped",
+      reason: "No net change in git state since the last automatic review -- avoiding a duplicate scan.",
+      classification
+    };
+  }
+  const result = await runLocalProductionVerdict({ workspacePath: workspace, scope: "workspace", persist: true });
+  writeState(workspace, {
+    pendingPaths: [],
+    lastTriggerFingerprint: fingerprint,
+    lastTriggerAt: (/* @__PURE__ */ new Date()).toISOString(),
+    lastTriggerScanId: result.persistence?.status === "saved" ? result.persistence.scanId : null
+  });
+  return { action: "triggered", reason: classification.reason, classification, result };
+}
+function readAutoSecurityState(workspaceRoot) {
+  return readState(workspaceRoot);
+}
+function formatAutoSecurityFeedback(decision) {
+  if (decision.action === "skipped") {
+    return `SequrAI Auto-Security: no review triggered (${decision.reason})`;
+  }
+  const { result } = decision;
+  const phaseLabel = result.phase === "complete" ? "REVIEW COMPLETE" : result.phase === "partial" ? "REVIEW PARTIAL" : result.phase === "cancelled" ? "REVIEW CANCELLED" : "REVIEW INCOMPLETE";
+  const blockingFindings = result.findings.filter((f) => f.severity === "critical" || f.severity === "high");
+  const lines = [
+    `SequrAI Auto-Security: ${phaseLabel}`,
+    `Verdict: ${result.verdictStatus}${result.score != null ? ` (${result.score}/100)` : ""}`,
+    `Findings: ${result.findings.length} total, ${blockingFindings.length} critical/high.`
+  ];
+  if (result.phase === "partial" || result.phase === "incomplete") {
+    const failedEngines = result.engines.filter((e) => e.status === "FAILED" || e.status === "PARTIAL");
+    if (failedEngines.length > 0) {
+      lines.push(`Note: ${failedEngines.map((e) => `${e.engine} (${e.status})`).join(", ")} did not complete -- absence of findings from them is not evidence of safety.`);
+    }
+  }
+  for (const finding of blockingFindings.slice(0, 3)) {
+    lines.push(`- ${finding.severity.toUpperCase()} ${finding.title} (${finding.filePath ?? "no single file"}${finding.line != null ? `:${finding.line}` : ""})`);
+  }
+  return lines.join("\n");
+}
 export {
   DEFAULT_IGNORED_DIRS,
   LOCAL_SCAN_LIMITS,
   LOCAL_TOOL_NAMES,
   LocalSafeFixError,
   WorkspaceBoundaryError,
+  classifySecurityRelevance,
+  evaluateAutoSecurityTrigger,
   executeLocalTool,
+  formatAutoSecurityFeedback,
   isBinaryBuffer,
   isIgnoredRelativePath,
   isLocalToolName,
   listWorkspaceFiles,
   normalizeWorkspaceRoot,
+  readAutoSecurityState,
   readWorkspaceTextFile,
+  recordChangedPath,
   resolveAuthorizedWorkspacePath,
   resolveSafePath,
   runLocalProductionVerdict
