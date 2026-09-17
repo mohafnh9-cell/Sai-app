@@ -39,11 +39,15 @@ That said, 47 top-level `ScanRule` registrations still drastically
 understates the real finding-level detection surface: several rules
 (`secrets.exposed`, `mcp.security`, `prompt-injection.security`,
 `agent-action.security`, `package-security.scan-packages`) each emit many
-distinct finding identifiers internally (secret classifications, ~29 MCP
-checks, ~21 prompt-injection checks, ~19 agent-action checks, and
-per-dependency findings respectively) -- see the docblocks in
-`mcp/positive/index.ts` and `agent/positive/index.ts` for the concrete,
-verified ruleId format those produce (`agent-scanner.<sourceTool>.<internal-id>`).
+distinct finding identifiers internally. As of the V2 pass, these are
+counted precisely rather than estimated: MCP = **29** source-pattern
+checks + **~13** manifest-derived ids (`mcp/rules.ts` + `mcp/scan-manifest.ts`),
+prompt-injection = **20** checks (`rules-code.ts` + `rules-content.ts`),
+agent-action = **19** fixed checks + **25** dynamically-named ids
+(`action-checks.ts`) — see `COVERAGE.md` for the full inventory and the
+docblocks in `mcp/positive/index.ts`, `prompt-injection/positive/index.ts`,
+and `agent/positive/index.ts` for the verified ruleId format those
+produce (`agent-scanner.<sourceTool>.<internal-id>`).
 
 This file records vulnerability classes the current deterministic scanner
 (`features/security-scanner`) either does not detect at all, or only
@@ -81,8 +85,8 @@ findings this benchmark is asked to close.
   to the rule -- documented in the rule's own finding wording ("No
   recognizable authentication check appears directly in this route
   file...") and confidence is deliberately `low`. See
-  `tests/security-benchmark/cases/authz.ts` for the negative cases that do
-  pass today because the project's own named helpers
+  `tests/security-benchmark/authz/negative/index.ts` for the negative
+  cases that do pass today because the project's own named helpers
   (`getServerAuthContext`, `getScanRequestContext`, etc.) are in the
   recognized-pattern list -- an *unrecognized* helper name would still be
   missed.
@@ -110,7 +114,7 @@ findings this benchmark is asked to close.
   AND contains a raw SQL string, which is not a realistic reproduction.
   Left out of `agent/positive/index.ts` rather than forced.
 
-## Known noisy rule (discovered during benchmark construction)
+## Known noisy rule (discovered during benchmark construction, V1)
 
 - **`cicd.github-actions-secrets`** (`features/security-scanner/rules/
   extended-rules.ts`) matches the literal substring `secrets.`, which is
@@ -118,8 +122,40 @@ findings this benchmark is asked to close.
   secret (`${{ secrets.NPM_TOKEN }}`). Every workflow that uses secrets
   the *correct* way still matches this rule. No fixture can honestly
   claim "no_detect" under the rule's current logic, so this rule was
-  deliberately left out of `tests/security-benchmark/cases/cicd.ts`
+  deliberately left out of `tests/security-benchmark/cicd/positive/index.ts`
   rather than benchmarked with a fixture that misrepresents its actual
-  behavior. Per the master prompt's false-positive workflow (section 11),
-  this is the discovered false positive; fixing the pattern itself is a
-  follow-up rule change, not part of this benchmark-construction pass.
+  behavior. Per the false-positive workflow, this is the discovered false
+  positive; fixing the pattern itself is a follow-up rule change, not
+  part of this benchmark-construction pass.
+
+## V2: MCP / Prompt Injection / Agent Action finding-level coverage
+
+Full check-by-check inventory and coverage status for these three
+multi-check subsystems now lives in
+[`COVERAGE.md`](./COVERAGE.md) rather than being duplicated here. Three
+new structural gaps were discovered while building that coverage (all
+measurement-only findings, none fixed in this pass):
+
+1. **`.py` files never reach `scanRepository()` at all** (scanner-wide,
+   not subsystem-specific) — `DEFAULT_SCAN_CONFIG.includeExtensions`
+   (`features/security-scanner/config.ts`) omits `.py`, so every Python
+   file is dropped at `normalizeFiles()` with omission reason `"binary"`
+   before any rule runs. This silently disables 6 MCP checks, 4
+   prompt-injection checks, and any Python-language agent-action tool
+   file, and (structurally) every native rule's Python coverage too, not
+   just these three subsystems. Flagged as a P1 candidate.
+2. **Agent-action's `isRelevantValue()` pre-filter** (`discover.ts`)
+   silently drops any extracted string that doesn't contain one of 13
+   unrelated trigger keywords, before the actual per-actionType rule
+   check ever sees it — makes `bash.credential.ssh-key-read`,
+   `bash.credential.aws-creds`, and `cron.persistence.at-boot`
+   unreachable under realistic phrasing even though each has its own
+   working regex.
+3. **`mcp.fs-write-no-path-validation`** false-positives on its own
+   recommended remediation (`writeFileSync(path.resolve(...))`) — same
+   regex-backtracking bug class as `web.next-xss` (V1): the "exclusion"
+   identifier match consumes the very text its negative lookahead is
+   supposed to check.
+
+See `COVERAGE.md` for exact check-by-check status and the full technical
+explanation of each.

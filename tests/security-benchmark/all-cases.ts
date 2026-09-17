@@ -14,8 +14,11 @@ import { DEPENDENCIES_NEGATIVE_CASES } from "./dependencies/negative/index";
 import { DEPENDENCIES_POSITIVE_CASES } from "./dependencies/positive/index";
 import { INJECTION_NEGATIVE_CASES } from "./injection/negative/index";
 import { INJECTION_POSITIVE_CASES } from "./injection/positive/index";
+import { MCP_EDGE_CASES } from "./mcp/edge/index";
 import { MCP_NEGATIVE_CASES } from "./mcp/negative/index";
 import { MCP_POSITIVE_CASES } from "./mcp/positive/index";
+import { PROMPT_INJECTION_NEGATIVE_CASES } from "./prompt-injection/negative/index";
+import { PROMPT_INJECTION_POSITIVE_CASES } from "./prompt-injection/positive/index";
 import { READINESS_POSITIVE_CASES } from "./readiness/positive/index";
 import { SECRETS_EDGE_CASES } from "./secrets/edge/index";
 import { SECRETS_NEGATIVE_CASES } from "./secrets/negative/index";
@@ -48,6 +51,9 @@ export const ALL_BENCHMARK_CASES: BenchmarkCase[] = [
   ...DEPENDENCIES_NEGATIVE_CASES,
   ...MCP_POSITIVE_CASES,
   ...MCP_NEGATIVE_CASES,
+  ...MCP_EDGE_CASES,
+  ...PROMPT_INJECTION_POSITIVE_CASES,
+  ...PROMPT_INJECTION_NEGATIVE_CASES,
   ...AGENT_POSITIVE_CASES,
   ...AGENT_NEGATIVE_CASES,
   ...READINESS_POSITIVE_CASES,
