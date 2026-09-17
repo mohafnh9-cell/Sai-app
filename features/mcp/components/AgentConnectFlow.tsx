@@ -4,11 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 import { ArrowLeft, ArrowRight, Check, ClipboardCopy, Loader2, Sparkles, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n/client";
-import {
-  buildMcpClaudeCliCommand,
-  buildMcpEnvExportCommand,
-  buildMcpUniversalInstallCommand,
-} from "@/lib/mcp/client-config";
+import { buildMcpEnvExportCommand, buildMcpUniversalInstallCommand } from "@/lib/mcp/client-config";
 import type { SupportedAgent } from "./AgentPicker";
 
 type ConnectState = "guided" | "checking" | "connected" | "not-yet";
@@ -43,10 +39,22 @@ export function AgentConnectFlow({
   const agentName = agent === "cursor" ? "Cursor" : "Claude Code";
 
   const envCommand = useMemo(() => buildMcpEnvExportCommand(apiKey), [apiKey]);
-  const setupCommand = useMemo(
-    () => (agent === "cursor" ? buildMcpUniversalInstallCommand(apiUrl) : buildMcpClaudeCliCommand(apiUrl)),
-    [agent, apiUrl]
-  );
+  // Auto-Security closure pass: both agents now go through the SAME
+  // canonical installer (install.mjs) rather than Claude Code taking a
+  // separate `claude mcp add` path. That separate path assumed
+  // .sequrai/mcp.env already existed -- true for a user who had already run
+  // the universal installer for another agent, but never true for someone
+  // whose FIRST and only pick here is Claude Code, since nothing before it
+  // ever created that file. It also skipped install.mjs entirely, so a
+  // Claude-Code-only user never got the local bundle or Auto-Security
+  // hooks. install.mjs already writes .mcp.json (Claude Code), .cursor/
+  // mcp.json (Cursor), and .vscode/mcp.json unconditionally regardless of
+  // which agent is actually installed (see install.mjs's own `main()`),
+  // so running it here is correct and safe for either agent choice.
+  // buildMcpClaudeCliCommand itself is untouched -- it remains valid for a
+  // caller that already has .sequrai/mcp.env (e.g. the landing page's
+  // "already installed, also add Claude Code" copy).
+  const setupCommand = useMemo(() => buildMcpUniversalInstallCommand(apiUrl), [apiUrl]);
 
   const copy = useCallback(async (value: string, which: "env" | "command") => {
     await navigator.clipboard.writeText(value);

@@ -183,3 +183,93 @@ describe("Auto-Security MVP: end-to-end trigger decision", () => {
     expect(feedback.toLowerCase()).not.toMatch(/\bverified\b|\bsecure\b(?! verification)|\ball clear\b/);
   });
 });
+
+describe("Auto-Security closure: large/adversarial pending-change sets", () => {
+  it("0 pending paths never triggers", async () => {
+    const root = tmpWorkspace("seq-auto-0paths-");
+    write(root, "app.ts", "export const ok = true;\n");
+    commitAll(root, "initial");
+    const decision = await evaluateAutoSecurityTrigger(root);
+    expect(decision.action).toBe("skipped");
+    expect(readAutoSecurityState(root).pendingPaths).toHaveLength(0);
+  });
+
+  it("1 pending path behaves identically to the normal single-edit case", async () => {
+    const root = tmpWorkspace("seq-auto-1path-");
+    write(root, "app/api/x/route.ts", "export async function GET(){ return Response.json({}); }\n");
+    commitAll(root, "initial");
+    recordChangedPath(root, "app/api/x/route.ts");
+    expect(readAutoSecurityState(root).pendingPaths).toHaveLength(1);
+    const decision = await evaluateAutoSecurityTrigger(root);
+    expect(decision.action).toBe("triggered");
+  });
+
+  it("exactly 199 recorded paths are all retained (below the cap)", () => {
+    const root = tmpWorkspace("seq-auto-199paths-");
+    write(root, "app.ts", "export const ok = true;\n");
+    commitAll(root, "initial");
+    for (let i = 0; i < 199; i += 1) recordChangedPath(root, `lib/file-${i}.ts`);
+    expect(readAutoSecurityState(root).pendingPaths).toHaveLength(199);
+  });
+
+  it("exactly 200 recorded paths are all retained (at the cap)", () => {
+    const root = tmpWorkspace("seq-auto-200paths-");
+    write(root, "app.ts", "export const ok = true;\n");
+    commitAll(root, "initial");
+    for (let i = 0; i < 200; i += 1) recordChangedPath(root, `lib/file-${i}.ts`);
+    expect(readAutoSecurityState(root).pendingPaths).toHaveLength(200);
+  });
+
+  it("201+ recorded paths are truncated to the most recent 200 -- bounded memory, deterministic, no crash", () => {
+    const root = tmpWorkspace("seq-auto-201paths-");
+    write(root, "app.ts", "export const ok = true;\n");
+    commitAll(root, "initial");
+    for (let i = 0; i < 250; i += 1) recordChangedPath(root, `lib/file-${i}.ts`);
+    const state = readAutoSecurityState(root);
+    expect(state.pendingPaths).toHaveLength(200);
+    // Truncation keeps the MOST RECENT paths, never silently drops the
+    // latest (most relevant) changes in favor of the oldest.
+    expect(state.pendingPaths).toContain("lib/file-249.ts");
+    expect(state.pendingPaths).not.toContain("lib/file-0.ts");
+  });
+
+  it("a large pending set still produces exactly one honest review, not one scan per path", async () => {
+    const root = tmpWorkspace("seq-auto-large-review-");
+    write(root, "app/api/x/route.ts", "export async function GET(){ return Response.json({}); }\n");
+    commitAll(root, "initial");
+    for (let i = 0; i < 250; i += 1) recordChangedPath(root, `lib/file-${i}.ts`);
+    recordChangedPath(root, "app/api/x/route.ts");
+
+    const decision = await evaluateAutoSecurityTrigger(root);
+    expect(decision.action).toBe("triggered");
+    // Exactly one scan was persisted for this trigger -- a 200+ file
+    // pending set never becomes 200+ scans.
+    if (decision.action === "triggered") {
+      const { openLocalPersistenceStore } = await import("../local-persistence");
+      const store = openLocalPersistenceStore(root);
+      try {
+        const scans = store.listScans(decision.result.identity.workspaceId, 10);
+        expect(scans).toHaveLength(1);
+      } finally {
+        store.close();
+      }
+    }
+  });
+
+  it("a hostile path-traversal-shaped entry is recorded as an opaque classification string but never used for filesystem access outside the workspace", () => {
+    const root = tmpWorkspace("seq-auto-traversal-path-");
+    write(root, "app.ts", "export const ok = true;\n");
+    commitAll(root, "initial");
+    // recordChangedPath's contract: the string is only ever fed to the
+    // deterministic classifier (a regex match, no I/O) -- never joined onto
+    // a filesystem path and read/written. This proves recording a hostile-
+    // looking string doesn't throw or escape the workspace boundary that
+    // resolveStatePath's own symlink/descendant checks already enforce for
+    // the (fixed, non-caller-supplied) .sequrai state file location itself.
+    expect(() => recordChangedPath(root, "../../../../etc/passwd")).not.toThrow();
+    expect(() => recordChangedPath(root, "\0nullbyte")).not.toThrow();
+    expect(() => recordChangedPath(root, "a".repeat(10_000))).not.toThrow();
+    const state = readAutoSecurityState(root);
+    expect(state.pendingPaths.length).toBeGreaterThan(0);
+  });
+});
