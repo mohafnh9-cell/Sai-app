@@ -20,3 +20,16 @@ jobs:
         run: npm ci
       - name: Release verify
         run: npm run release:verify
+      - name: Security Detection Benchmark
+        # Already covered by release:verify's test:release run (not excluded there);
+        # this step re-runs it in isolation to produce a machine-readable artifact,
+        # per tests/security-benchmark/report.ts's JSON output.
+        if: always()
+        run: npm run test:security-benchmark -- --reporter=default --reporter=json --outputFile=security-benchmark-report.json
+      - name: Upload security benchmark report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-detection-benchmark-report
+          path: security-benchmark-report.json
+          retention-days: 30
