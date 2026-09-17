@@ -150,6 +150,7 @@ function buildLocalProductionVerdictResult(result: LocalOrchestratorResult): Loc
       executiveSummary: verdict.executiveSummary,
       topPriorities: verdict.topPriorities.map((priority) => priority.title),
       reason: result.phase === "incomplete" || result.phase === "cancelled" ? engineErrorMessage : undefined,
+      credentialsSkipped: result.snapshot.credentialsSkipped,
     }),
     methodologyNote: verdict.methodologyNote,
     engines: result.engines,

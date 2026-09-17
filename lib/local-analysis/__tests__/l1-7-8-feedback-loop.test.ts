@@ -10,16 +10,18 @@ import type { LocalSafeFixResult } from "../local-safe-fix";
 /**
  * L1.7/L1.8 real-world scenario: exercises the ACTUAL live MCP path end to
  * end (executeLocalTool -> local-tool-handlers -> run-local-verdict ->
- * scanRepository -> local-persistence -> finding-history), no mocks at any
- * layer. This is the same path public/mcp/local-verdict-bundle.mjs bundles
- * (lib/local-analysis/runtime-entry.ts -> index.ts -> executeLocalTool).
+ * local-orchestrator -> local-persistence -> finding-history), no mocks at
+ * any layer. This is the same path public/mcp/local-verdict-bundle.mjs
+ * bundles (lib/local-analysis/runtime-entry.ts -> index.ts -> executeLocalTool).
  *
- * NOTE on architecture: run-local-verdict.ts (which this exercises) calls
- * scanRepository() directly, not lib/local-analysis/local-orchestrator.ts's
- * runLocalSecurityOrchestrator() -- that multi-engine coordinator has no
- * caller anywhere in the live MCP surface (documented in the L1.6 report).
- * This test therefore proves the loop through the path that is actually
- * live today (native engine only), not the orphaned multi-engine one.
+ * NOTE on architecture (corrected during Full System Adversarial
+ * Validation V1 -- this comment was stale): as of F9,
+ * run-local-verdict.ts's runLocalProductionVerdict() delegates to
+ * local-orchestrator.ts's runLocalSecurityOrchestrator(), which runs the
+ * native engine AND the external engines (OpenGrep/Trivy/crypto/Scorecard)
+ * concurrently via Promise.allSettled and merges their findings. It is no
+ * longer true that the multi-engine coordinator has no live caller; this
+ * test exercises that full merged path, not a native-only one.
  */
 
 const tempDirs: string[] = [];

@@ -10,6 +10,7 @@ export function buildLocalStatusSummary(input: {
   executiveSummary?: string;
   topPriorities?: string[];
   reason?: string;
+  credentialsSkipped?: number;
 }): string {
   const lines: string[] = [
     "SEQURAI — Production Verdict (Local Workspace)",
@@ -91,6 +92,24 @@ export function buildLocalStatusSummary(input: {
     "LIMITATION",
     "This verdict analyzes files on disk in your authorized workspace only. Remote MCP tools analyze your connected repository separately."
   );
+
+  // Found via Full System Adversarial Validation V1: real credential-shaped
+  // files (.env, private keys, etc.) are deliberately never read off disk
+  // (see CREDENTIAL_BASENAME_PATTERNS, workspace.ts) -- a real secret
+  // committed to an actual .env file is structurally invisible to
+  // secrets.exposed/secrets.public-env through this scan, no matter how
+  // clean the rest of the verdict looks. That fact was previously only a
+  // buried numeric field (snapshot.credentialsSkipped) in the JSON
+  // response -- never mentioned in this narrative, the text an agent or
+  // developer actually reads to decide whether they're covered.
+  if (input.credentialsSkipped && input.credentialsSkipped > 0) {
+    lines.push(
+      "",
+      "NOT SCANNED",
+      `${input.credentialsSkipped} credential-shaped file(s) (e.g. .env, private keys, credentials files) were not read, for privacy. ` +
+        "Their contents were never analyzed and are not reflected in this verdict -- review them yourself for hardcoded or leaked secrets."
+    );
+  }
 
   return lines.join("\n");
 }
