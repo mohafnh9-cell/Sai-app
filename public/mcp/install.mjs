@@ -198,6 +198,150 @@ function installAt(root, relativePath, mutator) {
   return path;
 }
 
+// ==================================================================
+// Auto-Security hook installation (Claude Code .claude/settings.json,
+// Cursor .cursor/hooks.json).
+//
+// Ownership/idempotency: neither file's hook array has a natural key the
+// way mcpServers does (mergeServer above keys on the "sequrai" server
+// name) -- both are plain arrays of hook definitions. The hook's own
+// `command` string, which always points at THIS installer's fixed
+// destination path for auto-security-hook.mjs, is used as the stable
+// identity marker instead: a hook entry is "SequrAI-owned" if and only if
+// its command references that exact path. This is not a new metadata
+// mechanism -- it reuses the one piece of the hook entry that is already
+// guaranteed unique and installer-controlled.
+// ==================================================================
+
+const AUTO_SECURITY_HOOK_MARKER = "auto-security-hook.mjs";
+
+function isSequraiHookEntry(entry) {
+  return Boolean(entry) && typeof entry.command === "string" && entry.command.includes(AUTO_SECURITY_HOOK_MARKER);
+}
+
+/**
+ * Claude Code's settings.json shape: an array of {matcher, hooks: [...]}
+ * groups per event. Idempotently ensures exactly one SequrAI-owned group
+ * exists -- a re-run replaces SequrAI's own group in place (picking up an
+ * updated command/timeout) rather than appending a second one, and every
+ * group that isn't SequrAI's own (a user's own hooks) is left untouched.
+ */
+function mergeClaudeCodeHookGroups(existingGroups, matcher, hookDefinition) {
+  const groups = Array.isArray(existingGroups) ? [...existingGroups] : [];
+  const ownedGroupIndex = groups.findIndex((group) => Array.isArray(group?.hooks) && group.hooks.some(isSequraiHookEntry));
+  const newGroup = matcher !== undefined ? { matcher, hooks: [hookDefinition] } : { hooks: [hookDefinition] };
+
+  if (ownedGroupIndex === -1) {
+    groups.push(newGroup);
+    return groups;
+  }
+  groups[ownedGroupIndex] = newGroup;
+  return groups;
+}
+
+function removeSequraiClaudeCodeHookGroups(existingGroups) {
+  const groups = Array.isArray(existingGroups) ? existingGroups : [];
+  return groups.filter((group) => !(Array.isArray(group?.hooks) && group.hooks.some(isSequraiHookEntry)));
+}
+
+/**
+ * Cursor's hooks.json shape: a flat array of hook definitions per event
+ * (no matcher grouping). Idempotently ensures exactly one SequrAI-owned
+ * entry exists, preserving every other entry.
+ */
+function mergeCursorHookEntries(existingEntries, hookDefinition) {
+  const entries = Array.isArray(existingEntries) ? existingEntries.filter((entry) => !isSequraiHookEntry(entry)) : [];
+  entries.push(hookDefinition);
+  return entries;
+}
+
+function removeSequraiCursorHookEntries(existingEntries) {
+  const entries = Array.isArray(existingEntries) ? existingEntries : [];
+  return entries.filter((entry) => !isSequraiHookEntry(entry));
+}
+
+function claudeCodeAutoSecurityHooks(hookPath) {
+  return {
+    postToolUse: { type: "command", command: `node "${hookPath}"`, timeout: 10 },
+    stop: { type: "command", command: `node "${hookPath}"`, timeout: 120 },
+  };
+}
+
+function cursorAutoSecurityHooks(hookPath) {
+  return {
+    afterFileEdit: { command: `node "${hookPath}"`, type: "command", timeout: 10, failClosed: false },
+    stop: { command: `node "${hookPath}"`, timeout: 120 },
+  };
+}
+
+/**
+ * Merges SequrAI's Auto-Security hooks into the project's
+ * .claude/settings.json and .cursor/hooks.json, preserving every existing
+ * entry (SequrAI's own or the user's). Safe to call on every install run --
+ * a second run updates SequrAI's own entries in place rather than
+ * duplicating them.
+ */
+function installAutoSecurityHooks(projectRoot, hookPath) {
+  const claudeHooks = claudeCodeAutoSecurityHooks(hookPath);
+  const claudeSettingsPath = installAt(projectRoot, ".claude/settings.json", (existing) => {
+    const hooks = existing.hooks && typeof existing.hooks === "object" ? { ...existing.hooks } : {};
+    hooks.PostToolUse = mergeClaudeCodeHookGroups(hooks.PostToolUse, "Edit|Write|MultiEdit|NotebookEdit", claudeHooks.postToolUse);
+    hooks.Stop = mergeClaudeCodeHookGroups(hooks.Stop, undefined, claudeHooks.stop);
+    return { ...existing, hooks };
+  });
+
+  const cursorHooks = cursorAutoSecurityHooks(hookPath);
+  const cursorHooksPath = installAt(projectRoot, ".cursor/hooks.json", (existing) => {
+    const hooks = existing.hooks && typeof existing.hooks === "object" ? { ...existing.hooks } : {};
+    hooks.afterFileEdit = mergeCursorHookEntries(hooks.afterFileEdit, cursorHooks.afterFileEdit);
+    hooks.stop = mergeCursorHookEntries(hooks.stop, cursorHooks.stop);
+    return { version: existing.version ?? 1, ...existing, hooks };
+  });
+
+  return { claudeSettingsPath, cursorHooksPath };
+}
+
+/** Removes ONLY SequrAI-owned Auto-Security hook entries; every other configured hook is left exactly as the user had it. */
+function uninstallAutoSecurityHooks(projectRoot) {
+  const removed = [];
+
+  const claudeSettingsPath = join(projectRoot, ".claude/settings.json");
+  const claudeSettings = readJson(claudeSettingsPath);
+  if (claudeSettings?.hooks) {
+    const hooks = { ...claudeSettings.hooks };
+    let changed = false;
+    for (const eventName of ["PostToolUse", "Stop"]) {
+      if (!hooks[eventName]) continue;
+      const before = JSON.stringify(hooks[eventName]);
+      hooks[eventName] = removeSequraiClaudeCodeHookGroups(hooks[eventName]);
+      if (JSON.stringify(hooks[eventName]) !== before) changed = true;
+    }
+    if (changed) {
+      writeJson(claudeSettingsPath, { ...claudeSettings, hooks });
+      removed.push(claudeSettingsPath);
+    }
+  }
+
+  const cursorHooksPath = join(projectRoot, ".cursor/hooks.json");
+  const cursorHooks = readJson(cursorHooksPath);
+  if (cursorHooks?.hooks) {
+    const hooks = { ...cursorHooks.hooks };
+    let changed = false;
+    for (const eventName of ["afterFileEdit", "stop"]) {
+      if (!Array.isArray(hooks[eventName])) continue;
+      const before = JSON.stringify(hooks[eventName]);
+      hooks[eventName] = removeSequraiCursorHookEntries(hooks[eventName]);
+      if (JSON.stringify(hooks[eventName]) !== before) changed = true;
+    }
+    if (changed) {
+      writeJson(cursorHooksPath, { ...cursorHooks, hooks });
+      removed.push(cursorHooksPath);
+    }
+  }
+
+  return removed;
+}
+
 async function main() {
   const { url, scope } = parseArgs();
   const key = await resolveApiKey();
@@ -231,6 +375,14 @@ async function main() {
     manifest?.localAnalysis?.path ?? "/mcp/local-analysis.mjs",
     localAnalysisPath,
     manifest?.localAnalysis?.sha256 ?? null
+  );
+
+  const autoSecurityHookPath = join(sequraiDir, "auto-security-hook.mjs");
+  await downloadVerifiedFile(
+    url,
+    manifest?.autoSecurityHook?.path ?? "/mcp/auto-security-hook.mjs",
+    autoSecurityHookPath,
+    manifest?.autoSecurityHook?.sha256 ?? null
   );
 
   const envPath = writeSecureEnvFile(projectRoot, key, url);
@@ -275,6 +427,10 @@ async function main() {
   }));
   installed.push(`VS Code (project): ${vscodePath}`);
 
+  const { claudeSettingsPath, cursorHooksPath } = installAutoSecurityHooks(projectRoot, autoSecurityHookPath);
+  installed.push(`Auto-Security (Claude Code hooks): ${claudeSettingsPath}`);
+  installed.push(`Auto-Security (Cursor hooks): ${cursorHooksPath}`);
+
   console.log("");
   console.log("SequrAI connected (project scope).");
   console.log("");
@@ -299,7 +455,52 @@ async function main() {
   console.log(`  • Bridge: ${bridgePath}`);
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : "Install failed");
-  process.exit(1);
-});
+/**
+ * `node install.mjs --uninstall` removes ONLY SequrAI's own Auto-Security
+ * hook entries (see uninstallAutoSecurityHooks's own ownership doc
+ * comment). Deliberately does not touch .cursor/mcp.json, .mcp.json,
+ * .vscode/mcp.json, or .sequrai/mcp.env -- MCP server removal and secret
+ * cleanup are a separate, already-reversible-by-editing-JSON concern; this
+ * flag's job is narrowly the hook entries a user cannot safely hand-edit
+ * without risking deleting their own unrelated hooks.
+ */
+function uninstallMain() {
+  const projectRoot = process.cwd();
+  const removed = uninstallAutoSecurityHooks(projectRoot);
+  if (removed.length === 0) {
+    console.log("No SequrAI Auto-Security hooks were found to remove.");
+    return;
+  }
+  console.log("Removed SequrAI Auto-Security hooks from:");
+  for (const path of removed) {
+    console.log(`  • ${path}`);
+  }
+}
+
+const isEntryPoint = process.argv[1] && import.meta.url === `file://${process.argv[1]}`;
+if (isEntryPoint) {
+  if (process.argv.includes("--uninstall")) {
+    uninstallMain();
+  } else {
+    main().catch((error) => {
+      console.error(error instanceof Error ? error.message : "Install failed");
+      process.exit(1);
+    });
+  }
+}
+
+export {
+  isSequraiHookEntry,
+  mergeClaudeCodeHookGroups,
+  removeSequraiClaudeCodeHookGroups,
+  mergeCursorHookEntries,
+  removeSequraiCursorHookEntries,
+  claudeCodeAutoSecurityHooks,
+  cursorAutoSecurityHooks,
+  installAutoSecurityHooks,
+  uninstallAutoSecurityHooks,
+  mergeServer,
+  installAt,
+  readJson,
+  writeJson,
+};

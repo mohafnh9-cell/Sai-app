@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import esbuild from "esbuild";
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -67,4 +67,19 @@ if (manifest.localAnalysis?.bundleSha256 !== bundleSha256) {
   manifest.localAnalysis.bundleSha256 = bundleSha256;
   writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
   console.log(`Updated install-manifest.json bundleSha256 → ${bundleSha256}`);
+}
+
+// Auto-Security hook installer sync: mcp/auto-security-hook.mjs (source) and
+// public/mcp/auto-security-hook.mjs (distributed copy) must stay byte-
+// identical, same as stdio-bridge.mjs's own two-copy convention -- copied
+// here automatically instead of relying on a manual copy every edit (the
+// exact class of drift the core-hardening audit found for stdio-bridge.mjs).
+const hookSourcePath = path.join(root, "mcp/auto-security-hook.mjs");
+const hookPublicPath = path.join(outDir, "auto-security-hook.mjs");
+copyFileSync(hookSourcePath, hookPublicPath);
+const hookSha256 = createHash("sha256").update(readFileSync(hookPublicPath)).digest("hex");
+if (manifest.autoSecurityHook?.sha256 !== hookSha256) {
+  manifest.autoSecurityHook = { path: "/mcp/auto-security-hook.mjs", sha256: hookSha256 };
+  writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  console.log(`Updated install-manifest.json autoSecurityHook.sha256 → ${hookSha256}`);
 }

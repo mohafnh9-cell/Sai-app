@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { existsSync, lstatSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { classifySecurityRelevance, type SecurityRelevanceResult } from "./auto-security-classifier";
 import { getGitContext } from "./git-scope";
@@ -120,9 +120,22 @@ function readState(workspaceRoot: string): AutoSecurityState {
   }
 }
 
+/**
+ * Pilot hardening: writes via a temp-file-then-rename instead of a direct
+ * writeFileSync -- a hook process that gets killed mid-write (a real
+ * scenario: the agent process itself can be interrupted, taking this
+ * short-lived subprocess down with it) previously risked leaving a
+ * truncated/corrupt JSON file. rename() is atomic on the same filesystem,
+ * so readers only ever see the old complete file or the new complete file,
+ * never a partial one. A corrupt read is still handled gracefully by
+ * readState's own catch (never fatal), but avoiding the corruption in the
+ * first place is strictly better.
+ */
 function writeState(workspaceRoot: string, state: AutoSecurityState): void {
   const path = resolveStatePath(workspaceRoot);
-  writeFileSync(path, `${JSON.stringify(state, null, 2)}\n`, { mode: 0o600 });
+  const tmpPath = `${path}.${process.pid}.${Date.now()}.tmp`;
+  writeFileSync(tmpPath, `${JSON.stringify(state, null, 2)}\n`, { mode: 0o600 });
+  renameSync(tmpPath, path);
 }
 
 /**

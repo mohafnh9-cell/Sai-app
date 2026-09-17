@@ -100,7 +100,28 @@ async function main() {
     }
 
     if (isStopLikeEvent(input)) {
-      const decision = await evaluateAutoSecurityTrigger(workspaceRoot);
+      let decision;
+      try {
+        decision = await evaluateAutoSecurityTrigger(workspaceRoot);
+      } catch (error) {
+        // The security pipeline itself failed (e.g. SQLite unavailable, a
+        // corrupt/unreadable workspace, an unexpected engine crash outside
+        // the orchestrator's own handling). This must reach the agent as an
+        // explicit, honest "could not verify" -- never silently nothing
+        // (which reads as "no findings, all clear") and never a fabricated
+        // SAFE/SECURE/VERIFIED/READY claim.
+        const message = error instanceof Error ? error.message : String(error);
+        process.stderr.write(`SequrAI Auto-Security hook error: ${message}\n`);
+        const feedback = `SequrAI Auto-Security: SECURITY VERIFICATION UNAVAILABLE\nSequrAI could not complete an automatic security review (${message}). This is not a finding of "no issues" -- it means verification did not run. Consider running sequrai_local_audit manually.`;
+        process.stdout.write(
+          JSON.stringify({
+            hookSpecificOutput: { hookEventName: "Stop", additionalContext: feedback, systemMessage: feedback },
+            followup_message: feedback,
+          })
+        );
+        process.exit(0);
+      }
+
       if (decision.action === "triggered") {
         const feedback = formatAutoSecurityFeedback(decision);
         process.stdout.write(
@@ -113,9 +134,9 @@ async function main() {
       process.exit(0);
     }
   } catch (error) {
-    // A hook failure must NEVER block or crash the agent's turn -- report
-    // to stderr (visible in Claude Code/Cursor's own hook debug output) and
-    // exit 0 (non-blocking) either way.
+    // A failure recording a changed path (edit-like event) is lower stakes
+    // -- worst case, one change is missed from coalescing -- but must still
+    // never crash the agent's turn.
     process.stderr.write(`SequrAI Auto-Security hook error: ${error instanceof Error ? error.message : String(error)}\n`);
   }
 

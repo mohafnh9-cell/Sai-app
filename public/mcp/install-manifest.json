@@ -9,6 +9,10 @@
     "path": "/mcp/local-analysis.mjs",
     "sha256": "3f789618d44c29962513ee3ccc3ff4c3a46385f341061d751a3ccd72159e7eac",
     "bundlePath": "/mcp/local-verdict-bundle.mjs",
-    "bundleSha256": "08da4ff70ed79d24e3d5256f92306d52e5c745b265623ab3cfeb15690274a13c"
+    "bundleSha256": "f153f0edf462b8ed6a9059903d32c8b3cc59a951eeb46618e5ebcd01cf5d5ef9"
+  },
+  "autoSecurityHook": {
+    "path": "/mcp/auto-security-hook.mjs",
+    "sha256": "abecb81f49153daf300fafa0643cc9b95749a43db1d84ca0df2e45587b838e9b"
   }
 }

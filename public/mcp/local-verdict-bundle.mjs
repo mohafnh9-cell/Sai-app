@@ -27330,7 +27330,7 @@ async function executeLocalTool(name, args = {}) {
 
 // lib/local-analysis/auto-security-trigger.ts
 import { createHash as createHash7 } from "node:crypto";
-import { existsSync as existsSync5, lstatSync as lstatSync3, mkdirSync as mkdirSync3, readFileSync as readFileSync3, writeFileSync as writeFileSync2 } from "node:fs";
+import { existsSync as existsSync5, lstatSync as lstatSync3, mkdirSync as mkdirSync3, readFileSync as readFileSync3, renameSync, writeFileSync as writeFileSync2 } from "node:fs";
 import { join as join5 } from "node:path";
 
 // lib/local-analysis/auto-security-classifier.ts
@@ -27458,8 +27458,10 @@ function readState(workspaceRoot) {
 }
 function writeState(workspaceRoot, state) {
   const path = resolveStatePath(workspaceRoot);
-  writeFileSync2(path, `${JSON.stringify(state, null, 2)}
+  const tmpPath = `${path}.${process.pid}.${Date.now()}.tmp`;
+  writeFileSync2(tmpPath, `${JSON.stringify(state, null, 2)}
 `, { mode: 384 });
+  renameSync(tmpPath, path);
 }
 function recordChangedPath(workspaceRoot, relativePath) {
   if (!relativePath) return;

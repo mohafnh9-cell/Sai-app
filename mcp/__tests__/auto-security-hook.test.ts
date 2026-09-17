@@ -227,6 +227,33 @@ export async function GET(req) {
   }, 30_000);
 });
 
+describe("Auto-Security pilot hardening: honest failure when verification cannot run", () => {
+  it("a security pipeline failure surfaces as SECURITY VERIFICATION UNAVAILABLE, never silence or a false-clean result", () => {
+    const root = tmpWorkspace("seq-hook-unavailable-");
+    write(root, "app/api/projects/route.ts", "export async function GET(){ return Response.json({}); }\n");
+    commitAll(root, "initial");
+
+    runHook(claudePostToolUse(root, "Edit", join(root, "app/api/projects/route.ts")));
+
+    // The workspace disappears out from under the review (a realistic
+    // failure mode: an agent/IDE deletes or moves the folder, a container
+    // is torn down mid-session) -- the Stop event must not report silence
+    // or a fabricated "no findings" result.
+    rmSync(root, { recursive: true, force: true });
+    tempDirs.splice(tempDirs.indexOf(root), 1);
+
+    const result = runHook(claudeStop(root));
+    expect(result.exitCode).toBe(0); // never crashes/blocks the agent turn
+    if (result.stdout.trim()) {
+      expect(result.stdout).toContain("SECURITY VERIFICATION UNAVAILABLE");
+      // The wording explicitly DISCLAIMS "no issues" as a conclusion -- it
+      // must never assert it as a finding.
+      expect(result.stdout).not.toMatch(/finding:?\s*no issues|no issues found|no issues detected/i);
+      expect(result.stdout).not.toContain('"verdictStatus":"ready_to_ship"');
+    }
+  }, 30_000);
+});
+
 describe("Auto-Security MVP: hook process safety", () => {
   it("malformed stdin JSON never crashes the hook process", () => {
     const result = execFileSync("node", [HOOK_PATH], { input: "not json{{{", encoding: "utf8", timeout: 10_000 });
