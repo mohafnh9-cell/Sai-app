@@ -15101,6 +15101,7 @@ var SOURCE_EXTENSIONS = /* @__PURE__ */ new Set([
   ".md",
   ".mjs",
   ".prisma",
+  ".py",
   ".rules",
   ".sql",
   ".toml",
@@ -17010,6 +17011,13 @@ function buildLocalStatusSummary(input) {
     "LIMITATION",
     "This verdict analyzes files on disk in your authorized workspace only. Remote MCP tools analyze your connected repository separately."
   );
+  if (input.credentialsSkipped && input.credentialsSkipped > 0) {
+    lines.push(
+      "",
+      "NOT SCANNED",
+      `${input.credentialsSkipped} credential-shaped file(s) (e.g. .env, private keys, credentials files) were not read, for privacy. Their contents were never analyzed and are not reflected in this verdict -- review them yourself for hardcoded or leaked secrets.`
+    );
+  }
   return lines.join("\n");
 }
 function formatScopeLabel(scope) {
@@ -21075,7 +21083,15 @@ var configurationRules = [
   }]),
   openRedirectRule,
   patternRule("web.next-xss", "Next.js and XSS", [{
-    pattern: /dangerouslySetInnerHTML\s*=\s*\{\s*\{\s*__html\s*:\s*(?!DOMPurify|sanitize)/,
+    // The negative lookahead must absorb its own leading whitespace
+    // (`\s*(?:DOMPurify|sanitize)`), not rely on the outer `\s*` having
+    // already consumed it -- the outer `\s*` is backtrackable, so with
+    // the idiomatic single space before a sanitizer call
+    // (`__html: DOMPurify.sanitize(x)`) the engine could backtrack it to
+    // zero width and test the lookahead against " DOMPurify", which
+    // trivially doesn't start with "DOMPurify" or "sanitize", defeating
+    // the exclusion entirely (found by the detection-accuracy benchmark).
+    pattern: /dangerouslySetInnerHTML\s*=\s*\{\s*\{\s*__html\s*:\s*(?!\s*(?:DOMPurify|sanitize))/,
     title: "Unsanitized HTML rendering",
     description: "React HTML injection can execute attacker-controlled markup.",
     severity: "high",
@@ -21084,7 +21100,8 @@ var configurationRules = [
     remediation: "Avoid raw HTML or sanitize it with a maintained allowlist sanitizer.",
     path: /\.(?:jsx|tsx)$/
   }, {
-    pattern: /\.innerHTML\s*=\s*(?!DOMPurify|sanitize|trustedTypes)/,
+    // Same backtracking-defeats-the-exclusion issue as above.
+    pattern: /\.innerHTML\s*=\s*(?!\s*(?:DOMPurify|sanitize|trustedTypes))/,
     title: "Unsanitized innerHTML assignment",
     description: "Direct HTML assignment may execute attacker-controlled markup.",
     severity: "high",
@@ -22102,7 +22119,7 @@ function isRelevantValue(actionType, value) {
     case "cron":
     case "git":
     case "docker":
-      return /\b(rm|curl|wget|git|docker|sudo|chmod|dd|DROP|DELETE|spawn|exec|nc)\b/i.test(value);
+      return /\b(rm|cat|curl|wget|git|docker|sudo|chmod|dd|DROP|DELETE|spawn|exec|nc)\b/i.test(value) || /@reboot/.test(value);
     case "file_write":
     case "file_read":
     case "file_delete":
@@ -23061,7 +23078,16 @@ var MCP_SECURITY_RULES = [
     severity: "WARNING",
     category: "overly-broad-permissions",
     message: "Filesystem write operation without visible path validation. Ensure paths are validated with path.resolve and confined to an allowed directory.",
-    pattern: /\b(writeFileSync|writeFile|createWriteStream|appendFileSync|appendFile)\s*\(\s*[a-zA-Z_$][\w$.]*(?!\s*(?:path\.resolve|path\.join|path\.normalize))/g,
+    // The safe-call exclusion must be checked BEFORE consuming any
+    // identifier characters -- putting it after `[\w$.]*` (as this
+    // pattern previously did) let that greedy, dot-inclusive class
+    // consume the literal "path.resolve" text itself, leaving nothing
+    // for the lookahead to compare against, so the exclusion never
+    // actually excluded anything (found by the detection-accuracy
+    // benchmark: this pattern flagged its own recommended remediation,
+    // writeFileSync(path.resolve(...), data)). mcp.url-no-validation
+    // below already uses the correct before-the-match placement.
+    pattern: /\b(writeFileSync|writeFile|createWriteStream|appendFileSync|appendFile)\s*\(\s*(?!(?:path\.resolve|path\.join|path\.normalize)\s*\()[a-zA-Z_$][\w$.]*/g,
     fileTypes: [".js", ".ts"]
   },
   {
@@ -27130,7 +27156,8 @@ function buildLocalProductionVerdictResult(result) {
       headline: verdictHeadline(verdict.status),
       executiveSummary: verdict.executiveSummary,
       topPriorities: verdict.topPriorities.map((priority) => priority.title),
-      reason: result.phase === "incomplete" || result.phase === "cancelled" ? engineErrorMessage : void 0
+      reason: result.phase === "incomplete" || result.phase === "cancelled" ? engineErrorMessage : void 0,
+      credentialsSkipped: result.snapshot.credentialsSkipped
     }),
     methodologyNote: verdict.methodologyNote,
     engines: result.engines,

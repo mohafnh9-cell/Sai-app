@@ -9,7 +9,7 @@
     "path": "/mcp/local-analysis.mjs",
     "sha256": "3f789618d44c29962513ee3ccc3ff4c3a46385f341061d751a3ccd72159e7eac",
     "bundlePath": "/mcp/local-verdict-bundle.mjs",
-    "bundleSha256": "f153f0edf462b8ed6a9059903d32c8b3cc59a951eeb46618e5ebcd01cf5d5ef9"
+    "bundleSha256": "1d3c212d2d0ff4afb801e51b70b397a34557fd301ea0dab4190999b112ab8e17"
   },
   "autoSecurityHook": {
     "path": "/mcp/auto-security-hook.mjs",
