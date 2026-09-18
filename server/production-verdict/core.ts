@@ -14,6 +14,10 @@ import {
 } from "@/server/attack-simulation/integration/build-verdict-overlay";
 import { emitOperationalEvent } from "@/server/observability/operational-events";
 import {
+  hasIncompleteExternalEngineCoverage,
+  loadExternalEngineFindingsForVerdict,
+} from "@/server/security-orchestrator/verdict-integration";
+import {
   buildIdempotencyKey,
   hasCompletedSideEffect,
   recordSideEffect,
@@ -247,6 +251,34 @@ export async function generateAndPersistProductionVerdict(
       .eq("id", input.scanId);
   }
 
+  // Phase 37, workstream C: fold external-engine findings (OpenGrep/Trivy/
+  // Crypto/Scorecard) into the SAME scoring input native findings already
+  // use -- see verdict-integration.ts for the exact dedup/suppression
+  // rules. Best-effort: a failure here must never block verdict
+  // generation from native findings alone.
+  const nativeFindings = findings ?? [];
+  const nativeFindingIds = new Set(nativeFindings.map((f) => f.id as string).filter(Boolean));
+  const [externalFindings, externalEngineCoverageIncomplete] = await Promise.all([
+    loadExternalEngineFindingsForVerdict(admin, {
+      scanId: input.scanId,
+      organizationId: input.organizationId,
+      nativeFindingIds,
+    }).catch((error) => {
+      log("external_findings_merge_failed", { scanId: input.scanId, message: error instanceof Error ? error.message : String(error) });
+      return [];
+    }),
+    // F10: a failed/incomplete external-engine job (opengrep/trivy/crypto)
+    // must make partialScanFailure true even when the native scan itself
+    // completed cleanly -- see hasIncompleteExternalEngineCoverage's own
+    // doc comment for the gap this closes. A read failure here defaults to
+    // true (assume incomplete) for the same honesty reason.
+    hasIncompleteExternalEngineCoverage(admin, {
+      scanId: input.scanId,
+      organizationId: input.organizationId,
+    }).catch(() => true),
+  ]);
+  const mergedFindings = [...nativeFindings, ...externalFindings];
+
   const baseVerdict = runEngine({
     projectId: input.projectId,
     repositoryId: scan.repository_id ?? input.projectId,
@@ -257,10 +289,10 @@ export async function generateAndPersistProductionVerdict(
     securityScore: scan.security_score,
     filesAnalyzed: coverage.filesAnalyzed,
     filesDiscovered: coverage.filesDiscovered,
-    findings: findings ?? [],
+    findings: mergedFindings,
     previousScore: previousVerdictParsed?.score ?? null,
     previousBlockersCount: previousBlockers,
-    partialScanFailure: scan.status !== "completed",
+    partialScanFailure: scan.status !== "completed" || externalEngineCoverageIncomplete,
     aiExecutiveSummary: aiReport?.executive_summary ?? null,
   }).verdict;
 

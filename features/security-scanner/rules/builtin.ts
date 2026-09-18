@@ -434,12 +434,21 @@ const configurationRules = [
   }]),
   openRedirectRule,
   patternRule("web.next-xss", "Next.js and XSS", [{
-    pattern: /dangerouslySetInnerHTML\s*=\s*\{\s*\{\s*__html\s*:\s*(?!DOMPurify|sanitize)/,
+    // The negative lookahead must absorb its own leading whitespace
+    // (`\s*(?:DOMPurify|sanitize)`), not rely on the outer `\s*` having
+    // already consumed it -- the outer `\s*` is backtrackable, so with
+    // the idiomatic single space before a sanitizer call
+    // (`__html: DOMPurify.sanitize(x)`) the engine could backtrack it to
+    // zero width and test the lookahead against " DOMPurify", which
+    // trivially doesn't start with "DOMPurify" or "sanitize", defeating
+    // the exclusion entirely (found by the detection-accuracy benchmark).
+    pattern: /dangerouslySetInnerHTML\s*=\s*\{\s*\{\s*__html\s*:\s*(?!\s*(?:DOMPurify|sanitize))/,
     title: "Unsanitized HTML rendering", description: "React HTML injection can execute attacker-controlled markup.",
     severity: "high", confidence: "medium", category: "xss",
     remediation: "Avoid raw HTML or sanitize it with a maintained allowlist sanitizer.", path: /\.(?:jsx|tsx)$/,
   }, {
-    pattern: /\.innerHTML\s*=\s*(?!DOMPurify|sanitize|trustedTypes)/,
+    // Same backtracking-defeats-the-exclusion issue as above.
+    pattern: /\.innerHTML\s*=\s*(?!\s*(?:DOMPurify|sanitize|trustedTypes))/,
     title: "Unsanitized innerHTML assignment", description: "Direct HTML assignment may execute attacker-controlled markup.",
     severity: "high", confidence: "medium", category: "xss",
     remediation: "Render text safely or sanitize markup with a maintained allowlist sanitizer.", path: CODE_PATH,

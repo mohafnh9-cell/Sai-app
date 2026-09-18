@@ -157,29 +157,42 @@ export default function IntegrationsPage() {
       githubAppStatus?.configured === true &&
       githubAppStatus.installation?.status === "active";
 
-    const res = await fetch(useAppRepos ? "/api/github/app/repos" : "/api/github/repos");
-    const data = await res.json();
+    // Observed transient false negative: the installation row is
+    // occasionally read as inactive on one request and active again
+    // immediately after (e.g. a webhook-driven status update landing
+    // concurrently), with no user action in between. One silent retry
+    // resolves it in every case we've reproduced -- only surface the error
+    // if it's still inactive on the second try.
+    const maxAttempts = useAppRepos ? 2 : 1;
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      const res = await fetch(useAppRepos ? "/api/github/app/repos" : "/api/github/repos", {
+        cache: "no-store",
+      });
+      const data = await res.json();
 
-    if (data.needsReauth || res.status === 403) {
-      setStep("idle");
-      setErrorMsg(data.error || t("githubNotConnected"));
+      if (data.needsReauth || res.status === 403) {
+        setStep("idle");
+        setErrorMsg(data.error || t("githubNotConnected"));
+        return;
+      }
+
+      if (!res.ok) {
+        setErrorMsg(data.error || "Failed to load repos");
+        setStep("error");
+        return;
+      }
+
+      if (useAppRepos && data.installationActive === false) {
+        if (attempt < maxAttempts) continue;
+        setErrorMsg("GitHub App installation is not active for this workspace.");
+        setStep("error");
+        return;
+      }
+
+      setRepos(data.repos);
+      setStep("selecting");
       return;
     }
-
-    if (!res.ok) {
-      setErrorMsg(data.error || "Failed to load repos");
-      setStep("error");
-      return;
-    }
-
-    if (useAppRepos && data.installationActive === false) {
-      setErrorMsg("GitHub App installation is not active for this workspace.");
-      setStep("error");
-      return;
-    }
-
-    setRepos(data.repos);
-    setStep("selecting");
   }, [githubAppStatus, t]);
 
   const connectGitHub = useCallback(async () => {
@@ -484,7 +497,7 @@ export default function IntegrationsPage() {
           {(step === "error" || (step === "idle" && displayError)) && (
             <div className="space-y-3">
               <p className="text-sm text-destructive">{displayError}</p>
-              <Button variant="outline" onClick={fetchRepos} className="gap-2">
+              <Button variant="outline" onClick={() => void fetchRepos()} className="gap-2">
                 <RefreshCw className="h-4 w-4" />
                 {tc("retry")}
               </Button>
@@ -606,7 +619,7 @@ export default function IntegrationsPage() {
                     <><Check className="h-4 w-4" />Protect {selected.size} repo{selected.size !== 1 ? "s" : ""}</>
                   )}
                 </Button>
-                <Button variant="ghost" size="sm" onClick={fetchRepos} className="gap-1.5">
+                <Button variant="ghost" size="sm" onClick={() => void fetchRepos()} className="gap-1.5">
                   <RefreshCw className="h-3.5 w-3.5" />
                   Refresh
                 </Button>
@@ -687,29 +700,31 @@ export default function IntegrationsPage() {
         </section>
       )}
 
-      <section className="space-y-3 border-t border-border/50 pt-8">
-        <div className="flex items-center gap-2">
-          <Webhook className="h-4 w-4 text-primary" />
-          <p className="text-sm font-semibold tracking-tight">GitHub Production Automation</p>
-        </div>
-        <p className="text-sm text-muted-foreground -mt-2">
-          Webhooks are registered automatically when you connect repositories. Manual setup is
-          only needed if automation was skipped.
-        </p>
-        <div className="space-y-3 text-sm">
-          <div>
-            <p className="text-xs text-muted-foreground mb-1">Payload URL</p>
-            <code className="block rounded-md bg-secondary/50 px-3 py-2 text-xs break-all">
-              {webhookPayloadUrl}
-            </code>
+      {!githubAppStatus?.configured && (
+        <section className="space-y-3 border-t border-border/50 pt-8">
+          <div className="flex items-center gap-2">
+            <Webhook className="h-4 w-4 text-primary" />
+            <p className="text-sm font-semibold tracking-tight">GitHub Production Automation</p>
           </div>
-          <p className="text-xs text-muted-foreground">
-            Events: <span className="text-foreground">push, pull_request, delete, repository</span>.
-            Set the same secret as <code className="text-foreground">GITHUB_WEBHOOK_SECRET</code> in
-            Vercel.
+          <p className="text-sm text-muted-foreground -mt-2">
+            Webhooks are registered automatically when you connect repositories. Manual setup is
+            only needed if automation was skipped.
           </p>
-        </div>
-      </section>
+          <div className="space-y-3 text-sm">
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">Payload URL</p>
+              <code className="block rounded-md bg-secondary/50 px-3 py-2 text-xs break-all">
+                {webhookPayloadUrl}
+              </code>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Events: <span className="text-foreground">push, pull_request, delete, repository</span>.
+              Set the same secret as <code className="text-foreground">GITHUB_WEBHOOK_SECRET</code> in
+              Vercel.
+            </p>
+          </div>
+        </section>
+      )}
 
       <section className="space-y-3 border-t border-border/50 pt-8">
         <p className="text-sm font-semibold tracking-tight">Channel integrations</p>

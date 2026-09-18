@@ -3,12 +3,16 @@
   "installer": "/mcp/install.mjs",
   "bridge": {
     "path": "/mcp/stdio-bridge.mjs",
-    "sha256": "1260b96cecd48b56c254c794eeb603b153e0b8b1971577ccdcd11882b9e92b36"
+    "sha256": "19055c6d6e9dbd54541f669d86283c88e1a859afb5ec04c095759fdb304389ea"
   },
   "localAnalysis": {
     "path": "/mcp/local-analysis.mjs",
     "sha256": "3f789618d44c29962513ee3ccc3ff4c3a46385f341061d751a3ccd72159e7eac",
     "bundlePath": "/mcp/local-verdict-bundle.mjs",
-    "bundleSha256": "d97a1906c7683fba6eb4c93510f7be33ea404d7550c52867c40889c016adb375"
+    "bundleSha256": "f153f0edf462b8ed6a9059903d32c8b3cc59a951eeb46618e5ebcd01cf5d5ef9"
+  },
+  "autoSecurityHook": {
+    "path": "/mcp/auto-security-hook.mjs",
+    "sha256": "abecb81f49153daf300fafa0643cc9b95749a43db1d84ca0df2e45587b838e9b"
   }
 }

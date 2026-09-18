@@ -2,8 +2,8 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { isBillingEnabled } from "@/lib/billing/billing-enabled";
-import { isSubscriptionAdminEmail } from "@/lib/billing/admin-access";
-import { organizationHasActiveSubscription } from "@/server/billing/subscription-status";
+import { isPlatformAdmin } from "@/server/billing/platform-admin";
+import { getOrganizationSubscription, hasActiveSubscription } from "@/server/billing/subscription-status";
 import { consumeFreeScanCredit, FREE_SCAN_LIMIT } from "@/server/billing/entitlements";
 import { ScanRequestError } from "@/server/security-scanner/request-context";
 
@@ -14,21 +14,14 @@ export async function assertOrganizationCanRunScan(
 ): Promise<void> {
   if (!isBillingEnabled()) return;
 
-  let email = user.email?.trim() ?? null;
+  // Internal SequrAI platform admins get unlimited access -- checked first,
+  // before any credit is touched, so admin usage never decrements the Free
+  // quota and never requires a Stripe subscription. This is role/plan-
+  // independent: see server/billing/platform-admin.ts.
+  if (await isPlatformAdmin(admin, user)) return;
 
-  if (!email) {
-    const { data: profile } = await admin
-      .from("profiles")
-      .select("email")
-      .eq("id", user.id)
-      .maybeSingle();
-    email = profile?.email?.trim() ?? null;
-  }
-
-  if (isSubscriptionAdminEmail(email)) return;
-
-  const active = await organizationHasActiveSubscription(admin, organizationId);
-  if (active) return;
+  const subscription = await getOrganizationSubscription(admin, organizationId);
+  if (hasActiveSubscription(subscription)) return;
 
   // No active paid subscription: fall back to the Free plan's scan credit
   // instead of an unconditional block. This is the single point every scan
@@ -47,9 +40,28 @@ export async function assertOrganizationCanRunScan(
   const granted = await consumeFreeScanCredit(admin, organizationId);
   if (granted) return;
 
+  // Phase 46: distinguish "never subscribed, used up the 2 free analyses"
+  // from "subscribed before, that subscription just isn't active right now"
+  // -- a stripe_subscription_id on the row is only ever set once a real
+  // Stripe subscription/checkout exists for this org (see
+  // sync-subscription.ts), and it is never cleared afterward, so its
+  // presence is a reliable signal even after the subscription later lapses
+  // and `plan`/`status` revert to FREE/canceled. Every current call site
+  // (review-now/trigger-review.ts) already anticipated exactly this second
+  // code -- it just never received anything but SCAN_LIMIT_REACHED before.
+  // Never resets free_scans_used and never grants access on its own; it
+  // only changes which error a denied request receives.
+  if (subscription?.stripeSubscriptionId) {
+    throw new ScanRequestError(
+      402,
+      "SUBSCRIPTION_REQUIRED",
+      "Your Pro subscription is no longer active. Upgrade to continue running security analyses."
+    );
+  }
+
   throw new ScanRequestError(
     402,
     "SCAN_LIMIT_REACHED",
-    `Free plan includes ${FREE_SCAN_LIMIT} security scans. Subscribe to Builder Edition to keep scanning.`
+    `You've used your ${FREE_SCAN_LIMIT} free security analyses. Subscribe to Pro to keep scanning.`
   );
 }

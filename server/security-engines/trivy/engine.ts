@@ -2,7 +2,7 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname } from "node:path";
 import type {
   EngineApplicabilityInput,
   EngineApplicabilityResult,
@@ -11,7 +11,7 @@ import type {
   EngineResult,
   SecurityEngine,
 } from "../types";
-import { safeExec, withIsolatedWorkspace } from "../subprocess/safe-exec";
+import { resolveSafeWorkspacePath, safeExec, withIsolatedWorkspace, WorkspacePathEscapeError } from "../subprocess/safe-exec";
 import { fromTrivyReport, type TrivyReport } from "./normalize";
 
 /**
@@ -151,6 +151,20 @@ export function createTrivyEngine(): SecurityEngine {
       const cacheDir = resolveCacheDir();
       const errors: EngineResult["errors"] = [];
 
+      if (input.signal?.aborted) {
+        return {
+          ...base,
+          status: "SKIPPED",
+          completedAt: new Date().toISOString(),
+          durationMs: Date.now() - started,
+          capabilitiesCompleted: [],
+          findings: [],
+          evidence: [],
+          metrics: {},
+          errors: [{ code: "cancelled", message: "Cancelled before Trivy started." }],
+        };
+      }
+
       try {
         const dbWarm = await ensureVulnerabilityDbWarm(binary, cacheDir, Math.min(60_000, input.timeoutMs));
         if (!dbWarm) {
@@ -165,7 +179,19 @@ export function createTrivyEngine(): SecurityEngine {
       try {
         report = await withIsolatedWorkspace("trivy-scan", async (workspaceDir) => {
           for (const file of input.files) {
-            const target = join(workspaceDir, file.path);
+            // Section 11/40: repository-supplied paths are untrusted --
+            // reject anything that would escape the isolated workspace
+            // (e.g. a crafted "../../etc/..." entry) rather than write it.
+            let target: string;
+            try {
+              target = resolveSafeWorkspacePath(workspaceDir, file.path);
+            } catch (pathError) {
+              if (pathError instanceof WorkspacePathEscapeError) {
+                errors.push({ code: "unsafe_path_skipped", message: pathError.message });
+                continue;
+              }
+              throw pathError;
+            }
             await mkdir(dirname(target), { recursive: true });
             await writeFile(target, file.content, "utf8");
           }
@@ -187,8 +213,13 @@ export function createTrivyEngine(): SecurityEngine {
             cwd: workspaceDir,
             timeoutMs: input.timeoutMs,
             envAllowlist: { DOCKER_CONFIG: cacheDir },
+            signal: input.signal,
           });
 
+          if (result.aborted) {
+            errors.push({ code: "cancelled", message: "trivy fs scan was cancelled" });
+            return null;
+          }
           if (result.timedOut) {
             errors.push({ code: "timeout", message: "trivy fs scan exceeded the execution timeout" });
             return null;

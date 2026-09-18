@@ -1,10 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowRight, Sparkles } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n/client";
+import { AgentPicker, type SupportedAgent } from "@/features/mcp/components/AgentPicker";
+import { AgentConnectFlow, AgentConnectBackButton } from "@/features/mcp/components/AgentConnectFlow";
 import { McpConnectGuide } from "@/features/mcp/components/McpConnectGuide";
+import { Button } from "@/components/ui/button";
+
+type View = "picker" | "connecting" | "other" | "connected";
+
+type CreatedKey = { rawKey: string; id: string };
 
 export function OnboardingCursorStep({
   onFinish,
@@ -15,10 +20,12 @@ export function OnboardingCursorStep({
 }) {
   const { t } = useI18n("onboarding");
   const { t: ts } = useI18n("settings");
-  const [apiKey, setApiKey] = useState<string | null>(null);
+  const [view, setView] = useState<View>("picker");
+  const [agent, setAgent] = useState<SupportedAgent | null>(null);
+  const [key, setKey] = useState<CreatedKey | null>(null);
+  const [hasExistingConnection, setHasExistingConnection] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [hasExistingConnection, setHasExistingConnection] = useState(false);
 
   const apiUrl = useMemo(() => {
     if (typeof window !== "undefined") return window.location.origin;
@@ -39,7 +46,7 @@ export function OnboardingCursorStep({
         setError(data.error ?? ts("mcpCreateKeyFailed"));
         return;
       }
-      setApiKey(data.key.rawKey as string);
+      setKey({ rawKey: data.key.rawKey as string, id: data.key.id as string });
     } finally {
       setLoading(false);
     }
@@ -48,41 +55,58 @@ export function OnboardingCursorStep({
   useEffect(() => {
     queueMicrotask(() => {
       void (async () => {
-        setLoading(true);
         try {
           const response = await fetch("/api/mcp/keys");
           const data = (await response.json()) as { keys?: unknown[]; error?: string };
-          if (!response.ok) {
-            setError(data.error ?? ts("mcpLoadKeysFailed"));
-            return;
-          }
           if ((data.keys?.length ?? 0) > 0) {
             setHasExistingConnection(true);
-            return;
           }
-          await createKey();
-        } finally {
-          setLoading(false);
+        } catch {
+          // Non-fatal: the picker still works, key creation is retried on selection.
         }
       })();
     });
-  }, [createKey, ts]);
+  }, []);
 
-  return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-3 duration-700">
-      <div className="space-y-2 text-center sm:text-left">
-        <p className="text-xs font-medium uppercase tracking-[0.22em] text-primary">
-          {t("cursorEyebrow")}
-        </p>
-        <h2 className="text-2xl font-semibold tracking-tight">{t("cursorTitle")}</h2>
-        <p className="text-sm text-muted-foreground">{t("cursorSubtitle")}</p>
+  const selectAgent = useCallback(
+    async (selected: SupportedAgent) => {
+      setAgent(selected);
+      setView("connecting");
+      if (!key) await createKey();
+    },
+    [createKey, key]
+  );
+
+  if (view === "picker") {
+    return (
+      <div className="space-y-8 animate-in fade-in slide-in-from-bottom-3 duration-700">
+        {hasExistingConnection && (
+          <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4">
+            <p className="text-sm font-medium">✓ {t("cursorExistingTitle")}</p>
+            <p className="mt-1 text-sm text-muted-foreground">{t("cursorExistingBody")}</p>
+          </div>
+        )}
+        <AgentPicker onSelect={(a) => void selectAgent(a)} onOther={() => setView("other")} />
+        <div className="flex flex-col gap-3">
+          <Button variant="ghost" className="w-full" onClick={onSkip}>
+            {t("cursorSkip")}
+          </Button>
+        </div>
       </div>
+    );
+  }
 
-      <div className="rounded-3xl border border-border/70 bg-gradient-to-b from-secondary/30 to-[#101014]/60 p-6 sm:p-8 space-y-6">
-        {loading && !apiKey && (
+  if (view === "other") {
+    return (
+      <div className="space-y-6 animate-in fade-in slide-in-from-bottom-3 duration-700">
+        <AgentConnectBackButton onBack={() => setView("picker")} />
+        <div className="space-y-2 text-center sm:text-left">
+          <h2 className="text-2xl font-semibold tracking-tight">{t("otherAgentTitle")}</h2>
+          <p className="text-sm text-muted-foreground">{t("otherAgentSubtitle")}</p>
+        </div>
+        {loading && !key && (
           <p className="text-sm text-muted-foreground animate-pulse">{t("cursorGeneratingKey")}</p>
         )}
-
         {error && (
           <div className="space-y-3">
             <p className="text-sm text-destructive">{error}</p>
@@ -91,43 +115,59 @@ export function OnboardingCursorStep({
             </Button>
           </div>
         )}
+        {!key && !loading && !error && (
+          <Button onClick={() => void createKey()}>{t("otherAgentGenerateKey")}</Button>
+        )}
+        {key && <McpConnectGuide apiKey={key.rawKey} apiUrl={apiUrl} exampleQuestion={t("mcpExamplePrompt")} />}
+        <div className="flex flex-col gap-3">
+          <Button
+            className="w-full h-12 text-base"
+            size="lg"
+            onClick={onFinish}
+            disabled={!key && !hasExistingConnection}
+          >
+            {t("cursorFinish")}
+          </Button>
+          <Button variant="ghost" className="w-full" onClick={onSkip}>
+            {t("cursorSkip")}
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
-        {hasExistingConnection && !apiKey && !error ? (
+  // view === "connecting"
+  if (!agent) return null;
+
+  if (loading || !key) {
+    return (
+      <div className="space-y-6 animate-in fade-in slide-in-from-bottom-3 duration-700">
+        <AgentConnectBackButton onBack={() => setView("picker")} />
+        {loading && (
+          <p className="text-sm text-muted-foreground animate-pulse">{t("cursorGeneratingKey")}</p>
+        )}
+        {error && (
           <div className="space-y-3">
-            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4">
-              <p className="text-sm font-medium">✓ {t("cursorExistingTitle")}</p>
-              <p className="mt-1 text-sm text-muted-foreground">{t("cursorExistingBody")}</p>
-            </div>
-            <Button variant="outline" onClick={() => void createKey()} disabled={loading}>
-              {t("cursorExistingRegenerate")}
+            <p className="text-sm text-destructive">{error}</p>
+            <Button size="sm" variant="outline" onClick={() => void createKey()} disabled={loading}>
+              {t("cursorRetryKey")}
             </Button>
           </div>
-        ) : null}
-
-        {apiKey ? (
-          <McpConnectGuide
-            apiKey={apiKey}
-            apiUrl={apiUrl}
-            exampleQuestion={t("mcpExamplePrompt")}
-          />
-        ) : null}
+        )}
       </div>
+    );
+  }
 
-      <div className="flex flex-col gap-3">
-        <Button
-          className="w-full h-12 text-base"
-          size="lg"
-          onClick={onFinish}
-          disabled={!apiKey && !hasExistingConnection}
-        >
-          <Sparkles className="mr-2 h-4 w-4" aria-hidden />
-          {t("cursorFinish")}
-          <ArrowRight className="ml-2 h-4 w-4" aria-hidden />
-        </Button>
-        <Button variant="ghost" className="w-full" onClick={onSkip} disabled={!apiKey && loading}>
-          {t("cursorSkip")}
-        </Button>
-      </div>
+  return (
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-3 duration-700">
+      <AgentConnectBackButton onBack={() => setView("picker")} />
+      <AgentConnectFlow
+        agent={agent}
+        apiKey={key.rawKey}
+        apiKeyId={key.id}
+        apiUrl={apiUrl}
+        onConnected={onFinish}
+      />
     </div>
   );
 }

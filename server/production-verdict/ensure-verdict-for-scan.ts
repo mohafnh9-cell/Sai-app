@@ -59,6 +59,7 @@ export async function ensureProductionVerdictForCompletedScan(
   const { data: verdictRow, error: verdictError } = await admin
     .from("production_verdicts")
     .select("id")
+    .eq("organization_id", input.organizationId)
     .eq("scan_id", input.scanId)
     .maybeSingle();
 

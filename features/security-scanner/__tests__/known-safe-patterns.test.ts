@@ -130,3 +130,47 @@ describe("known-safe route patterns (Red Team false-positive regressions)", () =
     expect(ruleIds).toContain("web.csrf-missing");
   });
 });
+
+/**
+ * Detection Accuracy Hardening V1: web.next-xss's DOMPurify/sanitize
+ * exclusion sat after a greedy, backtrackable `\s*`, so with the
+ * idiomatic single space before a sanitizer call (`__html: DOMPurify.sanitize(x)`)
+ * the regex engine could backtrack that `\s*` to zero width and test the
+ * lookahead against " DOMPurify" (a leading space), which trivially
+ * doesn't start with "DOMPurify"/"sanitize" -- defeating the exclusion
+ * entirely and flagging properly-sanitized code. Fixed by absorbing the
+ * whitespace inside the lookahead itself for both pattern specs
+ * (dangerouslySetInnerHTML and .innerHTML =).
+ */
+describe("web.next-xss DOMPurify/sanitize false-positive fix (Detection Accuracy Hardening V1)", () => {
+  it("does not flag dangerouslySetInnerHTML sanitized with DOMPurify.sanitize (one space after the colon)", async () => {
+    const result = await scanRepository([
+      { path: "components/Preview.tsx", content: "return <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(userHtml) }} />" },
+    ]);
+    expect(result.findings.map((f) => f.ruleId)).not.toContain("web.next-xss");
+  });
+
+  it("does not flag .innerHTML assignment sanitized with DOMPurify.sanitize (one space after '=')", async () => {
+    const result = await scanRepository([{ path: "server/render.ts", content: "el.innerHTML = DOMPurify.sanitize(userHtml);" }]);
+    expect(result.findings.map((f) => f.ruleId)).not.toContain("web.next-xss");
+  });
+
+  it("still flags unsanitized dangerouslySetInnerHTML", async () => {
+    const result = await scanRepository([
+      { path: "components/Preview.tsx", content: "return <div dangerouslySetInnerHTML={{ __html: userHtml }} />" },
+    ]);
+    expect(result.findings.map((f) => f.ruleId)).toContain("web.next-xss");
+  });
+
+  it("still flags unsanitized .innerHTML assignment", async () => {
+    const result = await scanRepository([{ path: "server/render.ts", content: "el.innerHTML = userHtml;" }]);
+    expect(result.findings.map((f) => f.ruleId)).toContain("web.next-xss");
+  });
+
+  it("edge case: a function that merely LOOKS like a sanitizer is still flagged (the fix does not overreach)", async () => {
+    const result = await scanRepository([
+      { path: "components/Preview.tsx", content: "return <div dangerouslySetInnerHTML={{ __html: maybeSanitize(userHtml) }} />" },
+    ]);
+    expect(result.findings.map((f) => f.ruleId)).toContain("web.next-xss");
+  });
+});

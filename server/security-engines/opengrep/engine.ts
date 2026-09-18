@@ -36,7 +36,30 @@ export const OPENGREP_VERSION = "1.30.0";
 export const OPENGREP_LICENSE = "LGPL-2.1";
 export const OPENGREP_REPOSITORY = "https://github.com/opengrep/opengrep";
 
-const RULES_FILE = join(__dirname, "rules", "taint-rules.yaml");
+// Phase 42: the Security Worker bundles this file (and everything else)
+// into a SINGLE esbuild-produced CJS file at /app/worker-bundle.cjs. At
+// runtime, __dirname inside that bundle is the bundle's OWN directory
+// (/app), not this source file's original directory -- so
+// join(__dirname, "rules", ...) silently resolved to the non-existent
+// /app/rules/taint-rules.yaml in the deployed worker (the Dockerfile
+// copies the real rules file to /app/server/security-engines/opengrep/rules/
+// instead, its source-relative path, since that's what it can see at build
+// time). Every single opengrep-core invocation therefore passed a
+// nonexistent -rules path, which crashed with an unhandled OCaml exception
+// (exit 2, "unknown exception ... Parse_rule.parse_file") on every file,
+// 100% of the time -- found via Phase 41's real E2E test, root-caused via
+// real Railway container access in Phase 42 (confirmed live: /app/rules/
+// does not exist; only /app/server/security-engines/opengrep/rules/ does).
+// This never reproduced locally or in unbundled test runs, where __dirname
+// correctly points at this file's real directory -- only the bundled
+// worker was ever affected.
+//
+// Fix: same pattern already used for OPENGREP_BINARY_PATH/TRIVY_BINARY_PATH
+// -- an explicit, deployment-configurable override, defaulting to the
+// __dirname-relative path for local/Vercel/test runs (where it has always
+// been correct). worker/Dockerfile sets OPENGREP_RULES_PATH to the exact
+// path it actually copies the file to.
+const RULES_FILE = process.env.OPENGREP_RULES_PATH?.trim() || join(__dirname, "rules", "taint-rules.yaml");
 const DEFAULT_PER_FILE_TIMEOUT_MS = 15_000;
 const MAX_FILES_PER_EXECUTION = 60;
 const MAX_TARGET_FILE_BYTES = 1_000_000;
@@ -87,7 +110,8 @@ async function runOnSingleFile(
   originalPath: string,
   content: string,
   language: string,
-  timeoutMs: number
+  timeoutMs: number,
+  signal?: AbortSignal
 ): Promise<{ matches: OpenGrepMatch[]; errorMessage: string | null }> {
   const safeName = `${randomUUID()}${originalPath.slice(originalPath.lastIndexOf("."))}`;
   const targetPath = join(workspaceDir, safeName);
@@ -98,7 +122,12 @@ async function runOnSingleFile(
     args: ["-json", "-lang", language, "-rules", RULES_FILE, "-max_memory", "1024", "-timeout", "10", targetPath],
     cwd: workspaceDir,
     timeoutMs,
+    signal,
   });
+
+  if (result.aborted) {
+    return { matches: [], errorMessage: "cancelled" };
+  }
 
   if (result.timedOut) {
     return { matches: [], errorMessage: "per-file timeout exceeded" };
@@ -106,8 +135,21 @@ async function runOnSingleFile(
   if (result.exitCode !== 0 && result.exitCode !== 1) {
     // opengrep-core's own convention: 0 = clean run, 1 = clean run with
     // findings for some invocations depending on version; anything else is
-    // a real execution failure, not "no findings."
-    return { matches: [], errorMessage: `opengrep-core exited ${result.exitCode}` };
+    // a real execution failure, not "no findings." Phase 42: exit 2
+    // specifically means opengrep-core's own "unknown exception" (a fatal,
+    // unhandled exception in its OCaml core -- confirmed by real
+    // invocation, never "vulnerability found" and never a memory-limit hit,
+    // which the binary reports separately as an exit-0 warning). stderr
+    // used to be discarded entirely here, which made a real Phase 41/42
+    // production failure (opengrep-core exited 2 on ~60 files, never
+    // reproduced against the same binary/container/files/rules on retest --
+    // most consistent with a transient cold-start condition) undiagnosable
+    // after the fact. Always capture a bounded stderr excerpt now.
+    const stderrExcerpt = result.stderr.trim().slice(-500);
+    return {
+      matches: [],
+      errorMessage: `opengrep-core exited ${result.exitCode}${stderrExcerpt ? `: ${stderrExcerpt}` : ""}`,
+    };
   }
 
   const parsed = parseOpenGrepJson(result.stdout);
@@ -202,15 +244,43 @@ export function createOpenGrepEngine(): SecurityEngine {
       try {
         await withIsolatedWorkspace("opengrep-scan", async (workspaceDir) => {
           for (const target of targets) {
+            if (input.signal?.aborted) break;
             const perFileTimeout = Math.min(DEFAULT_PER_FILE_TIMEOUT_MS, input.timeoutMs);
-            const { matches, errorMessage } = await runOnSingleFile(
+            let outcome = await runOnSingleFile(
               binary,
               workspaceDir,
               target.path,
               target.content,
               target.language,
-              perFileTimeout
+              perFileTimeout,
+              input.signal
             );
+            // Phase 42: a real production run saw ~60/60 files fail with
+            // "opengrep-core exited 2" (a fatal unhandled exception inside
+            // the OCaml core), which never reproduced on retest against the
+            // identical binary/container/rules/files -- most consistent
+            // with a transient condition (e.g. a cold container). A single
+            // bounded retry recovers from exactly that class of failure
+            // without ever turning a REAL, reproducible failure into a
+            // false "clean" result: a file that fails twice is still
+            // recorded as failed, with both attempts' detail preserved.
+            if (outcome.errorMessage?.startsWith("opengrep-core exited") && !input.signal?.aborted) {
+              const retry = await runOnSingleFile(
+                binary,
+                workspaceDir,
+                target.path,
+                target.content,
+                target.language,
+                perFileTimeout,
+                input.signal
+              );
+              if (retry.errorMessage) {
+                outcome = { matches: retry.matches, errorMessage: `${outcome.errorMessage} (retry also failed: ${retry.errorMessage})` };
+              } else {
+                outcome = retry;
+              }
+            }
+            const { matches, errorMessage } = outcome;
             filesScanned += 1;
             allMatches.push(...matches);
             if (errorMessage) {

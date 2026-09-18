@@ -68,6 +68,9 @@ function describeLocalTool(name) {
   if (name === "sequrai_local_findings") {
     return "List actionable local findings (redacted; never sends raw secrets).";
   }
+  if (name === "sequrai_local_fix") {
+    return "Explain a specific local finding and generate a safe, non-executing fix prompt for it. Call with no arguments first to list candidate findings and their correlationKey.";
+  }
   return "Prepare a sanitized manifest of local files eligible for optional remote analysis.";
 }
 
@@ -89,6 +92,11 @@ const LOCAL_TOOL_DEFINITIONS = LOCAL_TOOL_NAMES.map((name) => ({
       gitDiffOnly: {
         type: "boolean",
         description: "For sequrai_local_review / audit — unstaged diff only.",
+      },
+      correlationKey: {
+        type: "string",
+        description:
+          "For sequrai_local_fix — identifies one specific finding from the latest local scan. Omit to receive a list of candidates to choose from.",
       },
     },
     additionalProperties: false,

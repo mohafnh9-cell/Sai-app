@@ -7,8 +7,8 @@ import { persistScanJobPlatformMetadata, attachPlatformSummaryToScan } from "./p
 import { assertScanContinues } from "@/server/review-cancel/review-abort";
 import { runScanAttackSimulationPhase } from "@/server/attack-simulation/integration/run-scan-attack-simulation-phase";
 import { persistSecurityIntelligence } from "@/server/ai-red-team/intelligence/persistence";
-import { runSecurityEngines } from "@/server/security-engines/orchestrate";
-import { persistEngineResults } from "@/server/security-engines/persistence";
+import { isSecurityWorkerEnabled } from "@/server/security-jobs/worker-config";
+import { runSecurityOrchestration } from "@/server/security-orchestrator/orchestrate";
 
 export type UnifiedScanPipelineInput = {
   scanId: string;
@@ -102,15 +102,27 @@ export async function executeUnifiedScanRedTeamPhase(
     }
   }
 
-  // Phase 35: the multi-engine security layer (OpenGrep, Trivy, native
-  // Crypto engine, OpenSSF Scorecard -- server/security-engines/*). ONE
-  // execution path, callable from this same central scan pipeline stage
-  // rather than hardcoded per-route (section 27). OpenGrep/Trivy self-report
-  // SKIPPED with a clear reason when their binary env vars aren't configured
-  // for this runtime (see Phase 35 final report: production Vercel
-  // serverless cannot currently bundle either binary -- a worker-boundary
-  // service is required and does not exist yet) -- never silently reported
-  // as "0 findings." Best-effort/non-fatal, matching the Phase 34 pattern.
+  // Phase 38: the ONE canonical orchestration path (Phase 36's
+  // runSecurityOrchestration -- discovery, capability-driven planning,
+  // execution-graph-backed SecurityJob creation, coverage, adaptive
+  // investigation, AI reasoning, then Production Verdict, per Phase 37).
+  // This REPLACES Phase 35's direct runSecurityEngines()/createSecurityJob
+  // calls that previously lived here -- both review_now and
+  // full_product_audit flow through this one pipeline stage (Phase 34's
+  // established "one execution path" design), so wiring the orchestrator
+  // in HERE gives both MCP tools real orchestrator coverage without
+  // touching server/mcp/tools/*.ts at all, exactly the lowest-risk
+  // integration point already proven safe across three prior phases.
+  //
+  // drainInline preserves the exact pre-existing fallback behavior: with
+  // no Security Execution Worker deployed (isSecurityWorkerEnabled() ===
+  // false, true in every environment today), engine jobs are claimed and
+  // run inline through the SAME worker code a real deployed worker would
+  // use -- OpenGrep/Trivy still self-report SKIPPED if their binaries
+  // aren't present on this runtime (Vercel), never silently "0 findings."
+  // Once a real worker is deployed and SECURITY_WORKER_ENABLED=true, this
+  // flips to false and jobs are only created here, picked up
+  // asynchronously by that worker -- unchanged from Phase 35.5's design.
   try {
     await assertScanContinues(admin, input.scanId);
     const { data: project } = await admin
@@ -118,23 +130,21 @@ export async function executeUnifiedScanRedTeamPhase(
       .select("github_repo")
       .eq("id", input.projectId)
       .maybeSingle();
-    const enginesOutput = await runSecurityEngines({
+    const githubRepo = (project?.github_repo as string | null) ?? null;
+
+    await runSecurityOrchestration(admin, {
       scanId: input.scanId,
       projectId: input.projectId,
       organizationId: input.organizationId,
       files: input.files,
-      githubRepo: (project?.github_repo as string | null) ?? null,
-    });
-    await persistEngineResults(admin, {
-      organizationId: input.organizationId,
-      projectId: input.projectId,
-      scanId: input.scanId,
-      results: enginesOutput.results,
+      githubRepo,
+      depth: "STANDARD",
+      drainInline: !isSecurityWorkerEnabled(),
     });
   } catch (error) {
     console.error({
       component: "platform-convergence",
-      event: "security_engines_phase_failed",
+      event: "security_orchestration_phase_failed",
       scanId: input.scanId,
       message: error instanceof Error ? error.message : String(error),
     });

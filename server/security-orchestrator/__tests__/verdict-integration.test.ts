@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createFakeAdmin, type FakeTables } from "@/server/mcp/__tests__/fake-admin";
-import { loadExternalEngineFindingsForVerdict } from "../verdict-integration";
+import { hasIncompleteExternalEngineCoverage, loadExternalEngineFindingsForVerdict } from "../verdict-integration";
 
 const ORG_A = "org-a";
 const SCAN_A = "scan-a";
@@ -88,5 +88,51 @@ describe("Phase 37 -- loadExternalEngineFindingsForVerdict (workstream C)", () =
       nativeFindingIds: new Set(),
     });
     expect(result).toEqual([]);
+  });
+});
+
+describe("F10 -- hasIncompleteExternalEngineCoverage (partialScanFailure honesty)", () => {
+  function jobRow(overrides: Partial<Record<string, unknown>> & { status: string }) {
+    return {
+      id: `job-${Math.random()}`,
+      organization_id: ORG_A,
+      scan_id: SCAN_A,
+      engine: "opengrep",
+      ...overrides,
+    };
+  }
+
+  it("returns true when an engine job for this scan is FAILED -- a crashed engine must make the verdict honestly partial", async () => {
+    const admin = createFakeAdmin({ security_jobs: [jobRow({ status: "FAILED" })] });
+    const result = await hasIncompleteExternalEngineCoverage(admin as never, { scanId: SCAN_A, organizationId: ORG_A });
+    expect(result).toBe(true);
+  });
+
+  it("returns true when an engine job is still QUEUED/RUNNING -- coverage isn't in yet", async () => {
+    const admin = createFakeAdmin({ security_jobs: [jobRow({ status: "RUNNING" })] });
+    const result = await hasIncompleteExternalEngineCoverage(admin as never, { scanId: SCAN_A, organizationId: ORG_A });
+    expect(result).toBe(true);
+  });
+
+  it("returns false when every engine job for this scan COMPLETED", async () => {
+    const admin = createFakeAdmin({
+      security_jobs: [jobRow({ status: "COMPLETED", engine: "opengrep" }), jobRow({ status: "COMPLETED", engine: "trivy" })],
+    });
+    const result = await hasIncompleteExternalEngineCoverage(admin as never, { scanId: SCAN_A, organizationId: ORG_A });
+    expect(result).toBe(false);
+  });
+
+  it("returns false (not a failure) when no external-engine jobs were ever planned for this scan", async () => {
+    const admin = createFakeAdmin({ security_jobs: [] });
+    const result = await hasIncompleteExternalEngineCoverage(admin as never, { scanId: SCAN_A, organizationId: ORG_A });
+    expect(result).toBe(false);
+  });
+
+  it("never lets another organization's failed job affect this scan's coverage (tenant-scoped)", async () => {
+    const admin = createFakeAdmin({
+      security_jobs: [jobRow({ status: "FAILED", organization_id: "org-b", scan_id: SCAN_A })],
+    });
+    const result = await hasIncompleteExternalEngineCoverage(admin as never, { scanId: SCAN_A, organizationId: ORG_A });
+    expect(result).toBe(false);
   });
 });

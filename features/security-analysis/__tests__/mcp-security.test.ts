@@ -238,3 +238,76 @@ describe("mcpSecurityRule", () => {
     expect(drafts).toEqual([]);
   });
 });
+
+/**
+ * Detection Accuracy Hardening V1: mcp.fs-write-no-path-validation's
+ * path.resolve/join/normalize exclusion was checked AFTER a greedy,
+ * dot-inclusive identifier match had already consumed the literal
+ * "path.resolve" text, so the negative lookahead had nothing left to
+ * compare against and the exclusion never actually excluded anything --
+ * the rule flagged its own recommended remediation. Fixed by moving the
+ * exclusion check to before the identifier is matched.
+ */
+describe("mcp.fs-write-no-path-validation false-positive fix (Detection Accuracy Hardening V1)", () => {
+  it("does not flag a write whose path was already validated with path.resolve", () => {
+    const result = scanMcpRepository([
+      { path: "mcp/server.ts", content: "writeFileSync(path.resolve(base, userPath), data);" },
+    ]);
+    expect(result.findings.map((f) => f.rule)).not.toContain("mcp.fs-write-no-path-validation");
+  });
+
+  it("does not flag a write whose path was already validated with path.normalize", () => {
+    const result = scanMcpRepository([
+      { path: "mcp/server.ts", content: "writeFileSync(path.normalize(userPath), data);" },
+    ]);
+    expect(result.findings.map((f) => f.rule)).not.toContain("mcp.fs-write-no-path-validation");
+  });
+
+  it("does not flag a write whose path was already validated with path.join", () => {
+    const result = scanMcpRepository([
+      { path: "mcp/server.ts", content: "writeFileSync(path.join(base, userPath), data);" },
+    ]);
+    expect(result.findings.map((f) => f.rule)).not.toContain("mcp.fs-write-no-path-validation");
+  });
+
+  it("still flags a write with no path validation at all", () => {
+    const result = scanMcpRepository([{ path: "mcp/server.ts", content: "writeFileSync(userPath, data);" }]);
+    expect(result.findings.map((f) => f.rule)).toContain("mcp.fs-write-no-path-validation");
+  });
+
+  it("still flags a write whose path is validated by an unrelated helper (not path.resolve/join/normalize)", () => {
+    const result = scanMcpRepository([
+      { path: "mcp/server.ts", content: "writeFileSync(myCustomSanitize(userPath), data);" },
+    ]);
+    expect(result.findings.map((f) => f.rule)).toContain("mcp.fs-write-no-path-validation");
+  });
+});
+
+/**
+ * Detection Accuracy Hardening V1: the 6 Python-only MCP checks were
+ * previously unreachable because .py files never reached scanRepository()
+ * at all (see features/security-scanner/__tests__/python-visibility.test.ts).
+ * scanMcpRepository() itself was never the problem -- these tests confirm
+ * it always correctly handled .py content once given the chance.
+ */
+describe("MCP Python checks (Detection Accuracy Hardening V1)", () => {
+  it("detects os.system() in a Python MCP tool file", () => {
+    const result = scanMcpRepository([{ path: "mcp-server/tool.py", content: "os.system(cmd)" }]);
+    expect(result.findings.map((f) => f.rule)).toContain("mcp.os-system");
+  });
+
+  it("detects pickle.load() in a Python MCP tool file", () => {
+    const result = scanMcpRepository([{ path: "mcp-server/tool.py", content: "data = pickle.load(f)" }]);
+    expect(result.findings.map((f) => f.rule)).toContain("mcp.pickle-load");
+  });
+
+  it("does not flag safe Python equivalents", () => {
+    const result = scanMcpRepository([
+      { path: "mcp-server/tool.py", content: "subprocess.run(['ls'])\ndata = json.load(f)\ndata2 = yaml.safe_load(f)" },
+    ]);
+    const ruleIds = result.findings.map((f) => f.rule);
+    expect(ruleIds).not.toContain("mcp.os-system");
+    expect(ruleIds).not.toContain("mcp.pickle-load");
+    expect(ruleIds).not.toContain("mcp.yaml-unsafe-load");
+  });
+});

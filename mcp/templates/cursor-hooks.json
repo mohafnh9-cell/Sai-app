@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "hooks": {
+    "afterFileEdit": [
+      {
+        "command": "node ~/.sequrai/auto-security-hook.mjs",
+        "type": "command",
+        "timeout": 10,
+        "failClosed": false
+      }
+    ],
+    "stop": [
+      {
+        "command": "node ~/.sequrai/auto-security-hook.mjs",
+        "timeout": 120
+      }
+    ]
+  }
+}

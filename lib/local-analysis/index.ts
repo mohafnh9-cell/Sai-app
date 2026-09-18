@@ -25,3 +25,15 @@ export type {
   LocalGitMetadata,
 } from "./types";
 export { LOCAL_SCAN_LIMITS } from "./workspace";
+
+export { LocalSafeFixError, type LocalSafeFixResult, type LocalFixCandidate } from "./local-safe-fix";
+
+export {
+  recordChangedPath,
+  evaluateAutoSecurityTrigger,
+  readAutoSecurityState,
+  formatAutoSecurityFeedback,
+  type AutoSecurityState,
+  type AutoSecurityDecision,
+} from "./auto-security-trigger";
+export { classifySecurityRelevance, type SecurityRelevanceResult } from "./auto-security-classifier";

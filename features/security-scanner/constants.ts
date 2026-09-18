@@ -23,7 +23,7 @@ export const DEFAULT_BINARY_EXTENSIONS = new Set([
 ]);
 
 export const SOURCE_EXTENSIONS = new Set([
-  ".cjs", ".env", ".js", ".json", ".jsx", ".md", ".mjs", ".prisma", ".rules", ".sql",
+  ".cjs", ".env", ".js", ".json", ".jsx", ".md", ".mjs", ".prisma", ".py", ".rules", ".sql",
   ".toml", ".ts", ".tsx", ".yaml", ".yml",
 ]);
 
