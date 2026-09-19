@@ -1,16 +1,10 @@
-import { redirect } from "next/navigation";
+import { Suspense } from "react";
 import { SignupForm } from "./SignupForm";
 
-export default async function SignupPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ email?: string }>;
-}) {
-  const params = await searchParams;
-
-  if (params.email !== "1") {
-    redirect("/connect");
-  }
-
-  return <SignupForm />;
+export default function SignupPage() {
+  return (
+    <Suspense fallback={<div className="w-full max-w-sm h-96 animate-pulse rounded-lg bg-muted/30" />}>
+      <SignupForm />
+    </Suspense>
+  );
 }
