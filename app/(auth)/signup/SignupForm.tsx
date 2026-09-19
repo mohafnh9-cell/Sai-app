@@ -2,21 +2,27 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Shield, Eye, EyeOff, Loader2, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createClient } from "@/lib/supabase/client";
 import { useI18n } from "@/lib/i18n/client";
+import { safeNextPath } from "@/lib/auth/safe-next-path";
+import { OAuthProviderButtons } from "@/features/auth/components/OAuthProviderButtons";
 
 export function SignupForm() {
   const { t } = useI18n("auth");
   const { t: tc } = useI18n("common");
+  const searchParams = useSearchParams();
+  const redirectTarget = safeNextPath(searchParams.get("redirectTo"));
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [oauthBusy, setOauthBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
@@ -81,6 +87,23 @@ export function SignupForm() {
         <p className="mt-1.5 text-sm text-muted-foreground">{t("signupSubtitle")}</p>
       </div>
 
+      <div className="mb-4">
+        <OAuthProviderButtons
+          redirectTarget={redirectTarget}
+          disabled={loading}
+          onLoadingChange={setOauthBusy}
+        />
+      </div>
+
+      <div className="relative mb-4">
+        <div className="absolute inset-0 flex items-center">
+          <span className="w-full border-t border-border" />
+        </div>
+        <div className="relative flex justify-center text-xs text-muted-foreground">
+          <span className="bg-background px-2">{t("orEmail")}</span>
+        </div>
+      </div>
+
       <form onSubmit={handleSignup} className="space-y-4">
         {error && (
           <div className="rounded-md bg-destructive/10 border border-destructive/20 px-3 py-2">
@@ -97,7 +120,7 @@ export function SignupForm() {
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
-            disabled={loading}
+            disabled={loading || oauthBusy}
           />
         </div>
 
@@ -110,7 +133,7 @@ export function SignupForm() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            disabled={loading}
+            disabled={loading || oauthBusy}
           />
         </div>
 
@@ -124,7 +147,7 @@ export function SignupForm() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              disabled={loading}
+              disabled={loading || oauthBusy}
               className="pr-10"
             />
             <button
@@ -137,7 +160,7 @@ export function SignupForm() {
           </div>
         </div>
 
-        <Button type="submit" className="w-full" disabled={loading}>
+        <Button type="submit" className="w-full" disabled={loading || oauthBusy}>
           {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           {t("createAccount")}
         </Button>
