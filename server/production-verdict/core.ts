@@ -7,6 +7,7 @@ import {
 import { isAnalysisRunImmutable } from "@/server/analysis-runs/is-analysis-run-immutable";
 import { generateProductionVerdict as runEngine } from "@/brain/production-verdict/engine";
 import { finalizeProductionVerdict } from "@/brain/production-verdict/finalize-verdict";
+import { writeScanStatePointer } from "./scan-state-writer";
 import { resolveScanCoverageForVerdict } from "@/brain/production-verdict/resolve-scan-coverage";
 import { loadPriorScanCoverage } from "@/server/production-verdict/load-prior-scan-coverage";
 import {
@@ -375,23 +376,28 @@ export async function generateAndPersistProductionVerdict(
     operationType: "production_verdict",
   });
 
-  const { error: stateError } = await admin
-    .from("repository_scan_state")
-    .upsert(
-      {
-        repository_id: input.projectId,
-        organization_id: input.organizationId,
+  // The current-verdict pointer only moves forward (see scan-state-writer):
+  // a delayed older scan must not replace a newer scan's verdict, and a
+  // non-default-branch scan must not become the project's production verdict.
+  let pointerResult: Awaited<ReturnType<typeof writeScanStatePointer>>;
+  try {
+    pointerResult = await writeScanStatePointer(admin, {
+      organizationId: input.organizationId,
+      projectId: input.projectId,
+      scanId: input.scanId,
+      values: {
         current_verdict_id: persisted?.id ?? null,
         last_scan_id: input.scanId,
         last_security_score: verdict.score,
-        updated_at: new Date().toISOString(),
       },
-      { onConflict: "repository_id" }
-    );
-
-  if (stateError) {
-    log("verdict_state_update_failed", { scanId: input.scanId, error: stateError.message });
-    throw new Error(stateError.message);
+    });
+  } catch (stateError) {
+    const message = stateError instanceof Error ? stateError.message : String(stateError);
+    log("verdict_state_update_failed", { scanId: input.scanId, error: message });
+    throw new Error(message);
+  }
+  if (!pointerResult.applied) {
+    log("verdict_state_pointer_skipped", { scanId: input.scanId, reason: pointerResult.reason });
   }
 
   log("verdict_persistence_completed", { scanId: input.scanId, verdictId: persisted?.id });

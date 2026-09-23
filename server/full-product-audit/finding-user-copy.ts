@@ -239,6 +239,9 @@ export function buildExecutiveSummaryLine(result: {
   if (result.verdictStatus === "insufficient_data" || result.verdictStatus === "analysis_failed") {
     return "SequrAI no ha revisado suficiente de tu repositorio todavía para responder con responsabilidad.";
   }
+  if (result.verdictStatus === null) {
+    return "SequrAI todavía no tiene un veredicto completo para esta revisión, así que no puede dar una recomendación de despliegue.";
+  }
   const blockers = result.counts.critical + result.counts.high;
   if (blockers === 0) {
     return "SequrAI no encontró bloqueadores de producción basados en la evidencia actual.";

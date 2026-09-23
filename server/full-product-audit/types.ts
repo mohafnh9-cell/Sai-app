@@ -155,4 +155,14 @@ export type FullProductAuditResult = {
   summary: string;
   timedOut: boolean;
   nextAction: string;
+  /**
+   * DIAGNOSTIC only -- exposes whether a live recomputation disagrees with
+   * the authoritative persisted verdict for this scan. Never used to decide
+   * readiness.
+   */
+  verdictDiagnostics?: {
+    authoritativeVerdictScanId: string | null;
+    liveVerdictStatus: VerdictStatus | null;
+    consistency: "consistent" | "diverged" | "not_available";
+  };
 };
