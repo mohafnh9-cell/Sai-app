@@ -48,7 +48,7 @@ function buildAdmin(scanOverrides: Record<string, unknown> = {}) {
   });
 }
 
-function buildDualScanAdmin() {
+function buildDualScanAdmin(scanAOverrides: Record<string, unknown> = {}) {
   const verdict = buildVerdictFixture({
     projectId: PROJECT_ID,
     repositoryId: PROJECT_ID,
@@ -77,6 +77,7 @@ function buildDualScanAdmin() {
         files_analyzed: 0,
         files_discovered: 0,
         completed_at: "2026-01-01T00:00:00.000Z",
+        ...scanAOverrides,
       },
       {
         id: SCAN_B_ID,
@@ -129,6 +130,18 @@ describe("computeLiveProductionVerdict scan row completeness", () => {
 describe("getLiveProductionVerdict canonical scan resolution", () => {
   it("uses persisted scanId instead of the latest completed scan", async () => {
     const admin = buildDualScanAdmin();
+
+    const verdict = await getLiveProductionVerdict(admin as never, PROJECT_ID);
+
+    expect(verdict?.scanId).toBe(SCAN_A_ID);
+    // Scan A is a full scan that analyzed 0 files itself. It must not borrow
+    // scan B's coverage (that would present another scan's evidence as its
+    // own), so its coverage is insufficient.
+    expect(verdict?.status).toBe("insufficient_data");
+  });
+
+  it("lets an INCREMENTAL scan inherit a prior scan's coverage (it only analyzes changed files)", async () => {
+    const admin = buildDualScanAdmin({ scan_type: "incremental" });
 
     const verdict = await getLiveProductionVerdict(admin as never, PROJECT_ID);
 

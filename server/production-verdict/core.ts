@@ -8,6 +8,7 @@ import { isAnalysisRunImmutable } from "@/server/analysis-runs/is-analysis-run-i
 import { generateProductionVerdict as runEngine } from "@/brain/production-verdict/engine";
 import { finalizeProductionVerdict } from "@/brain/production-verdict/finalize-verdict";
 import { writeScanStatePointer } from "./scan-state-writer";
+import { hasIncompleteNativeRuleCoverage, isIncrementalScan } from "@/server/security-scanner/native-coverage";
 import { resolveScanCoverageForVerdict } from "@/brain/production-verdict/resolve-scan-coverage";
 import { loadPriorScanCoverage } from "@/server/production-verdict/load-prior-scan-coverage";
 import {
@@ -236,7 +237,9 @@ export async function generateAndPersistProductionVerdict(
   const coverage = resolveScanCoverageForVerdict({
     filesAnalyzed: (scan.files_analyzed as number | null) ?? (scan.files_scanned as number | null) ?? 0,
     filesDiscovered: (scan.files_discovered as number | null) ?? (scan.total_files as number | null) ?? 0,
-    priorScan: priorCoverage,
+    priorScan: isIncrementalScan({ scan_type: scan.scan_type, metrics: scan.metrics })
+      ? priorCoverage
+      : null,
   });
 
   if (
@@ -293,7 +296,12 @@ export async function generateAndPersistProductionVerdict(
     findings: mergedFindings,
     previousScore: previousVerdictParsed?.score ?? null,
     previousBlockersCount: previousBlockers,
-    partialScanFailure: scan.status !== "completed" || externalEngineCoverageIncomplete,
+    // A native rule that threw or never ran (time budget) is missing
+    // evidence, exactly like a failed external engine: never "found nothing".
+    partialScanFailure:
+      scan.status !== "completed" ||
+      externalEngineCoverageIncomplete ||
+      hasIncompleteNativeRuleCoverage({ metrics: scan.metrics, omissions: scan.omissions }),
     aiExecutiveSummary: aiReport?.executive_summary ?? null,
   }).verdict;
 

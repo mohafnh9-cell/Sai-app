@@ -281,3 +281,57 @@ describe("cross-tool decision consistency", () => {
     expect(history.currentDecision).toBe("more_analysis_required");
   });
 });
+
+// Pass 3 CRIT-006: a priority that disappears is only "no longer detected"
+// when the latest review had enough evidence to see it.
+describe("what_changed never reports resolved blockers from an incomplete review", () => {
+  function twoReviews(currentStatus: "insufficient_data" | "ready_to_ship") {
+    const previous = buildVerdictFixture({
+      status: "not_ready",
+      score: 50,
+      scanId: "44444444-4444-4444-8444-444444444441",
+      generatedAt: "2026-03-01T00:00:00.000Z",
+    });
+    const current = buildVerdictFixture({
+      status: currentStatus,
+      score: 90,
+      scanId: "44444444-4444-4444-8444-444444444442",
+      generatedAt: "2026-03-05T00:00:00.000Z",
+      blockersCount: 0,
+      topPriorities: [] as never[],
+    });
+    return tables({ production_verdicts: [verdictRow(PROJECT, previous), verdictRow(PROJECT, current)] });
+  }
+
+  it("insufficient_data latest review: nothing is reported as resolved", async () => {
+    const changed = await whatChanged(ctx(createFakeAdmin(twoReviews("insufficient_data"))), {}, t);
+    expect(changed.resolvedBlockers).toEqual([]);
+    expect(changed.improvements.filter((item) => !item.includes("pts"))).toEqual([]);
+  });
+
+  it("complete latest review: priorities that are gone are reported as no longer detected", async () => {
+    const changed = await whatChanged(ctx(createFakeAdmin(twoReviews("ready_to_ship"))), {}, t);
+    expect(changed.resolvedBlockers.length).toBeGreaterThan(0);
+  });
+});
+
+// Pass 3 Part 8: SequrAI has no persisted Security Proof lifecycle, so no
+// user-facing copy may claim one exists.
+describe("no unsupported Security Proof claims in user-facing copy", () => {
+  it("MCP message catalogs never promise a proof, certificate, or verified-fix guarantee", async () => {
+    const { readFileSync, readdirSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const forbidden = /security proof|proof of (fix|remediation|security)|comprobante de (seguridad|correcci[oó]n)|certificado de seguridad|prueba de correcci[oó]n|verified fix|fix verified|correcci[oó]n verificada/i;
+    for (const locale of ["en", "es"]) {
+      const dir = join(process.cwd(), "messages", locale);
+      for (const file of readdirSync(dir).filter((name) => name.endsWith(".json"))) {
+        const text = readFileSync(join(dir, file), "utf8");
+        expect({ locale, file, match: text.match(forbidden)?.[0] ?? null }).toEqual({
+          locale,
+          file,
+          match: null,
+        });
+      }
+    }
+  });
+});

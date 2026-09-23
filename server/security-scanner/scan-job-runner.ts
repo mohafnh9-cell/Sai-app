@@ -25,6 +25,7 @@ import {
 } from "@/lib/github/repository-service";
 import { commitsMatch } from "@/lib/repository-sync/commits-match";
 import { releaseActiveScan, writeScanStatePointer } from "@/server/production-verdict/scan-state-writer";
+import { countDroppedRelevantFiles } from "./native-coverage";
 import {
   mergeReviewPipelineMetadata,
   reviewPhaseProgressForScan,
@@ -400,9 +401,13 @@ export class InlineScanJobRunner implements ScanJobRunner {
       const filesAnalyzed = isIncremental
         ? Math.max(priorCoverage?.filesAnalyzed ?? 0, incrementalFilesAnalyzed)
         : result.metrics.scannedFiles;
+      // A full scan's denominator is every relevant file it saw, including
+      // relevant files it had to drop (depth/size/count limits). Recording
+      // only the scanned count made a truncated large repository look 100%
+      // covered and turned the coverage floor into a no-op.
       const filesDiscovered = isIncremental
         ? Math.max(priorCoverage?.filesDiscovered ?? 0, snapshot.discoveredFiles, filesAnalyzed)
-        : result.metrics.scannedFiles;
+        : result.metrics.scannedFiles + countDroppedRelevantFiles(snapshot.omissions);
       const completed = await this.updateActiveScan(context.scanId, {
         status: "completed",
         progress: 100,

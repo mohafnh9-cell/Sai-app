@@ -189,7 +189,7 @@ export async function runFullProductAudit(
 
   const { data: scanRow } = await admin
     .from("scans")
-    .select(`${LIVE_VERDICT_SCAN_SELECT}, metrics`)
+    .select(LIVE_VERDICT_SCAN_SELECT)
     .eq("id", scanId)
     .maybeSingle();
 
@@ -340,7 +340,7 @@ export async function runFullProductAudit(
   const persistedVerdict = bindVerdictToScan(currentProjectVerdict, scanId);
   const { data: freshScanRow } = await admin
     .from("scans")
-    .select(`${LIVE_VERDICT_SCAN_SELECT}, metrics`)
+    .select(LIVE_VERDICT_SCAN_SELECT)
     .eq("id", scanId)
     .maybeSingle();
   const verdictScanRow = freshScanRow ?? scanRow;

@@ -30,15 +30,31 @@ describe("resolveScanCoverageForVerdict", () => {
     });
   });
 
-  it("uses discovered files when no prior scan exists", () => {
+  it("never counts merely discovered files as analyzed", () => {
+    // A scan that analyzed nothing has not analyzed the repository, however
+    // many files it saw. Treating discovered as analyzed fabricated coverage.
     expect(
       resolveScanCoverageForVerdict({
         filesAnalyzed: 0,
         filesDiscovered: 8,
       })
     ).toEqual({
-      filesAnalyzed: 8,
+      filesAnalyzed: 0,
       filesDiscovered: 8,
+      inheritedFromPrior: false,
+    });
+  });
+
+  it("does not borrow a prior scan's coverage when the caller supplies none (full scans)", () => {
+    expect(
+      resolveScanCoverageForVerdict({
+        filesAnalyzed: 1,
+        filesDiscovered: 400,
+        priorScan: null,
+      })
+    ).toEqual({
+      filesAnalyzed: 1,
+      filesDiscovered: 400,
       inheritedFromPrior: false,
     });
   });

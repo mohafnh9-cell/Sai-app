@@ -136,10 +136,15 @@ export function generateProductionVerdict(input: VerdictEngineInput): {
   const scoreDelta =
     input.previousScore != null && score != null ? score - input.previousScore : null;
 
-  const { introduced, resolved } = blockerDelta(
-    blockers.blockersCount,
-    input.previousBlockersCount
-  );
+  const rawDelta = blockerDelta(blockers.blockersCount, input.previousBlockersCount);
+  // A blocker that is merely absent from this scan is only "resolved" if this
+  // scan actually looked: a failed scan, a partial scan (engine failure, rule
+  // crash, time limit) or one with insufficient coverage proves nothing about
+  // findings it could not see. Newly *visible* blockers are still reported.
+  const evidenceSupportsResolution =
+    input.scanStatus === "completed" && !input.partialScanFailure && sufficientCoverage;
+  const introduced = rawDelta.introduced;
+  const resolved = evidenceSupportsResolution ? rawDelta.resolved : 0;
 
   const blockerConfidence = summarizeConfidenceDistribution(
     normalized

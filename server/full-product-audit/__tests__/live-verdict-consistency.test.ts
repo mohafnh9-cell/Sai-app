@@ -465,7 +465,10 @@ describe("full_product_audit dual scan regression", () => {
     const deployVerdict = await getLiveProductionVerdict(admin as never, E2E_PROJECT_ID);
 
     expect(deployVerdict?.scanId).toBe(E2E_SCAN_ID);
-    expect(deployVerdict?.status).toBe("ready_to_ship");
-    expect(deployVerdict?.score).toBe(100);
+    // Scan A analyzed 0 files and is a full scan: it must not inherit scan
+    // B's coverage, so it is not ready (and, with insufficient coverage, has
+    // no honest score).
+    expect(deployVerdict?.status).toBe("insufficient_data");
+    expect(deployVerdict?.score).toBeNull();
   });
 });
