@@ -9,6 +9,7 @@ import type {
   FindingVerificationStatus,
 } from "./types";
 
+import { isCoverageBaselineFinding, isCredentialFinding } from "./finding-classification";
 import type { ConfidenceLevel } from "@/brain/confidence/types";
 import { CONFIDENCE_LEVEL_LABELS } from "@/brain/confidence/derive";
 
@@ -122,18 +123,35 @@ export function buildAuditFindingUserFacing(
 ): AuditFindingUserFacing {
   const dynamic = dynamicVerificationCopy(finding);
   const safeToIgnore = isNonBlockingSecretClassification(finding.secretClassification);
+  const isBaseline = isCoverageBaselineFinding(finding);
+  const isCredential = isCredentialFinding(finding);
 
-  return {
-    simpleExplanation: safeToIgnore
-      ? "Este valor parece un fixture de prueba o marcador de posición, no una credencial de producción."
+  // Credential wording is only for genuine secret-rule findings. Everything
+  // else gets neutral wording, and coverage baselines are explicitly not a
+  // finding at all.
+  const simpleExplanation = safeToIgnore
+    ? "Este valor parece un fixture de prueba o marcador de posición, no una credencial de producción."
+    : isBaseline
+      ? "Información de cobertura: SequrAI evaluó esta área del repositorio. No es un hallazgo de seguridad."
       : finding.verificationStatus === "CONFIRMED"
         ? "SequrAI encontró un riesgo de seguridad con evidencia estática y dinámica."
-        : "SequrAI encontró un valor en tu código que parece una credencial o riesgo de seguridad.",
-    whyItMatters: safeToIgnore
-      ? "Los fixtures de prueba no deberían bloquear el despliegue, pero conviene confirmar que no se usan en producción."
+        : isCredential
+          ? "SequrAI encontró un valor en tu código que parece una credencial o riesgo de seguridad."
+          : "SequrAI encontró un posible riesgo de seguridad en tu código.";
+
+  const whyItMatters = safeToIgnore
+    ? "Los fixtures de prueba no deberían bloquear el despliegue, pero conviene confirmar que no se usan en producción."
+    : isBaseline
+      ? "Indica qué partes del repositorio se han revisado; no requiere ninguna acción."
       : finding.verificationStatus === "CONFIRMED"
         ? "Este problema puede explotarse en la aplicación autorizada."
-        : "Si fuera una credencial real y alguien accediera al código, podría usarla para acceder a un servicio externo.",
+        : isCredential
+          ? "Si fuera una credencial real y alguien accediera al código, podría usarla para acceder a un servicio externo."
+          : "Si se confirmara, podría afectar a la seguridad de tu aplicación.";
+
+  return {
+    simpleExplanation,
+    whyItMatters,
     confidenceLabel: finding.confidenceLevel
       ? confidenceLabelFromLevel(finding.confidenceLevel)
       : confidenceLabelFromVerification(finding.verificationStatus, finding.secretClassification),
