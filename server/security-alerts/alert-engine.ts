@@ -1,3 +1,4 @@
+import type { DeployAlertDecision } from "./deploy-alert-decision";
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -344,20 +345,20 @@ export function buildProtectionAlertCandidates(
 }
 
 export function buildDeployBlockedCandidate(
-  projectId: string,
   projectName: string,
-  primaryWorry: string | null
+  decision: DeployAlertDecision
 ): AlertCandidate {
-  const day = dayKey();
   return candidateBase({
     alertKind: "deploy_blocked",
     severity: defaultSeverityForKind("deploy_blocked"),
     deliveryTier: "digest",
-    dedupeKey: `${projectId}:deploy_blocked:${day}`,
+    dedupeKey: decision.dedupeKey,
     titlePlain: `Deploy check — ${projectName}`,
     bodyPlain: "",
-    changedBullets: primaryWorry ? [primaryWorry] : ["SequrAI is not comfortable with a deploy right now."],
-    ctaType: "safe_fix",
-    nextAction: "Apply Safe Fix before you ship.",
+    changedBullets: decision.changedBullets,
+    ctaType: decision.ctaType,
+    nextAction: decision.nextAction,
+    protectionImpact: decision.protectionImpact,
+    ...(decision.worryLine ? { worryLine: decision.worryLine } : {}),
   });
 }

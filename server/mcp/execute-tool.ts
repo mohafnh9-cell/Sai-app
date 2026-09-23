@@ -18,7 +18,7 @@ import { discoverApplication } from "./tools/discover-application";
 import { fullProductAudit } from "./tools/full-product-audit";
 import { authorizeDynamicTarget } from "./tools/authorize-dynamic-target";
 import type { VerdictStatus } from "@/brain/production-verdict/schema";
-import { deployAnswerFromVerdictStatus } from "@/server/production-memory/types";
+import { deployAnswerFromCanonicalDecision } from "@/server/production-memory/types";
 import {
   recordDeployCheckMemory,
   recordReviewStartedMemory,
@@ -220,7 +220,10 @@ async function dispatch(
 
     case "can_i_deploy": {
       const result = await canIDeploy(ctx, projectSelector(input), t);
-      const deployAnswer = deployAnswerFromVerdictStatus(result.verdictStatus as VerdictStatus);
+      const deployAnswer = deployAnswerFromCanonicalDecision(
+        result.deploymentRecommendation,
+        result.verdictStatus as VerdictStatus
+      );
       void recordDeployCheckMemory(ctx.admin, {
         organizationId: ctx.organizationId,
         projectId: result.project.id,
@@ -231,12 +234,22 @@ async function dispatch(
         primaryBlockerPlain: result.topBlockers[0]?.title ?? null,
         source: "mcp",
       });
+      // The alert answers from the canonical decision can_i_deploy just
+      // produced (not a second status mapping), bound to its scan.
       void evaluateDeployCheckAlert(ctx.admin, {
         organizationId: ctx.organizationId,
         projectId: result.project.id,
         projectName: result.project.name,
-        deployAnswer,
-        primaryWorry: result.topBlockers[0]?.title ?? null,
+        decision: {
+          deploymentRecommendation: result.deploymentRecommendation,
+          verdictStatus: result.verdictStatus,
+          reviewInProgress: result.reviewInProgress,
+          reviewFailed: result.reviewFailed,
+          freshnessStatus: result.freshnessStatus,
+          hasActionableFinding: result.topBlockers.length > 0,
+          verdictScanId: result.verdictScanId,
+          primaryWorry: result.topBlockers[0]?.title ?? null,
+        },
       });
       return result;
     }

@@ -63,4 +63,8 @@ export type FounderAlertRecord = {
   createdAt: string;
   readAt: string | null;
   acknowledgedAt: string | null;
+  /** Scan the alert's decision was computed for (deploy alerts only). */
+  decisionScanId?: string | null;
+  /** True when the alert describes a superseded decision and is not the current one. */
+  historical?: boolean;
 };

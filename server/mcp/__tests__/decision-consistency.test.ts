@@ -8,6 +8,7 @@ import { whatChanged } from "@/server/mcp/tools/what-changed";
 import { createFakeAdmin, type FakeTables } from "./fake-admin";
 import { buildVerdictFixture, verdictRow } from "./verdict-fixture";
 import { testMcpAuthContext } from "./test-context";
+import { deriveDeployAlertDecision } from "@/server/security-alerts/deploy-alert-decision";
 
 // Phase Z v2 Pass 3 (HIGH-001/002/003, Block Q): every decision-facing MCP
 // tool must describe the SAME evaluation with the SAME decision semantics.
@@ -333,5 +334,56 @@ describe("no unsupported Security Proof claims in user-facing copy", () => {
         });
       }
     }
+  });
+});
+
+// Pass 4 HIGH-004: the deploy alert is derived from the same canonical result
+// can_i_deploy returns, so it can never recommend Safe Fix where safe_fix
+// reports there is nothing verified to fix.
+describe("alerts agree with can_i_deploy and safe_fix", () => {
+  function alertFor(deploy: Awaited<ReturnType<typeof canIDeploy>>) {
+    return deriveDeployAlertDecision(PROJECT, {
+      deploymentRecommendation: deploy.deploymentRecommendation,
+      verdictStatus: deploy.verdictStatus,
+      reviewInProgress: deploy.reviewInProgress,
+      reviewFailed: deploy.reviewFailed,
+      freshnessStatus: deploy.freshnessStatus,
+      hasActionableFinding: deploy.topBlockers.length > 0,
+      verdictScanId: deploy.verdictScanId,
+      primaryWorry: deploy.topBlockers[0]?.title ?? null,
+    });
+  }
+
+  it("insufficient_data: safe_fix has nothing to fix, so the alert does not offer Safe Fix", async () => {
+    const verdict = buildVerdictFixture({ status: "insufficient_data", score: 100, ...CLEAN_FIELDS });
+    const admin = createFakeAdmin(tables({ production_verdicts: [verdictRow(PROJECT, verdict)] }));
+    const deploy = await canIDeploy(ctx(admin), {}, t);
+    const fix = await safeFix(ctx(admin), {}, t);
+
+    expect(fix.status).toBe("no_actionable_finding");
+    const alert = alertFor(deploy);
+    expect(alert?.ctaType).toBe("review_again");
+    expect(alert?.nextAction).not.toMatch(/safe fix/i);
+    expect(alert?.decisionScanId).toBe(verdict.scanId);
+  });
+
+  it("not_ready with a real blocker: safe_fix offers a fix and the alert offers Safe Fix", async () => {
+    const verdict = buildVerdictFixture({ status: "not_ready", score: 40 });
+    const admin = createFakeAdmin(tables({ production_verdicts: [verdictRow(PROJECT, verdict)] }));
+    const deploy = await canIDeploy(ctx(admin), {}, t);
+    const fix = await safeFix(ctx(admin), {}, t);
+
+    expect(fix.status).toBe("choose_blocker");
+    expect(alertFor(deploy)?.ctaType).toBe("safe_fix");
+  });
+
+  it("ready and current: no blocking alert and safe_fix reports no blockers", async () => {
+    const verdict = buildVerdictFixture({ status: "ready_to_ship", score: 96, ...CLEAN_FIELDS });
+    const admin = createFakeAdmin(tables({ production_verdicts: [verdictRow(PROJECT, verdict)] }));
+    const deploy = await canIDeploy(ctx(admin), {}, t);
+    const fix = await safeFix(ctx(admin), {}, t);
+
+    expect(fix.status).toBe("no_blockers");
+    expect(alertFor(deploy)).toBeNull();
   });
 });
