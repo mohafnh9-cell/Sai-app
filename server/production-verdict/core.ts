@@ -124,7 +124,8 @@ export async function generateAndPersistProductionVerdict(
     scanId: string;
     scanJobId?: string | null;
     /** Authoritative Security Decision from unified scan pipeline (single verdict source). */
-    securityDecisionReport?: import("@/server/ai-red-team/decision/decision-model").SecurityDecisionReport | null;
+    // Only the fields finalizeProductionVerdict reads (a full SecurityDecisionReport satisfies this).
+    securityDecisionReport?: import("@/brain/production-verdict/finalize-verdict").SecurityDecisionFinalizeInput | null;
     verdictRowId?: string | null;
   }
 ): Promise<ProductionVerdictV1 | null> {
