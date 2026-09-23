@@ -27,6 +27,10 @@ import { commitsMatch } from "@/lib/repository-sync/commits-match";
 import { releaseActiveScan, writeScanStatePointer } from "@/server/production-verdict/scan-state-writer";
 import { countDroppedRelevantFiles } from "./native-coverage";
 import {
+  assertRepositoryIdentityUnchanged,
+  RepositoryIdentityChangedError,
+} from "@/lib/github/repository-identity";
+import {
   mergeReviewPipelineMetadata,
   reviewPhaseProgressForScan,
 } from "@/brain/review-engine/state-machine";
@@ -255,6 +259,20 @@ export class InlineScanJobRunner implements ScanJobRunner {
           `COMMIT_SNAPSHOT_MISMATCH: expected ${context.headCommitSha}, got ${snapshot.commitSha}`,
           409
         );
+      }
+
+      // Repository identity is immutable per project. If this project is
+      // bound to a repository id and the name now resolves to a different
+      // repository, analyzing it (and rebinding the project below) would
+      // present the old repository's evidence lineage as the new one's.
+      if (!usingPrefetchedSnapshot) {
+        const { data: boundProject } = await this.supabase
+          .from("projects")
+          .select("github_repository_id")
+          .eq("id", context.repositoryId)
+          .eq("organization_id", context.organizationId)
+          .maybeSingle();
+        assertRepositoryIdentityUnchanged(boundProject?.github_repository_id, snapshot.repositoryId);
       }
 
       logScan("info", "repository_fetched", {
@@ -551,9 +569,12 @@ export class InlineScanJobRunner implements ScanJobRunner {
         });
         return;
       }
-      const code = error instanceof GitHubServiceError ? error.code : "SCAN_FAILED";
+      const code =
+        error instanceof GitHubServiceError || error instanceof RepositoryIdentityChangedError
+          ? error.code
+          : "SCAN_FAILED";
       const message =
-        error instanceof GitHubServiceError
+        error instanceof GitHubServiceError || error instanceof RepositoryIdentityChangedError
           ? error.message
           : "The scan could not be completed";
       await this.updateScan(context.scanId, {

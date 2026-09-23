@@ -46,11 +46,17 @@ export async function resolveMcpProject(
   if (selector.repositoryFullName?.trim()) {
     const normalizedSelector = normalizeStoredGitHubRepository(selector.repositoryFullName.trim());
     if (normalizedSelector) {
+      // A repository name that was released and reused by a different
+      // repository leaves two projects with the same name (the old lineage is
+      // preserved). A name means the newest one; the old project stays
+      // reachable by explicit id as history.
       const { data: project } = await ctx.admin
         .from("projects")
         .select("id, name, github_repo")
         .eq("organization_id", ctx.organizationId)
         .eq("github_repo", normalizedSelector)
+        .order("created_at", { ascending: false })
+        .limit(1)
         .maybeSingle();
       if (project) {
         return toResolvedMcpProject(project);
@@ -59,12 +65,14 @@ export async function resolveMcpProject(
 
     const { data: projects } = await ctx.admin
       .from("projects")
-      .select("id, name, github_repo")
+      .select("id, name, github_repo, created_at")
       .eq("organization_id", ctx.organizationId);
 
-    const project = (projects ?? []).find((row) =>
-      repositorySelectorMatchesStored(selector.repositoryFullName!.trim(), row.github_repo as string | null)
-    );
+    const project = [...(projects ?? [])]
+      .filter((row) =>
+        repositorySelectorMatchesStored(selector.repositoryFullName!.trim(), row.github_repo as string | null)
+      )
+      .sort((a, b) => String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")))[0];
     if (!project) {
       throw new McpError(404, "project_not_found", t("errors.project_not_found"));
     }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getGitHubRepoById, type GitHubRepo } from "@/lib/github";
 import { gitHubRepositoryReferenceFromApi } from "@/lib/github/repository-reference";
+import { repositoryIdentityMatches } from "@/lib/github/repository-identity";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/server/security-scanner/admin-client";
 import {
@@ -72,11 +73,20 @@ async function upsertConnectedProject(
   if (!existingProjectId) {
     const { data: existingByUrl } = await supabase
       .from("projects")
-      .select("id")
+      .select("id, github_repository_id")
       .eq("organization_id", organizationId)
       .eq("github_repo", reference.htmlUrl)
       .maybeSingle();
-    existingProjectId = existingByUrl?.id as string | undefined;
+    // Reuse a URL match only if it is the same repository. A project already
+    // bound to a different numeric repository id is a different repository
+    // that reuses this name (deleted and recreated, transferred): reusing the
+    // row would attach the old repository's scans, findings and verdicts to
+    // the new one. Falling through creates a new project (a new lineage) and
+    // leaves the old project and its history untouched.
+    existingProjectId =
+      existingByUrl && repositoryIdentityMatches(existingByUrl.github_repository_id, repo.id)
+        ? (existingByUrl.id as string)
+        : undefined;
   }
 
   if (existingProjectId) {

@@ -1,14 +1,9 @@
 import "server-only";
 
-import { getAuthoritativeProductionVerdict } from "@/server/production-verdict/authoritative-verdict";
 import type { McpAuthContext } from "../auth";
 import { McpError } from "../auth";
-import { mapVerdictStatusToDecision } from "../decision-mapping";
-import {
-  evaluateDeployDecision,
-} from "../deploy-decision/evaluate-deploy-decision";
+import { resolveCanonicalDecisionState } from "../canonical-decision-state";
 import type { McpTranslator } from "../i18n";
-import { getLatestReviewSummary } from "../latest-review";
 import {
   formatCanIDeployDeferredResponse,
   formatCanIDeployResponse,
@@ -17,7 +12,6 @@ import {
 import type { ProjectSelector } from "../project-resolution";
 import { resolveMcpProject } from "../project-resolution";
 import { buildProjectReportUrl } from "../report-url";
-import { getStalenessInfo } from "../staleness";
 import { applyLatestSecurityDecisionToVerdict } from "../security-decision-overlay";
 import type { VerdictConsistency } from "@/server/production-verdict/authoritative-verdict";
 import { resolveVerdictSourceForScan } from "../verdict-source";
@@ -76,43 +70,24 @@ export async function canIDeploy(
 ): Promise<CanIDeployResult> {
   const project = await resolveMcpProject(ctx, input, t);
 
-  const authoritative = await getAuthoritativeProductionVerdict(
-    ctx.admin,
-    ctx.organizationId,
-    project.id
-  );
-  if (!authoritative) {
+  // The single decision authority shared by every decision-facing MCP tool
+  // (can_i_deploy, safe_fix, what_changed, production_history): persisted
+  // verdict + staleness + latest review + deferral, resolved once.
+  const state = await resolveCanonicalDecisionState(ctx, project.id);
+  if (!state) {
     throw new McpError(404, "no_verdict_available", t("errors.no_verdict_available"));
   }
+  const { authoritative, staleness, latestReview, deployEvaluation, reviewInProgress, stalenessFootnotes } =
+    state;
 
-  let verdict = authoritative.verdict;
+  let verdict = state.verdict;
   const rawSource = await resolveVerdictSourceForScan(ctx.admin, verdict.scanId);
   const source: "github" | "pr" = rawSource === "pr" ? "pr" : "github";
 
+  // ADVISORY: the AI red-team decision may only annotate an evidence-complete
+  // verdict; it can never promote an insufficient one (see the overlay).
   const securityOverlay = applyLatestSecurityDecisionToVerdict(project.id, verdict);
   verdict = securityOverlay.verdict;
-
-  const [staleness, latestReview] = await Promise.all([
-    getStalenessInfo(ctx.admin, project.id, verdict.commitSha),
-    getLatestReviewSummary(ctx.admin, project.id),
-  ]);
-
-  const deployEvaluation = evaluateDeployDecision({
-    latestReview: latestReview
-      ? {
-          id: latestReview.id,
-          status: latestReview.status,
-          commitSha: latestReview.commitSha,
-          errorCode: latestReview.errorCode,
-        }
-      : null,
-    historicalVerdict: {
-      scanId: verdict.scanId,
-      commitSha: verdict.commitSha,
-      status: verdict.status,
-      score: verdict.score,
-    },
-  });
 
   const topBlockers: CanIDeployBlocker[] = verdict.topPriorities.slice(0, 3).map((priority) => ({
     id: priority.id,
@@ -125,18 +100,6 @@ export async function canIDeploy(
   }));
 
   const worries = topBlockers.map((b) => b.title);
-  const reviewInProgress =
-    deployEvaluation.kind === "deferred" &&
-    (deployEvaluation.reason === "in_progress" || deployEvaluation.reason === "awaiting_verdict")
-      ? true
-      : staleness.reviewInProgress;
-
-  const stalenessFootnotes = {
-    reviewInProgress,
-    freshnessStatus: staleness.freshnessStatus,
-    reviewFailed: staleness.reviewFailed,
-    latestDetectedCommitSha: staleness.latestDetectedCommitSha,
-  };
 
   if (deployEvaluation.kind === "deferred") {
     const summary = formatCanIDeployDeferredResponse(t, {
@@ -188,9 +151,7 @@ export async function canIDeploy(
     };
   }
 
-  const engineDecision = mapVerdictStatusToDecision(verdict.status);
-  const decision =
-    staleness.reviewFailed && engineDecision === "deploy" ? "more_analysis_required" : engineDecision;
+  const decision = state.decision;
   type McpDeploymentRecommendation = "DO_NOT_DEPLOY" | "SHIP_IT" | "MORE_ANALYSIS_REQUIRED";
   let deploymentRecommendation: McpDeploymentRecommendation =
     decision === "deploy" ? "SHIP_IT" : decision === "do_not_deploy" ? "DO_NOT_DEPLOY" : "MORE_ANALYSIS_REQUIRED";
