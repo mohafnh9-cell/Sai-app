@@ -222,4 +222,32 @@ describe("POST /api/github/connect", () => {
     const body = await res.json();
     expect(body.code).toBe("github_not_connected");
   });
+
+  // BUG FIX regression: resolveGitHubCredential returns the literal string
+  // "github-app" as a userId placeholder for the GitHub App path when no
+  // existing project has a connected_by_user_id to inherit. That string is
+  // not a valid uuid, and connected_by_user_id is a uuid column on
+  // projects -- inserting it caused every first-time GitHub-App-based
+  // repository save to fail in production with Postgres 22P02. The real,
+  // authenticated user must be used instead.
+  it("BUG FIX: uses the real authenticated user id, not the credential's 'github-app' placeholder, for a first-time GitHub-App-based save", async () => {
+    state.credential = { token: "gh-token", source: "github_app", connectionId: "conn-1", userId: "github-app" };
+    state.installation = { id: "install-row-1" };
+
+    const res = await POST(postReq({ repos: [{ id: 1 }] }));
+
+    expect(res.status).toBe(200);
+    expect(tables.projects).toHaveLength(1);
+    expect(tables.projects[0].connected_by_user_id).toBe(USER_1);
+    expect(tables.projects[0].connected_by_user_id).not.toBe("github-app");
+  });
+
+  it("BUG FIX: still uses the credential's own userId for the oauth_legacy path (untouched by the fix)", async () => {
+    state.credential = { token: "gh-token", source: "oauth_legacy", connectionId: "conn-1", userId: USER_1 };
+
+    const res = await POST(postReq({ repos: [{ id: 1 }] }));
+
+    expect(res.status).toBe(200);
+    expect(tables.projects[0].connected_by_user_id).toBe(USER_1);
+  });
 });

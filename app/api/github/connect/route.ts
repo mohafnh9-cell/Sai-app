@@ -54,7 +54,7 @@ async function upsertConnectedProject(
   organizationId: string,
   repo: GitHubRepo,
   connectionMeta?: {
-    connectionId: string;
+    connectionId: string | null;
     connectedByUserId: string;
     authMode?: "oauth_legacy" | "github_app";
     installationRowId?: string | null;
@@ -308,8 +308,21 @@ async function connectRepositories(request: Request) {
       }
     }
     const projectId = await upsertConnectedProject(supabase, organizationId, repo, {
-      connectionId: tokenResult.connectionId ?? "github-app",
-      connectedByUserId: tokenResult.userId,
+      // BUG FIX: for the GitHub App credential path, resolveGitHubCredential
+      // returns the literal string "github-app" as a userId placeholder when
+      // no existing project has a connected_by_user_id to inherit -- that
+      // string is not a valid uuid, and connected_by_user_id (like
+      // github_connection_id) is a nullable uuid column on projects, so
+      // every first-time GitHub-App-based repository save failed with
+      // Postgres 22P02 (invalid input syntax for type uuid). Use the real,
+      // currently authenticated user (already verified above) instead --
+      // better attribution than a placeholder ever was, and always a valid
+      // uuid. The oauth_legacy path already returns a genuine user id, so
+      // it's untouched. connectionId only ever needed the null it already
+      // is for the github_app path (never actually broken there); the
+      // unnecessary "?? \"github-app\"" coalesce on it is simply removed.
+      connectionId: tokenResult.connectionId,
+      connectedByUserId: usingGitHubApp ? user.id : tokenResult.userId,
       authMode: usingGitHubApp ? "github_app" : "oauth_legacy",
       installationRowId,
     });
