@@ -300,6 +300,86 @@ describe("full_product_audit live verdict consistency", () => {
   });
 });
 
+describe("full_product_audit CRIT-002 authoritative verdict precedence", () => {
+  // SECURITY regression (CRIT-002): reproduces the exact production
+  // divergence -- a persisted verdict of "insufficient_data" (generated
+  // through the canonical verdict pipeline, reflecting the true
+  // evaluated-coverage state at persistence time) coexisting with a scan
+  // row whose raw files_analyzed/files_discovered would make an
+  // independent live recomputation classify as "ready_to_ship". Before
+  // the fix, orchestrate.ts preferred that live recomputation
+  // (`liveVerdict ?? persistedVerdict`), so full_product_audit reported
+  // readiness for a project can_i_deploy correctly refused to clear.
+  // The persisted, authoritative verdict must always win.
+  it("reports the persisted insufficient_data status, not the live-recomputed ready_to_ship status", async () => {
+    const verdict = buildVerdictFixture({
+      projectId: E2E_PROJECT_ID,
+      repositoryId: E2E_PROJECT_ID,
+      scanId: E2E_SCAN_ID,
+      commitSha: E2E_COMMIT_SHA,
+      status: "insufficient_data",
+      score: 100,
+      blockersCount: 0,
+      criticalBlockersCount: 0,
+      highBlockersCount: 0,
+      topPriorities: [],
+      findingsCount: 0,
+      coverageRatio: 0.1,
+    });
+    const verdictDbRow = verdictRow(E2E_PROJECT_ID, verdict, VERDICT_ROW_ID, E2E_ORG_ID);
+
+    const { admin, tables } = createFullProductAuditE2EAdmin({
+      scanFindings: [],
+    });
+
+    const scanIndex = tables.scans!.findIndex((scan) => scan.id === E2E_SCAN_ID);
+    // Scan row itself shows full coverage and a clean score -- exactly
+    // what would let an independent live recomputation call this
+    // "ready_to_ship", even though the verdict that was actually
+    // persisted through the canonical pipeline says insufficient_data.
+    tables.scans![scanIndex] = {
+      ...tables.scans![scanIndex],
+      security_score: 100,
+      files_analyzed: 50,
+      files_discovered: 60,
+    };
+
+    tables.production_verdicts = [verdictDbRow];
+    tables.repository_scan_state = [
+      {
+        repository_id: E2E_PROJECT_ID,
+        organization_id: E2E_ORG_ID,
+        current_verdict_id: VERDICT_ROW_ID,
+        active_scan_id: null,
+      },
+    ];
+
+    const audit = await runFullProductAudit(admin as never, {
+      organizationId: E2E_ORG_ID,
+      projectId: E2E_PROJECT_ID,
+      userId: "e2e-test-user",
+      projectName: "sequrai-app",
+      repositoryFullName: "mohafnh9-cell/sequrai-app",
+      githubRepo: "mohafnh9-cell/sequrai-app",
+      githubRepositoryId: 4242,
+      commitSha: E2E_COMMIT_SHA,
+      waitForReviewMs: 500,
+      waitForSecurityTestsMs: 500,
+      reviewDeps: buildReviewDeps(),
+    });
+
+    const deployVerdict = await getLiveProductionVerdict(admin as never, E2E_PROJECT_ID);
+
+    // Sanity check: the live recomputation genuinely diverges in this
+    // fixture (otherwise this test would not exercise the precedence bug).
+    expect(deployVerdict?.status).toBe("ready_to_ship");
+
+    expect(audit.verdictStatus).toBe("insufficient_data");
+    expect(audit.recommendation).not.toMatch(/ship when your release process is ready/i);
+    expect(audit.recommendation).not.toMatch(/no production blockers were identified/i);
+  });
+});
+
 describe("full_product_audit dual scan regression", () => {
   it("does not let can_i_deploy prefer scan B when current_verdict points to scan A with zero coverage", async () => {
     const verdict = buildVerdictFixture({
