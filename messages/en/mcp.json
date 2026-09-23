@@ -87,6 +87,13 @@
     "chooseNext": "Or pick one:",
     "chooseBlocker": "Choose a blocker to generate its Safe Fix Prompt.",
     "noBlockers": "Nothing is blocking deploy right now — there's nothing I need you to fix.",
+    "noActionable": {
+      "insufficientEvidence": "There's no verified finding to fix yet, because the security review isn't complete enough to call this project clean. That is not the same as \"nothing is wrong\" — run a fuller review first.",
+      "reviewInProgress": "A review is running right now, so there's nothing verified to fix yet. Wait for it to finish, then ask again.",
+      "reviewFailed": "The latest review didn't complete, so I can't tell you there's nothing to fix. Say \"Review again\" first.",
+      "staleOrUnverified": "I can't confirm the last review still matches your latest code, so I can't tell you there's nothing to fix. Say \"Review again\" first.",
+      "notReadyWithoutSpecificFinding": "This project isn't ready to deploy, but I don't have a specific finding to generate a fix for. Say \"Review again\" or ask \"Can I deploy?\" for details."
+    },
     "copyIntoCursor": "Copy this into your code agent:",
     "afterFixSayReviewAgain": "After you apply the fix, say: \"Review again.\"",
     "timeHint": "About {time} to fix.",
@@ -114,7 +121,11 @@
     "confirmedIntroducedHeader": "Confirmed introduced by your latest change:",
     "nextActionLabel": "Next action:",
     "noChange": "No change since your last valid review.",
-    "noPreviousReview": "This is your first valid review — there's nothing to compare yet."
+    "noPreviousReview": "This is your first valid review — there's nothing to compare yet.",
+    "comparisonUnavailable": "I can't compare your latest review with an earlier one, because the latest review isn't a comparable valid review.",
+    "stateDoNotDeploy": "Current status: this project is not ready to deploy.",
+    "stateMoreAnalysis": "Current status: I need more analysis before I can call this project safe.",
+    "notADeployAnswer": "This compares reviews over time — it is not a deploy answer. Ask \"Can I deploy?\" for today's answer."
   },
   "fullProductAudit": {
     "intro": "SequrAI has completed a Full Product Audit — static code review plus security testing.",

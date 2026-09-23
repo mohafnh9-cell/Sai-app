@@ -313,8 +313,13 @@ describe("safe_fix", () => {
     }
   });
 
-  it("reports no_blockers when the verdict has none", async () => {
-    const verdict = buildVerdictFixture({ blockersCount: 0, topPriorities: [] });
+  it("reports no_blockers when the verdict is genuinely ready, current, and has none", async () => {
+    const verdict = buildVerdictFixture({
+      status: "ready_to_ship",
+      score: 96,
+      blockersCount: 0,
+      topPriorities: [],
+    });
     const tables = baseTables({ production_verdicts: [verdictRow(PROJECT_1, verdict)] });
     const result = await safeFix(ctxFor(createFakeAdmin(tables)), {}, t);
     expect(result.status).toBe("no_blockers");

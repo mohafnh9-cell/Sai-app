@@ -99,6 +99,7 @@ export function generateProductionVerdict(input: VerdictEngineInput): {
     findings: normalized,
     securityScore: input.securityScore,
     filesAnalyzed,
+    filesDiscovered: input.filesDiscovered,
   });
 
   const sufficientCoverage = hasSufficientCoverage({

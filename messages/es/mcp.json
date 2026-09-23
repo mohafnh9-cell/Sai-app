@@ -87,6 +87,13 @@
     "chooseNext": "O elige uno:",
     "chooseBlocker": "Elige un bloqueador para generar su prompt de corrección.",
     "noBlockers": "Nada bloquea el despliegue ahora — no hay nada que debas corregir.",
+    "noActionable": {
+      "insufficientEvidence": "Aún no hay ningún hallazgo verificado que corregir, porque la revisión de seguridad no es lo bastante completa para dar este proyecto por limpio. Eso no equivale a \"no hay nada mal\" — ejecuta primero una revisión más completa.",
+      "reviewInProgress": "Hay una revisión en curso, así que todavía no hay nada verificado que corregir. Espera a que termine y vuelve a preguntar.",
+      "reviewFailed": "La última revisión no se completó, así que no puedo decirte que no haya nada que corregir. Di \"Revisa otra vez\" primero.",
+      "staleOrUnverified": "No puedo confirmar que la última revisión siga correspondiendo a tu código más reciente, así que no puedo decirte que no haya nada que corregir. Di \"Revisa otra vez\" primero.",
+      "notReadyWithoutSpecificFinding": "Este proyecto no está listo para desplegar, pero no tengo un hallazgo concreto para generar una corrección. Di \"Revisa otra vez\" o pregunta \"¿Puedo desplegar?\" para más detalles."
+    },
     "copyIntoCursor": "Copia esto en tu agente de código:",
     "afterFixSayReviewAgain": "Después de aplicar la corrección, di: \"Revisa otra vez.\"",
     "timeHint": "Unos {time} para corregirlo.",
@@ -114,7 +121,11 @@
     "confirmedIntroducedHeader": "Confirmados introducidos por tu último cambio:",
     "nextActionLabel": "Siguiente acción:",
     "noChange": "Sin cambios desde tu última revisión válida.",
-    "noPreviousReview": "Esta es tu primera revisión válida — aún no hay nada con qué comparar."
+    "noPreviousReview": "Esta es tu primera revisión válida — aún no hay nada con qué comparar.",
+    "comparisonUnavailable": "No puedo comparar tu última revisión con una anterior, porque la última revisión no es una revisión válida comparable.",
+    "stateDoNotDeploy": "Estado actual: este proyecto no está listo para desplegar.",
+    "stateMoreAnalysis": "Estado actual: necesito más análisis antes de poder dar este proyecto por seguro.",
+    "notADeployAnswer": "Esto compara revisiones a lo largo del tiempo — no es una respuesta de despliegue. Pregunta \"¿Puedo desplegar?\" para la respuesta de hoy."
   },
   "fullProductAudit": {
     "intro": "SequrAI ha completado una Auditoría Completa del Producto — revisión de código y pruebas de seguridad.",

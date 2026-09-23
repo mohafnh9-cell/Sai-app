@@ -9,7 +9,9 @@ import type { McpTranslator } from "../i18n";
 import type { ProjectSelector } from "../project-resolution";
 import { resolveMcpProject } from "../project-resolution";
 import { formatWhatChangedResponse, pickRecommendedAction } from "../personality";
-import { mapVerdictStatusToDecision } from "../decision-mapping";
+import { resolveCanonicalDecisionState } from "../canonical-decision-state";
+import type { DeploymentDecision } from "../decision-mapping";
+import type { FreshnessStatus } from "../staleness";
 
 export type WhatChangedInput = ProjectSelector;
 
@@ -28,6 +30,16 @@ export type WhatChangedResult = {
   improvements: string[];
   regressions: string[];
   nextAction: string;
+  /**
+   * AUTHORITATIVE current decision, identical in semantics to can_i_deploy.
+   * currentVerdict/currentScore above describe the compared review and are
+   * HISTORICAL unless comparisonReflectsCurrentVerdict is true.
+   */
+  currentDecision: DeploymentDecision;
+  authoritativeVerdictStatus: VerdictStatus;
+  reviewInProgress: boolean;
+  freshnessStatus: FreshnessStatus;
+  comparisonReflectsCurrentVerdict: boolean;
   currentCommitSha: string | null;
   previousCommitSha: string | null;
   reviewedAt: string;
@@ -63,6 +75,22 @@ export async function whatChanged(
   const current = valid[valid.length - 1];
   const previous = valid.length > 1 ? valid[valid.length - 2] : null;
 
+  // The decision-facing state comes from the single canonical authority
+  // (same one can_i_deploy uses) -- never hardcoded "not running / current /
+  // not failed" defaults, which previously let this tool tell an agent to
+  // ship while a newer review was running or the verdict was stale.
+  const state = await resolveCanonicalDecisionState(ctx, project.id);
+  const decision: DeploymentDecision = state?.decision ?? "more_analysis_required";
+  const authoritativeStatus: VerdictStatus = state?.verdict.status ?? current.status;
+  const stalenessFootnotes = state?.stalenessFootnotes ?? {
+    reviewInProgress: false,
+    freshnessStatus: "unknown" as const,
+    reviewFailed: false,
+    latestDetectedCommitSha: null,
+  };
+  const comparisonReflectsCurrentVerdict =
+    state != null && current.verdict.scanId === state.verdict.scanId;
+
   const scoreDelta =
     current.score != null && previous?.score != null ? current.score - previous.score : null;
 
@@ -89,25 +117,21 @@ export async function whatChanged(
     regressions.push(`${scoreDelta} pts`);
   }
 
-  const decision = mapVerdictStatusToDecision(current.status);
   const recommendedAction = pickRecommendedAction(t, {
     decision,
-    status: current.status,
-    blockersCount: current.verdict.blockersCount,
-    staleness: {
-      reviewInProgress: false,
-      freshnessStatus: "current",
-      reviewFailed: false,
-      latestDetectedCommitSha: null,
-    },
+    status: authoritativeStatus,
+    blockersCount: state?.verdict.blockersCount ?? current.verdict.blockersCount,
+    staleness: stalenessFootnotes,
   });
 
   const summary = formatWhatChangedResponse(t, {
     hasPrevious: Boolean(previous),
+    comparisonAvailable: comparisonReflectsCurrentVerdict,
     scoreDelta,
     resolved: resolvedBlockers,
     detected: detectedBlockers,
     recommendedAction,
+    currentState: { decision, staleness: stalenessFootnotes },
   });
 
   return {
@@ -125,6 +149,11 @@ export async function whatChanged(
     improvements,
     regressions,
     nextAction: recommendedAction,
+    currentDecision: decision,
+    authoritativeVerdictStatus: authoritativeStatus,
+    reviewInProgress: stalenessFootnotes.reviewInProgress,
+    freshnessStatus: stalenessFootnotes.freshnessStatus,
+    comparisonReflectsCurrentVerdict,
     currentCommitSha: current.commitSha,
     previousCommitSha: previous?.commitSha ?? null,
     reviewedAt: current.generatedAt,
