@@ -149,7 +149,16 @@ export function formatCanIDeployResponse(
     lines.push("");
     lines.push(t("canIDeploy.cantAnswerComfort"));
     lines.push("");
-    lines.push(truncateExplanation(input.executiveSummary || t("canIDeploy.insufficientData")));
+    // SECURITY: never surface the persisted verdict's own executiveSummary
+    // text here. It can be overwritten at verdict-generation time by a
+    // secondary security-decision subsystem's narrative (e.g. "Safe to
+    // deploy based on current authorized security evidence.") even when
+    // this verdict's own status is insufficient_data -- that text would
+    // directly contradict the conservative "I can't answer responsibly
+    // yet" framing two lines above. Insufficient coverage always uses the
+    // fixed, safe canonical message; no persisted narrative is trusted
+    // for this status, regardless of what generated it.
+    lines.push(truncateExplanation(t("canIDeploy.insufficientData")));
     lines.push(...recommendedActionBlock(t, pickRecommendedAction(t, input)));
     lines.push(...stalenessFootnotes(t, input.staleness));
     return buildTextResponse("production_review", t, lines);
