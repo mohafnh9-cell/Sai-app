@@ -66,6 +66,12 @@ type WebhookHealthPayload = {
   summary: { total: number; healthy: number; degraded: number };
 };
 
+type AvailableGitHubInstallation = {
+  installationId: number;
+  accountLogin: string;
+  accountType: string;
+};
+
 type GitHubAppStatusPayload = {
   configured: boolean;
   installation: {
@@ -77,6 +83,7 @@ type GitHubAppStatusPayload = {
     repositorySelection: string;
     installedAt: string;
   } | null;
+  availableInstallations: AvailableGitHubInstallation[];
   webhookUrl: string | null;
 };
 
@@ -111,6 +118,8 @@ export default function IntegrationsPage() {
     "idle"
   );
   const [githubAppStatus, setGithubAppStatus] = useState<GitHubAppStatusPayload | null>(null);
+  const [attachState, setAttachState] = useState<"idle" | "attaching" | "error">("idle");
+  const [attachError, setAttachError] = useState("");
 
   const fetchConnection = useCallback(async () => {
     setConnectionState("loading");
@@ -148,6 +157,38 @@ export default function IntegrationsPage() {
     if (!res.ok || !data) return;
     setGithubAppStatus(data);
   }, []);
+
+  // Explicit, user-initiated action only -- never called automatically.
+  // The server independently re-verifies the installation against GitHub
+  // itself (see POST /api/github/app/attach); installationId here is only
+  // ever a candidate the user picked from the already-verified list this
+  // page received from /api/github/app/status.
+  const attachExistingInstallation = useCallback(
+    async (installationId?: number) => {
+      setAttachState("attaching");
+      setAttachError("");
+      try {
+        const res = await fetch("/api/github/app/attach", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(installationId !== undefined ? { installationId } : {}),
+        });
+        const data = (await res.json().catch(() => null)) as { error?: string; code?: string } | null;
+        if (!res.ok) {
+          setAttachError(data?.error ?? t("connectFailed"));
+          setAttachState("error");
+          return;
+        }
+        setAttachState("idle");
+        await fetchGitHubAppStatus();
+        await fetchConnection();
+      } catch (error) {
+        setAttachError(error instanceof Error ? error.message : t("connectFailed"));
+        setAttachState("error");
+      }
+    },
+    [fetchConnection, fetchGitHubAppStatus, t]
+  );
 
   const fetchRepos = useCallback(async () => {
     setStep("loading");
@@ -454,12 +495,47 @@ export default function IntegrationsPage() {
           {connectionState === "ready" &&
             connection &&
             connection.connection.status !== "connected" && (
-              <Button onClick={() => void connectGitHub()} className="gap-2">
-                <GitBranch className="h-4 w-4" />
-                {connection.connection.status === "migration_reconnection_required"
-                  ? t("reconnectGitHub")
-                  : t("connectGitHubToWorkspace")}
-              </Button>
+              <>
+                <Button onClick={() => void connectGitHub()} className="gap-2">
+                  <GitBranch className="h-4 w-4" />
+                  {connection.connection.status === "migration_reconnection_required"
+                    ? t("reconnectGitHub")
+                    : t("connectGitHubToWorkspace")}
+                </Button>
+
+                {!githubAppStatus?.installation &&
+                  (githubAppStatus?.availableInstallations.length ?? 0) > 0 && (
+                    <div className="mt-3 rounded-lg border border-border/50 bg-secondary/20 p-3 space-y-2">
+                      <p className="text-sm font-medium">GitHub App already installed</p>
+                      <p className="text-xs text-muted-foreground">
+                        This GitHub account already has SequrAI installed. Connect this existing
+                        installation to this workspace instead of reinstalling it.
+                      </p>
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        {githubAppStatus!.availableInstallations.map((available) => (
+                          <Button
+                            key={available.installationId}
+                            variant="outline"
+                            size="sm"
+                            disabled={attachState === "attaching"}
+                            onClick={() => void attachExistingInstallation(available.installationId)}
+                            className="gap-2"
+                          >
+                            {attachState === "attaching" ? (
+                              <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Check className="h-3.5 w-3.5" />
+                            )}
+                            Use existing installation ({available.accountLogin})
+                          </Button>
+                        ))}
+                      </div>
+                      {attachState === "error" && attachError && (
+                        <p className="text-xs text-destructive">{attachError}</p>
+                      )}
+                    </div>
+                  )}
+              </>
             )}
 
           {connectionState === "ready" &&
