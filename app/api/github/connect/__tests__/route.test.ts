@@ -215,6 +215,73 @@ describe("POST /api/github/connect", () => {
     expect(secondBody.projectIds).toEqual(firstBody.projectIds);
   });
 
+  // Pass 3 CRIT-004: a repository name released and reused by a DIFFERENT
+  // repository must never inherit the old repository's project (and with it
+  // its scans, findings and verdicts).
+  describe("repository identity is immutable per project (Pass 3 CRIT-004)", () => {
+    const OLD_PROJECT = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+
+    it("a new repository that reuses an old repository's name starts a NEW project; the old one is untouched", async () => {
+      // Old repository (numeric id 100) was named acme/repo-7 and had history.
+      tables.projects.push({
+        id: OLD_PROJECT,
+        organization_id: ORG_A,
+        name: "repo-7",
+        github_repo: "https://github.com/acme/repo-7",
+        github_repository_id: 100,
+        github_default_branch: "main",
+      });
+
+      // A different repository (numeric id 7) now owns the name acme/repo-7.
+      const res = await POST(postReq({ repos: [{ id: 7 }] }));
+      const body = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(tables.projects).toHaveLength(2);
+      expect(body.projectIds).toHaveLength(1);
+      expect(body.projectIds[0]).not.toBe(OLD_PROJECT);
+
+      const old = tables.projects.find((p) => p.id === OLD_PROJECT)!;
+      expect(old.github_repository_id).toBe(100);
+      const created = tables.projects.find((p) => p.id === body.projectIds[0])!;
+      expect(created.github_repository_id).toBe(7);
+    });
+
+    it("the same repository (same numeric id) reconnected under a renamed URL keeps its project and history", async () => {
+      tables.projects.push({
+        id: OLD_PROJECT,
+        organization_id: ORG_A,
+        name: "old-name",
+        github_repo: "https://github.com/acme/old-name",
+        github_repository_id: 7,
+      });
+
+      const res = await POST(postReq({ repos: [{ id: 7 }] }));
+      const body = await res.json();
+
+      expect(tables.projects).toHaveLength(1);
+      expect(body.projectIds).toEqual([OLD_PROJECT]);
+      expect(tables.projects[0].github_repository_id).toBe(7);
+    });
+
+    it("a legacy project that was never bound to a repository id is reused by URL and bound to it", async () => {
+      tables.projects.push({
+        id: OLD_PROJECT,
+        organization_id: ORG_A,
+        name: "repo-7",
+        github_repo: "https://github.com/acme/repo-7",
+        github_repository_id: null,
+      });
+
+      const res = await POST(postReq({ repos: [{ id: 7 }] }));
+      const body = await res.json();
+
+      expect(tables.projects).toHaveLength(1);
+      expect(body.projectIds).toEqual([OLD_PROJECT]);
+      expect(tables.projects[0].github_repository_id).toBe(7);
+    });
+  });
+
   it("returns 403 github_not_connected when no GitHub credential can be resolved for the organization", async () => {
     state.credential = null;
     const res = await POST(postReq({ repos: [{ id: 1 }] }));
