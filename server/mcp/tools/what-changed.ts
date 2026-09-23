@@ -97,9 +97,17 @@ export async function whatChanged(
   const previousPriorityIds = new Set((previous?.verdict.topPriorities ?? []).map((p) => p.id));
   const currentPriorityIds = new Set(current.verdict.topPriorities.map((p) => p.id));
 
-  const resolvedBlockers = (previous?.verdict.topPriorities ?? [])
-    .filter((p) => !currentPriorityIds.has(p.id))
-    .map((p) => p.title);
+  // A priority missing from the latest review is only "no longer detected"
+  // if that review actually had enough evidence to see it. An insufficient
+  // or failed evaluation (partial engines, low coverage) proves nothing
+  // about findings it could not evaluate, so nothing is reported as resolved.
+  const currentEvidenceIsComplete =
+    current.status !== "insufficient_data" && current.status !== "analysis_failed";
+  const resolvedBlockers = currentEvidenceIsComplete
+    ? (previous?.verdict.topPriorities ?? [])
+        .filter((p) => !currentPriorityIds.has(p.id))
+        .map((p) => p.title)
+    : [];
 
   const detectedBlockers = current.verdict.topPriorities
     .filter((p) => !previousPriorityIds.has(p.id))

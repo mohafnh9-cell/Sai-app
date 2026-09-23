@@ -69,6 +69,13 @@ vi.mock("@/server/attack-simulation/integration/build-verdict-overlay", () => ({
   buildAttackSimulationVerdictOverlay: vi.fn(async () => null),
 }));
 
+// External engines are out of scope here: report them complete so the
+// native-rule signal is what drives partialScanFailure in these tests.
+vi.mock("@/server/security-orchestrator/verdict-integration", () => ({
+  hasIncompleteExternalEngineCoverage: vi.fn(async () => false),
+  loadExternalEngineFindingsForVerdict: vi.fn(async () => []),
+}));
+
 vi.mock("@/server/observability/operational-events", () => ({
   emitOperationalEvent: vi.fn(async () => undefined),
 }));
@@ -86,6 +93,8 @@ vi.mock("@/server/production-memory/record-writes", () => ({
 function buildAdmin(input: {
   existingVerdict?: ProductionVerdictV1 | null;
   immutabilityLockedAt?: string | null;
+  scanMetrics?: Record<string, unknown>;
+  scanOmissions?: unknown[];
 }) {
   let insertCalled = false;
   const scanRow = {
@@ -99,6 +108,8 @@ function buildAdmin(input: {
     files_analyzed: 10,
     files_discovered: 10,
     immutability_locked_at: input.immutabilityLockedAt ?? null,
+    metrics: input.scanMetrics ?? { rulesRun: 47, ruleFailures: 0 },
+    omissions: input.scanOmissions ?? [],
   };
 
   return {
@@ -278,6 +289,38 @@ describe("generateAndPersistProductionVerdict insert-only", () => {
         }),
       })
     );
+  });
+
+  // Pass 3 CRIT-006 / Part 7: a native rule that threw (or never ran) is
+  // missing evidence, so the verdict engine must be told coverage is partial.
+  it("marks the verdict partial when a native rule failed during the scan", async () => {
+    const { admin } = buildAdmin({
+      existingVerdict: null,
+      scanMetrics: { rulesRun: 45, ruleFailures: 2 },
+      scanOmissions: [{ reason: "rule-error", ruleId: "authz.ownership", detail: "TypeError" }],
+    });
+
+    await generateAndPersistProductionVerdict(admin, {
+      organizationId: ORG_ID,
+      projectId: PROJECT_ID,
+      scanId: SCAN_ID,
+    });
+
+    const engineInput = vi.mocked(generateProductionVerdict).mock.calls[0]?.[0];
+    expect(engineInput?.partialScanFailure).toBe(true);
+  });
+
+  it("does not mark a clean scan partial", async () => {
+    const { admin } = buildAdmin({ existingVerdict: null });
+
+    await generateAndPersistProductionVerdict(admin, {
+      organizationId: ORG_ID,
+      projectId: PROJECT_ID,
+      scanId: SCAN_ID,
+    });
+
+    const engineInput = vi.mocked(generateProductionVerdict).mock.calls[0]?.[0];
+    expect(engineInput?.partialScanFailure).toBe(false);
   });
 
   it("returns existing verdict without re-running engine when scan is immutable", async () => {

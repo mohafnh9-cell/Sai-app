@@ -3,6 +3,15 @@ export type ScanCoverageSnapshot = {
   filesDiscovered: number;
 };
 
+/**
+ * Resolves the coverage a verdict may claim for a scan.
+ *
+ * `priorScan` must only be supplied for incremental scans (which legitimately
+ * analyze just the changed files). A full scan that analyzed almost nothing
+ * has not analyzed the repository, and borrowing a previous scan's coverage
+ * would present historical evidence as this scan's. Files that were merely
+ * discovered are never counted as analyzed.
+ */
 export function resolveScanCoverageForVerdict(input: {
   filesAnalyzed: number;
   filesDiscovered: number;
@@ -28,13 +37,5 @@ export function resolveScanCoverageForVerdict(input: {
     };
   }
 
-  if (filesAnalyzed === 0 && filesDiscovered >= 3) {
-    return {
-      filesAnalyzed: filesDiscovered,
-      filesDiscovered,
-      inheritedFromPrior: false,
-    };
-  }
-
-  return { filesAnalyzed, filesDiscovered, inheritedFromPrior: false };
+  return { filesAnalyzed, filesDiscovered: Math.max(filesDiscovered, filesAnalyzed), inheritedFromPrior: false };
 }

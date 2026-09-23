@@ -4,6 +4,7 @@ import { generateProductionVerdict } from "@/brain/production-verdict/engine";
 import type { ProductionVerdictV1 } from "@/brain/production-verdict/schema";
 import { safeParseProductionVerdict } from "@/brain/production-verdict/schema";
 import { resolveScanCoverageForVerdict } from "@/brain/production-verdict/resolve-scan-coverage";
+import { hasIncompleteNativeRuleCoverage, isIncrementalScan } from "@/server/security-scanner/native-coverage";
 import { loadPriorScanCoverage } from "@/server/production-verdict/load-prior-scan-coverage";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -16,11 +17,14 @@ export type LiveVerdictScanRow = {
   files_analyzed?: number | null;
   files_discovered?: number | null;
   repository_id?: string | null;
+  metrics?: unknown;
+  omissions?: unknown;
+  scan_type?: string | null;
 };
 
 /** Keep in sync with all live-verdict scan reads. */
 export const LIVE_VERDICT_SCAN_SELECT =
-  "id, commit_sha, branch, status, security_score, files_analyzed, files_discovered, repository_id";
+  "id, commit_sha, branch, status, security_score, files_analyzed, files_discovered, repository_id, scan_type, metrics, omissions";
 
 export async function loadLiveVerdictScanRow(
   admin: SupabaseClient,
@@ -87,7 +91,9 @@ export async function computeLiveProductionVerdict(
   const coverage = resolveScanCoverageForVerdict({
     filesAnalyzed: scan.files_analyzed ?? 0,
     filesDiscovered: scan.files_discovered ?? 0,
-    priorScan: priorCoverage,
+    priorScan: isIncrementalScan({ scan_type: scan.scan_type, metrics: scan.metrics })
+      ? priorCoverage
+      : null,
   });
 
   const { data: findings } = await admin
@@ -110,7 +116,9 @@ export async function computeLiveProductionVerdict(
     findings: findings ?? [],
     previousScore: input.persisted?.previousScore ?? null,
     previousBlockersCount: input.persisted?.blockersCount,
-    partialScanFailure: scan.status !== "completed",
+    partialScanFailure:
+      scan.status !== "completed" ||
+      hasIncompleteNativeRuleCoverage({ metrics: scan.metrics, omissions: scan.omissions }),
     aiExecutiveSummary: input.persisted?.executiveSummary ?? null,
   });
 
