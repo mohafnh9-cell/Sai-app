@@ -228,6 +228,17 @@ export function buildExecutiveSummaryLine(result: {
   counts: { critical: number; high: number };
   topRisks: ConsolidatedAuditFinding[];
 }): string {
+  // SECURITY (CRIT-002): a zero-blocker count is not the same claim as
+  // "safe to ship" -- it only means nothing critical/high was FOUND in
+  // whatever was actually evaluated. When the authoritative verdict
+  // itself says coverage was insufficient or analysis failed, "no
+  // blockers found" reads as a green light it has not earned (this is
+  // the exact production reproduction: score 100, zero findings,
+  // insufficient_data). This branch must run before the blockers===0
+  // check below, which has no awareness of coverage at all.
+  if (result.verdictStatus === "insufficient_data" || result.verdictStatus === "analysis_failed") {
+    return "SequrAI no ha revisado suficiente de tu repositorio todavía para responder con responsabilidad.";
+  }
   const blockers = result.counts.critical + result.counts.high;
   if (blockers === 0) {
     return "SequrAI no encontró bloqueadores de producción basados en la evidencia actual.";

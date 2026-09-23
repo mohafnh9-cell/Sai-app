@@ -218,6 +218,48 @@ describe("formatFullProductAuditResponse", () => {
     expect(formatted.summary).not.toContain("Rotate the credential if necessary");
   });
 
+  // SECURITY regression (CRIT-002): a verdict whose coverage was
+  // insufficient (or whose analysis failed) must never render as an
+  // all-clear -- neither via the headline, the executive summary line,
+  // nor the recommendation -- even when zero critical/high findings
+  // were found in whatever partial evidence exists. This mirrors the
+  // exact production reproduction: score 100, zero findings,
+  // verdictStatus "insufficient_data".
+  describe("SECURITY: insufficient coverage never renders as an all-clear", () => {
+    for (const status of ["insufficient_data", "analysis_failed"] as const) {
+      it(`does not claim readiness in headline, executive summary, or recommendation for "${status}"`, () => {
+        const formatted = formatFullProductAuditResponse(
+          baseResult({
+            verdictStatus: status,
+            score: 100,
+            topRisks: [],
+            findings: [],
+            recommendation: "placeholder",
+            counts: {
+              critical: 0,
+              high: 0,
+              medium: 0,
+              low: 0,
+              info: 0,
+              confirmed: 0,
+              likely: 0,
+              potential: 0,
+              notReproduced: 0,
+              falsePositive: 0,
+              notApplicable: 0,
+            },
+          }),
+          t
+        );
+
+        expect(formatted.summary).not.toContain("READY TO SHIP");
+        expect(formatted.summary).not.toMatch(/no encontr[oó] bloqueadores/i);
+        expect(formatted.summary).not.toMatch(/no production blockers were identified/i);
+        expect(formatted.summary).toMatch(/no ha revisado suficiente|hasn't reviewed enough/i);
+      });
+    }
+  });
+
   it("keeps internal execution and authorization terminology out of MCP data", () => {
     const formatted = formatFullProductAuditResponse(baseResult({}), t);
     const serialized = JSON.stringify(formatted);

@@ -64,6 +64,15 @@ function buildRecommendation(input: {
   if (input.counts.confirmed > 0) {
     return "Do not deploy until confirmed vulnerabilities are fixed. Re-run Full Product Audit after applying fixes.";
   }
+  // SECURITY (CRIT-002): must run before the topRisks-empty fallback
+  // below, which otherwise reads as an all-clear ("No production
+  // blockers were identified") for a verdict whose own status says
+  // coverage was insufficient or analysis failed to complete -- exactly
+  // the production reproduction (score 100, zero findings, but
+  // insufficient_data) can_i_deploy correctly refused to call ready.
+  if (input.verdictStatus === "insufficient_data" || input.verdictStatus === "analysis_failed") {
+    return "SequrAI hasn't reviewed enough of your repository yet to give a responsible deploy recommendation. Re-run Full Product Audit once evidence is complete.";
+  }
   if (input.verdictStatus === "ready_to_ship") {
     return "SequrAI found no confirmed dynamic vulnerabilities blocking deploy. Ship when your release process is ready.";
   }
@@ -312,7 +321,20 @@ export async function runFullProductAudit(
     scan: verdictScanRow,
     persisted: persistedVerdict,
   });
-  const verdict = liveVerdict ?? persistedVerdict;
+  // SECURITY (CRIT-002): the persisted verdict is this system's sole
+  // decision authority -- the exact same contract can_i_deploy uses via
+  // getAuthoritativeProductionVerdict(). computeLiveProductionVerdict()
+  // independently re-derives coverage/status from raw scan+findings data
+  // and can disagree with what was actually persisted through the
+  // canonical verdict-generation pipeline (observed in production: a live
+  // recomputation classified as "ready_to_ship" for a scan whose properly
+  // persisted verdict was "insufficient_data"). A live recomputation must
+  // never be preferred over the authoritative persisted verdict -- doing
+  // so let this tool report readiness can_i_deploy correctly refused to
+  // claim, for the identical project/commit/evidence. liveVerdict is kept
+  // only as a diagnostic fallback for the (legitimate) case where no
+  // verdict has been persisted yet at all.
+  const verdict = persistedVerdict ?? liveVerdict;
   const priorityFindingIds = verdict?.topPriorities.flatMap((priority) => priority.findingIds) ?? [];
 
   const consolidated = enrichAuditFindingUserFacing(
