@@ -69,7 +69,6 @@ type WebhookHealthPayload = {
 type AvailableGitHubInstallation = {
   installationId: number;
   accountLogin: string;
-  accountType: string;
 };
 
 type GitHubAppStatusPayload = {
@@ -518,7 +517,17 @@ export default function IntegrationsPage() {
                             variant="outline"
                             size="sm"
                             disabled={attachState === "attaching"}
-                            onClick={() => void attachExistingInstallation(available.installationId)}
+                            onClick={() =>
+                              void attachExistingInstallation(
+                                // Only one verified candidate exists -- the
+                                // server already knows which one; no need
+                                // to send a selector at all. With more than
+                                // one, the id IS the user's explicit choice.
+                                githubAppStatus!.availableInstallations.length === 1
+                                  ? undefined
+                                  : available.installationId
+                              )
+                            }
                             className="gap-2"
                           >
                             {attachState === "attaching" ? (
