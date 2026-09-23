@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getProductionReviewState } from "@/server/review-cancel/get-production-review-state";
+import { expireStaleActiveReviewsForRepository } from "@/server/review-recovery/stale-review";
 import {
   getAttackCampaignByScanId,
   getAttackCampaignById,
@@ -21,14 +22,64 @@ function isTerminalReviewStatus(status: string): boolean {
   return status === "completed" || status === "failed" || status === "cancelled" || status === "stale";
 }
 
+const TERMINAL_SCAN_ROW_STATUSES = new Set(["completed", "failed", "cancelled"]);
+
+/**
+ * Waits for one specific scan -- never "whatever review is newest for the
+ * project". Another scan reaching a terminal state (a concurrent review, an
+ * automatic push review, a retry) must not satisfy this caller's wait, or
+ * the caller would silently present the wrong scan's evidence as the review
+ * it asked for. If the scan cannot be found under this project, the result
+ * is status "missing" (a safe failure), never a substitute.
+ */
+async function pollUntilScanTerminal(
+  admin: SupabaseClient,
+  input: { projectId: string; scanId: string },
+  options: { maxMs: number; intervalMs: number }
+): Promise<{ scanId: string | null; status: string; timedOut: boolean }> {
+  const startedAt = Date.now();
+  let lastStatus = "unknown";
+
+  do {
+    await expireStaleActiveReviewsForRepository(admin, input.projectId).catch(() => undefined);
+
+    const { data: scan } = await admin
+      .from("scans")
+      .select("id, status, repository_id")
+      .eq("id", input.scanId)
+      .maybeSingle();
+
+    if (!scan || (scan.repository_id as string | null) !== input.projectId) {
+      return { scanId: null, status: "missing", timedOut: false };
+    }
+
+    lastStatus = String(scan.status);
+    if (TERMINAL_SCAN_ROW_STATUSES.has(lastStatus)) {
+      return { scanId: scan.id as string, status: lastStatus, timedOut: false };
+    }
+
+    await sleep(options.intervalMs);
+  } while (Date.now() - startedAt < options.maxMs);
+
+  return { scanId: input.scanId, status: lastStatus, timedOut: true };
+}
+
 export async function pollUntilReviewTerminal(
   admin: SupabaseClient,
-  input: { organizationId: string; projectId: string },
+  input: { organizationId: string; projectId: string; scanId?: string },
   options?: { maxMs?: number; intervalMs?: number }
 ): Promise<{ scanId: string | null; status: string; timedOut: boolean }> {
   const maxMs = options?.maxMs ?? DEFAULT_REVIEW_POLL_MS;
   const intervalMs = options?.intervalMs ?? DEFAULT_INTERVAL_MS;
   const startedAt = Date.now();
+
+  if (input.scanId) {
+    return pollUntilScanTerminal(
+      admin,
+      { projectId: input.projectId, scanId: input.scanId },
+      { maxMs, intervalMs }
+    );
+  }
 
   while (Date.now() - startedAt < maxMs) {
     const state = await getProductionReviewState(admin, {

@@ -22,6 +22,7 @@ import {
   enrichAuditFindingUserFacing,
 } from "./finding-user-copy";
 import { pollUntilReviewTerminal } from "./poll";
+import { bindVerdictToScan } from "./verdict-binding";
 import { ensureSecurityTestsForAudit } from "./run-security-tests";
 import { resolveDynamicTargetForAudit } from "./resolve-dynamic-target";
 import { loadAttackChainsSummary } from "./load-attack-chains-summary";
@@ -72,6 +73,11 @@ function buildRecommendation(input: {
   // insufficient_data) can_i_deploy correctly refused to call ready.
   if (input.verdictStatus === "insufficient_data" || input.verdictStatus === "analysis_failed") {
     return "SequrAI hasn't reviewed enough of your repository yet to give a responsible deploy recommendation. Re-run Full Product Audit once evidence is complete.";
+  }
+  // No verdict is persisted for this scan yet: a missing decision is not a
+  // clean one, so never fall through to the topRisks-empty all-clear below.
+  if (input.verdictStatus === null) {
+    return "SequrAI doesn't have a completed verdict for this review yet, so it can't give a deploy recommendation. Run Full Product Audit again shortly.";
   }
   if (input.verdictStatus === "ready_to_ship") {
     return "SequrAI found no confirmed dynamic vulnerabilities blocking deploy. Ship when your release process is ready.";
@@ -149,15 +155,31 @@ export async function runFullProductAudit(
 
   let reviewTimedOut = false;
   if (reviewOutcome.outcome === "queued" || reviewOutcome.outcome === "processing") {
+    if (!scanId) {
+      throw new FullProductAuditError("No scan available after review", "review_failed", 422);
+    }
+    // Bound to the scan this audit started: a different scan reaching a
+    // terminal state (concurrent review, push review, retry) must never
+    // satisfy this wait or be silently substituted as "the" review.
     const poll = await pollUntilReviewTerminal(
       admin,
-      { organizationId: input.organizationId, projectId: input.projectId },
+      { organizationId: input.organizationId, projectId: input.projectId, scanId },
       { maxMs: input.waitForReviewMs ?? 300_000 }
     );
-    scanId = poll.scanId ?? scanId;
+    if (poll.status === "missing" || poll.scanId !== scanId) {
+      throw new FullProductAuditError(
+        "The review started for this audit could not be found",
+        "review_failed",
+        422
+      );
+    }
     reviewTimedOut = poll.timedOut;
-    if (poll.status === "failed") {
-      throw new FullProductAuditError("Production review failed", "review_failed", 422);
+    if (poll.status === "failed" || poll.status === "cancelled") {
+      throw new FullProductAuditError(
+        poll.status === "cancelled" ? "Production review was cancelled" : "Production review failed",
+        "review_failed",
+        422
+      );
     }
   }
 
@@ -305,11 +327,17 @@ export async function runFullProductAudit(
           )
         : [];
 
-  const persistedVerdict = await getCurrentProductionVerdict(
+  // The authoritative verdict must describe THIS audit's scan. The
+  // project-level "current" verdict can belong to a different scan (an
+  // older one whose successor's verdict is still being generated, or a
+  // concurrent review), and pairing its status/score with this scan's
+  // findings would present stale evidence as the result of this audit.
+  const currentProjectVerdict = await getCurrentProductionVerdict(
     admin,
     input.organizationId,
     input.projectId
   );
+  const persistedVerdict = bindVerdictToScan(currentProjectVerdict, scanId);
   const { data: freshScanRow } = await admin
     .from("scans")
     .select(`${LIVE_VERDICT_SCAN_SELECT}, metrics`)
@@ -321,20 +349,26 @@ export async function runFullProductAudit(
     scan: verdictScanRow,
     persisted: persistedVerdict,
   });
-  // SECURITY (CRIT-002): the persisted verdict is this system's sole
-  // decision authority -- the exact same contract can_i_deploy uses via
-  // getAuthoritativeProductionVerdict(). computeLiveProductionVerdict()
-  // independently re-derives coverage/status from raw scan+findings data
-  // and can disagree with what was actually persisted through the
-  // canonical verdict-generation pipeline (observed in production: a live
-  // recomputation classified as "ready_to_ship" for a scan whose properly
-  // persisted verdict was "insufficient_data"). A live recomputation must
-  // never be preferred over the authoritative persisted verdict -- doing
-  // so let this tool report readiness can_i_deploy correctly refused to
-  // claim, for the identical project/commit/evidence. liveVerdict is kept
-  // only as a diagnostic fallback for the (legitimate) case where no
-  // verdict has been persisted yet at all.
-  const verdict = persistedVerdict ?? liveVerdict;
+  // AUTHORITATIVE: the persisted verdict for THIS scan -- the same contract
+  // can_i_deploy uses via getAuthoritativeProductionVerdict (CRIT-002).
+  // DIAGNOSTIC: the live recomputation is only ever reported as divergence
+  // metadata, never used to decide. When no verdict has been persisted for
+  // this scan yet there is no authoritative decision for this evidence, so
+  // none is claimed (status stays null and the response says so) rather than
+  // borrowing an unpersisted recomputation or another scan's verdict.
+  const verdict = persistedVerdict;
+  const verdictDiagnostics: NonNullable<FullProductAuditResult["verdictDiagnostics"]> = {
+    authoritativeVerdictScanId: persistedVerdict?.scanId ?? null,
+    liveVerdictStatus: liveVerdict?.status ?? null,
+    consistency: !persistedVerdict
+      ? "not_available"
+      : liveVerdict &&
+          (liveVerdict.status !== persistedVerdict.status ||
+            liveVerdict.score !== persistedVerdict.score ||
+            liveVerdict.blockersCount !== persistedVerdict.blockersCount)
+        ? "diverged"
+        : "consistent",
+  };
   const priorityFindingIds = verdict?.topPriorities.flatMap((priority) => priority.findingIds) ?? [];
 
   const consolidated = enrichAuditFindingUserFacing(
@@ -431,6 +465,7 @@ export async function runFullProductAudit(
     safeFixAvailable: Boolean(safeFixBlockerId),
     safeFixBlockerId,
     recommendation,
+    verdictDiagnostics,
     summary: "",
     timedOut,
     nextAction,
