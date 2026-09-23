@@ -3,6 +3,10 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { loadProtectionContext } from "@/server/continuous-protection/protection-context";
 import {
+  deriveDeployAlertDecision,
+  type DeployAlertDecisionInput,
+} from "./deploy-alert-decision";
+import {
   buildDeployBlockedCandidate,
   buildProtectionAlertCandidates,
   loadAlertEvaluationContext,
@@ -99,18 +103,15 @@ export async function evaluateDeployCheckAlert(
     organizationId: string;
     projectId: string;
     projectName: string;
-    deployAnswer: "go" | "no_go" | "not_yet";
-    primaryWorry: string | null;
+    /** The canonical decision (as answered by can_i_deploy), not a re-derived one. */
+    decision: DeployAlertDecisionInput;
   }
 ): Promise<void> {
-  if (input.deployAnswer === "go") {
+  const derived = deriveDeployAlertDecision(input.projectId, input.decision);
+  if (!derived) {
     return;
   }
-  const candidate = buildDeployBlockedCandidate(
-    input.projectId,
-    input.projectName,
-    input.primaryWorry
-  );
+  const candidate = buildDeployBlockedCandidate(input.projectName, derived);
   await deliverAlertCandidate(admin, {
     organizationId: input.organizationId,
     projectId: input.projectId,

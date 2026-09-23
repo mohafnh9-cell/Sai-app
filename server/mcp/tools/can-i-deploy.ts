@@ -37,6 +37,8 @@ export type CanIDeployResult = {
   liveScore?: number | null;
   project: { id: string; name: string; repositoryFullName: string | null };
   verdictStatus: string;
+  /** Scan the authoritative verdict was generated from. */
+  verdictScanId: string;
   score: number | null;
   scoreDelta: number | null;
   confidenceBand: "high" | "medium" | "low";
@@ -121,6 +123,7 @@ export async function canIDeploy(
       liveScore: authoritative.liveVerdict?.score ?? null,
       project,
       verdictStatus: verdict.status,
+    verdictScanId: verdict.scanId,
       score: verdict.score,
       scoreDelta: verdict.scoreDelta,
       confidenceBand: verdict.confidence,
@@ -187,6 +190,7 @@ export async function canIDeploy(
     liveScore: authoritative.liveVerdict?.score ?? null,
     project,
     verdictStatus: verdict.status,
+    verdictScanId: verdict.scanId,
     score: verdict.score,
     scoreDelta: verdict.scoreDelta,
     confidenceBand: verdict.confidence,

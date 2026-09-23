@@ -23,6 +23,7 @@ import {
 } from "./finding-user-copy";
 import { pollUntilReviewTerminal } from "./poll";
 import { bindVerdictToScan } from "./verdict-binding";
+import { waitForScanVerdict } from "@/server/production-verdict/evidence-finalization";
 import { ensureSecurityTestsForAudit } from "./run-security-tests";
 import { resolveDynamicTargetForAudit } from "./resolve-dynamic-target";
 import { loadAttackChainsSummary } from "./load-attack-chains-summary";
@@ -51,6 +52,8 @@ export type RunFullProductAuditInput = {
   branch?: string;
   waitForReviewMs?: number;
   waitForSecurityTestsMs?: number;
+  /** Bounded wait for a scan's verdict while its engine jobs finish. */
+  waitForVerdictMs?: number;
   dynamicVerificationDecision?: DynamicVerificationDecision;
   reviewDeps?: import("@/server/review-now/trigger-review").TriggerReviewDependencies;
   /** Phase 34 P0: required to bill the dynamic-testing stage (see run-security-tests.ts). */
@@ -349,6 +352,17 @@ export async function runFullProductAudit(
     scan: verdictScanRow,
     persisted: persistedVerdict,
   });
+  // Engine jobs finish asynchronously, and the verdict is generated only when
+  // they have all reached a terminal state. Wait (bounded, state-aware) for
+  // that instead of reporting "no verdict" for a scan whose engines are about
+  // to finish.
+  await waitForScanVerdict(admin, {
+    organizationId: input.organizationId,
+    projectId: input.projectId,
+    scanId,
+    maxMs: input.waitForVerdictMs ?? 20_000,
+  }).catch(() => undefined);
+
   // AUTHORITATIVE: the persisted verdict for THIS scan -- the same contract
   // can_i_deploy uses via getAuthoritativeProductionVerdict (CRIT-002).
   // DIAGNOSTIC: the live recomputation is only ever reported as divergence

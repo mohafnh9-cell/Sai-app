@@ -1,3 +1,5 @@
+import { getCurrentProductionVerdict } from "@/server/production-verdict/service";
+import { isHistoricalAlert } from "@/server/security-alerts/deploy-alert-decision";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/server/security-scanner/admin-client";
@@ -22,8 +24,15 @@ export async function GET(
 
   const admin = createAdminClient();
   const rows = await getOpenAlertsForProject(admin, projectId, 20);
+  // Deploy alerts describe one decision; mark those that no longer match the
+  // authoritative verdict's scan as historical instead of presenting them as current.
+  const currentVerdict = await getCurrentProductionVerdict(admin, access.project.organization_id, projectId);
+  const currentScanId = currentVerdict?.scanId ?? null;
   const alerts = sortAlertsByPriority(
-    rows.map(mapAlertRow).map((a) => ({ ...a, priority: severityProfile(a.severity).priority }))
+    rows
+      .map(mapAlertRow)
+      .map((a) => ({ ...a, priority: severityProfile(a.severity).priority }))
+      .map((a) => ({ ...a, historical: isHistoricalAlert(a, currentScanId) }))
   );
 
   return NextResponse.json({ projectId, alerts });

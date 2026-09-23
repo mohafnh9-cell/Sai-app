@@ -1,3 +1,4 @@
+import { resolveTargetFindings } from "./verification-evidence";
 import "server-only";
 
 import {
@@ -159,6 +160,15 @@ async function generateSafeFixInner(
 
   await supersedeOpenFixesForRecommendation(admin, input.projectId, recommendationId);
 
+  // Preserve the exact finding identity this fix targets, so verification can
+  // later prove THOSE findings are gone rather than infer it from counts.
+  const resolvedTargets = await resolveTargetFindings(admin, {
+    organizationId: input.organizationId,
+    projectId: input.projectId,
+    baselineScanId: verdict.scanId,
+    recommendationId,
+  }).catch(() => ({ targets: [], fullyResolved: false }));
+
   const record = await persistGeneratedSafeFix(admin, {
     organizationId: input.organizationId,
     projectId: input.projectId,
@@ -174,6 +184,9 @@ async function generateSafeFixInner(
       score: verdict.score,
       blockersCount: verdict.blockersCount,
       priorityTitle: priority?.title ?? promptInput.issueTitle,
+      // Empty when identity could not be fully resolved; verification then
+      // re-resolves from the baseline scan and otherwise fails closed.
+      targetFindings: resolvedTargets.fullyResolved ? resolvedTargets.targets : [],
     },
   });
 

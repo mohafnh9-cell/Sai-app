@@ -1,3 +1,4 @@
+import { decisionScanIdFromDedupeKey } from "./deploy-alert-decision";
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -289,5 +290,6 @@ export function mapAlertRow(row: Record<string, unknown>): FounderAlertRecord {
     createdAt: row.created_at as string,
     readAt: (row.read_at as string) ?? null,
     acknowledgedAt: (row.acknowledged_at as string) ?? null,
+    decisionScanId: decisionScanIdFromDedupeKey(row.dedupe_key as string | null),
   };
 }

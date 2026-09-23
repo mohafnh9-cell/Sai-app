@@ -14,6 +14,10 @@ import type { Confidence, Finding as ScannerFinding, Severity } from "@/features
 import { buildFindingCorrelationKeyFromParts } from "@/lib/correlation/finding-identity";
 import { generateAndPersistProductionVerdict } from "@/server/production-verdict/service";
 import {
+  finalizeVerdictWhenEvidenceComplete,
+  markVerdictEvidenceReady,
+} from "@/server/production-verdict/evidence-finalization";
+import {
   assertScanContinues,
   ScanCancelledError,
 } from "@/server/review-cancel/review-abort";
@@ -519,15 +523,33 @@ export class InlineScanJobRunner implements ScanJobRunner {
 
         try {
           await assertScanContinues(this.supabase, context.scanId);
-          const verdict = await generateAndPersistProductionVerdict(this.supabase, {
+          // This scan's own pipeline is finished. External engine jobs run
+          // asynchronously on the security worker, so the verdict is generated
+          // only once every engine job is terminal -- by this call if they
+          // already are, otherwise by the job that finishes last. Generating it
+          // here unconditionally froze insufficient_data while engines were
+          // still running (see production-verdict/evidence-finalization.ts).
+          await markVerdictEvidenceReady(this.supabase, {
+            scanId: context.scanId,
+            organizationId: context.organizationId,
+            securityDecision: securityDecisionReport,
+          });
+          const outcome = await finalizeVerdictWhenEvidenceComplete(this.supabase, {
             organizationId: context.organizationId,
             projectId: context.repositoryId,
             scanId: context.scanId,
             scanJobId: context.scanJobId,
             securityDecisionReport,
           });
-          if (!verdict) {
-            throw new Error(`VERDICT_NOT_PERSISTED: scan=${context.scanId}`);
+          if (outcome.status === "deferred") {
+            logScan("info", "verdict_deferred_until_engines_complete", {
+              scanId: context.scanId,
+              repositoryId: context.repositoryId,
+              reason: outcome.reason,
+              pendingEngines: outcome.pendingEngines,
+            });
+          } else if (outcome.status !== "generated" && outcome.status !== "already_exists") {
+            throw new Error(`VERDICT_NOT_PERSISTED: scan=${context.scanId} (${outcome.reason})`);
           }
         } catch (error) {
           await this.updateScan(context.scanId, {

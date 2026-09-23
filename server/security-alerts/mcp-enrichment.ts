@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { sortAlertsByPriority } from "./noise-policy";
 import { mapAlertRow } from "./lifecycle";
+import { isHistoricalAlert } from "./deploy-alert-decision";
 import { getOpenAlertsForProject } from "./evaluate-project";
 import type { FounderAlertRecord } from "./types";
 import { severityProfile } from "./severity";
@@ -11,6 +12,10 @@ type McpEnrichable = {
   summary?: string;
   project?: { id?: string; name?: string };
   nextAction?: string;
+  /** can_i_deploy / production_history: the authoritative verdict's scan. */
+  verdictScanId?: string | null;
+  currentVerdictScanId?: string | null;
+  deploymentRecommendation?: "SHIP_IT" | "DO_NOT_DEPLOY" | "MORE_ANALYSIS_REQUIRED";
 };
 
 export type McpAlertSurface = {
@@ -28,13 +33,22 @@ export type McpAlertSurface = {
 
 export async function loadMcpAlertSurface(
   admin: SupabaseClient,
-  projectId: string
+  projectId: string,
+  /** Scan of the authoritative verdict; alerts for any other decision are historical. */
+  currentScanId: string | null = null
 ): Promise<McpAlertSurface> {
   const rows = await getOpenAlertsForProject(admin, projectId, 5);
   const openAlerts = sortAlertsByPriority(
-    rows.map(mapAlertRow).map((a) => ({ ...a, priority: severityProfile(a.severity).priority }))
+    rows
+      .map(mapAlertRow)
+      .map((a) => ({ ...a, priority: severityProfile(a.severity).priority }))
+      .map((a) => ({ ...a, historical: isHistoricalAlert(a, currentScanId) }))
   );
-  const primary = openAlerts.find((a) => a.severity === "critical") ?? openAlerts[0] ?? null;
+  // Only alerts that describe the CURRENT decision may drive guidance. A
+  // superseded deploy alert stays visible (marked historical) but is never
+  // the primary alert, the worry signal, or the founder guidance.
+  const current = openAlerts.filter((a) => !a.historical);
+  const primary = current.find((a) => a.severity === "critical") ?? current[0] ?? null;
 
   const shouldWorry = Boolean(primary && (primary.severity === "critical" || primary.severity === "high"));
 
@@ -77,7 +91,11 @@ export async function enrichMcpToolResultWithAlerts(
   const projectId = result.project?.id;
   if (!projectId) return result;
 
-  const surface = await loadMcpAlertSurface(admin, projectId);
+  const surface = await loadMcpAlertSurface(
+    admin,
+    projectId,
+    result.verdictScanId ?? result.currentVerdictScanId ?? null
+  );
 
   if (toolName === "can_i_deploy") {
     let summary = result.summary ?? "";
@@ -86,7 +104,13 @@ export async function enrichMcpToolResultWithAlerts(
       if (unread) {
         summary = `${alertOpeningBlock(surface.primaryAlert)}\n\n${summary}`;
       }
-    } else if (!surface.shouldWorry && summary.length > 0) {
+    } else if (
+      !surface.shouldWorry &&
+      summary.length > 0 &&
+      result.deploymentRecommendation === "SHIP_IT"
+    ) {
+      // "Nothing urgent" is only a truthful lead when the canonical decision
+      // is a clean ship; it must never precede "I can't answer responsibly yet".
       summary = `No — nothing urgent.\n\n${summary}`;
     }
     return { ...result, summary, alerts: surface };

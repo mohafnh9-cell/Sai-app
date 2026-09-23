@@ -102,6 +102,9 @@ export async function reconcileOrphanScanJobWithTerminalScan(
         projectId: job.project_id ?? (input.scan.repository_id as string),
         scanId: input.scan.id as string,
         scanJobId: job.id,
+        // The runner that would have finalized this scan is gone: generate
+        // from whatever evidence exists rather than wait forever.
+        mode: "recovery",
       }).catch(() => undefined);
     }
   }

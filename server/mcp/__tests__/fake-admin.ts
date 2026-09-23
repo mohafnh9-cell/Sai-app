@@ -47,6 +47,7 @@ class FakeQuery
   private orderCol?: string;
   private ascending = true;
   private limitN?: number;
+  private rangeFrom = 0;
   private errorToReturn: { message: string; code?: string } | null = null;
   private pendingRows: Row[] | null = null;
   private pendingUpdateValues: Row | null = null;
@@ -97,6 +98,11 @@ class FakeQuery
   }
   limit(n: number) {
     this.limitN = n;
+    return this;
+  }
+  range(from: number, to: number) {
+    this.rangeFrom = from;
+    this.limitN = to - from + 1;
     return this;
   }
 
@@ -175,7 +181,7 @@ class FakeQuery
         return 0;
       });
     }
-    if (this.limitN != null) result = result.slice(0, this.limitN);
+    if (this.limitN != null) result = result.slice(this.rangeFrom, this.rangeFrom + this.limitN);
     return result;
   }
 

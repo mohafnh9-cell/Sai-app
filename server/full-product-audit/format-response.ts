@@ -10,6 +10,7 @@ import {
   buildStaticOnlySummary,
   skippedReasonLabel,
 } from "./dynamic-verification-flow";
+import { requiresCredentialRemediation } from "./finding-classification";
 import { buildExecutiveSummaryLine } from "./finding-user-copy";
 import type { ConsolidatedAuditFinding, FullProductAuditResult } from "./types";
 
@@ -208,12 +209,10 @@ function appendFinalVerdict(lines: string[], t: McpTranslator, result: FullProdu
     lines.push(`⚠ ${t("fullProductAudit.report.unknownLimitedDynamic")}`);
   }
 
-  const hasSecretFindings = result.findings.some(
-    (finding) =>
-      finding.category?.toLowerCase().includes("secret") ||
-      finding.title.toLowerCase().includes("secret") ||
-      finding.title.toLowerCase().includes("credential")
-  );
+  // Credential remediation requires an actual secret-rule finding (structured
+  // rule id), never a category/title substring: a coverage baseline titled
+  // "secrets coverage evaluated" is not a credential finding.
+  const hasSecretFindings = result.findings.some(requiresCredentialRemediation);
   const hasActionableRisks = result.topRisks.length > 0;
 
   if (hasActionableRisks || hasSecretFindings) {

@@ -100,6 +100,22 @@ export function deployAnswerFromVerdictStatus(status: VerdictStatus): DeployAnsw
   }
 }
 
+/**
+ * The deploy answer recorded in production memory must be the canonical
+ * decision can_i_deploy actually gave, not a second status-only mapping that
+ * ignores a running review, a failed review, or staleness (which would record
+ * "go" while can_i_deploy answered MORE_ANALYSIS_REQUIRED). Status only adds
+ * the "close, but not yet" nuance within a do-not-deploy decision.
+ */
+export function deployAnswerFromCanonicalDecision(
+  deploymentRecommendation: "SHIP_IT" | "DO_NOT_DEPLOY" | "MORE_ANALYSIS_REQUIRED",
+  status: VerdictStatus
+): DeployAnswer {
+  if (deploymentRecommendation === "SHIP_IT") return "go";
+  if (deploymentRecommendation === "MORE_ANALYSIS_REQUIRED") return "not_yet";
+  return status === "almost_ready" ? "not_yet" : "no_go";
+}
+
 export function protectionStatusFromVerdict(status: VerdictStatus): ProtectionStatus {
   switch (status) {
     case "ready_to_ship":

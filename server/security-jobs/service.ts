@@ -246,4 +246,15 @@ export async function transitionSecurityJob(
   if (updateError) {
     throw new Error(`Could not transition security job ${input.jobId}: ${updateError.message}`);
   }
+
+  // An engine reaching a terminal state is the event that can complete a
+  // scan's evidence. If it is the last one, this generates the verdict (see
+  // production-verdict/evidence-finalization.ts). Dynamic import: the verdict
+  // pipeline depends on this module's data, not the other way around.
+  if (isTerminal) {
+    const { finalizeVerdictForTerminalSecurityJob } = await import(
+      "@/server/production-verdict/evidence-finalization"
+    );
+    await finalizeVerdictForTerminalSecurityJob(admin, input.jobId);
+  }
 }
