@@ -24,6 +24,7 @@ import {
   type RepositorySnapshot,
 } from "@/lib/github/repository-service";
 import { commitsMatch } from "@/lib/repository-sync/commits-match";
+import { releaseActiveScan, writeScanStatePointer } from "@/server/production-verdict/scan-state-writer";
 import {
   mergeReviewPipelineMetadata,
   reviewPhaseProgressForScan,
@@ -841,15 +842,36 @@ export class InlineScanJobRunner implements ScanJobRunner {
     };
   }
 
+  /**
+   * State writes go through the ordered writer: a finishing scan only
+   * clears an active-scan marker that is still its own, and only moves the
+   * current-scan pointer forward -- never over a newer scan or a
+   * non-default-branch scan's way onto the project-level pointer.
+   */
   private async updateState(context: ScanContext, values: Record<string, unknown>) {
-    const { error } = await this.supabase.from("repository_scan_state").upsert(
-      {
-        repository_id: context.repositoryId,
-        organization_id: context.organizationId,
-        ...values,
-      },
-      { onConflict: "repository_id" }
-    );
-    if (error) throw new Error(`Could not update repository scan state: ${error.message}`);
+    const { active_scan_id: activeScanId, ...pointerValues } = values;
+    if (activeScanId === null) {
+      await releaseActiveScan(this.supabase, {
+        projectId: context.repositoryId,
+        scanId: context.scanId,
+      });
+    } else if (activeScanId !== undefined) {
+      throw new Error("updateState only supports clearing active_scan_id for the running scan");
+    }
+
+    if (Object.keys(pointerValues).length === 0) return;
+    const result = await writeScanStatePointer(this.supabase, {
+      organizationId: context.organizationId,
+      projectId: context.repositoryId,
+      scanId: context.scanId,
+      values: pointerValues,
+    });
+    if (!result.applied) {
+      logScan("warn", "scan_state_write_skipped", {
+        scanId: context.scanId,
+        repositoryId: context.repositoryId,
+        reason: result.reason,
+      });
+    }
   }
 }

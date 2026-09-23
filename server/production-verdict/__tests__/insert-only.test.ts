@@ -45,7 +45,15 @@ const { validVerdict } = vi.hoisted(() => {
 });
 
 import { generateAndPersistProductionVerdict } from "../core";
+import { writeScanStatePointer } from "../scan-state-writer";
 import { generateProductionVerdict } from "@/brain/production-verdict/engine";
+
+// The ordered pointer writer has its own suite (scan-state-writer.test.ts);
+// here we only assert core hands it the right scan and values.
+vi.mock("../scan-state-writer", () => ({
+  writeScanStatePointer: vi.fn(async () => ({ applied: true })),
+  releaseActiveScan: vi.fn(async () => undefined),
+}));
 
 vi.mock("@/brain/production-verdict/engine", () => ({
   generateProductionVerdict: vi.fn(() => ({
@@ -258,6 +266,18 @@ describe("generateAndPersistProductionVerdict insert-only", () => {
 
     expect(result?.status).toBe("not_ready");
     expect(insertCalled()).toBe(true);
+    expect(writeScanStatePointer).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        organizationId: ORG_ID,
+        projectId: PROJECT_ID,
+        scanId: SCAN_ID,
+        values: expect.objectContaining({
+          current_verdict_id: "verdict-new",
+          last_scan_id: SCAN_ID,
+        }),
+      })
+    );
   });
 
   it("returns existing verdict without re-running engine when scan is immutable", async () => {
