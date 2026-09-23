@@ -1,13 +1,12 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import {
-  getCurrentProductionVerdict,
-  getProductionVerdictByScan,
-} from "@/server/production-verdict/service";
+import { getCurrentProductionVerdict } from "@/server/production-verdict/service";
 import { loadProtectionContext } from "@/server/continuous-protection/protection-context";
 import { getSafeFixById, storeSafeFixHistoryUpdate } from "./history";
 import { transitionSafeFixState } from "./lifecycle";
+import { loadVerificationEvidence } from "./verification-evidence";
+import { decideFindingVerification } from "./verification-rules";
 import { appendSafeFixMemoryEvent } from "./memory-bridge";
 import type { SafeFixVerificationResult } from "./types";
 import { incrementMetricCounter } from "@/server/observability/metrics";
@@ -53,7 +52,11 @@ async function verifySafeFixInner(
   }
 ): Promise<SafeFixVerificationResult> {
   const record = await getSafeFixById(admin, input.safeFixId);
-  if (!record || record.projectId !== input.projectId) {
+  if (
+    !record ||
+    record.projectId !== input.projectId ||
+    record.organizationId !== input.organizationId
+  ) {
     throw new Error("safe_fix_not_found");
   }
 
@@ -75,14 +78,34 @@ async function verifySafeFixInner(
     .eq("id", record.id)
     .maybeSingle())?.data?.baseline_snapshot as Record<string, unknown> | undefined;
 
-  const verdictScanId = input.analysisRunId ?? record.reviewId ?? null;
-  const verdict = verdictScanId
-    ? await getProductionVerdictByScan(admin, input.organizationId, verdictScanId)
-    : await getCurrentProductionVerdict(admin, input.organizationId, input.projectId);
-  const ctx = await loadProtectionContext(admin, input.projectId);
+  // The verification scan is the latest evaluation unless one is named -- never
+  // the baseline scan the recommendation was generated from.
+  const currentVerdict = await getCurrentProductionVerdict(
+    admin,
+    input.organizationId,
+    input.projectId
+  );
+  const verificationScanId = input.analysisRunId ?? currentVerdict?.scanId ?? null;
 
+  const evidence = await loadVerificationEvidence(admin, {
+    organizationId: input.organizationId,
+    projectId: input.projectId,
+    baselineScanId: record.reviewId,
+    verificationScanId,
+    recommendationId: record.recommendationId,
+    storedTargets: baselineSnap?.targetFindings,
+  });
+
+  // The ONLY thing that can produce "passed": the exact target finding(s)
+  // absent from a complete, valid rescan of the same project and repository.
+  const decision = decideFindingVerification(evidence);
+  const outcome = decision.outcome;
+
+  // Secondary evidence, recorded for context. None of it can cause VERIFIED.
+  const verdict = evidence.verdict;
+  const ctx = await loadProtectionContext(admin, input.projectId);
   const baselineScore = (baselineSnap?.score as number) ?? null;
-  const afterScore = verdict?.score ?? ctx?.productionConfidence ?? null;
+  const afterScore = verdict?.score ?? null;
   const productionConfidenceImproved =
     baselineScore != null && afterScore != null ? afterScore > baselineScore : false;
 
@@ -90,19 +113,10 @@ async function verifySafeFixInner(
   const afterStatus = ctx?.latestSnapshotStatus;
   const protectionStatusImproved = rank(afterStatus) < rank(beforeStatus);
 
-  const baselineBlockers = (baselineSnap?.blockersCount as number) ?? 999;
-  const issueDisappeared = verdict ? verdict.blockersCount < baselineBlockers : false;
-
-  const baselinePriorityTitle = (baselineSnap?.priorityTitle as string) ?? "";
-  const stillInPriorities = verdict?.topPriorities.some((p) => p.title === baselinePriorityTitle) ?? true;
-  const issueGone = !stillInPriorities || issueDisappeared;
-
+  const baselineBlockers =
+    typeof baselineSnap?.blockersCount === "number" ? (baselineSnap.blockersCount as number) : null;
   const newIssuesIntroduced =
-    verdict != null && verdict.blockersCount > baselineBlockers && !issueGone;
-
-  let outcome: "passed" | "failed" | "partial" = "partial";
-  if (issueGone && productionConfidenceImproved && !newIssuesIntroduced) outcome = "passed";
-  else if (newIssuesIntroduced) outcome = "failed";
+    verdict != null && baselineBlockers != null && verdict.blockersCount > baselineBlockers;
 
   const confidenceDelta =
     baselineScore != null && afterScore != null ? afterScore - baselineScore : null;
@@ -114,7 +128,7 @@ async function verifySafeFixInner(
       project_id: input.projectId,
       safe_fix_id: record.id,
       outcome,
-      issue_disappeared: issueGone,
+      issue_disappeared: decision.targetsAbsent,
       production_confidence_improved: productionConfidenceImproved,
       protection_status_improved: protectionStatusImproved,
       new_issues_introduced: newIssuesIntroduced,
@@ -123,8 +137,13 @@ async function verifySafeFixInner(
       protection_status_before: beforeStatus,
       protection_status_after: afterStatus,
       details: {
-        baselinePriorityTitle,
+        baselinePriorityTitle: (baselineSnap?.priorityTitle as string) ?? "",
         executiveSummary: baseline.executiveSummary,
+        reasons: decision.reasons,
+        baselineScanId: record.reviewId,
+        verificationScanId,
+        targetFindingIds: evidence.targets.map((target) => target.findingId),
+        remainingTargetIds: decision.remainingTargetIds,
       },
     })
     .select("id")
@@ -141,9 +160,12 @@ async function verifySafeFixInner(
     fromState: "VERIFYING",
     toState: finalState,
     actor: input.actor ?? "system",
-    reason: `verification_${outcome}`,
+    reason:
+      outcome === "passed"
+        ? "verification_passed"
+        : `verification_${outcome}:${decision.reasons.join(",")}`,
     relatedRecommendationId: record.recommendationId,
-    relatedReviewId: record.reviewId,
+    relatedReviewId: verificationScanId ?? record.reviewId,
   });
 
   await storeSafeFixHistoryUpdate(admin, record.id, {
@@ -158,7 +180,7 @@ async function verifySafeFixInner(
     organizationId: input.organizationId,
     projectId: input.projectId,
     type: memoryType,
-    payload: { safeFixId: record.id, outcome, confidenceDelta },
+    payload: { safeFixId: record.id, outcome, confidenceDelta, reasons: decision.reasons },
     idempotencyKey: `verify:${record.id}:${outcome}`,
   });
 
@@ -167,11 +189,11 @@ async function verifySafeFixInner(
     id: verificationRow.id as string,
     safeFixId: record.id,
     outcome,
-    issueDisappeared: issueGone,
+    issueDisappeared: decision.targetsAbsent,
     productionConfidenceImproved,
     protectionStatusImproved,
     newIssuesIntroduced,
-    details: { confidenceDelta },
+    details: { confidenceDelta, reasons: decision.reasons },
   };
 }
 
