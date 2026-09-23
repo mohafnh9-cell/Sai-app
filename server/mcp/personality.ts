@@ -249,6 +249,28 @@ export function formatSafeFixNoBlockers(t: McpTranslator): string {
   return buildTextResponse("safe_fix", t, [t("safeFix.noBlockers")]);
 }
 
+export type SafeFixNoActionableReason =
+  | "insufficient_evidence"
+  | "review_in_progress"
+  | "review_failed"
+  | "stale_or_unverified"
+  | "not_ready_without_specific_finding";
+
+const SAFE_FIX_NO_ACTIONABLE_KEYS: Record<SafeFixNoActionableReason, string> = {
+  insufficient_evidence: "safeFix.noActionable.insufficientEvidence",
+  review_in_progress: "safeFix.noActionable.reviewInProgress",
+  review_failed: "safeFix.noActionable.reviewFailed",
+  stale_or_unverified: "safeFix.noActionable.staleOrUnverified",
+  not_ready_without_specific_finding: "safeFix.noActionable.notReadyWithoutSpecificFinding",
+};
+
+export function formatSafeFixNoActionableFinding(
+  t: McpTranslator,
+  reason: SafeFixNoActionableReason
+): string {
+  return buildTextResponse("safe_fix", t, [t(SAFE_FIX_NO_ACTIONABLE_KEYS[reason])]);
+}
+
 export function formatSafeFixPromptReady(
   t: McpTranslator,
   input: {
@@ -273,19 +295,58 @@ export function formatSafeFixPromptReady(
   return buildTextResponse("safe_fix", t, lines);
 }
 
+/**
+ * A trend comparison ("things look better") must never be the only signal an
+ * agent receives: it always carries the current authoritative decision and
+ * any in-flight/stale/failed review state, plus an explicit statement that
+ * it is not a deploy answer.
+ */
+function whatChangedStateBlock(
+  t: McpTranslator,
+  currentState: {
+    decision: DeploymentDecision;
+    staleness: StalenessFootnotes;
+  }
+): string[] {
+  const lines: string[] = [];
+  if (currentState.decision === "do_not_deploy") {
+    lines.push("", t("whatChanged.stateDoNotDeploy"));
+  } else if (currentState.decision === "more_analysis_required") {
+    lines.push("", t("whatChanged.stateMoreAnalysis"));
+  }
+  lines.push(...stalenessFootnotes(t, currentState.staleness));
+  lines.push("", t("whatChanged.notADeployAnswer"));
+  return lines;
+}
+
 export function formatWhatChangedResponse(
   t: McpTranslator,
   input: {
     hasPrevious: boolean;
+    /** False when the latest authoritative review is not the review being compared. */
+    comparisonAvailable?: boolean;
     scoreDelta: number | null;
     resolved: string[];
     detected: string[];
     recommendedAction: string;
+    currentState: {
+      decision: DeploymentDecision;
+      staleness: StalenessFootnotes;
+    };
   }
 ): string {
+  if (input.comparisonAvailable === false) {
+    return buildTextResponse("continuous_review", t, [
+      t("whatChanged.comparisonUnavailable"),
+      ...whatChangedStateBlock(t, input.currentState),
+      ...recommendedActionBlock(t, input.recommendedAction || t("actions.applySafeFix")),
+    ]);
+  }
+
   if (!input.hasPrevious) {
     return buildTextResponse("continuous_review", t, [
       t("whatChanged.noPreviousReview"),
+      ...whatChangedStateBlock(t, input.currentState),
       "",
       t("whatChanged.firstReviewNext"),
     ]);
@@ -317,6 +378,7 @@ export function formatWhatChangedResponse(
     lines.push(`- ${t("whatChanged.nothingNew")}`);
   }
 
+  lines.push(...whatChangedStateBlock(t, input.currentState));
   lines.push(...recommendedActionBlock(t, input.recommendedAction || t("actions.applySafeFix")));
   return buildTextResponse("continuous_review", t, lines);
 }

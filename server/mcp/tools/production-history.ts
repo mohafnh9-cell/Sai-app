@@ -2,6 +2,9 @@ import "server-only";
 
 import { buildProductionJourney, type JourneyTrend } from "@/brain/production-journey";
 import type { VerdictStatus } from "@/brain/production-verdict/schema";
+import { resolveCanonicalDecisionState } from "../canonical-decision-state";
+import type { DeploymentDecision } from "../decision-mapping";
+import type { FreshnessStatus } from "../staleness";
 import { loadVerdictJourneyRecords } from "@/server/production-journey/load-verdicts";
 import type { McpAuthContext } from "../auth";
 import type { McpTranslator } from "../i18n";
@@ -27,8 +30,20 @@ export type ProductionHistoryResult = {
   mode: "production_history";
   source: "github";
   project: { id: string; name: string; repositoryFullName: string | null };
+  /**
+   * AUTHORITATIVE: the persisted Production Verdict resolved through the
+   * same canonical decision state can_i_deploy uses. Everything else in this
+   * result (recentVerdicts, bestScore, trend, ...) is HISTORICAL.
+   */
   currentVerdict: VerdictStatus | null;
   currentScore: number | null;
+  currentVerdictScanId: string | null;
+  currentVerdictCommitSha: string | null;
+  currentDecision: DeploymentDecision | null;
+  reviewInProgress: boolean;
+  freshnessStatus: FreshnessStatus | null;
+  /** "history_fallback" only when no authoritative verdict could be resolved. */
+  currentVerdictSource: "authoritative" | "history_fallback" | "none";
   bestScore: number | null;
   trend: JourneyTrend;
   totalValidReviews: number;
@@ -74,6 +89,12 @@ export async function productionHistory(
       project,
       currentVerdict: null,
       currentScore: null,
+      currentVerdictScanId: null,
+      currentVerdictCommitSha: null,
+      currentDecision: null,
+      reviewInProgress: false,
+      freshnessStatus: null,
+      currentVerdictSource: "none",
       bestScore: null,
       trend: "insufficient_data",
       totalValidReviews: 0,
@@ -89,6 +110,7 @@ export async function productionHistory(
   }
 
   const journey = buildProductionJourney(records, { limit: 200 });
+  const state = await resolveCanonicalDecisionState(ctx, project.id);
 
   const rangeDays = RANGE_DAYS[range];
   const cutoff = rangeDays != null ? Date.now() - rangeDays * 24 * 60 * 60 * 1000 : null;
@@ -112,8 +134,14 @@ export async function productionHistory(
     mode: "production_history",
     source: "github",
     project,
-    currentVerdict: journey.currentStatus,
-    currentScore: journey.currentScore,
+    currentVerdict: state ? state.verdict.status : journey.currentStatus,
+    currentScore: state ? state.verdict.score : journey.currentScore,
+    currentVerdictScanId: state?.verdict.scanId ?? null,
+    currentVerdictCommitSha: state?.verdict.commitSha ?? null,
+    currentDecision: state?.decision ?? null,
+    reviewInProgress: state?.reviewInProgress ?? false,
+    freshnessStatus: state?.staleness.freshnessStatus ?? null,
+    currentVerdictSource: state ? "authoritative" : "history_fallback",
     bestScore: journey.bestScore,
     trend: journey.trend,
     totalValidReviews: journey.validReviews,

@@ -1,3 +1,4 @@
+import { VERDICT_THRESHOLDS } from "./config";
 import type { NormalizedFinding } from "./normalize-finding";
 import type { AreaKey, ProductionAreaAssessment } from "./schema";
 
@@ -187,13 +188,14 @@ export function assessCoverage(input: {
   findings: NormalizedFinding[];
   securityScore: number | null;
   filesAnalyzed: number;
+  filesDiscovered?: number;
 }): {
   evaluatedAreas: ProductionAreaAssessment[];
   partiallyEvaluatedAreas: ProductionAreaAssessment[];
   unevaluatedAreas: ProductionAreaAssessment[];
   coverageRatio: number | null;
 } {
-  const { findings, securityScore, filesAnalyzed } = input;
+  const { findings, securityScore, filesAnalyzed, filesDiscovered } = input;
   const allAreas = Object.keys(AREA_DEFINITIONS) as AreaKey[];
 
   const assessments: ProductionAreaAssessment[] = allAreas.map((key) => {
@@ -223,18 +225,27 @@ export function assessCoverage(input: {
   const partiallyEvaluatedAreas = assessments.filter((a) => a.status === "partial");
   const unevaluatedAreas = assessments.filter((a) => a.status === "not_evaluated");
 
+  // When the scanner reports how many files actually exist in the
+  // repository, the true completion ratio (files analyzed / files
+  // discovered) is a far more meaningful signal than the heuristic below
+  // -- it correctly gives a small, fully-analyzed repository full credit
+  // while still catching a large repository where only a handful of files
+  // were actually looked at. Fall back to the heuristic only when
+  // filesDiscovered is unknown (e.g. older scans that never recorded it).
   const coverageRatio =
-    filesAnalyzed > 0
-      ? Math.min(
-          1,
-          Math.max(
-            filesAnalyzed >= 10 ? 0.2 : 0,
-            findings.length > 0
-              ? 0.4 + Math.min(0.6, filesAnalyzed / 200)
-              : filesAnalyzed / 100
+    filesDiscovered != null && filesDiscovered > 0
+      ? Math.min(1, filesAnalyzed / filesDiscovered)
+      : filesAnalyzed > 0
+        ? Math.min(
+            1,
+            Math.max(
+              filesAnalyzed >= 10 ? 0.2 : 0,
+              findings.length > 0
+                ? 0.4 + Math.min(0.6, filesAnalyzed / 200)
+                : filesAnalyzed / 100
+            )
           )
-        )
-      : null;
+        : null;
 
   return {
     evaluatedAreas,
@@ -244,14 +255,29 @@ export function assessCoverage(input: {
   };
 }
 
+/**
+ * SECURITY (Phase Z v2 Pass 3, CRIT-001): both minFilesAnalyzed and
+ * minCoverageRatio are real, independent gates -- an absolute floor on how
+ * much was looked at, and a relative floor on how much of the actual
+ * repository that represents. A prior change (`filesAnalyzed >= 3 →
+ * return true`, meant only to stop small-but-fully-analyzed repositories
+ * from being wrongly flagged) made the coverageRatio check permanently
+ * unreachable, letting a 3-file scan of an arbitrarily large repository
+ * register as sufficient coverage. Restoring the coverageRatio gate no
+ * longer punishes small repositories, because assessCoverage() now
+ * computes coverageRatio as the true filesAnalyzed/filesDiscovered
+ * fraction when filesDiscovered is known -- a small repository analyzed
+ * in full has coverageRatio 1.0 regardless of its absolute file count.
+ */
 export function hasSufficientCoverage(input: {
   filesAnalyzed: number;
   coverageRatio: number | null;
   scanStatus: string;
 }): boolean {
   if (input.scanStatus === "failed") return false;
-  if (input.filesAnalyzed < 3) return false;
-  if (input.filesAnalyzed >= 3) return true;
-  if (input.coverageRatio != null && input.coverageRatio < 0.15) return false;
+  if (input.filesAnalyzed < VERDICT_THRESHOLDS.minFilesAnalyzed) return false;
+  if (input.coverageRatio != null && input.coverageRatio < VERDICT_THRESHOLDS.minCoverageRatio) {
+    return false;
+  }
   return true;
 }

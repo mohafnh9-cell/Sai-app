@@ -10,16 +10,18 @@ import {
   stackFromDetectedStack,
 } from "@/brain/fix-prompt";
 import type { ProductionPriority } from "@/brain/production-verdict/schema";
-import { getCurrentProductionVerdict } from "@/server/production-verdict/service";
 import type { McpAuthContext } from "../auth";
 import { McpError } from "../auth";
+import { resolveCanonicalDecisionState } from "../canonical-decision-state";
 import type { McpTranslator } from "../i18n";
 import type { ProjectSelector } from "../project-resolution";
 import { resolveMcpProject } from "../project-resolution";
 import {
   formatSafeFixChooseBlockers,
+  formatSafeFixNoActionableFinding,
   formatSafeFixNoBlockers,
   formatSafeFixPromptReady,
+  type SafeFixNoActionableReason,
 } from "../personality";
 import { assertFixPromptOutputSafe } from "@/server/mcp/security";
 
@@ -49,6 +51,20 @@ export type SafeFixResult =
       mode: "safe_fix";
       source: "github";
       status: "no_blockers";
+      project: { id: string; name: string; repositoryFullName: string | null };
+      summary: string;
+    }
+  | {
+      mode: "safe_fix";
+      source: "github";
+      /**
+       * There is no concrete finding to generate a fix for, but that does NOT
+       * mean the project is clean: the evidence is incomplete, stale, being
+       * replaced by a running review, or otherwise not a "ready" verdict.
+       */
+      status: "no_actionable_finding";
+      reason: SafeFixNoActionableReason;
+      verdictStatus: string;
       project: { id: string; name: string; repositoryFullName: string | null };
       summary: string;
     }
@@ -104,18 +120,45 @@ export async function safeFix(
 ): Promise<SafeFixResult> {
   const project = await resolveMcpProject(ctx, input, t);
 
-  const verdict = await getCurrentProductionVerdict(ctx.admin, ctx.organizationId, project.id);
-  if (!verdict) {
+  const state = await resolveCanonicalDecisionState(ctx, project.id);
+  if (!state) {
     throw new McpError(404, "no_verdict_available", t("errors.no_verdict_available"));
   }
+  const verdict = state.verdict;
 
   if (verdict.blockersCount === 0 && verdict.topPriorities.length === 0) {
+    // "Nothing to fix" is only a truthful thing to say when the decision
+    // authority says the project is genuinely clean and current. Zero
+    // findings from an insufficient, stale, failed, or in-flight review is
+    // absence of evidence, not evidence of absence.
+    if (state.isCleanAndCurrent) {
+      return {
+        mode: "safe_fix",
+        source: "github" as const,
+        status: "no_blockers",
+        project,
+        summary: formatSafeFixNoBlockers(t),
+      };
+    }
+
+    const reason: SafeFixNoActionableReason = state.reviewInProgress
+      ? "review_in_progress"
+      : state.reviewFailed
+        ? "review_failed"
+        : verdict.status === "insufficient_data" || verdict.status === "analysis_failed"
+          ? "insufficient_evidence"
+          : state.staleness.freshnessStatus !== "current"
+            ? "stale_or_unverified"
+            : "not_ready_without_specific_finding";
+
     return {
       mode: "safe_fix",
       source: "github" as const,
-      status: "no_blockers",
+      status: "no_actionable_finding",
+      reason,
+      verdictStatus: verdict.status,
       project,
-      summary: formatSafeFixNoBlockers(t),
+      summary: formatSafeFixNoActionableFinding(t, reason),
     };
   }
 
