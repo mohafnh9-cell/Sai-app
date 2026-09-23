@@ -49,6 +49,51 @@ describe("MCP personality — can_i_deploy text", () => {
     expect(text).toContain("Nothing critical is blocking");
   });
 
+  // SECURITY regression (CRIT-001, deeper contamination found during
+  // production verification): a persisted verdict's own executiveSummary
+  // can be overwritten at verdict-generation time by a secondary security
+  // decision subsystem's "safe to deploy" narrative even when the
+  // verdict's own status is insufficient_data. That text must never
+  // surface here -- it would directly contradict the conservative
+  // "I can't answer responsibly yet" framing this branch always leads with.
+  it("SECURITY: never surfaces a contaminated executiveSummary claiming deployment safety for insufficient_data", () => {
+    const text = formatCanIDeployResponse(t, {
+      decision: "more_analysis_required",
+      status: "insufficient_data",
+      executiveSummary: "Safe to deploy based on current authorized security evidence.",
+      worries: [],
+      blockersCount: 0,
+      staleness: {
+        reviewInProgress: false,
+        freshnessStatus: "current",
+        reviewFailed: false,
+        latestDetectedCommitSha: null,
+      },
+    });
+
+    expect(text).not.toContain("Safe to deploy");
+    expect(text).not.toContain("based on current authorized security evidence");
+    expect(text).toContain("I don't have enough of your repository reviewed yet to protect you responsibly.");
+  });
+
+  it("still uses the safe canonical insufficient_data message even when executiveSummary is empty (existing fallback preserved)", () => {
+    const text = formatCanIDeployResponse(t, {
+      decision: "more_analysis_required",
+      status: "insufficient_data",
+      executiveSummary: "",
+      worries: [],
+      blockersCount: 0,
+      staleness: {
+        reviewInProgress: false,
+        freshnessStatus: "current",
+        reviewFailed: false,
+        latestDetectedCommitSha: null,
+      },
+    });
+
+    expect(text).toContain("I don't have enough of your repository reviewed yet to protect you responsibly.");
+  });
+
   it("recommends Safe Fix when blockers exist", () => {
     expect(
       pickRecommendedAction(t, {

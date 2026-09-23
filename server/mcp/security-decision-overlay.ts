@@ -14,12 +14,27 @@ export type SecurityDecisionMcpOverlay = {
 
 /**
  * MCP deploy answers use the persisted Production Verdict only — no in-memory recomputation.
+ *
+ * SECURITY INVARIANT: a verdict computed from insufficient evaluated
+ * coverage ("insufficient_data") or a failed analysis ("analysis_failed")
+ * must never have its deployment recommendation promoted by this overlay,
+ * regardless of what the security decision report itself concluded. The
+ * AI red-team decision subsystem answers "did we find an attack chain?" —
+ * that is not the same claim as "did we evaluate enough of the
+ * application to trust this answer?" A project with zero findings and a
+ * high score but only partial coverage is not equivalent to production
+ * readiness, and no downstream opinion is allowed to contradict that.
+ * Insufficient coverage always wins; it is intentionally never
+ * overridable from this call site.
  */
 export function applyLatestSecurityDecisionToVerdict(
   _projectId: string,
   verdict: ProductionVerdictV1
 ): SecurityDecisionMcpOverlay {
-  if (verdict.securityDecisionId && verdict.securityDeploymentVerdict) {
+  const insufficientCoverage =
+    verdict.status === "insufficient_data" || verdict.status === "analysis_failed";
+
+  if (verdict.securityDecisionId && verdict.securityDeploymentVerdict && !insufficientCoverage) {
     return {
       applied: true,
       deploymentVerdict: verdict.securityDeploymentVerdict,
