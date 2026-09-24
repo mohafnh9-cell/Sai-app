@@ -14,8 +14,8 @@ import type { Confidence, Finding as ScannerFinding, Severity } from "@/features
 import { buildFindingCorrelationKeyFromParts } from "@/lib/correlation/finding-identity";
 import { generateAndPersistProductionVerdict } from "@/server/production-verdict/service";
 import {
-  finalizeVerdictWhenEvidenceComplete,
   markVerdictEvidenceReady,
+  waitForScanVerdict,
 } from "@/server/production-verdict/evidence-finalization";
 import {
   assertScanContinues,
@@ -534,12 +534,15 @@ export class InlineScanJobRunner implements ScanJobRunner {
             organizationId: context.organizationId,
             securityDecision: securityDecisionReport,
           });
-          const outcome = await finalizeVerdictWhenEvidenceComplete(this.supabase, {
+          // The security worker is a separate deployment and may not run the
+          // job-terminal finalization hook, so wait here -- driven by the real
+          // job state on every check, bounded -- for the engines to finish.
+          // The marker recorded above carries the security decision.
+          const outcome = await waitForScanVerdict(this.supabase, {
             organizationId: context.organizationId,
             projectId: context.repositoryId,
             scanId: context.scanId,
-            scanJobId: context.scanJobId,
-            securityDecisionReport,
+            maxMs: 60_000,
           });
           if (outcome.status === "deferred") {
             logScan("info", "verdict_deferred_until_engines_complete", {

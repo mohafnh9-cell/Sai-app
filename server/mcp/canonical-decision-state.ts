@@ -14,6 +14,7 @@ import {
 import { getLatestReviewSummary, type LatestReviewSummary } from "./latest-review";
 import type { StalenessFootnotes } from "./personality";
 import { getStalenessInfo, type StalenessInfo } from "./staleness";
+import { finalizeVerdictWhenEvidenceComplete } from "@/server/production-verdict/evidence-finalization";
 
 /**
  * The single place that decides what "the current deployment decision" is
@@ -53,6 +54,23 @@ export async function resolveCanonicalDecisionState(
   ctx: McpAuthContext,
   projectId: string
 ): Promise<CanonicalDecisionState | null> {
+  // Self-heal: a completed scan whose engines have all finished but whose
+  // verdict was never written (its finalizing event was missed) gets it now,
+  // so the decision is never stuck "awaiting a verdict" for finished evidence.
+  try {
+    const latest = await getLatestReviewSummary(ctx.admin, projectId);
+    if (latest && latest.status === "completed") {
+      await finalizeVerdictWhenEvidenceComplete(ctx.admin, {
+        organizationId: ctx.organizationId,
+        projectId,
+        scanId: latest.id,
+        mode: "pipeline",
+      });
+    }
+  } catch {
+    // Read paths never fail because a repair attempt failed.
+  }
+
   const authoritative = await getAuthoritativeProductionVerdict(
     ctx.admin,
     ctx.organizationId,
