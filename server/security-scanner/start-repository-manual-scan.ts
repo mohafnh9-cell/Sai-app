@@ -1,3 +1,4 @@
+import { markActiveScan } from "@/server/production-verdict/scan-state-writer";
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -232,14 +233,12 @@ export async function startRepositoryManualScan(
     throw new ScanRequestError(500, "SCAN_CREATE_FAILED", "Could not create scan");
   }
 
-  const { error: stateError } = await ctx.admin.from("repository_scan_state").upsert(
-    {
-      repository_id: repositoryId,
-      organization_id: ctx.project.organization_id,
-      active_scan_id: scan.id,
-    },
-    { onConflict: "repository_id" }
-  );
+  const { error: stateError } = await markActiveScan(ctx.admin, {
+    projectId: repositoryId,
+    organizationId: ctx.project.organization_id,
+    scanId: scan.id as string,
+    branch: resolvedCommit.branch,
+  });
   if (stateError) {
     await ctx.admin
       .from("scans")

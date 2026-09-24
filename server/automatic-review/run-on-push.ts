@@ -1,3 +1,4 @@
+import { markActiveScan } from "@/server/production-verdict/scan-state-writer";
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -74,7 +75,7 @@ export async function runAutomaticProductionReview(
       input.project.id,
       input.detection.commitSha
     ),
-    hasActiveRepositoryReview(admin, input.project.id),
+    hasActiveRepositoryReview(admin, input.project.id, input.detection.branch),
   ]);
 
   const decision = shouldRunAutomaticReview({
@@ -147,14 +148,12 @@ export async function runAutomaticProductionReview(
     };
   }
 
-  await admin.from("repository_scan_state").upsert(
-    {
-      repository_id: input.project.id,
-      organization_id: input.project.organization_id,
-      active_scan_id: scan.id,
-    },
-    { onConflict: "repository_id" }
-  );
+  await markActiveScan(admin, {
+    projectId: input.project.id,
+    organizationId: input.project.organization_id,
+    scanId: scan.id as string,
+    branch: input.detection.branch,
+  });
 
   try {
     await scheduleAutomationScan(admin, {

@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { isDefaultBranchHead } from "@/server/repository-sync/persistence";
 
 /**
  * The persistence boundary for `repository_scan_state`, the row every "what
@@ -147,4 +148,27 @@ export async function writeScanStatePointer(
   }
 
   return { applied: false, reason: "contention" };
+}
+
+/**
+ * `repository_scan_state.active_scan_id` is the DEFAULT branch's active review
+ * (the scope production decision surfaces read). Active reviews of other
+ * branches are tracked only in `scans` (unique per repository + branch) and
+ * never written here, so a feature review can neither overwrite nor be
+ * mistaken for the default branch's active review.
+ */
+export async function markActiveScan(
+  admin: SupabaseClient,
+  input: { projectId: string; organizationId: string; scanId: string; branch: string | null | undefined }
+): Promise<{ error: { message: string } | null }> {
+  if (!(await isDefaultBranchHead(admin, input.projectId, input.branch))) return { error: null };
+  const { error } = await admin.from("repository_scan_state").upsert(
+    {
+      repository_id: input.projectId,
+      organization_id: input.organizationId,
+      active_scan_id: input.scanId,
+    },
+    { onConflict: "repository_id" }
+  );
+  return { error: error ? { message: error.message } : null };
 }

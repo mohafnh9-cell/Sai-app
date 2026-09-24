@@ -71,20 +71,39 @@ export async function getProductionReviewState(
     await expireStaleActiveReviewsForRepository(admin, input.projectId).catch(() => undefined);
   }
 
+  // Production review state is the DEFAULT branch's (the scope decision
+  // surfaces read). Active jobs of other branches are not this project's
+  // "active production review", and must not hide a default-branch one.
   let activeJob: Record<string, unknown> | null = null;
   try {
-    const { data } = await admin
-      .from("scan_jobs")
-      .select(
-        "id, scan_id, status, created_at, started_at, heartbeat_at, updated_at, failure_message"
-      )
-      .eq("organization_id", input.organizationId)
-      .eq("project_id", input.projectId)
-      .in("status", ["queued", "running"])
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    activeJob = (data as Record<string, unknown> | null) ?? null;
+    const [{ data: jobs }, { data: projectRow }] = await Promise.all([
+      admin
+        .from("scan_jobs")
+        .select(
+          "id, scan_id, status, created_at, started_at, heartbeat_at, updated_at, failure_message"
+        )
+        .eq("organization_id", input.organizationId)
+        .eq("project_id", input.projectId)
+        .in("status", ["queued", "running"])
+        .order("created_at", { ascending: false })
+        .limit(20),
+      admin.from("projects").select("github_default_branch").eq("id", input.projectId).maybeSingle(),
+    ]);
+    const defaultBranch =
+      (projectRow as { github_default_branch?: string | null } | null)?.github_default_branch ?? null;
+    const jobRows = (jobs ?? []) as Array<Record<string, unknown>>;
+    const scanIds = jobRows.map((job) => job.scan_id).filter((id): id is string => typeof id === "string");
+    const { data: jobScans } = scanIds.length
+      ? await admin.from("scans").select("id, branch").in("id", scanIds)
+      : { data: [] as Array<{ id: string; branch: string | null }> };
+    const branchByScan = new Map(
+      ((jobScans ?? []) as Array<{ id: string; branch: string | null }>).map((row) => [row.id, row.branch])
+    );
+    activeJob =
+      jobRows.find((job) => {
+        const branch = branchByScan.get(job.scan_id as string) ?? null;
+        return !defaultBranch || !branch || branch === defaultBranch;
+      }) ?? null;
   } catch (error) {
     console.warn({
       component: "production-review-state",

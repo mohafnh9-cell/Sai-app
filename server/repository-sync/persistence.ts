@@ -70,13 +70,18 @@ export async function isDefaultBranchHead(
   branch: string | null | undefined
 ): Promise<boolean> {
   if (!branch) return true;
-  const { data } = await admin
-    .from("projects")
-    .select("github_default_branch")
-    .eq("id", projectId)
-    .maybeSingle();
-  const defaultBranch = (data as { github_default_branch?: string | null } | null)?.github_default_branch ?? null;
-  return !defaultBranch || defaultBranch === branch;
+  try {
+    const { data } = await admin
+      .from("projects")
+      .select("github_default_branch")
+      .eq("id", projectId)
+      .maybeSingle();
+    const defaultBranch = (data as { github_default_branch?: string | null } | null)?.github_default_branch ?? null;
+    return !defaultBranch || defaultBranch === branch;
+  } catch {
+    // Unknown scope keeps the legacy (default-branch) behaviour.
+    return true;
+  }
 }
 
 export async function recordLiveHeadCommit(

@@ -1,3 +1,4 @@
+import { markActiveScan } from "@/server/production-verdict/scan-state-writer";
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -93,14 +94,12 @@ export async function createAutomationScan(
     throw new Error(`Could not create automation scan: ${error.message}`);
   }
 
-  await admin.from("repository_scan_state").upsert(
-    {
-      repository_id: input.projectId,
-      organization_id: input.organizationId,
-      active_scan_id: scan.id,
-    },
-    { onConflict: "repository_id" }
-  );
+  await markActiveScan(admin, {
+    projectId: input.projectId,
+    organizationId: input.organizationId,
+    scanId: scan.id as string,
+    branch: input.branch ?? null,
+  });
 
   return scan.id as string;
 }
