@@ -18,9 +18,16 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createPollLoop } from "@/server/security-jobs/worker-poll-loop";
 import { startHealthServer } from "@/server/security-jobs/worker-health";
 import { WORKER_CONFIG } from "@/server/security-jobs/worker-config";
+import { WORKER_LIFECYCLE_VERSION } from "@/server/security-jobs/engine-result-status";
 
 async function main() {
-  console.info({ component: "security-worker", event: "starting", workerId: WORKER_CONFIG.workerId });
+  console.info({
+    component: "security-worker",
+    event: "starting",
+    workerId: WORKER_CONFIG.workerId,
+    lifecycleVersion: WORKER_LIFECYCLE_VERSION,
+    deploymentId: process.env.RAILWAY_DEPLOYMENT_ID ?? null,
+  });
 
   const admin = createAdminClient();
   const healthServer = startHealthServer();

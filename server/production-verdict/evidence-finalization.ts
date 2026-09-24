@@ -229,12 +229,21 @@ export async function finalizeVerdictForTerminalSecurityJob(
       .eq("id", jobId)
       .maybeSingle();
     if (!job) return null;
-    return await finalizeVerdictWhenEvidenceComplete(admin, {
+    const outcome = await finalizeVerdictWhenEvidenceComplete(admin, {
       organizationId: job.organization_id as string,
       projectId: job.project_id as string,
       scanId: job.scan_id as string,
       mode: "pipeline",
     });
+    console.info({
+      component: "evidence-finalization",
+      event: "job_terminal_finalize",
+      jobId,
+      scanId: job.scan_id,
+      status: outcome.status,
+      reason: "reason" in outcome ? outcome.reason : undefined,
+    });
+    return outcome;
   } catch (error) {
     console.error({
       component: "evidence-finalization",

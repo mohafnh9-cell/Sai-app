@@ -32,6 +32,8 @@ export type EngineOutcomeStatus =
   | "SKIPPED"
   | "UNAVAILABLE"
   | "FAILED"
+  /** The engine ran but some of its inputs failed/were skipped: evidence is incomplete, never clean. */
+  | "PARTIAL"
   | "COMPLETED_CLEAN"
   | "COMPLETED_WITH_FINDINGS";
 
@@ -94,6 +96,7 @@ export type CoverageReport = {
   clean: number;
   withFindings: number;
   failed: number;
+  partial: number;
   unavailable: number;
   skipped: number;
   entries: EngineCoverageEntry[];
