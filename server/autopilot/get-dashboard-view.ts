@@ -1,5 +1,7 @@
 import "server-only";
 
+import { scanInBranchScope } from "@/server/review-start/branch-scope";
+
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   buildAutopilotDashboardView,
@@ -51,7 +53,7 @@ export async function getAutopilotDashboardView(
 
   const { data: projects } = await supabase
     .from("projects")
-    .select("id, name, github_repo, github_repository_id, webhook_enabled")
+    .select("id, name, github_repo, github_repository_id, webhook_enabled, github_default_branch")
     .eq("organization_id", organizationId)
     .order("updated_at", { ascending: false });
 
@@ -74,14 +76,14 @@ export async function getAutopilotDashboardView(
       supabase.from("github_webhooks").select("project_id, active").in("project_id", projectIds),
       supabase
         .from("scans")
-        .select("id, repository_id, status, completed_at, failed_at, created_at, review_type")
+        .select("id, repository_id, status, completed_at, failed_at, created_at, review_type, branch")
         .in("repository_id", projectIds)
         .eq("review_type", "automatic")
         .order("created_at", { ascending: false }),
       admin
         ? admin
             .from("scans")
-            .select("id, repository_id")
+            .select("id, repository_id, branch")
             .in("repository_id", projectIds)
             .in("status", [...ACTIVE_SCAN_STATUSES])
         : Promise.resolve({ data: [] as Array<{ id: string; repository_id: string }>, error: null }),
@@ -91,11 +93,23 @@ export async function getAutopilotDashboardView(
   const webhooksByProject = new Map(
     (webhookResult.data ?? []).map((row) => [row.project_id as string, row])
   );
+  // The dashboard shows the DEFAULT branch's review state: a feature branch
+  // review is not "the project is being reviewed".
+  const defaultBranchByProject = new Map<string, string | null>(
+    projects.map((project) => [
+      project.id as string,
+      (project as { github_default_branch?: string | null }).github_default_branch ?? null,
+    ])
+  );
+  const inDefaultScope = (row: { repository_id: string; branch?: string | null }) =>
+    scanInBranchScope(row.branch, null, defaultBranchByProject.get(row.repository_id) ?? null);
   const latestReviewByProject = latestAutomaticReviewByProject(
-    (automaticReviewResult.data ?? []) as AutomaticReviewRow[]
+    ((automaticReviewResult.data ?? []) as Array<AutomaticReviewRow & { branch?: string | null }>).filter(inDefaultScope)
   );
   const activeScanProjects = new Set(
-    (activeScanResult.data ?? []).map((row) => row.repository_id as string)
+    ((activeScanResult.data ?? []) as Array<{ repository_id: string; branch?: string | null }>)
+      .filter(inDefaultScope)
+      .map((row) => row.repository_id)
   );
 
   const completedReviewScanIds = [...latestReviewByProject.values()]

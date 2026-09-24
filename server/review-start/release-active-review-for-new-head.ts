@@ -34,6 +34,16 @@ export async function releaseActiveReviewForNewHead(
     supersededByScanId?: string | null;
   }
 ): Promise<ReleaseActiveReviewForNewHeadResult> {
+  const { data: projectRow } = await admin
+    .from("projects")
+    .select("github_default_branch")
+    .eq("id", input.projectId)
+    .maybeSingle();
+  const defaultBranch =
+    (projectRow as { github_default_branch?: string | null } | null)?.github_default_branch ?? null;
+  // Branchless GitHub scans belong to the default branch scope.
+  const targetScope = input.targetBranch ?? defaultBranch;
+
   const { data: activeScans } = await admin
     .from("scans")
     .select("id, status, commit_sha, branch, created_at, updated_at, started_at, queued_at")
@@ -44,6 +54,12 @@ export async function releaseActiveReviewForNewHead(
   const now = new Date().toISOString();
 
   for (const scan of activeScans ?? []) {
+    // Supersession is branch-scoped: a new head on one branch never
+    // supersedes an active review of another branch. Branchless GitHub scans
+    // belong to the default branch scope.
+    const scanScope = ((scan.branch as string | null) ?? null) ?? defaultBranch;
+    if (targetScope && scanScope && scanScope !== targetScope) continue;
+
     const scanCommit = (scan.commit_sha as string | null) ?? null;
     if (scanCommit && commitsMatch(scanCommit, input.targetCommitSha)) {
       continue;

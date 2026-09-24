@@ -3,7 +3,8 @@ import "server-only";
 import { after } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { decideReviewNowAction } from "@/brain/review-now/decision";
-import { hasActiveRepositoryReview } from "@/server/automatic-review/queries";
+import { loadActiveReviewForBranch } from "@/server/automatic-review/queries";
+import { markActiveScan } from "@/server/production-verdict/scan-state-writer";
 import { resolveOrganizationGitHubToken } from "@/server/github-automation/token-resolver";
 import {
   GitHubServiceError,
@@ -112,18 +113,6 @@ const ACTIVE_SCAN_STATUSES = [
 
 function log(event: string, fields: Record<string, unknown>) {
   console.info({ component: "review-now", event, ...fields });
-}
-
-async function loadActiveScanId(admin: SupabaseClient, projectId: string): Promise<string | null> {
-  const { data } = await admin
-    .from("scans")
-    .select("id")
-    .eq("repository_id", projectId)
-    .in("status", ACTIVE_SCAN_STATUSES)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  return (data?.id as string | undefined) ?? null;
 }
 
 /**
@@ -237,8 +226,9 @@ export async function triggerProductionReview(
   // head only. An explicit older commit or a feature-branch review must never
   // overwrite them (that made the default branch's decision "stale" and
   // "in progress" because of an unrelated branch).
+  const isHeadReview = !input.requestedCommitSha;
   const reviewsDefaultBranchHead =
-    !input.requestedCommitSha && (await isDefaultBranchHead(admin, input.projectId, resolvedBranch));
+    isHeadReview && (await isDefaultBranchHead(admin, input.projectId, resolvedBranch));
 
   if (reviewsDefaultBranchHead) {
     await recordLiveHeadCommit(admin, {
@@ -248,9 +238,7 @@ export async function triggerProductionReview(
       commitSha: resolvedCommitSha,
       branch: resolvedBranch ?? "main",
     }).catch(() => undefined);
-  }
 
-  if (reviewsDefaultBranchHead) {
     await admin
       .from("projects")
       .update({
@@ -259,7 +247,12 @@ export async function triggerProductionReview(
       })
       .eq("id", input.projectId)
       .eq("organization_id", input.organizationId);
+  }
 
+  // A newer head supersedes older active reviews of the SAME branch only
+  // (releaseActiveReviewForNewHead is branch-scoped); an explicit older commit
+  // never supersedes anything.
+  if (isHeadReview) {
     await releaseActiveReviewForNewHead(admin, {
       organizationId: input.organizationId,
       projectId: input.projectId,
@@ -268,14 +261,17 @@ export async function triggerProductionReview(
     });
   }
 
-  const [hasActiveReview, currentVerdict] = await Promise.all([
+  // Review lifecycle scope is (project, branch): only an active review of the
+  // SAME branch deduplicates this request.
+  const [activeReview, currentVerdict] = await Promise.all([
     (async () => {
       await recoverStaleActiveReviewsForProject(admin, input.projectId);
-      return hasActiveRepositoryReview(admin, input.projectId);
+      return loadActiveReviewForBranch(admin, input.projectId, resolvedBranch);
     })(),
     getCurrentProductionVerdict(admin, input.organizationId, input.projectId),
   ]);
-  const activeReviewId = hasActiveReview ? await loadActiveScanId(admin, input.projectId) : null;
+  const hasActiveReview = Boolean(activeReview);
+  const activeReviewId = activeReview?.id ?? null;
 
   const decision = decideReviewNowAction({
     hasActiveReview,
@@ -328,22 +324,20 @@ export async function triggerProductionReview(
     // concurrency authority — a race between two concurrent review_now
     // calls resolves here, not earlier.
     if (insertError.code === "23505") {
-      const raceReviewId = await loadActiveScanId(admin, input.projectId);
-      if (raceReviewId) {
-        return { outcome: "processing", reviewId: raceReviewId };
+      const raceReview = await loadActiveReviewForBranch(admin, input.projectId, resolvedBranch);
+      if (raceReview) {
+        return { outcome: "processing", reviewId: raceReview.id };
       }
     }
     throw new ReviewNowError("review_creation_failed", "Could not create the Production Review.");
   }
 
-  await admin.from("repository_scan_state").upsert(
-    {
-      repository_id: input.projectId,
-      organization_id: input.organizationId,
-      active_scan_id: scan.id,
-    },
-    { onConflict: "repository_id" }
-  );
+  await markActiveScan(admin, {
+    projectId: input.projectId,
+    organizationId: input.organizationId,
+    scanId: scan.id as string,
+    branch: resolvedBranch,
+  });
 
   log("review_now_queued", {
     projectId: input.projectId,

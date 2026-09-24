@@ -9,10 +9,12 @@ import {
   CancelProductionReviewError,
   cancelProductionReview,
 } from "@/server/review-cancel/cancel-production-review";
-import { isActiveReviewScanStatus } from "@/brain/automatic-review/review-status";
+import { loadActiveReviewForBranch } from "@/server/automatic-review/queries";
 
 export type CancelReviewInput = ProjectSelector & {
   reviewId?: string;
+  /** Branch whose active review to cancel when no reviewId is given. Defaults to the default branch. */
+  branch?: string;
 };
 
 export type CancelReviewResult = {
@@ -32,15 +34,13 @@ export async function cancelReview(
 
   let reviewId = input.reviewId?.trim() || null;
   if (!reviewId) {
-    const { data: active } = await ctx.admin
-      .from("scans")
-      .select("id, status")
-      .eq("repository_id", project.id)
-      .order("created_at", { ascending: false })
-      .limit(5);
-
-    reviewId =
-      (active ?? []).find((row) => isActiveReviewScanStatus(String(row.status)))?.id ?? null;
+    // Without an explicit review id the target is the active review of ONE
+    // branch scope: the requested branch, else the default branch. It is
+    // never "the newest active review of the project": another branch's
+    // review is never selected, so an ambiguous request fails closed
+    // (nothing is cancelled).
+    const active = await loadActiveReviewForBranch(ctx.admin, project.id, input.branch?.trim() || null);
+    reviewId = active?.id ?? null;
   }
 
   if (!reviewId) {

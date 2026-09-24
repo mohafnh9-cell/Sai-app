@@ -127,25 +127,60 @@ export async function hasCompletedAutomaticReviewForCommit(
   return Boolean(data);
 }
 
+const ACTIVE_REVIEW_STATUSES = [
+  "queued",
+  "fetching_repository",
+  "indexing",
+  "scanning",
+  "calculating_score",
+];
+
+/**
+ * The active review of ONE branch scope. `branch` omitted/undefined means the
+ * project's default branch (the production decision scope); null is treated as
+ * the default branch too (branchless GitHub scans are default-branch scans).
+ * Reviews of other branches are never returned: a feature review is not the
+ * default branch's active review, and vice versa.
+ */
+export async function loadActiveReviewForBranch(
+  admin: SupabaseClient,
+  projectId: string,
+  branch?: string | null
+): Promise<{ id: string; status: string; branch: string | null } | null> {
+  const [{ data: project }, { data: scans }] = await Promise.all([
+    admin.from("projects").select("github_default_branch").eq("id", projectId).maybeSingle(),
+    admin
+      .from("scans")
+      .select("id, status, branch, created_at")
+      .eq("repository_id", projectId)
+      .in("status", ACTIVE_REVIEW_STATUSES)
+      .order("created_at", { ascending: false })
+      .limit(20),
+  ]);
+  const defaultBranch =
+    (project as { github_default_branch?: string | null } | null)?.github_default_branch ?? null;
+  const scope = branch ?? defaultBranch;
+  const match = (scans ?? []).find((row) => {
+    const rowBranch = (row as { branch?: string | null }).branch ?? null;
+    // A branchless scan with an unknown default branch cannot be scoped: it is
+    // conservatively treated as belonging to every scope (legacy behaviour).
+    if (!rowBranch && !defaultBranch) return true;
+    return scope === (rowBranch ?? defaultBranch);
+  });
+  if (!match || !isActiveReviewScanStatus((match as { status: string }).status)) return null;
+  return {
+    id: (match as { id: string }).id,
+    status: (match as { status: string }).status,
+    branch: ((match as { branch?: string | null }).branch ?? null) as string | null,
+  };
+}
+
 export async function hasActiveRepositoryReview(
   admin: SupabaseClient,
-  projectId: string
+  projectId: string,
+  branch?: string | null
 ): Promise<boolean> {
-  const { data } = await admin
-    .from("scans")
-    .select("status")
-    .eq("repository_id", projectId)
-    .in("status", [
-      "queued",
-      "fetching_repository",
-      "indexing",
-      "scanning",
-      "calculating_score",
-    ])
-    .limit(1)
-    .maybeSingle();
-
-  return Boolean(data && isActiveReviewScanStatus(data.status));
+  return Boolean(await loadActiveReviewForBranch(admin, projectId, branch));
 }
 
 export function buildCommitValidationInput(input: {

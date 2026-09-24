@@ -1,3 +1,4 @@
+import { markActiveScan } from "@/server/production-verdict/scan-state-writer";
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -356,14 +357,12 @@ export async function ensureCiScan(
     throw mapDatabaseError(insertError, "Could not create CI scan");
   }
 
-  await access.admin.from("repository_scan_state").upsert(
-    {
-      repository_id: access.project.id,
-      organization_id: access.project.organization_id,
-      active_scan_id: scan.id,
-    },
-    { onConflict: "repository_id" }
-  );
+  await markActiveScan(access.admin, {
+    projectId: access.project.id,
+    organizationId: access.project.organization_id,
+    scanId: scan.id as string,
+    branch: resolvedBranch,
+  });
 
   try {
     const scheduled = await scheduleScanRun(
