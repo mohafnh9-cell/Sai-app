@@ -140,7 +140,7 @@ describe("PASS 5.6A branch-scoped review lifecycle", () => {
     const base = tables([scan("feat", "feature/x", "f1"), scan("main-a", "main", "m1")], "main-a") as Record<string, unknown>;
     const both = createFakeAdmin({ ...base, scan_jobs: jobs } as never);
     const s1 = await getProductionReviewState(both as never, { organizationId: ORG, projectId: P, recoverStale: false });
-    expect(s1.reviewId ?? (s1 as { scanId?: string }).scanId).toBe("main-a");
+    expect(s1.scanId).toBe("main-a");
     const featOnly = createFakeAdmin({ ...base, scan_jobs: [jobs[0]], repository_scan_state: [{ repository_id: P, organization_id: ORG, active_scan_id: null }] } as never);
     const s2 = await getProductionReviewState(featOnly as never, { organizationId: ORG, projectId: P, recoverStale: false });
     expect(s2.hasActiveReview).toBe(false);
