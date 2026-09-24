@@ -16,7 +16,7 @@ import { getCurrentProductionVerdict } from "@/server/production-verdict/service
 import { getScanSchedulerMode } from "@/lib/env/scan-scheduler";
 import { scheduleScanRun } from "@/server/jobs/schedule-scan";
 import { recoverStaleActiveReviewsForProject } from "@/server/review-recovery/stale-review";
-import { recordLiveHeadCommit } from "@/server/repository-sync/persistence";
+import { isDefaultBranchHead, recordLiveHeadCommit } from "@/server/repository-sync/persistence";
 import { releaseActiveReviewForNewHead } from "@/server/review-start/release-active-review-for-new-head";
 import { assertOrganizationCanRunScan } from "@/server/billing/assert-scan-access";
 import { ScanRequestError } from "@/server/security-scanner/request-context";
@@ -233,29 +233,40 @@ export async function triggerProductionReview(
     throw new ReviewNowError("internal_error", "Could not resolve the commit to review.");
   }
 
-  await recordLiveHeadCommit(admin, {
-    organizationId: input.organizationId,
-    projectId: input.projectId,
-    githubRepositoryId: input.githubRepositoryId,
-    commitSha: resolvedCommitSha,
-    branch: resolvedBranch ?? "main",
-  }).catch(() => undefined);
+  // The "live head" / detected-commit signals describe the DEFAULT branch's
+  // head only. An explicit older commit or a feature-branch review must never
+  // overwrite them (that made the default branch's decision "stale" and
+  // "in progress" because of an unrelated branch).
+  const reviewsDefaultBranchHead =
+    !input.requestedCommitSha && (await isDefaultBranchHead(admin, input.projectId, resolvedBranch));
 
-  await admin
-    .from("projects")
-    .update({
-      github_last_commit_sha: resolvedCommitSha,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", input.projectId)
-    .eq("organization_id", input.organizationId);
+  if (reviewsDefaultBranchHead) {
+    await recordLiveHeadCommit(admin, {
+      organizationId: input.organizationId,
+      projectId: input.projectId,
+      githubRepositoryId: input.githubRepositoryId,
+      commitSha: resolvedCommitSha,
+      branch: resolvedBranch ?? "main",
+    }).catch(() => undefined);
+  }
 
-  await releaseActiveReviewForNewHead(admin, {
-    organizationId: input.organizationId,
-    projectId: input.projectId,
-    targetCommitSha: resolvedCommitSha,
-    targetBranch: resolvedBranch,
-  });
+  if (reviewsDefaultBranchHead) {
+    await admin
+      .from("projects")
+      .update({
+        github_last_commit_sha: resolvedCommitSha,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", input.projectId)
+      .eq("organization_id", input.organizationId);
+
+    await releaseActiveReviewForNewHead(admin, {
+      organizationId: input.organizationId,
+      projectId: input.projectId,
+      targetCommitSha: resolvedCommitSha,
+      targetBranch: resolvedBranch,
+    });
+  }
 
   const [hasActiveReview, currentVerdict] = await Promise.all([
     (async () => {

@@ -99,9 +99,9 @@ export async function getStalenessInfo(
   projectId: string,
   reviewedCommitSha: string | null
 ): Promise<StalenessInfo> {
-  const [{ data: project }, { data: syncStatus }, { data: webhook }, { data: scanState }, { data: latestAutomaticScan }] =
+  const [{ data: project }, { data: syncStatus }, { data: webhook }, { data: scanState }, { data: automaticScans }] =
     await Promise.all([
-      admin.from("projects").select("github_repo").eq("id", projectId).maybeSingle(),
+      admin.from("projects").select("github_repo, github_default_branch").eq("id", projectId).maybeSingle(),
       admin
         .from("repository_sync_status")
         .select("commit_sha, connection_status, last_error")
@@ -119,20 +119,35 @@ export async function getStalenessInfo(
         .maybeSingle(),
       admin
         .from("scans")
-        .select("status, commit_sha")
+        .select("status, commit_sha, branch")
         .eq("repository_id", projectId)
         .eq("review_type", "automatic")
         .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle(),
+        .limit(20),
     ]);
+  const defaultBranch =
+    (project as { github_default_branch?: string | null } | null)?.github_default_branch ?? null;
+  const onDefaultBranch = (branch: string | null | undefined) =>
+    !defaultBranch || !branch || branch === defaultBranch;
 
   const sync = (syncStatus ?? null) as SyncStatusRow | null;
   const hook = (webhook ?? null) as WebhookRow | null;
   const state = (scanState ?? null) as ScanStateRow | null;
-  const latestAutomatic = (latestAutomaticScan ?? null) as LatestAutomaticScanRow | null;
+  const latestAutomatic = ((automaticScans ?? []) as Array<LatestAutomaticScanRow & { branch?: string | null }>).find(
+    (row) => onDefaultBranch(row.branch)
+  ) ?? null;
 
-  const reviewInProgress = Boolean(state?.active_scan_id);
+  // An active review of another branch is not a review "in progress" for the
+  // default branch's decision.
+  let reviewInProgress = false;
+  if (state?.active_scan_id) {
+    const { data: activeScan } = await admin
+      .from("scans")
+      .select("branch")
+      .eq("id", state.active_scan_id)
+      .maybeSingle();
+    reviewInProgress = onDefaultBranch((activeScan as { branch?: string | null } | null)?.branch);
+  }
   const reviewFailed = latestAutomatic?.status === "failed";
 
   // Deliberately excludes repository_scan_state.last_commit_sha: that column

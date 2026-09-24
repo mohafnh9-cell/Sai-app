@@ -318,7 +318,10 @@ export class InlineScanJobRunner implements ScanJobRunner {
                 .update({
                   github_repository_id: snapshot.repositoryId,
                   github_default_branch: snapshot.defaultBranch,
-                  github_last_commit_sha: snapshot.commitSha,
+                  // Only the default branch's head is the project's "last commit".
+                  ...(!context.branch || context.branch === snapshot.defaultBranch
+                    ? { github_last_commit_sha: snapshot.commitSha }
+                    : {}),
                   github_is_private: snapshot.isPrivate,
                   github_connected_at: new Date().toISOString(),
                 })

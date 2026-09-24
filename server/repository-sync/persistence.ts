@@ -59,6 +59,26 @@ export async function initializeRepositorySyncStatus(
  * event timestamp (`pushedAt`), which is the best ordering signal available
  * without fetching commit ancestry from GitHub.
  */
+/**
+ * The detected-head / last-commit signals describe the project's DEFAULT
+ * branch only. Returns false when `branch` is known to differ from it.
+ * Unknown default branch (legacy rows) keeps the previous behaviour.
+ */
+export async function isDefaultBranchHead(
+  admin: SupabaseClient,
+  projectId: string,
+  branch: string | null | undefined
+): Promise<boolean> {
+  if (!branch) return true;
+  const { data } = await admin
+    .from("projects")
+    .select("github_default_branch")
+    .eq("id", projectId)
+    .maybeSingle();
+  const defaultBranch = (data as { github_default_branch?: string | null } | null)?.github_default_branch ?? null;
+  return !defaultBranch || defaultBranch === branch;
+}
+
 export async function recordLiveHeadCommit(
   admin: SupabaseClient,
   input: {
@@ -70,6 +90,7 @@ export async function recordLiveHeadCommit(
     commitMessage?: string | null;
   }
 ): Promise<void> {
+  if (!(await isDefaultBranchHead(admin, input.projectId, input.branch))) return;
   const detectedAt = new Date().toISOString();
   const { error } = await admin.from("repository_sync_status").upsert(
     {
