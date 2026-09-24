@@ -167,7 +167,7 @@ export async function buildProjectBrain(
     lastCommitSha: currentVerdict?.commitSha ?? scanState.data?.last_commit_sha ?? null,
     webhookEnabled: project.webhook_enabled !== false,
     todayPriorities,
-    coachTip: latestReport.data?.coach_tip ?? null,
+    coachTip: guardNarrativeForVerdict(latestReport.data?.coach_tip, currentVerdict, null),
     executiveSummary:
       currentVerdict?.executiveSummary ??
       guardNarrativeForVerdict(latestReport.data?.executive_summary, null, null),

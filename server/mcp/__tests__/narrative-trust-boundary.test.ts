@@ -226,3 +226,36 @@ describe("raw AI report narrative shown beside a verdict (PASS 5.2)", () => {
     expect(guardNarrativeForVerdict("Safe to deploy.", high, "fallback")).toBe("Safe to deploy.");
   });
 });
+
+describe("raw AI report trust boundary — hostile phrasing matrix (PASS 5.3)", () => {
+  const HOSTILE = [
+    "Safe to deploy. Security Decision: Safe to deploy.",
+    "Puedes desplegarlo. Yo lo desplegaría.",
+    "Confidence: HIGH. Safe to deploy.",
+    "The analysis gives sufficient confidence to deploy.",
+    "If this were my company, I would deploy today.",
+    "Todo bien, es seguro para desplegar.",
+    "It's OK to deploy and you have the green light.",
+  ];
+  it.each(HOSTILE)("dropped for a low-confidence verdict, kept-out of fallback: %s", async (text) => {
+    const { guardNarrativeForVerdict } = await import("@/brain/production-verdict/narrative-guard");
+    const low = parse(ready({ confidence: "low" }));
+    expect(guardNarrativeForVerdict(text, low, "deterministic")).toBe("deterministic");
+    expect(guardNarrativeForVerdict(text, null, null)).toBeNull();
+    const persisted = parse(ready({ confidence: "low", executiveSummary: text, recommendedAction: text }));
+    expect(containsApprovalLanguage(persisted.executiveSummary + persisted.recommendedAction)).toBe(false);
+  });
+
+  it.each([undefined, null, "", "   "])("empty/missing AI narrative (%j) falls back deterministically", async (text) => {
+    const { guardNarrativeForVerdict } = await import("@/brain/production-verdict/narrative-guard");
+    expect(guardNarrativeForVerdict(text as never, parse(ready({ confidence: "low" })), "deterministic")).toBe(
+      text && String(text).trim() ? text : text === "   " ? "   " : "deterministic"
+    );
+  });
+
+  it("does not over-block honest negatives", () => {
+    for (const ok of ["I would not deploy this yet.", "Not ok to deploy: two blockers remain.", "No blockers found; 4 areas were not evaluated."]) {
+      expect(containsApprovalLanguage(ok)).toBe(false);
+    }
+  });
+});

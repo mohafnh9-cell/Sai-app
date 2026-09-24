@@ -23,6 +23,12 @@ export const APPROVAL_PATTERNS: RegExp[] = [
   /despliega\s+cuando\s+est[eé]s\s+listo/i,
   /ship\s+when\s+you'?re\s+ready/i,
   /\bship\s+it\b/i,
+  /(?:sufficient|enough|high)\s+confidence\s+to\s+(?:deploy|ship|release)/i,
+  /(?<!\b(?:not|n't)\s+)\b(?:ok|okay|good|fine|clear)\s+to\s+(?:deploy|ship|go)\b/i,
+  /\bgreen[\s-]?light\b/i,
+  /go\s+ahead\s+and\s+(?:deploy|ship|release)/i,
+  /\blo\s+desplegar[ií]a\b/i,
+  /suficiente\s+confianza\s+para\s+(?:desplegar|publicar)/i,
   /desplegar\s+con\s+confianza/i,
 ];
 
