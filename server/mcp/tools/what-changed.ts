@@ -37,6 +37,8 @@ export type WhatChangedResult = {
    */
   currentDecision: DeploymentDecision;
   authoritativeVerdictStatus: VerdictStatus;
+  /** Scan of the authoritative verdict; lets alert enrichment tell current alerts from historical ones. */
+  verdictScanId: string | null;
   reviewInProgress: boolean;
   freshnessStatus: FreshnessStatus;
   comparisonReflectsCurrentVerdict: boolean;
@@ -159,6 +161,7 @@ export async function whatChanged(
     nextAction: recommendedAction,
     currentDecision: decision,
     authoritativeVerdictStatus: authoritativeStatus,
+    verdictScanId: state?.verdict.scanId ?? null,
     reviewInProgress: stalenessFootnotes.reviewInProgress,
     freshnessStatus: stalenessFootnotes.freshnessStatus,
     comparisonReflectsCurrentVerdict,

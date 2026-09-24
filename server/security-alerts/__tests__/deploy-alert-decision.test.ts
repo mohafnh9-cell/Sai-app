@@ -127,6 +127,10 @@ describe("alerts are bound to the decision (scan) they describe", () => {
     expect(isHistoricalAlert({ alertKind: "deploy_blocked", decisionScanId: SCAN }, SCAN)).toBe(false);
   });
 
+  it("with no known current decision, a deploy alert is never presented as current", () => {
+    expect(isHistoricalAlert({ alertKind: "deploy_blocked", decisionScanId: SCAN }, null)).toBe(true);
+  });
+
   it("non-decision alert kinds are never marked historical", () => {
     expect(isHistoricalAlert({ alertKind: "watch_stale", decisionScanId: null }, SCAN)).toBe(false);
   });
@@ -203,6 +207,19 @@ describe("MCP alert surface marks superseded alerts historical", () => {
       deploymentRecommendation: "SHIP_IT",
     });
     expect(ship.summary).toMatch(/nothing urgent/i);
+  });
+});
+
+describe("what_changed exposes the authoritative scan so its alerts are classified", () => {
+  it("a legacy deploy alert is historical and not primary when what_changed supplies the current scan", async () => {
+    const admin = createFakeAdmin({ security_alerts: [alertRow({})] } as FakeTables);
+    const enriched = await enrichMcpToolResultWithAlerts(admin as never, "what_changed", {
+      project: { id: PROJECT },
+      summary: "WHAT CHANGED",
+      verdictScanId: SCAN,
+    });
+    expect(enriched.alerts?.primaryAlert).toBeNull();
+    expect(enriched.summary).not.toMatch(/why I alerted you/i);
   });
 });
 
