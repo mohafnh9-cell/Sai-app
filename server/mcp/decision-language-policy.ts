@@ -1,4 +1,5 @@
 import type { ProductionVerdictV1, VerdictStatus } from "@/brain/production-verdict/schema";
+import { containsApprovalLanguage } from "@/brain/production-verdict/narrative-guard";
 import type { DeploymentDecision } from "./decision-mapping";
 
 /**
@@ -115,29 +116,7 @@ export function describeCoverage(
   };
 }
 
-const APPROVAL_PATTERNS: RegExp[] = [
-  /safe\s+(?:to|for)\s+(?:deploy|ship|production|release)/i,
-  /security\s+decision:\s*(?:safe|deploy\b)/i,
-  /\b(?:i|we)(?:'d|\s+would|'ll|\s+will)\s+(?:deploy|ship|release)\b/i,
-  /\bwould\s+(?:deploy|ship)\s+(?:this|it)\b/i,
-  /(?<!\b(?:not|n't)\s+(?:fully\s+)?)comfortable\s+(?:with\s+you\s+)?(?:shipping|deploying|protecting)/i,
-  /deploy\s+with\s+confidence/i,
-  /\b(?:fully|completely)\s+(?:secure|analy[sz]ed|verified)\b/i,
-  /\bproven\s+(?:secure|safe)\b/i,
-  /(?<!\bno\s+)me\s+siento\s+(?:del\s+todo\s+)?c[oó]modo/i,
-  /desplegar[ií]a\s+esto/i,
-  /(?:enviar[ií]a|lanzar[ií]a)\s+esto/i,
-  /(?:es\s+)?seguro\s+(?:para\s+)?(?:desplegar|producci[oó]n)/i,
-  /puedes\s+desplegar/i,
-  /despliega\s+cuando\s+est[eé]s\s+listo/i,
-  /ship\s+when\s+you'?re\s+ready/i,
-  /\bship\s+it\b/i,
-  /desplegar\s+con\s+confianza/i,
-];
-
-export function containsApprovalLanguage(text: string): boolean {
-  return APPROVAL_PATTERNS.some((pattern) => pattern.test(text));
-}
+export { containsApprovalLanguage };
 
 /**
  * Backstop for free text that originates outside the deterministic layer

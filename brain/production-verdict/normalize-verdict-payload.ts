@@ -1,3 +1,10 @@
+import {
+  containsApprovalLanguage,
+  narrativeMayApprove,
+  NEUTRAL_EXECUTIVE_SUMMARY,
+  NEUTRAL_RECOMMENDED_ACTION,
+} from "./narrative-guard";
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   return value as Record<string, unknown>;
@@ -77,7 +84,8 @@ export function normalizeProductionVerdictPayload(data: unknown): unknown {
   normalized.findingsCount = asNumber(normalized.findingsCount);
 
   if (normalized.confidence !== "high" && normalized.confidence !== "medium" && normalized.confidence !== "low") {
-    normalized.confidence = "medium";
+    // Unknown confidence must never read as stronger than "low".
+    normalized.confidence = "low";
   }
 
   normalized.topPriorities = (normalized.topPriorities as unknown[]).map((item) => {
@@ -97,6 +105,17 @@ export function normalizeProductionVerdictPayload(data: unknown): unknown {
           : "medium",
     };
   });
+
+  // Trust boundary: stored/AI narrative can never state approval the evidence
+  // does not support (this runs on every write and every read of a verdict).
+  if (!narrativeMayApprove(normalized as never)) {
+    if (containsApprovalLanguage(String(normalized.executiveSummary ?? ""))) {
+      normalized.executiveSummary = NEUTRAL_EXECUTIVE_SUMMARY;
+    }
+    if (containsApprovalLanguage(String(normalized.recommendedAction ?? ""))) {
+      normalized.recommendedAction = NEUTRAL_RECOMMENDED_ACTION;
+    }
+  }
 
   return normalized;
 }

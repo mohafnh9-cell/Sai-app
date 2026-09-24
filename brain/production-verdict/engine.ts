@@ -8,6 +8,7 @@ import {
   projectScoreAfterPriorities,
 } from "./projection";
 import { isNonBlockingSecretClassification } from "@/features/security-scanner/rules/secret-classification";
+import { applyNarrativeGuard } from "./narrative-guard";
 import { summarizeConfidenceDistribution } from "@/brain/confidence/derive";
 import {
   PRODUCTION_VERDICT_VERSION,
@@ -197,7 +198,7 @@ export function generateProductionVerdict(input: VerdictEngineInput): {
     input.aiExecutiveSummary?.trim() || buildDeterministicSummary(baseVerdict, blockerConfidence);
   baseVerdict.methodologyNote = buildMethodologyNote(baseVerdict);
 
-  const verdict = ProductionVerdictSchema.parse(baseVerdict);
+  const verdict = applyNarrativeGuard(ProductionVerdictSchema.parse(baseVerdict));
 
   return {
     verdict,

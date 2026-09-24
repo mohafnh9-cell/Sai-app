@@ -27,6 +27,8 @@ export type StatusEvaluationInput = {
   lastCheckAt: string | null;
   consecutiveDailyFailures: number;
   deployAnswer: "go" | "no_go" | "not_yet" | null;
+  /** Canonical decision-language policy allows first-person deployment approval (high confidence, all areas evaluated). */
+  approvalEligible: boolean;
   openCriticalCount: number;
   openHighCount: number;
   productionConfidence: number | null;

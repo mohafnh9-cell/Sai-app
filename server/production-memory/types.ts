@@ -111,6 +111,10 @@ function policyForVerdict(verdict: VerdictEvidence) {
   });
 }
 
+export function verdictAllowsFirstPersonApproval(verdict: VerdictEvidence): boolean {
+  return policyForVerdict(verdict).canUseFirstPersonDeploymentLanguage;
+}
+
 export function deployAnswerFromVerdictEvidence(verdict: VerdictEvidence): DeployAnswer {
   const policy = policyForVerdict(verdict);
   if (policy.decision === "deploy") return "go";
