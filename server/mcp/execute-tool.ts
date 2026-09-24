@@ -190,6 +190,7 @@ async function dispatch(
         {
           ...projectSelector(input),
           reviewId: str(input.reviewId),
+          branch: str(input.branch),
         },
         t
       );

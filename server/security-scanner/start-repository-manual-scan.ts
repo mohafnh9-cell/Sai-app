@@ -131,6 +131,7 @@ export async function startRepositoryManualScan(
   const idempotency = await resolveReviewIdempotency(ctx.admin, {
     projectId: ctx.project.id,
     commitSha: resolvedCommit.commitSha,
+    branch: resolvedCommit.branch,
     reviewType: "manual",
     forceNew: input.forceNew === true,
   });

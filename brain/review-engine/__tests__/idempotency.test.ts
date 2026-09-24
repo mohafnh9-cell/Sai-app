@@ -1,5 +1,8 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { createFakeAdmin } from "@/server/mcp/__tests__/fake-admin";
 import { resolveReviewIdempotency } from "../idempotency";
+
+vi.mock("server-only", () => ({}));
 
 vi.mock("@/lib/repository-sync/commits-match", () => ({
   commitsMatch: (a: string, b: string) => a.toLowerCase() === b.toLowerCase(),
@@ -16,30 +19,19 @@ const COMMIT = "abc123def456";
 function buildAdmin(input: {
   active?: Array<Record<string, unknown>>;
   completed?: Array<Record<string, unknown>>;
+  defaultBranch?: string | null;
 }) {
-  return {
-    from: (table: string) => {
-      if (table !== "scans") throw new Error(`unexpected table ${table}`);
-      return {
-        select: () => ({
-          eq: (_col: string, _val: string) => ({
-            in: () => ({
-              order: () => ({
-                limit: () => Promise.resolve({ data: input.active ?? [], error: null }),
-              }),
-            }),
-            eq: (_col2: string, _val2: string) => ({
-              eq: (_col3: string, _val3: string) => ({
-                order: () => ({
-                  limit: () => Promise.resolve({ data: input.completed ?? [], error: null }),
-                }),
-              }),
-            }),
-          }),
-        }),
-      };
-    },
-  } as never;
+  const withProject = (row: Record<string, unknown>) => ({
+    repository_id: PROJECT,
+    branch: "main",
+    created_at: "2026-02-01T00:00:00Z",
+    completed_at: "2026-02-01T00:00:00Z",
+    ...row,
+  });
+  return createFakeAdmin({
+    projects: [{ id: PROJECT, github_default_branch: input.defaultBranch === undefined ? "main" : input.defaultBranch }],
+    scans: [...(input.active ?? []), ...(input.completed ?? [])].map(withProject),
+  } as never) as never;
 }
 
 describe("resolveReviewIdempotency", () => {
@@ -122,4 +114,40 @@ describe("resolveReviewIdempotency", () => {
 
     expect(result).toEqual({ action: "create_new" });
   });
+
+  describe("branch scope (PASS 5.6A-B)", () => {
+    const active = (id: string, branch: string) => ({ id, status: "queued", commit_sha: COMMIT, review_type: "manual", branch });
+    const done = (id: string, branch: string) => ({ id, status: "completed", commit_sha: COMMIT, review_type: "manual", branch });
+
+    it("same branch + same commit + same type resumes the active review", async () => {
+      const admin = buildAdmin({ active: [active("main-active", "main")] });
+      const r = await resolveReviewIdempotency(admin, { projectId: PROJECT, commitSha: COMMIT, branch: "main" });
+      expect(r).toEqual({ action: "resume_active", scan: expect.objectContaining({ id: "main-active" }) });
+    });
+
+    it("same commit on a different branch never resumes the other branch's active review", async () => {
+      const admin = buildAdmin({ active: [active("main-active", "main")] });
+      const r = await resolveReviewIdempotency(admin, { projectId: PROJECT, commitSha: COMMIT, branch: "feature/x" });
+      expect(r).toEqual({ action: "create_new" });
+    });
+
+    it("main + feature active at the same commit: each resolves to its own", async () => {
+      const admin = buildAdmin({ active: [active("main-active", "main"), active("feat-active", "feature/x")] });
+      expect((await resolveReviewIdempotency(admin, { projectId: PROJECT, commitSha: COMMIT, branch: "feature/x" }))).toEqual({
+        action: "resume_active",
+        scan: expect.objectContaining({ id: "feat-active" }),
+      });
+      expect((await resolveReviewIdempotency(admin, { projectId: PROJECT, commitSha: COMMIT }))).toEqual({
+        action: "resume_active",
+        scan: expect.objectContaining({ id: "main-active" }),
+      });
+    });
+
+    it("a completed review of another branch is not reused", async () => {
+      const admin = buildAdmin({ completed: [done("feat-done", "feature/x")] });
+      expect(await resolveReviewIdempotency(admin, { projectId: PROJECT, commitSha: COMMIT, branch: "main" })).toEqual({ action: "create_new" });
+      expect((await resolveReviewIdempotency(admin, { projectId: PROJECT, commitSha: COMMIT, branch: "feature/x" })).action).toBe("reuse_completed");
+    });
+  });
 });
+

@@ -110,7 +110,11 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
         ...PROJECT_SELECTOR_PROPERTIES,
         reviewId: {
           type: "string",
-          description: "Optional scan/review UUID. Defaults to the newest active review for the project.",
+          description: "Optional scan/review UUID. When omitted, the active review of `branch` (default: the repository's default branch) is cancelled; another branch's review is never chosen.",
+        },
+        branch: {
+          type: "string",
+          description: "Branch whose active review to cancel when reviewId is omitted. Defaults to the repository's default branch.",
         },
       },
       required: [],

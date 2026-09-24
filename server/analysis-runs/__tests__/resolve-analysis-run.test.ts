@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { createFakeAdmin } from "@/server/mcp/__tests__/fake-admin";
 import { resolveAnalysisRunForMissionControl } from "../resolve-analysis-run";
 
 vi.mock("@/server/review-cancel/get-production-review-state", () => ({
@@ -16,41 +17,25 @@ const PROJECT = "proj-1";
 const ORG = "org-1";
 const RUN = "run-abc";
 
-function buildAdmin(scanRows: Array<{ id: string; status?: string }>) {
-  let callIndex = 0;
+function scanRow(id: string, over: Record<string, unknown> = {}) {
   return {
-    from: (table: string) => {
-      if (table !== "scans") throw new Error(`unexpected table ${table}`);
-      return {
-        select: () => ({
-          eq: () => ({
-            eq: () => ({
-              eq: () => ({
-                order: () => ({
-                  limit: () => ({
-                    maybeSingle: async () => {
-                      const row = scanRows[callIndex++];
-                      return row ? { data: row, error: null } : { data: null, error: null };
-                    },
-                  }),
-                }),
-              }),
-              in: () => ({
-                order: () => ({
-                  limit: () => ({
-                    maybeSingle: async () => {
-                      const row = scanRows[callIndex++];
-                      return row ? { data: row, error: null } : { data: null, error: null };
-                    },
-                  }),
-                }),
-              }),
-            }),
-          }),
-        }),
-      };
-    },
-  } as never;
+    id,
+    project_id: PROJECT,
+    repository_id: PROJECT,
+    organization_id: ORG,
+    status: "completed",
+    branch: "main",
+    completed_at: "2026-02-01T00:00:00Z",
+    created_at: "2026-02-01T00:00:00Z",
+    ...over,
+  };
+}
+
+function buildAdmin(scans: Array<Record<string, unknown>>) {
+  return createFakeAdmin({
+    projects: [{ id: PROJECT, organization_id: ORG, github_default_branch: "main" }],
+    scans,
+  } as never) as never;
 }
 
 describe("resolveAnalysisRunForMissionControl", () => {
@@ -105,7 +90,7 @@ describe("resolveAnalysisRunForMissionControl", () => {
       status: "idle",
     } as never);
 
-    const admin = buildAdmin([{ id: "completed-scan" }]);
+    const admin = buildAdmin([scanRow("completed-scan")]);
 
     const result = await resolveAnalysisRunForMissionControl(admin, {
       projectId: PROJECT,
@@ -122,40 +107,7 @@ describe("resolveAnalysisRunForMissionControl", () => {
       status: "idle",
     } as never);
 
-    let completedQuery = true;
-    const admin = {
-      from: (table: string) => {
-        if (table !== "scans") throw new Error(`unexpected table ${table}`);
-        return {
-          select: () => ({
-            eq: () => ({
-              eq: () => ({
-                eq: () => ({
-                  order: () => ({
-                    limit: () => ({
-                      maybeSingle: async () => {
-                        if (completedQuery) {
-                          completedQuery = false;
-                          return { data: null, error: null };
-                        }
-                        return { data: { id: "queued-scan" }, error: null };
-                      },
-                    }),
-                  }),
-                }),
-                in: () => ({
-                  order: () => ({
-                    limit: () => ({
-                      maybeSingle: async () => ({ data: { id: "queued-scan" }, error: null }),
-                    }),
-                  }),
-                }),
-              }),
-            }),
-          }),
-        };
-      },
-    } as never;
+    const admin = buildAdmin([scanRow("queued-scan", { status: "queued", completed_at: null })]);
 
     const result = await resolveAnalysisRunForMissionControl(admin, {
       projectId: PROJECT,
@@ -181,4 +133,56 @@ describe("resolveAnalysisRunForMissionControl", () => {
 
     expect(result).toEqual({ runId: null, source: "none", valid: true });
   });
+
+  describe("branch scope (PASS 5.6A-B)", () => {
+    const idle = { scanId: null, hasActiveReview: false, status: "idle" } as never;
+
+    it("main completed + feature completed (feature newer): resolving the default returns main", async () => {
+      vi.mocked(getProductionReviewState).mockResolvedValue(idle);
+      const admin = buildAdmin([
+        scanRow("feat-done", { branch: "feature/x", completed_at: "2026-02-03T00:00:00Z" }),
+        scanRow("main-done", { branch: "main", completed_at: "2026-02-02T00:00:00Z" }),
+      ]);
+      const r = await resolveAnalysisRunForMissionControl(admin, { projectId: PROJECT, organizationId: ORG });
+      expect(r.runId).toBe("main-done");
+    });
+
+    it("resolving an explicit feature branch returns the feature run", async () => {
+      vi.mocked(getProductionReviewState).mockResolvedValue(idle);
+      const admin = buildAdmin([
+        scanRow("feat-done", { branch: "feature/x", completed_at: "2026-02-03T00:00:00Z" }),
+        scanRow("main-done", { branch: "main", completed_at: "2026-02-04T00:00:00Z" }),
+      ]);
+      const r = await resolveAnalysisRunForMissionControl(admin, { projectId: PROJECT, organizationId: ORG, branch: "feature/x" });
+      expect(r.runId).toBe("feat-done");
+    });
+
+    it("feature completed only: the default branch has no run (a feature run is never presented as main's)", async () => {
+      vi.mocked(getProductionReviewState).mockResolvedValue(idle);
+      const admin = buildAdmin([scanRow("feat-done", { branch: "feature/x" })]);
+      const r = await resolveAnalysisRunForMissionControl(admin, { projectId: PROJECT, organizationId: ORG });
+      expect(r).toEqual({ runId: null, source: "none", valid: true });
+    });
+
+    it("main active + feature active: default resolution returns main's active run", async () => {
+      vi.mocked(getProductionReviewState).mockResolvedValue(idle);
+      const admin = buildAdmin([
+        scanRow("feat-active", { branch: "feature/x", status: "scanning", completed_at: null, created_at: "2026-02-05T00:00:00Z" }),
+        scanRow("main-active", { branch: "main", status: "scanning", completed_at: null, created_at: "2026-02-04T00:00:00Z" }),
+      ]);
+      const r = await resolveAnalysisRunForMissionControl(admin, { projectId: PROJECT, organizationId: ORG });
+      expect(r).toEqual({ runId: "main-active", source: "active", valid: true });
+    });
+
+    it("feature active + main active: explicit feature resolution returns the feature's active run", async () => {
+      vi.mocked(getProductionReviewState).mockResolvedValue(idle);
+      const admin = buildAdmin([
+        scanRow("feat-active", { branch: "feature/x", status: "scanning", completed_at: null, created_at: "2026-02-04T00:00:00Z" }),
+        scanRow("main-active", { branch: "main", status: "scanning", completed_at: null, created_at: "2026-02-05T00:00:00Z" }),
+      ]);
+      const r = await resolveAnalysisRunForMissionControl(admin, { projectId: PROJECT, organizationId: ORG, branch: "feature/x" });
+      expect(r).toEqual({ runId: "feat-active", source: "active", valid: true });
+    });
+  });
 });
+
