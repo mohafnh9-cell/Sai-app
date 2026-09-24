@@ -157,6 +157,8 @@ export function isHistoricalAlert(
   currentScanId: string | null
 ): boolean {
   if (!isDecisionBoundAlertKind(alert.alertKind)) return false;
-  if (!currentScanId) return false;
+  // Without a known current decision an alert cannot be shown to describe it:
+  // fail closed to historical rather than presenting it as current.
+  if (!currentScanId) return true;
   return (alert.decisionScanId ?? null) !== currentScanId;
 }
