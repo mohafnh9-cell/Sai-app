@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { GitHubRepositoryService, parseGitHubRepository } from "@/lib/github/repository-service";
 import { resolveOrganizationGitHubToken } from "@/server/github-automation/token-resolver";
 import { listExternalAndNativeAdjacentEngines } from "@/server/security-engines/registry";
+import { jobOutcomeFromEngineResult } from "./engine-result-status";
 import { persistEngineResults } from "@/server/security-engines/persistence";
 import type { EngineResult } from "@/server/security-engines/types";
 import { transitionSecurityJob, recordJobEvent } from "./service";
@@ -263,19 +264,17 @@ export async function runClaimedSecurityJob(
     detail: { findingsCount: engineResult.findings.length },
   });
 
-  const finalStatus =
-    engineResult.status === "COMPLETED" || engineResult.status === "PARTIAL"
-      ? "COMPLETED"
-      : engineResult.status === "SKIPPED"
-        ? "FAILED" // a SKIPPED EngineResult reaching the worker means its binary genuinely wasn't available on this worker -- a real failure for THIS job, not a silent success.
-        : "FAILED";
+  // COMPLETED only for complete evidence. A PARTIAL engine result must never
+  // become COMPLETED (see engine-result-status.ts).
+  const outcome = jobOutcomeFromEngineResult(engineResult);
 
   await transitionSecurityJob(admin, {
     jobId: job.id,
     from: "RUNNING",
-    to: finalStatus,
-    error: finalStatus === "FAILED" ? (engineResult.errors[0] ?? { code: "unknown", message: "engine did not complete" }) : null,
+    to: outcome.status,
+    error: outcome.error,
   });
 
+  const finalStatus = outcome.status;
   return { status: finalStatus, engineResult };
 }

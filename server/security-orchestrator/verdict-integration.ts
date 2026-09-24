@@ -130,20 +130,57 @@ export async function hasIncompleteExternalEngineCoverage(
   admin: SupabaseClient,
   input: { scanId: string; organizationId: string }
 ): Promise<boolean> {
-  const { data, error } = await admin
-    .from("security_jobs")
-    .select("id")
-    .eq("scan_id", input.scanId)
-    .eq("organization_id", input.organizationId)
-    .neq("status", "COMPLETED")
-    .limit(1);
+  const [jobsRes, executionsRes] = await Promise.all([
+    admin
+      .from("security_jobs")
+      .select("id, engine, status, requested_at")
+      .eq("scan_id", input.scanId)
+      .eq("organization_id", input.organizationId),
+    admin
+      .from("engine_executions")
+      .select("engine, status, created_at")
+      .eq("scan_id", input.scanId)
+      .eq("organization_id", input.organizationId),
+  ]);
 
-  if (error) {
+  if (jobsRes.error || executionsRes.error || !jobsRes.data || !executionsRes.data) {
     // A read failure here must never silently look like "full coverage" --
     // the safer honest default is to assume coverage MIGHT be incomplete
     // rather than assert it is complete without evidence.
     return true;
   }
 
-  return (data?.length ?? 0) > 0;
+  // The LATEST attempt per engine decides: a retry that genuinely completes
+  // supersedes an earlier failed/partial run, and an earlier run can never
+  // make a later complete one look incomplete (or the reverse).
+  const latestJob = new Map<string, { status: string; at: string }>();
+  for (const row of jobsRes.data as Array<Record<string, unknown>>) {
+    const engine = String(row.engine);
+    const at = String(row.requested_at ?? "");
+    const current = latestJob.get(engine);
+    if (!current || at >= current.at) latestJob.set(engine, { status: String(row.status), at });
+  }
+
+  // Evidence is complete only for COMPLETED. QUEUED, RUNNING, FAILED, TIMED_OUT,
+  // CANCELLED and REJECTED are all incomplete.
+  for (const job of latestJob.values()) {
+    if (job.status !== "COMPLETED") return true;
+  }
+
+  // Second, independent source: the engine's own persisted result. A PARTIAL
+  // (or otherwise non-COMPLETED) execution is incomplete evidence even if a job
+  // row says COMPLETED -- which is how PARTIAL results used to read as complete.
+  const latestExecution = new Map<string, { status: string; at: string }>();
+  for (const row of executionsRes.data as Array<Record<string, unknown>>) {
+    const engine = String(row.engine);
+    const at = String(row.created_at ?? "");
+    const current = latestExecution.get(engine);
+    if (!current || at >= current.at) latestExecution.set(engine, { status: String(row.status), at });
+  }
+  for (const [engine, execution] of latestExecution) {
+    // Only engines that had a job are external engines of this scan's plan.
+    if (latestJob.has(engine) && execution.status !== "COMPLETED") return true;
+  }
+
+  return false;
 }

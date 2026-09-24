@@ -16,8 +16,11 @@ function classifyOutcome(input: { selected: boolean; result?: EngineResult }): E
       return "SKIPPED";
     case "FAILED":
       return "FAILED";
-    case "COMPLETED":
     case "PARTIAL":
+      // Incomplete evidence: never "completed", and never "clean" even with
+      // zero findings -- the files it failed on were not analyzed.
+      return "PARTIAL";
+    case "COMPLETED":
       return input.result.findings.length > 0 ? "COMPLETED_WITH_FINDINGS" : "COMPLETED_CLEAN";
     default:
       return "UNAVAILABLE";
@@ -41,10 +44,11 @@ export function buildCoverageReport(plan: SecurityPlan, results: Map<EngineId, E
   return {
     planned: entries.length,
     applicable: applicable.length,
-    executed: applicable.filter((e) => e.status === "COMPLETED_CLEAN" || e.status === "COMPLETED_WITH_FINDINGS" || e.status === "FAILED").length,
+    executed: applicable.filter((e) => e.status === "COMPLETED_CLEAN" || e.status === "COMPLETED_WITH_FINDINGS" || e.status === "FAILED" || e.status === "PARTIAL").length,
     clean: entries.filter((e) => e.status === "COMPLETED_CLEAN").length,
     withFindings: entries.filter((e) => e.status === "COMPLETED_WITH_FINDINGS").length,
     failed: entries.filter((e) => e.status === "FAILED").length,
+    partial: entries.filter((e) => e.status === "PARTIAL").length,
     unavailable: entries.filter((e) => e.status === "UNAVAILABLE").length,
     skipped: entries.filter((e) => e.status === "SKIPPED").length,
     entries,

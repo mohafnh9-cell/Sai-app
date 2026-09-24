@@ -41,6 +41,7 @@ function fakePlan(): SecurityPlan {
 describe("Phase 38 -- native coverage (loadNativeEngineResult)", () => {
   it("reports COMPLETED_WITH_FINDINGS when scan_findings has rows for this scan", async () => {
     const t: FakeTables = {
+      scans: [{ id: "scan-1", metrics: { rulesRun: 47, ruleFailures: 0 }, omissions: [] }],
       scan_findings: [
         {
           id: "f1",
@@ -77,7 +78,10 @@ describe("Phase 38 -- native coverage (loadNativeEngineResult)", () => {
   });
 
   it("reports COMPLETED_CLEAN (never UNAVAILABLE) when native ran but found nothing for this scan", async () => {
-    const t: FakeTables = { scan_findings: [] };
+    const t: FakeTables = {
+      scans: [{ id: "scan-1", metrics: { rulesRun: 47, ruleFailures: 0 }, omissions: [] }],
+      scan_findings: [],
+    };
     const admin = createFakeAdmin(t);
 
     const nativeResult = await loadNativeEngineResult(admin as never, {
@@ -118,5 +122,34 @@ describe("Phase 38 -- native coverage (loadNativeEngineResult)", () => {
     });
 
     expect(nativeResult.findings).toHaveLength(0);
+  });
+
+  // Pass 4B: a native rule that crashed or never ran is missing evidence.
+  it("reports PARTIAL (never COMPLETED_CLEAN) when a native rule failed, even with zero findings", async () => {
+    const admin = createFakeAdmin({
+      scans: [{ id: "scan-1", metrics: { rulesRun: 45, ruleFailures: 2 }, omissions: [{ reason: "rule-error", ruleId: "authz.x" }] }],
+      scan_findings: [],
+    } as FakeTables);
+    const nativeResult = await loadNativeEngineResult(admin as never, {
+      scanId: "scan-1",
+      projectId: "project-1",
+      organizationId: "org-1",
+    });
+    expect(nativeResult.status).toBe("PARTIAL");
+
+    const coverage = buildCoverageReport(fakePlan(), new Map<EngineId, EngineResult>([["native", nativeResult]]));
+    expect(coverage.entries[0]?.status).toBe("PARTIAL");
+    expect(coverage.clean).toBe(0);
+    expect(coverage.partial).toBe(1);
+  });
+
+  it("fails closed when the native scan record cannot be read", async () => {
+    const admin = createFakeAdmin({ scans: [], scan_findings: [] } as FakeTables);
+    const nativeResult = await loadNativeEngineResult(admin as never, {
+      scanId: "scan-1",
+      projectId: "project-1",
+      organizationId: "org-1",
+    });
+    expect(nativeResult.status).toBe("FAILED");
   });
 });
