@@ -46,6 +46,18 @@ export async function getLatestVerdictsByOrganization(
     .select("project_id, verdict, generated_at")
     .eq("organization_id", organizationId)
     .order("generated_at", { ascending: false });
+  // Latest verdict per project means the DEFAULT branch's; a feature-branch
+  // verdict must never be presented as the project's current verdict.
+  const { data: projectRows } = await client
+    .from("projects")
+    .select("id, github_default_branch")
+    .eq("organization_id", organizationId);
+  const defaultBranchByProject = new Map<string, string | null>(
+    ((projectRows ?? []) as Array<{ id: string; github_default_branch: string | null }>).map((p) => [
+      p.id,
+      p.github_default_branch ?? null,
+    ])
+  );
 
   if (error) {
     if (isMissingTableError(error.message)) {
@@ -60,6 +72,8 @@ export async function getLatestVerdictsByOrganization(
   for (const row of data ?? []) {
     if (!map.has(row.project_id) && row.verdict) {
       const parsed = safeParseProductionVerdict(row.verdict);
+      const defaultBranch = defaultBranchByProject.get(row.project_id) ?? null;
+      if (parsed && defaultBranch && parsed.branch && parsed.branch !== defaultBranch) continue;
       if (parsed) map.set(row.project_id, parsed);
     }
   }

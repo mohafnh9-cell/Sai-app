@@ -8,7 +8,7 @@ import {
   type GitHubRepositoryService,
 } from "@/lib/github/repository-service";
 import { resolveOrganizationGitHubToken } from "@/server/github-automation/token-resolver";
-import { recordLiveHeadCommit } from "./persistence";
+import { isDefaultBranchHead, recordLiveHeadCommit } from "./persistence";
 import { commitsMatch } from "@/lib/repository-sync/commits-match";
 
 export type ResolvedGitHubHead = {
@@ -125,14 +125,16 @@ async function persistResolvedHead(
     commitSha: resolved.sha,
     branch: resolved.branch ?? input.branch ?? "main",
   });
-  await admin
-    .from("projects")
-    .update({
-      github_last_commit_sha: resolved.sha,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", input.projectId)
-    .eq("organization_id", input.organizationId);
+  if (await isDefaultBranchHead(admin, input.projectId, resolved.branch ?? input.branch)) {
+    await admin
+      .from("projects")
+      .update({
+        github_last_commit_sha: resolved.sha,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", input.projectId)
+      .eq("organization_id", input.organizationId);
+  }
 
   return {
     commitSha: resolved.sha,

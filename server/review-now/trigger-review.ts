@@ -16,7 +16,7 @@ import { getCurrentProductionVerdict } from "@/server/production-verdict/service
 import { getScanSchedulerMode } from "@/lib/env/scan-scheduler";
 import { scheduleScanRun } from "@/server/jobs/schedule-scan";
 import { recoverStaleActiveReviewsForProject } from "@/server/review-recovery/stale-review";
-import { recordLiveHeadCommit } from "@/server/repository-sync/persistence";
+import { isDefaultBranchHead, recordLiveHeadCommit } from "@/server/repository-sync/persistence";
 import { releaseActiveReviewForNewHead } from "@/server/review-start/release-active-review-for-new-head";
 import { assertOrganizationCanRunScan } from "@/server/billing/assert-scan-access";
 import { ScanRequestError } from "@/server/security-scanner/request-context";
@@ -237,16 +237,8 @@ export async function triggerProductionReview(
   // head only. An explicit older commit or a feature-branch review must never
   // overwrite them (that made the default branch's decision "stale" and
   // "in progress" because of an unrelated branch).
-  const { data: defaultBranchRow } = await admin
-    .from("projects")
-    .select("github_default_branch")
-    .eq("id", input.projectId)
-    .maybeSingle();
-  const defaultBranch =
-    (defaultBranchRow as { github_default_branch?: string | null } | null)?.github_default_branch ?? null;
   const reviewsDefaultBranchHead =
-    !input.requestedCommitSha &&
-    (!resolvedBranch || !defaultBranch || resolvedBranch === defaultBranch);
+    !input.requestedCommitSha && (await isDefaultBranchHead(admin, input.projectId, resolvedBranch));
 
   if (reviewsDefaultBranchHead) {
     await recordLiveHeadCommit(admin, {

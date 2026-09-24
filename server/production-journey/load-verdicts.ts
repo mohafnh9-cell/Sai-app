@@ -38,6 +38,16 @@ export async function loadVerdictJourneyRecords(
 ): Promise<{ records: VerdictJourneyRecord[]; skippedInvalid: number }> {
   const limit = options?.limit ?? 200;
 
+  // History/journey describe the default branch's evolution; a feature-branch
+  // verdict must not be compared against (or shown as) the project's history.
+  const { data: projectRow } = await client
+    .from("projects")
+    .select("github_default_branch")
+    .eq("id", projectId)
+    .maybeSingle();
+  const defaultBranch =
+    (projectRow as { github_default_branch?: string | null } | null)?.github_default_branch ?? null;
+
   const { data, error } = await client
     .from("production_verdicts")
     .select(
@@ -76,6 +86,7 @@ export async function loadVerdictJourneyRecords(
   for (const row of (data ?? []) as VerdictRow[]) {
     try {
       const verdict = parseProductionVerdict(row.verdict);
+      if (defaultBranch && verdict.branch && verdict.branch !== defaultBranch) continue;
       records.push({
         id: row.id,
         scanId: row.scan_id,
