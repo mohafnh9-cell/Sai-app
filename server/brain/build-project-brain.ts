@@ -1,5 +1,6 @@
 import "server-only";
 
+import { guardNarrativeForVerdict } from "@/brain/production-verdict/narrative-guard";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   BRAIN_VERSION,
@@ -168,7 +169,8 @@ export async function buildProjectBrain(
     todayPriorities,
     coachTip: latestReport.data?.coach_tip ?? null,
     executiveSummary:
-      currentVerdict?.executiveSummary ?? latestReport.data?.executive_summary ?? null,
+      currentVerdict?.executiveSummary ??
+      guardNarrativeForVerdict(latestReport.data?.executive_summary, null, null),
     recentActivity: activity,
     snapshotAt: new Date().toISOString(),
     brainVersion: BRAIN_VERSION,

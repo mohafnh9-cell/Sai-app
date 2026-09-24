@@ -71,3 +71,18 @@ export function applyNarrativeGuard<
       : verdict.recommendedAction,
   };
 }
+
+/**
+ * For narratives that bypass the verdict record (e.g. the raw AI report shown
+ * beside a verdict): returns `text` only if it is safe for the given evidence,
+ * otherwise `fallback`.
+ */
+export function guardNarrativeForVerdict(
+  text: string | null | undefined,
+  verdict: Parameters<typeof narrativeMayApprove>[0] | null,
+  fallback: string | null
+): string | null {
+  if (!text) return fallback;
+  if (verdict && narrativeMayApprove(verdict)) return text;
+  return containsApprovalLanguage(text) ? fallback : text;
+}

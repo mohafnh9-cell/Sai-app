@@ -213,3 +213,16 @@ describe("hostile AI decision output through finalizeProductionVerdict (PASS 5.2
     expect(out.confidence).toBe("high");
   });
 });
+
+describe("raw AI report narrative shown beside a verdict (PASS 5.2)", () => {
+  it("is dropped unless the evidence supports approval", async () => {
+    const { guardNarrativeForVerdict } = await import("@/brain/production-verdict/narrative-guard");
+    const low = parse(ready({ confidence: "low" }));
+    const high = parse(ready({ confidence: "high" }));
+    expect(guardNarrativeForVerdict("Safe to deploy.", low, "fallback")).toBe("fallback");
+    expect(guardNarrativeForVerdict("Puedes desplegar", low, "fallback")).toBe("fallback");
+    expect(guardNarrativeForVerdict("Safe to deploy.", null, null)).toBeNull();
+    expect(guardNarrativeForVerdict("Two issues found.", low, "fallback")).toBe("Two issues found.");
+    expect(guardNarrativeForVerdict("Safe to deploy.", high, "fallback")).toBe("Safe to deploy.");
+  });
+});
