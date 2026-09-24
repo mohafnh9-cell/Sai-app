@@ -20,7 +20,9 @@
     "reviewAgain": "Say \"Review again\" for a fresh protection review.",
     "runFirstReview": "Say \"Review my project\" so I can protect this app properly.",
     "shipWhenReady": "Ship when you're ready — ask me again after your next big change.",
-    "waitForReview": "Wait for this review to finish, then ask \"Can I deploy?\""
+    "waitForReview": "Wait for this review to finish, then ask \"Can I deploy?\"",
+    "gatherMoreEvidence": "Say \"Review again\" after adding more of your application to the review, so there is enough evidence for a deployment answer.",
+    "reviewUnevaluated": "Look at the areas that were not evaluated before you deploy, and say \"Review again\" after a big change."
   },
   "canIDeploy": {
     "yesLead": "YES.",
@@ -55,7 +57,12 @@
     "pendingReviewTimedOutLead": "The latest review timed out before it could finish (commit {currentSha}).",
     "pendingReviewRetryLead": "A new review is in progress for commit {currentSha}.",
     "insufficientData": "I don't have enough of your repository reviewed yet to protect you responsibly.",
-    "analysisFailed": "Your last review didn't complete. Say \"Review again\" before you trust this answer."
+    "analysisFailed": "Your last review didn't complete. Say \"Review again\" before you trust this answer.",
+    "supportedLead": "NO BLOCKERS FOUND — with limits.",
+    "supportedBody": "The latest review found no production blockers in the areas it evaluated. {count} area(s) were not fully evaluated, so this is not a guarantee that the application is safe.",
+    "qualifiedLead": "NOT CONFIRMED YET.",
+    "qualifiedBody": "The latest analysis is classified as ready_to_ship, but confidence is low. The available evidence does not support an unqualified deployment approval.",
+    "notCurrentBody": "The latest analysis is classified as ready_to_ship, but it is not confirmed to describe your current code. It does not support a deployment answer yet."
   },
   "cancel_review": {
     "none_active": "SEQURAI\n\nThere is no active protection review to cancel.",

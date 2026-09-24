@@ -1,7 +1,26 @@
 import { describe, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
 import type { ProductionVerdictV1, VerdictStatus } from "@/brain/production-verdict/schema";
-import { applyLatestSecurityDecisionToVerdict } from "../security-decision-overlay";
+import { applyLatestSecurityDecisionToVerdict as applyOverlay } from "../security-decision-overlay";
+import { deriveDecisionLanguagePolicy } from "../decision-language-policy";
+import { mapVerdictStatusToDecision } from "../decision-mapping";
+
+function applyLatestSecurityDecisionToVerdict(projectId: string, verdict: ProductionVerdictV1) {
+  return applyOverlay(
+    projectId,
+    verdict,
+    deriveDecisionLanguagePolicy({
+      status: verdict.status,
+      confidence: verdict.confidence,
+      unevaluatedAreaCount: verdict.unevaluatedAreas.length,
+      partiallyEvaluatedAreaCount: verdict.partiallyEvaluatedAreas.length,
+      baseDecision: mapVerdictStatusToDecision(verdict.status),
+      freshnessStatus: "current",
+      reviewInProgress: false,
+      reviewFailed: false,
+    })
+  );
+}
 
 function baseVerdict(overrides: Partial<ProductionVerdictV1> = {}): ProductionVerdictV1 {
   const projectId = randomUUID();

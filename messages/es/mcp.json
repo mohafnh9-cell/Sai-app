@@ -20,7 +20,9 @@
     "reviewAgain": "Di \"Revisa otra vez\" para una revisión de protección actualizada.",
     "runFirstReview": "Di \"Revisa mi proyecto\" para que pueda proteger esta app.",
     "shipWhenReady": "Despliega cuando estés listo — pregúntame de nuevo tras un cambio grande.",
-    "waitForReview": "Espera a que termine esta revisión y pregunta \"¿Puedo desplegar?\""
+    "waitForReview": "Espera a que termine esta revisión y pregunta \"¿Puedo desplegar?\"",
+    "gatherMoreEvidence": "Di \"Revisa otra vez\" después de añadir más de tu aplicación a la revisión, para que haya evidencia suficiente para una respuesta de despliegue.",
+    "reviewUnevaluated": "Revisa las áreas que no se evaluaron antes de publicar, y di \"Revisa otra vez\" tras un cambio grande."
   },
   "canIDeploy": {
     "yesLead": "SÍ.",
@@ -55,7 +57,12 @@
     "pendingReviewTimedOutLead": "La última revisión expiró antes de terminar (commit {currentSha}).",
     "pendingReviewRetryLead": "Hay una revisión nueva en curso para el commit {currentSha}.",
     "insufficientData": "Aún no he revisado suficiente de tu repositorio para protegerte con responsabilidad.",
-    "analysisFailed": "Tu última revisión no se completó. Di \"Revisa otra vez\" antes de confiar en esta respuesta."
+    "analysisFailed": "Tu última revisión no se completó. Di \"Revisa otra vez\" antes de confiar en esta respuesta.",
+    "supportedLead": "NO SE ENCONTRARON BLOQUEOS — con límites.",
+    "supportedBody": "La última revisión no encontró bloqueos de producción en las áreas que evaluó. {count} área(s) no se evaluaron por completo, así que esto no garantiza que la aplicación sea segura.",
+    "qualifiedLead": "AÚN NO CONFIRMADO.",
+    "qualifiedBody": "El último análisis está clasificado como ready_to_ship, pero la confianza es baja. La evidencia disponible no respalda una aprobación de despliegue sin reservas.",
+    "notCurrentBody": "El último análisis está clasificado como ready_to_ship, pero no está confirmado que describa tu código actual. Todavía no respalda una respuesta de despliegue."
   },
   "cancel_review": {
     "none_active": "SEQURAI\n\nNo hay ninguna revisión de protección activa que cancelar.",

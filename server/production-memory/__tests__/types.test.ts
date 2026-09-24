@@ -1,22 +1,35 @@
+import type { VerdictStatus } from "@/brain/production-verdict/schema";
 import { describe, expect, it } from "vitest";
 import {
   compositeHealthScore,
-  deployAnswerFromVerdictStatus,
+  deployAnswerFromVerdictEvidence,
   healthLabelFromScore,
   protectionStatusFromVerdict,
 } from "@/server/production-memory/types";
 
 describe("production memory types", () => {
-  it("maps verdict status to deploy answers", () => {
-    expect(deployAnswerFromVerdictStatus("ready_to_ship")).toBe("go");
-    expect(deployAnswerFromVerdictStatus("not_ready")).toBe("no_go");
-    expect(deployAnswerFromVerdictStatus("almost_ready")).toBe("not_yet");
-    expect(deployAnswerFromVerdictStatus("insufficient_data")).toBe("not_yet");
+  const ev = (status: VerdictStatus, confidence: "high" | "medium" | "low" = "high", unevaluated = 0) => ({
+    status,
+    confidence,
+    unevaluatedAreas: Array.from({ length: unevaluated }, () => ({}) as never),
+    partiallyEvaluatedAreas: [],
   });
 
-  it("maps verdict status to protection status", () => {
-    expect(protectionStatusFromVerdict("ready_to_ship")).toBe("protected");
-    expect(protectionStatusFromVerdict("not_ready")).toBe("requires_attention");
+  it("derives deploy answers from evidence, not status alone", () => {
+    expect(deployAnswerFromVerdictEvidence(ev("ready_to_ship"))).toBe("go");
+    expect(deployAnswerFromVerdictEvidence(ev("ready_to_ship", "medium", 2))).toBe("go");
+    // NEW-2: ready_to_ship + low confidence must never be recorded as "go".
+    expect(deployAnswerFromVerdictEvidence(ev("ready_to_ship", "low"))).toBe("not_yet");
+    expect(deployAnswerFromVerdictEvidence(ev("not_ready"))).toBe("no_go");
+    expect(deployAnswerFromVerdictEvidence(ev("almost_ready"))).toBe("not_yet");
+    expect(deployAnswerFromVerdictEvidence(ev("insufficient_data"))).toBe("not_yet");
+  });
+
+  it("only reports 'protected' when first-person approval is allowed", () => {
+    expect(protectionStatusFromVerdict(ev("ready_to_ship"))).toBe("protected");
+    expect(protectionStatusFromVerdict(ev("ready_to_ship", "low"))).toBe("safe_with_caution");
+    expect(protectionStatusFromVerdict(ev("ready_to_ship", "high", 4))).toBe("safe_with_caution");
+    expect(protectionStatusFromVerdict(ev("not_ready"))).toBe("requires_attention");
   });
 
   it("caps health label when protection requires attention", () => {

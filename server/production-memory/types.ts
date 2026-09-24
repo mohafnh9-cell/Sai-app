@@ -1,4 +1,6 @@
-import type { VerdictStatus } from "@/brain/production-verdict/schema";
+import type { ProductionVerdictV1, VerdictStatus } from "@/brain/production-verdict/schema";
+import { deriveDecisionLanguagePolicy } from "@/server/mcp/decision-language-policy";
+import { mapVerdictStatusToDecision } from "@/server/mcp/decision-mapping";
 
 /** Hybrid V1 event catalog (append-only). */
 export const PROTECTION_EVENT_TYPES = [
@@ -86,18 +88,34 @@ export type ProjectMemorySummary = {
   stackFingerprint: string[];
 };
 
-export function deployAnswerFromVerdictStatus(status: VerdictStatus): DeployAnswer {
-  switch (status) {
-    case "ready_to_ship":
-      return "go";
-    case "almost_ready":
-      return "not_yet";
-    case "not_ready":
-    case "needs_improvement":
-      return "no_go";
-    default:
-      return "not_yet";
-  }
+type VerdictEvidence = Pick<
+  ProductionVerdictV1,
+  "status" | "confidence" | "unevaluatedAreas" | "partiallyEvaluatedAreas"
+>;
+
+/**
+ * Decision recorded from a verdict alone (no freshness/review context).
+ * It goes through the canonical decision-language policy, so a status
+ * alone -- e.g. ready_to_ship with low confidence -- can never read as "go".
+ */
+function policyForVerdict(verdict: VerdictEvidence) {
+  return deriveDecisionLanguagePolicy({
+    status: verdict.status,
+    confidence: verdict.confidence,
+    unevaluatedAreaCount: verdict.unevaluatedAreas.length,
+    partiallyEvaluatedAreaCount: verdict.partiallyEvaluatedAreas.length,
+    baseDecision: mapVerdictStatusToDecision(verdict.status),
+    freshnessStatus: "current",
+    reviewInProgress: false,
+    reviewFailed: false,
+  });
+}
+
+export function deployAnswerFromVerdictEvidence(verdict: VerdictEvidence): DeployAnswer {
+  const policy = policyForVerdict(verdict);
+  if (policy.decision === "deploy") return "go";
+  if (policy.decision === "do_not_deploy") return verdict.status === "almost_ready" ? "not_yet" : "no_go";
+  return "not_yet";
 }
 
 /**
@@ -116,10 +134,11 @@ export function deployAnswerFromCanonicalDecision(
   return status === "almost_ready" ? "not_yet" : "no_go";
 }
 
-export function protectionStatusFromVerdict(status: VerdictStatus): ProtectionStatus {
-  switch (status) {
+export function protectionStatusFromVerdict(verdict: VerdictEvidence): ProtectionStatus {
+  switch (verdict.status) {
     case "ready_to_ship":
-      return "protected";
+      // "protected" is a positive claim: only when the decision policy allows first-person deployment language (high confidence, all areas evaluated).
+      return policyForVerdict(verdict).canUseFirstPersonDeploymentLanguage ? "protected" : "safe_with_caution";
     case "almost_ready":
       return "safe_with_caution";
     case "not_ready":

@@ -3,6 +3,7 @@ import "server-only";
 import type { McpAuthContext } from "../auth";
 import { McpError } from "../auth";
 import { resolveCanonicalDecisionState } from "../canonical-decision-state";
+import { describeCoverage } from "../decision-language-policy";
 import type { McpTranslator } from "../i18n";
 import {
   formatCanIDeployDeferredResponse,
@@ -45,12 +46,7 @@ export type CanIDeployResult = {
   blockersCount: number;
   topBlockers: CanIDeployBlocker[];
   nextAction: string;
-  evaluatedCoverage: {
-    ratio: number | null;
-    evaluatedAreas: number;
-    partiallyEvaluatedAreas: number;
-    unevaluatedAreas: number;
-  };
+  evaluatedCoverage: ReturnType<typeof describeCoverage>;
   generatedAt: string;
   reviewedCommitSha: string | null;
   latestDetectedCommitSha: string | null;
@@ -88,7 +84,7 @@ export async function canIDeploy(
 
   // ADVISORY: the AI red-team decision may only annotate an evidence-complete
   // verdict; it can never promote an insufficient one (see the overlay).
-  const securityOverlay = applyLatestSecurityDecisionToVerdict(project.id, verdict);
+  const securityOverlay = applyLatestSecurityDecisionToVerdict(project.id, verdict, state.languagePolicy);
   verdict = securityOverlay.verdict;
 
   const topBlockers: CanIDeployBlocker[] = verdict.topPriorities.slice(0, 3).map((priority) => ({
@@ -130,12 +126,7 @@ export async function canIDeploy(
       blockersCount: verdict.blockersCount,
       topBlockers,
       nextAction: t("actions.waitForReview"),
-      evaluatedCoverage: {
-        ratio: verdict.coverageRatio,
-        evaluatedAreas: verdict.evaluatedAreas.length,
-        partiallyEvaluatedAreas: verdict.partiallyEvaluatedAreas.length,
-        unevaluatedAreas: verdict.unevaluatedAreas.length,
-      },
+      evaluatedCoverage: describeCoverage(verdict),
       generatedAt: verdict.generatedAt,
       reviewedCommitSha: verdict.commitSha,
       latestDetectedCommitSha: staleness.latestDetectedCommitSha,
@@ -160,10 +151,16 @@ export async function canIDeploy(
     decision === "deploy" ? "SHIP_IT" : decision === "do_not_deploy" ? "DO_NOT_DEPLOY" : "MORE_ANALYSIS_REQUIRED";
 
   if (securityOverlay.applied && securityOverlay.deploymentRecommendation) {
-    deploymentRecommendation = securityOverlay.deploymentRecommendation;
+    // The overlay is already clamped to the policy; SHIP_IT additionally
+    // requires the policy to allow it.
+    deploymentRecommendation =
+      securityOverlay.deploymentRecommendation === "SHIP_IT" && !state.languagePolicy.mayRecommendDeploy
+        ? deploymentRecommendation
+        : securityOverlay.deploymentRecommendation;
   }
 
   const nextAction = pickRecommendedAction(t, {
+    policy: state.languagePolicy,
     decision,
     status: verdict.status,
     blockersCount: verdict.blockersCount,
@@ -171,6 +168,7 @@ export async function canIDeploy(
   });
 
   const summary = formatCanIDeployResponse(t, {
+    policy: state.languagePolicy,
     decision,
     status: verdict.status,
     executiveSummary: securityOverlay.executiveSummarySuffix
@@ -197,12 +195,7 @@ export async function canIDeploy(
     blockersCount: verdict.blockersCount,
     topBlockers,
     nextAction,
-    evaluatedCoverage: {
-      ratio: verdict.coverageRatio,
-      evaluatedAreas: verdict.evaluatedAreas.length,
-      partiallyEvaluatedAreas: verdict.partiallyEvaluatedAreas.length,
-      unevaluatedAreas: verdict.unevaluatedAreas.length,
-    },
+    evaluatedCoverage: describeCoverage(verdict),
     generatedAt: verdict.generatedAt,
     reviewedCommitSha: verdict.commitSha,
     latestDetectedCommitSha: staleness.latestDetectedCommitSha,

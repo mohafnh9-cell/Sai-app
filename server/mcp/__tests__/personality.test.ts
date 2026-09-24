@@ -1,12 +1,32 @@
 import { describe, expect, it } from "vitest";
 import { getMcpTranslator } from "@/server/mcp/i18n";
+import { deriveDecisionLanguagePolicy } from "@/server/mcp/decision-language-policy";
 import { formatCanIDeployResponse, pickRecommendedAction } from "@/server/mcp/personality";
 
 const t = getMcpTranslator("en");
 
+function policyFor(
+  status: Parameters<typeof deriveDecisionLanguagePolicy>[0]["status"],
+  baseDecision: Parameters<typeof deriveDecisionLanguagePolicy>[0]["baseDecision"],
+  over: Partial<Parameters<typeof deriveDecisionLanguagePolicy>[0]> = {}
+) {
+  return deriveDecisionLanguagePolicy({
+    status,
+    confidence: "high",
+    unevaluatedAreaCount: 0,
+    partiallyEvaluatedAreaCount: 0,
+    baseDecision,
+    freshnessStatus: "current",
+    reviewInProgress: false,
+    reviewFailed: false,
+    ...over,
+  });
+}
+
 describe("MCP personality — can_i_deploy text", () => {
   it("uses opinionated NO lead instead of vulnerability counts", () => {
     const text = formatCanIDeployResponse(t, {
+      policy: policyFor("not_ready", "do_not_deploy"),
       decision: "do_not_deploy",
       status: "not_ready",
       executiveSummary: "Two production blockers remain.",
@@ -31,6 +51,7 @@ describe("MCP personality — can_i_deploy text", () => {
 
   it("uses YES lead for ready_to_ship", () => {
     const text = formatCanIDeployResponse(t, {
+      policy: policyFor("ready_to_ship", "deploy"),
       decision: "deploy",
       status: "ready_to_ship",
       executiveSummary: "",
@@ -58,6 +79,7 @@ describe("MCP personality — can_i_deploy text", () => {
   // "I can't answer responsibly yet" framing this branch always leads with.
   it("SECURITY: never surfaces a contaminated executiveSummary claiming deployment safety for insufficient_data", () => {
     const text = formatCanIDeployResponse(t, {
+      policy: policyFor("insufficient_data", "more_analysis_required"),
       decision: "more_analysis_required",
       status: "insufficient_data",
       executiveSummary: "Safe to deploy based on current authorized security evidence.",
@@ -78,6 +100,7 @@ describe("MCP personality — can_i_deploy text", () => {
 
   it("still uses the safe canonical insufficient_data message even when executiveSummary is empty (existing fallback preserved)", () => {
     const text = formatCanIDeployResponse(t, {
+      policy: policyFor("insufficient_data", "more_analysis_required"),
       decision: "more_analysis_required",
       status: "insufficient_data",
       executiveSummary: "",

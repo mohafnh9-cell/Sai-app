@@ -104,14 +104,6 @@ export async function enrichMcpToolResultWithAlerts(
       if (unread) {
         summary = `${alertOpeningBlock(surface.primaryAlert)}\n\n${summary}`;
       }
-    } else if (
-      !surface.shouldWorry &&
-      summary.length > 0 &&
-      result.deploymentRecommendation === "SHIP_IT"
-    ) {
-      // "Nothing urgent" is only a truthful lead when the canonical decision
-      // is a clean ship; it must never precede "I can't answer responsibly yet".
-      summary = `No — nothing urgent.\n\n${summary}`;
     }
     return { ...result, summary, alerts: surface };
   }

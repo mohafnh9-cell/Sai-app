@@ -41,6 +41,12 @@ function baseTables(overrides: Partial<FakeTables> = {}): FakeTables {
     scan_findings: [],
     scans: [],
     profiles: [],
+    github_webhooks: [
+      { project_id: PROJECT_1, active: true, callback_url: null, last_delivery_at: "2026-01-01T00:00:00.000Z" },
+    ],
+    repository_sync_status: [
+      { project_id: PROJECT_1, commit_sha: null, connection_status: "connected", last_error: null },
+    ],
     ...overrides,
   };
 }

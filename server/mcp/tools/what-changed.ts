@@ -128,6 +128,7 @@ export async function whatChanged(
   }
 
   const recommendedAction = pickRecommendedAction(t, {
+    policy: state?.languagePolicy,
     decision,
     status: authoritativeStatus,
     blockersCount: state?.verdict.blockersCount ?? current.verdict.blockersCount,
