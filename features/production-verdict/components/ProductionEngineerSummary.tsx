@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Brain, Loader2 } from "lucide-react";
 import type { ProductionVerdictV1 } from "@/brain/production-verdict/schema";
+import { guardNarrativeForVerdict } from "@/brain/production-verdict/narrative-guard";
 import { useI18n } from "@/lib/i18n/client";
 
 type Intelligence = {
@@ -67,8 +68,9 @@ export function ProductionEngineerSummary({
 
   if (!scanCompleted) return null;
 
-  const summary = aiSummary ?? verdict.executiveSummary;
-  const nextAction = coachTip ?? verdict.recommendedAction;
+  // The raw AI report bypasses the verdict record: it may not state approval the evidence does not support.
+  const summary = guardNarrativeForVerdict(aiSummary, verdict, verdict.executiveSummary) ?? verdict.executiveSummary;
+  const nextAction = guardNarrativeForVerdict(coachTip, verdict, verdict.recommendedAction) ?? verdict.recommendedAction;
   const commitLine = verdict.commitSha
     ? t("commitReviewed", { sha: verdict.commitSha.slice(0, 12) })
     : t("latestChanges");

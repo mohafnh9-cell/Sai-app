@@ -23,6 +23,12 @@ export const APPROVAL_PATTERNS: RegExp[] = [
   /despliega\s+cuando\s+est[eé]s\s+listo/i,
   /ship\s+when\s+you'?re\s+ready/i,
   /\bship\s+it\b/i,
+  /(?:sufficient|enough|high)\s+confidence\s+to\s+(?:deploy|ship|release)/i,
+  /(?<!\b(?:not|n't)\s+)\b(?:ok|okay|good|fine|clear)\s+to\s+(?:deploy|ship|go)\b/i,
+  /\bgreen[\s-]?light\b/i,
+  /go\s+ahead\s+and\s+(?:deploy|ship|release)/i,
+  /\blo\s+desplegar[ií]a\b/i,
+  /suficiente\s+confianza\s+para\s+(?:desplegar|publicar)/i,
   /desplegar\s+con\s+confianza/i,
 ];
 
@@ -70,4 +76,19 @@ export function applyNarrativeGuard<
       ? NEUTRAL_RECOMMENDED_ACTION
       : verdict.recommendedAction,
   };
+}
+
+/**
+ * For narratives that bypass the verdict record (e.g. the raw AI report shown
+ * beside a verdict): returns `text` only if it is safe for the given evidence,
+ * otherwise `fallback`.
+ */
+export function guardNarrativeForVerdict(
+  text: string | null | undefined,
+  verdict: Parameters<typeof narrativeMayApprove>[0] | null,
+  fallback: string | null
+): string | null {
+  if (!text) return fallback;
+  if (verdict && narrativeMayApprove(verdict)) return text;
+  return containsApprovalLanguage(text) ? fallback : text;
 }
