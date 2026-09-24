@@ -44,6 +44,11 @@ export async function releaseActiveReviewForNewHead(
   const now = new Date().toISOString();
 
   for (const scan of activeScans ?? []) {
+    // A new head on one branch never supersedes an active review of another
+    // branch (previously a main review silently failed feature-branch reviews).
+    const scanBranch = (scan.branch as string | null) ?? null;
+    if (input.targetBranch && scanBranch && scanBranch !== input.targetBranch) continue;
+
     const scanCommit = (scan.commit_sha as string | null) ?? null;
     if (scanCommit && commitsMatch(scanCommit, input.targetCommitSha)) {
       continue;
