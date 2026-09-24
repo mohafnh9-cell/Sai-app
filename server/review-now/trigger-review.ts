@@ -233,29 +233,48 @@ export async function triggerProductionReview(
     throw new ReviewNowError("internal_error", "Could not resolve the commit to review.");
   }
 
-  await recordLiveHeadCommit(admin, {
-    organizationId: input.organizationId,
-    projectId: input.projectId,
-    githubRepositoryId: input.githubRepositoryId,
-    commitSha: resolvedCommitSha,
-    branch: resolvedBranch ?? "main",
-  }).catch(() => undefined);
-
-  await admin
+  // The "live head" / detected-commit signals describe the DEFAULT branch's
+  // head only. An explicit older commit or a feature-branch review must never
+  // overwrite them (that made the default branch's decision "stale" and
+  // "in progress" because of an unrelated branch).
+  const { data: defaultBranchRow } = await admin
     .from("projects")
-    .update({
-      github_last_commit_sha: resolvedCommitSha,
-      updated_at: new Date().toISOString(),
-    })
+    .select("github_default_branch")
     .eq("id", input.projectId)
-    .eq("organization_id", input.organizationId);
+    .maybeSingle();
+  const defaultBranch =
+    (defaultBranchRow as { github_default_branch?: string | null } | null)?.github_default_branch ?? null;
+  const reviewsDefaultBranchHead =
+    !input.requestedCommitSha &&
+    (!resolvedBranch || !defaultBranch || resolvedBranch === defaultBranch);
 
-  await releaseActiveReviewForNewHead(admin, {
-    organizationId: input.organizationId,
-    projectId: input.projectId,
-    targetCommitSha: resolvedCommitSha,
-    targetBranch: resolvedBranch,
-  });
+  if (reviewsDefaultBranchHead) {
+    await recordLiveHeadCommit(admin, {
+      organizationId: input.organizationId,
+      projectId: input.projectId,
+      githubRepositoryId: input.githubRepositoryId,
+      commitSha: resolvedCommitSha,
+      branch: resolvedBranch ?? "main",
+    }).catch(() => undefined);
+  }
+
+  if (reviewsDefaultBranchHead) {
+    await admin
+      .from("projects")
+      .update({
+        github_last_commit_sha: resolvedCommitSha,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", input.projectId)
+      .eq("organization_id", input.organizationId);
+
+    await releaseActiveReviewForNewHead(admin, {
+      organizationId: input.organizationId,
+      projectId: input.projectId,
+      targetCommitSha: resolvedCommitSha,
+      targetBranch: resolvedBranch,
+    });
+  }
 
   const [hasActiveReview, currentVerdict] = await Promise.all([
     (async () => {
