@@ -206,7 +206,8 @@ describe("MCP alert surface marks superseded alerts historical", () => {
       summary: "YES.",
       deploymentRecommendation: "SHIP_IT",
     });
-    expect(ship.summary).toMatch(/nothing urgent/i);
+    // The alert layer never adds its own approval-flavoured lead.
+    expect(ship.summary).not.toMatch(/nothing urgent/i);
   });
 });
 

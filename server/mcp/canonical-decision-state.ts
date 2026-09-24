@@ -13,6 +13,10 @@ import {
 } from "./deploy-decision/evaluate-deploy-decision";
 import { getLatestReviewSummary, type LatestReviewSummary } from "./latest-review";
 import type { StalenessFootnotes } from "./personality";
+import {
+  deriveDecisionLanguagePolicy,
+  type DecisionLanguagePolicy,
+} from "./decision-language-policy";
 import { getStalenessInfo, type StalenessInfo } from "./staleness";
 import { finalizeVerdictWhenEvidenceComplete } from "@/server/production-verdict/evidence-finalization";
 
@@ -48,6 +52,8 @@ export type CanonicalDecisionState = {
    * never be described to an agent as "nothing is blocking deploy".
    */
   isCleanAndCurrent: boolean;
+  /** Deterministic ceiling on decision wording; every decision-facing text obeys it. */
+  languagePolicy: DecisionLanguagePolicy;
 };
 
 export async function resolveCanonicalDecisionState(
@@ -113,11 +119,24 @@ export async function resolveCanonicalDecisionState(
       : staleness.reviewFailed;
 
   const engineDecision = mapVerdictStatusToDecision(verdict.status);
-  const decision: DeploymentDecision = deferred
+  const baseDecision: DeploymentDecision = deferred
     ? "more_analysis_required"
     : staleness.reviewFailed && engineDecision === "deploy"
       ? "more_analysis_required"
       : engineDecision;
+  // A status-only "deploy" is never enough: confidence, coverage and
+  // freshness may only ever weaken it (never strengthen).
+  const languagePolicy = deriveDecisionLanguagePolicy({
+    status: verdict.status,
+    confidence: verdict.confidence,
+    unevaluatedAreaCount: verdict.unevaluatedAreas.length,
+    partiallyEvaluatedAreaCount: verdict.partiallyEvaluatedAreas.length,
+    baseDecision,
+    freshnessStatus: staleness.freshnessStatus,
+    reviewInProgress,
+    reviewFailed,
+  });
+  const decision: DeploymentDecision = languagePolicy.decision;
 
   const stalenessFootnotes: StalenessFootnotes = {
     reviewInProgress,
@@ -144,5 +163,6 @@ export async function resolveCanonicalDecisionState(
     decision,
     stalenessFootnotes,
     isCleanAndCurrent,
+    languagePolicy,
   };
 }

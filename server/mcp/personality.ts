@@ -4,6 +4,7 @@ import type { VerdictStatus } from "@/brain/production-verdict/schema";
 import type { DeploymentDecision } from "./decision-mapping";
 import type { DeployDeferReason } from "./deploy-decision/evaluate-deploy-decision";
 import { shortSha } from "./deploy-decision/evaluate-deploy-decision";
+import { guardDecisionText, type DecisionLanguagePolicy } from "./decision-language-policy";
 import type { McpTranslator } from "./i18n";
 import { buildTextResponse, type McpMode } from "./response-format";
 
@@ -43,8 +44,11 @@ export function pickRecommendedAction(
     status: VerdictStatus;
     blockersCount: number;
     staleness: StalenessFootnotes;
+    policy?: DecisionLanguagePolicy;
   }
 ): string {
+  if (input.policy?.strength === "QUALIFIED") return t("actions.gatherMoreEvidence");
+  if (input.policy?.strength === "SUPPORTED") return t("actions.reviewUnevaluated");
   if (input.staleness.reviewInProgress) return t("actions.waitForReview");
   if (input.staleness.freshnessStatus === "stale" || input.staleness.reviewFailed) {
     return t("actions.reviewAgain");
@@ -52,7 +56,11 @@ export function pickRecommendedAction(
   if (input.status === "insufficient_data" || input.status === "analysis_failed") {
     return t("actions.runFirstReview");
   }
-  if (input.decision === "deploy") return t("actions.shipWhenReady");
+  if (input.decision === "deploy") {
+    return input.policy && input.policy.strength !== "HIGH_CONFIDENCE"
+      ? t("actions.reviewUnevaluated")
+      : t("actions.shipWhenReady");
+  }
   if (input.blockersCount > 0 || input.decision === "do_not_deploy") {
     return t("actions.applySafeFix");
   }
@@ -140,9 +148,11 @@ export function formatCanIDeployResponse(
     worries: string[];
     blockersCount: number;
     staleness: StalenessFootnotes;
+    policy: DecisionLanguagePolicy;
   }
 ): string {
   const lines: string[] = [];
+  const policy = input.policy;
 
   if (input.status === "insufficient_data") {
     lines.push(t("canIDeploy.cantAnswerLead"));
@@ -173,12 +183,25 @@ export function formatCanIDeployResponse(
     return buildTextResponse("production_review", t, lines);
   }
 
-  if (input.decision === "deploy") {
+  if (policy.strength === "HIGH_CONFIDENCE") {
     lines.push(t("canIDeploy.yesLead"));
     lines.push("");
     lines.push(t("canIDeploy.yesComfort"));
     lines.push(t("canIDeploy.yesProtect"));
     lines.push(t("canIDeploy.yesCompany"));
+  } else if (policy.strength === "SUPPORTED") {
+    lines.push(t("canIDeploy.supportedLead"));
+    lines.push("");
+    lines.push(t("canIDeploy.supportedBody", { count: policy.notFullyEvaluatedAreaCount }));
+  } else if (policy.strength === "QUALIFIED") {
+    lines.push(t("canIDeploy.qualifiedLead"));
+    lines.push("");
+    lines.push(t("canIDeploy.qualifiedBody"));
+  } else if (input.status === "ready_to_ship") {
+    // Ready classification without current evidence (stale, in progress, failed).
+    lines.push(t("canIDeploy.cantAnswerLead"));
+    lines.push("");
+    lines.push(t("canIDeploy.notCurrentBody"));
   } else if (input.status === "almost_ready") {
     lines.push(t("canIDeploy.notYetLead"));
     lines.push("");
@@ -192,13 +215,21 @@ export function formatCanIDeployResponse(
     lines.push(t("canIDeploy.noCompany"));
   }
 
-  if (input.executiveSummary.trim()) {
+  // Persisted narratives (AI / security-decision overlay) may explain but
+  // can never carry approval language the policy forbids.
+  const guardedSummary = guardDecisionText(input.executiveSummary, policy, "");
+  if (guardedSummary.trim()) {
     lines.push("");
-    lines.push(truncateExplanation(input.executiveSummary));
+    lines.push(truncateExplanation(guardedSummary));
   }
 
-  lines.push("");
-  lines.push(...worriesBlock(t, input.worries));
+  // "Nothing critical is blocking" is reassurance: only when the policy allows it.
+  const omitReassurance =
+    input.worries.length === 0 && policy.strength !== "HIGH_CONFIDENCE" && input.status === "ready_to_ship";
+  if (!omitReassurance) {
+    lines.push("");
+    lines.push(...worriesBlock(t, input.worries));
+  }
   lines.push(...recommendedActionBlock(t, pickRecommendedAction(t, input)));
   lines.push(...stalenessFootnotes(t, input.staleness));
 

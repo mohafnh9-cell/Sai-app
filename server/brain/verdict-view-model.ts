@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { ProductionReadyScore, BrainPriority } from "@/brain";
+import { deployAnswerFromVerdictEvidence } from "@/server/production-memory/types";
 import type { ProductionVerdictV1 } from "@/brain/production-verdict/schema";
 
 /** Derive legacy ProductionReadyScore shape from canonical verdict — do not recalculate. */
@@ -25,7 +26,9 @@ export function productionReadyFromVerdict(verdict: ProductionVerdictV1): Produc
     blockersCount: verdict.blockersCount,
     improvementsCount: Math.max(0, verdict.findingsCount - verdict.blockersCount),
     estimatedMinutesToReady: verdict.estimatedFixMinutes,
-    readyForProduction: verdict.status === "ready_to_ship",
+    // Status alone is not a readiness claim: it must also clear the canonical
+    // decision-language policy (confidence / area coverage).
+    readyForProduction: deployAnswerFromVerdictEvidence(verdict) === "go",
   };
 }
 

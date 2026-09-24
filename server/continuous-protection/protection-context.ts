@@ -3,7 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ProductionVerdictV1 } from "@/brain/production-verdict/schema";
 import { getCurrentProductionVerdict } from "@/server/production-verdict/service";
-import { deployAnswerFromVerdictStatus } from "@/server/production-memory/types";
+import { deployAnswerFromVerdictEvidence } from "@/server/production-memory/types";
 import {
   computeHealthBundle,
   confidenceTrendNarrative,
@@ -135,7 +135,7 @@ export async function loadProtectionContext(
     worries,
     openCritical,
     openHigh,
-    deployAnswer: verdict ? deployAnswerFromVerdictStatus(verdict.status) : null,
+    deployAnswer: verdict ? deployAnswerFromVerdictEvidence(verdict) : null,
   };
 }
 

@@ -1,3 +1,4 @@
+import { guardDecisionText, type DecisionLanguagePolicy } from "./decision-language-policy";
 import type { ProductionVerdictV1 } from "@/brain/production-verdict/schema";
 import {
   mapSecurityDeploymentToMcpRecommendation,
@@ -29,21 +30,35 @@ export type SecurityDecisionMcpOverlay = {
  */
 export function applyLatestSecurityDecisionToVerdict(
   _projectId: string,
-  verdict: ProductionVerdictV1
+  verdict: ProductionVerdictV1,
+  policy: DecisionLanguagePolicy
 ): SecurityDecisionMcpOverlay {
   const insufficientCoverage =
     verdict.status === "insufficient_data" || verdict.status === "analysis_failed";
 
   if (verdict.securityDecisionId && verdict.securityDeploymentVerdict && !insufficientCoverage) {
+    const overlayStatus =
+      verdict.securityDeploymentVerdict as import("@/server/ai-red-team/decision/decision-model").SecurityDeploymentVerdictStatus;
+    const overlayRecommendation = mapSecurityDeploymentToMcpRecommendation(overlayStatus);
+    // DETERMINISTIC POLICY WINS: the overlay may only weaken the policy's
+    // recommendation, never promote it, and its wording is dropped whenever
+    // it would state more than the policy allows.
+    const policyRecommendation =
+      policy.decision === "deploy"
+        ? "SHIP_IT"
+        : policy.decision === "do_not_deploy"
+          ? "DO_NOT_DEPLOY"
+          : "MORE_ANALYSIS_REQUIRED";
+    const deploymentRecommendation =
+      overlayRecommendation === "SHIP_IT" && policyRecommendation !== "SHIP_IT"
+        ? policyRecommendation
+        : overlayRecommendation;
+    const suffix = `Security Decision: ${securityDeploymentVerdictLabel(overlayStatus)}.`;
     return {
       applied: true,
       deploymentVerdict: verdict.securityDeploymentVerdict,
-      deploymentRecommendation: mapSecurityDeploymentToMcpRecommendation(
-        verdict.securityDeploymentVerdict as import("@/server/ai-red-team/decision/decision-model").SecurityDeploymentVerdictStatus
-      ),
-      executiveSummarySuffix: `Security Decision: ${securityDeploymentVerdictLabel(
-        verdict.securityDeploymentVerdict as import("@/server/ai-red-team/decision/decision-model").SecurityDeploymentVerdictStatus
-      )}.`,
+      deploymentRecommendation,
+      executiveSummarySuffix: guardDecisionText(suffix, policy, "") || null,
       verdict,
     };
   }

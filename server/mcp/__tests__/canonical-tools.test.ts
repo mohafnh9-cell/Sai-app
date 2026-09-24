@@ -98,10 +98,11 @@ describe("can_i_deploy", () => {
     });
     const result = await canIDeploy(ctxFor(createFakeAdmin(tables)), {}, t);
 
-    expect(result.deploymentRecommendation).toBe("SHIP_IT");
+    // NEW-2: a ready_to_ship classification with LOW confidence is never a
+    // deployment recommendation, and the persisted band is kept, not raised.
+    expect(result.deploymentRecommendation).toBe("MORE_ANALYSIS_REQUIRED");
     expect(result.source).toBe("github");
     expect(result.authoritative).toBe("persisted");
-    // Authoritative persisted verdict keeps its stored confidence band.
     expect(result.confidenceBand).toBe("low");
     expect(result.latestReviewId).toBe("44444444-4444-4444-8444-444444444441");
     expect(result.latestReviewStatus).toBe("completed");

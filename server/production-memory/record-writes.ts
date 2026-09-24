@@ -6,7 +6,7 @@ import type { ProductionVerdictV1 } from "@/brain/production-verdict/schema";
 import { appendProtectionEvent, ensureProjectMemoryProfile, snapshotContentHash } from "./append-event";
 import {
   compositeHealthScore,
-  deployAnswerFromVerdictStatus,
+  deployAnswerFromVerdictEvidence,
   healthLabelFromScore,
   protectionStatusFromVerdict,
   type DeployAnswer,
@@ -64,8 +64,8 @@ export async function upsertProtectionSnapshot(
   const snapshotDate = new Date().toISOString().slice(0, 10);
   const productionConfidence = input.verdict.score;
   const securityConfidence = input.securityConfidence;
-  const protectionStatus = protectionStatusFromVerdict(input.verdict.status);
-  const deployAnswer = deployAnswerFromVerdictStatus(input.verdict.status);
+  const protectionStatus = protectionStatusFromVerdict(input.verdict);
+  const deployAnswer = deployAnswerFromVerdictEvidence(input.verdict);
   const healthScore = compositeHealthScore(productionConfidence, securityConfidence);
   const healthLabel = healthLabelFromScore(healthScore, protectionStatus);
   const worries = input.verdict.topPriorities.slice(0, 3).map((p) => p.title);
@@ -246,7 +246,7 @@ export async function recordReviewCompletedMemory(
   input: RecordReviewMemoryInput
 ): Promise<void> {
   const stackLabels = stackLabelsFromDetectedStack(input.detectedStack);
-  const deployAnswer = deployAnswerFromVerdictStatus(input.verdict.status);
+  const deployAnswer = deployAnswerFromVerdictEvidence(input.verdict);
   const worries = input.verdict.topPriorities.slice(0, 3).map((p) => p.title);
 
   await appendProtectionEvent(admin, {
