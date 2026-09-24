@@ -23,6 +23,7 @@ import { hasIncompleteExternalEngineCoverage } from "@/server/security-orchestra
 import { transitionSecurityJob } from "@/server/security-jobs/service";
 import { generateAndPersistProductionVerdict } from "../core";
 import { ensureProductionVerdictForCompletedScan } from "../ensure-verdict-for-scan";
+import { resolveCanonicalDecisionState } from "@/server/mcp/canonical-decision-state";
 import {
   EVIDENCE_READY_KEY,
   finalizeVerdictWhenEvidenceComplete,
@@ -46,6 +47,8 @@ function world(jobs: JobSeed[], opts: { ready?: boolean; scanStatus?: string; sc
       id,
       organization_id: ORG,
       project_id: PROJECT,
+      repository_id: PROJECT,
+      created_at: "2026-03-01T00:00:00.000Z",
       status: opts.scanStatus ?? "completed",
       metrics: opts.ready === false ? {} : { [EVIDENCE_READY_KEY]: "2026-03-01T00:00:00.000Z" },
     })),
@@ -328,6 +331,22 @@ describe("waitForScanVerdict is state-aware and bounded", () => {
       intervalMs: 10,
     });
     expect(outcome.status).toBe("deferred");
+    expect(calls.log).toEqual([]);
+  });
+});
+
+describe("read-path self-heal (a missed finalizing event never leaves finished evidence without a verdict)", () => {
+  const ctx = (admin: unknown) => ({ admin, organizationId: ORG }) as never;
+
+  it("the canonical decision state generates the verdict for a completed scan whose engines all finished", async () => {
+    const { admin } = world([job("j1", "opengrep", "COMPLETED"), job("j2", "trivy", "COMPLETED")]);
+    await resolveCanonicalDecisionState(ctx(admin), PROJECT).catch(() => undefined);
+    expect(calls.log).toEqual([`generate:${SCAN_A}`]);
+  });
+
+  it("does not generate while an engine is still running", async () => {
+    const { admin } = world([job("j1", "opengrep", "COMPLETED"), job("j2", "trivy", "RUNNING")]);
+    await resolveCanonicalDecisionState(ctx(admin), PROJECT).catch(() => undefined);
     expect(calls.log).toEqual([]);
   });
 });
