@@ -1,3 +1,4 @@
+import { applyNarrativeGuard } from "./narrative-guard";
 import { ProductionVerdictSchema, type ProductionVerdictV1, type VerdictStatus } from "./schema";
 
 const STATUS_SEVERITY: Record<VerdictStatus, number> = {
@@ -8,6 +9,15 @@ const STATUS_SEVERITY: Record<VerdictStatus, number> = {
   insufficient_data: 4,
   analysis_failed: 5,
 };
+
+const CONFIDENCE_RANK = { low: 0, medium: 1, high: 2 } as const;
+
+function weakerConfidence(
+  a: "high" | "medium" | "low",
+  b: "high" | "medium" | "low"
+): "high" | "medium" | "low" {
+  return CONFIDENCE_RANK[a] <= CONFIDENCE_RANK[b] ? a : b;
+}
 
 export type SecurityDecisionFinalizeInput = {
   decision: {
@@ -79,7 +89,12 @@ export function finalizeProductionVerdict(input: {
       status,
       executiveSummary: input.securityDecisionReport.explanation.founder.headline,
       recommendedAction: input.securityDecisionReport.decision.primaryRecommendation,
-      confidence: mapDecisionConfidence(input.securityDecisionReport.decision.confidence),
+      // AI/security-decision output may only weaken the evidence-derived
+      // confidence, never raise it.
+      confidence: weakerConfidence(
+        verdict.confidence,
+        mapDecisionConfidence(input.securityDecisionReport.decision.confidence)
+      ),
       securityDeploymentVerdict: input.securityDecisionReport.decision.deploymentVerdict,
       securityDecisionId: input.securityDecisionReport.decision.decisionId,
     };
@@ -94,5 +109,5 @@ export function finalizeProductionVerdict(input: {
     };
   }
 
-  return ProductionVerdictSchema.parse(verdict);
+  return applyNarrativeGuard(ProductionVerdictSchema.parse(verdict));
 }

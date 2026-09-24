@@ -59,7 +59,9 @@ export function evaluateProtectionStatus(input: StatusEvaluationInput): Protecti
     return "SAFE_WITH_CAUTION";
   }
 
-  return "PROTECTED";
+  // "PROTECTED" is a positive claim (it powers "I would deploy today"): it needs
+  // an explicit go decision that the evidence policy allows to be stated.
+  return input.deployAnswer === "go" && input.approvalEligible ? "PROTECTED" : "SAFE_WITH_CAUTION";
 }
 
 export function isCheckStale(lastCheckAt: string | null, cpActive: boolean): boolean {

@@ -3,7 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ProductionVerdictV1 } from "@/brain/production-verdict/schema";
 import { getCurrentProductionVerdict } from "@/server/production-verdict/service";
-import { deployAnswerFromVerdictEvidence } from "@/server/production-memory/types";
+import { deployAnswerFromVerdictEvidence, verdictAllowsFirstPersonApproval } from "@/server/production-memory/types";
 import {
   computeHealthBundle,
   confidenceTrendNarrative,
@@ -64,6 +64,7 @@ export type ProtectionContext = {
   openCritical: number;
   openHigh: number;
   deployAnswer: "go" | "no_go" | "not_yet" | null;
+  approvalEligible: boolean;
 };
 
 export async function loadProtectionContext(
@@ -136,6 +137,7 @@ export async function loadProtectionContext(
     openCritical,
     openHigh,
     deployAnswer: verdict ? deployAnswerFromVerdictEvidence(verdict) : null,
+    approvalEligible: verdict ? verdictAllowsFirstPersonApproval(verdict) : false,
   };
 }
 
@@ -155,6 +157,7 @@ export async function getProtectionCenterModel(
     lastCheckAt: ctx.lastCheckAt,
     consecutiveDailyFailures: ctx.consecutiveDailyFailures,
     deployAnswer: ctx.deployAnswer,
+    approvalEligible: ctx.approvalEligible,
     openCriticalCount: ctx.openCritical,
     openHighCount: ctx.openHigh,
     productionConfidence: ctx.productionConfidence,
@@ -271,6 +274,7 @@ export async function recomputeAndPersistProtectionState(
     lastCheckAt: ctx.lastCheckAt,
     consecutiveDailyFailures: ctx.consecutiveDailyFailures,
     deployAnswer: ctx.deployAnswer,
+    approvalEligible: ctx.approvalEligible,
     openCriticalCount: ctx.openCritical,
     openHighCount: ctx.openHigh,
     productionConfidence: ctx.productionConfidence,

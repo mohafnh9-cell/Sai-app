@@ -12,6 +12,7 @@ function baseInput(overrides: Partial<StatusEvaluationInput> = {}): StatusEvalua
     lastCheckAt: new Date().toISOString(),
     consecutiveDailyFailures: 0,
     deployAnswer: "go",
+    approvalEligible: true,
     openCriticalCount: 0,
     openHighCount: 0,
     productionConfidence: 92,
@@ -51,6 +52,12 @@ describe("protection status machine", () => {
 
   it("returns PROTECTED on clean input", () => {
     expect(evaluateProtectionStatus(baseInput())).toBe("PROTECTED");
+  });
+
+  it("never returns PROTECTED unless the decision policy allows approval (NEW-2)", () => {
+    expect(evaluateProtectionStatus(baseInput({ approvalEligible: false }))).toBe("SAFE_WITH_CAUTION");
+    expect(evaluateProtectionStatus(baseInput({ deployAnswer: "no_go" }))).toBe("SAFE_WITH_CAUTION");
+    expect(evaluateProtectionStatus(baseInput({ deployAnswer: null }))).toBe("SAFE_WITH_CAUTION");
   });
 });
 
