@@ -70,7 +70,7 @@ export async function loadMcpAlertSurface(
 
 function alertOpeningBlock(alert: FounderAlertRecord): string {
   return [
-    alert.severity === "critical" ? "Yes — something needs attention." : "Yes — I'd look at this before your next deploy.",
+    alert.severity === "critical" ? "Heads up — something needs attention." : "Heads up — I'd look at this before your next deploy.",
     "",
     "I'm worried about:",
     ...alert.changedBullets.slice(0, 3).map((b) => `• ${b}`),
