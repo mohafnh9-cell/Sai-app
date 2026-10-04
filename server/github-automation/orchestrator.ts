@@ -44,6 +44,8 @@ type ProjectRow = {
   security_score: number | null;
 };
 
+import { findOwningOpenPullRequest } from "./pull-request-ownership";
+
 function log(event: string, fields: Record<string, unknown>) {
   console.info({ component: "github-automation", event, ...fields });
 }
@@ -375,6 +377,7 @@ async function handlePushEvent(
 
     let outcome:
       | { ok: boolean; action: string; reason?: string; [key: string]: unknown };
+    let owningPullRequest: number | null = null;
 
     if (REPOSITORY_SYNC_CONFIG.pushTriggersScan) {
       outcome = await handlePushEventWithScan(admin, input, parsed);
@@ -392,6 +395,28 @@ async function handlePushEvent(
           branch: parsed.branch,
           commitSha: parsed.commitSha,
           reason: "autopilot_disabled",
+        };
+      } else if (
+        (owningPullRequest = await findOwningOpenPullRequest(admin, {
+          projectId: input.project.id,
+          githubRepo: input.project.github_repo,
+          branch: parsed.branch,
+          token: input.token,
+        })) != null
+      ) {
+        log("push_review_owned_by_pull_request", {
+          projectId: input.project.id,
+          branch: parsed.branch,
+          commitSha: parsed.commitSha,
+          pullRequestNumber: owningPullRequest,
+        });
+        outcome = {
+          ok: true,
+          action: "skipped",
+          reason: "owned_by_pull_request",
+          branch: parsed.branch,
+          commitSha: parsed.commitSha,
+          pullRequestNumber: owningPullRequest,
         };
       } else {
         const reviewResult = await runAutomaticProductionReview(admin, {

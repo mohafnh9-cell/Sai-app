@@ -1,5 +1,7 @@
 import type { OrgBrainSnapshot } from "../types";
 import type { ProductionVerdictV1, VerdictStatus } from "./schema";
+import { narrativeMayApprove } from "./narrative-guard";
+import { EVIDENCE_LIMITED_RECOMMENDED_ACTION } from "./status-rules";
 import { verdictHeadlineDisplay, verdictRecommendedAction, shouldShowScore } from "./status-ui";
 
 export type ProductionHeroViewModel = {
@@ -30,6 +32,11 @@ export function heroViewFromVerdict(verdict: ProductionVerdictV1): ProductionHer
     subheadline = `${verdictRecommendedAction(verdict.status, verdict.blockersCount)} Top priority: ${top.title}.`;
   }
 
+  // A ready_to_ship status is only headlined as ready when the evidence
+  // supports approval (high confidence, every area evaluated).
+  const evidenceLimited = verdict.status === "ready_to_ship" && !narrativeMayApprove(verdict);
+  if (evidenceLimited && !top) subheadline = EVIDENCE_LIMITED_RECOMMENDED_ACTION;
+
   return {
     status: verdict.status,
     score: verdict.score,
@@ -39,7 +46,7 @@ export function heroViewFromVerdict(verdict: ProductionVerdictV1): ProductionHer
     projectedScore: verdict.projectedScore,
     topPriorityTitle: top?.title ?? null,
     evaluatedCoverage,
-    headline: verdictHeadlineDisplay(verdict.status),
+    headline: evidenceLimited ? "NO BLOCKERS FOUND — EVIDENCE LIMITED" : verdictHeadlineDisplay(verdict.status),
     subheadline,
     analysisError: verdict.status === "analysis_failed" ? verdict.executiveSummary : null,
   };

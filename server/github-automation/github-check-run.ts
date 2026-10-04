@@ -96,6 +96,31 @@ export function githubDecisionPresentation(
   };
 }
 
+/**
+ * Commit-status state for the same decision the check run reports.
+ *
+ * GitHub statuses only offer success | failure | pending | error. The rule:
+ * "success" (a green mark) is reserved for decisions the evidence policy lets
+ * SequrAI call ready (high confidence, full coverage, check passed). A result
+ * with no confirmed blockers but limited evidence is NOT a failure and NOT an
+ * approval, so it is reported as "pending" ("not yet conclusive") with the
+ * honest description; analysis_failed is "error"; a confirmed NO-GO or a
+ * failed security check is "failure".
+ */
+export function commitStatusStateFor(
+  presentation: GitHubDecisionPresentation,
+  verdictStatus: ProductionVerdictV1["status"],
+  checkStatus?: "passed" | "failed" | "warning" | "pending" | null
+): "success" | "failure" | "pending" | "error" {
+  if (verdictStatus === "analysis_failed") return "error";
+  if (presentation.conclusion === "failure") return "failure";
+  if (checkStatus === "failed" || checkStatus === "warning") return "failure";
+  if (presentation.conclusion === "success" && (checkStatus === "passed" || checkStatus == null)) {
+    return "success";
+  }
+  return "pending";
+}
+
 export function buildCheckRunExternalId(input: {
   pullRequestNumber: number;
   headSha: string;

@@ -9,7 +9,7 @@ vi.mock("@/server/production-verdict/service", () => ({
 
 import { finalizeProjectStateAfterAutomaticReview } from "../finalize";
 
-function makeAdmin(scanBranch: string) {
+function makeAdmin(scanBranch: string, siblings: Array<{ id: string }> = []) {
   const writes: Array<{ table: string; op: string }> = [];
   const scan = {
     id: "s1",
@@ -27,6 +27,8 @@ function makeAdmin(scanBranch: string) {
       const self = () => chain;
       chain.select = self;
       chain.eq = self;
+      chain.neq = self;
+      chain.limit = self;
       chain.maybeSingle = async () =>
         table === "scans" ? { data: scan, error: null } : { data: { github_default_branch: "main" }, error: null };
       chain.update = () => {
@@ -37,7 +39,7 @@ function makeAdmin(scanBranch: string) {
         writes.push({ table, op: "upsert" });
         return { error: null };
       };
-      chain.then = (r: (v: unknown) => unknown) => r({ error: null });
+      chain.then = (r: (v: unknown) => unknown) => r({ data: table === "scans" ? siblings : null, error: null });
       return chain;
     },
   };
@@ -58,5 +60,23 @@ describe("automatic review finalize branch isolation", () => {
     const { admin, writes } = makeAdmin("main");
     await finalizeProjectStateAfterAutomaticReview(admin, { organizationId: "o", projectId: "p", scanId: "s1" });
     expect(writes.map((w) => w.table)).toEqual(expect.arrayContaining(["repository_scan_state", "projects"]));
+  });
+
+  it("does not create a competing verdict when a pull request review owns the commit", async () => {
+    const { admin, writes } = makeAdmin("feature/x", [{ id: "pr-scan" }]);
+    const result = await finalizeProjectStateAfterAutomaticReview(admin, {
+      organizationId: "o",
+      projectId: "p",
+      scanId: "s1",
+    });
+    expect(generate).not.toHaveBeenCalled();
+    expect(writes).toEqual([]);
+    expect(result.ok).toBe(true);
+  });
+
+  it("still generates a verdict for a branch push that no pull request owns", async () => {
+    const { admin } = makeAdmin("feature/x", []);
+    await finalizeProjectStateAfterAutomaticReview(admin, { organizationId: "o", projectId: "p", scanId: "s1" });
+    expect(generate).toHaveBeenCalled();
   });
 });
