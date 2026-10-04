@@ -43,6 +43,37 @@ const DOCKERFILE_PATTERN = /(^|\/)Dockerfile(\.[a-zA-Z0-9_-]+)?$/;
 const TERRAFORM_PATTERN = /\.tf$/;
 const K8S_HINT_PATTERN = /(^|\/)(k8s|kubernetes)\//i;
 
+const JSON_MANIFESTS = ["package.json", "package-lock.json", "composer.lock", "Pipfile.lock"];
+
+/**
+ * Trivy (offline) skips a dependency manifest it cannot parse and still exits
+ * 0 with an empty result, which would read as "0 vulnerabilities". An input
+ * the engine could not analyze is UNKNOWN, never clean, so unparsable
+ * manifests are detected here, deterministically, and reported as engine
+ * errors (-> PARTIAL, dependency capabilities not completed).
+ */
+export function findUnparsableManifests(
+  files: ReadonlyArray<{ path: string; content: string }>
+): Array<{ code: "manifest_unparsable"; message: string }> {
+  const problems: Array<{ code: "manifest_unparsable"; message: string }> = [];
+  for (const file of files) {
+    const name = file.path.slice(file.path.lastIndexOf("/") + 1);
+    if (!DEPENDENCY_MANIFESTS.includes(name)) continue;
+    if (file.content.includes("\u0000")) {
+      problems.push({ code: "manifest_unparsable", message: `${file.path}: contains NUL bytes; dependencies were not analyzed` });
+      continue;
+    }
+    if (JSON_MANIFESTS.includes(name)) {
+      try {
+        JSON.parse(file.content);
+      } catch {
+        problems.push({ code: "manifest_unparsable", message: `${file.path}: not valid JSON; dependencies were not analyzed` });
+      }
+    }
+  }
+  return problems;
+}
+
 function resolveBinaryPath(): string | null {
   return process.env.TRIVY_BINARY_PATH?.trim() || null;
 }
@@ -150,6 +181,8 @@ export function createTrivyEngine(): SecurityEngine {
 
       const cacheDir = resolveCacheDir();
       const errors: EngineResult["errors"] = [];
+      const manifestProblems = findUnparsableManifests(input.files);
+      errors.push(...manifestProblems);
 
       if (input.signal?.aborted) {
         return {
@@ -250,7 +283,11 @@ export function createTrivyEngine(): SecurityEngine {
         status,
         completedAt: new Date().toISOString(),
         durationMs: Date.now() - started,
-        capabilitiesCompleted: report ? [...capabilitiesAttempted] : [],
+        capabilitiesCompleted: report
+          ? capabilitiesAttempted.filter(
+              (c) => manifestProblems.length === 0 || (c !== "dependencies" && c !== "sbom")
+            )
+          : [],
         findings,
         evidence,
         metrics: { vulnerabilitiesFound: findings.length },

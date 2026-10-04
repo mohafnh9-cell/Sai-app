@@ -1,5 +1,8 @@
-import { describe, expect, it } from "vitest";
-import { createTrivyEngine } from "../trivy/engine";
+import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+import { createTrivyEngine, findUnparsableManifests } from "../trivy/engine";
 
 /**
  * Phase 35, section 41: REAL INTEGRATION VALIDATION. Skipped (not mocked)
@@ -92,5 +95,72 @@ describe("TrivyEngine -- applicability and skip semantics (no binary required)",
     } finally {
       if (originalPath) process.env.TRIVY_BINARY_PATH = originalPath;
     }
+  });
+});
+
+describe("TrivyEngine -- unanalyzable dependency input is never reported as clean", () => {
+  const original = { bin: process.env.TRIVY_BINARY_PATH, cache: process.env.TRIVY_CACHE_DIR };
+  afterEach(() => {
+    if (original.bin === undefined) delete process.env.TRIVY_BINARY_PATH;
+    else process.env.TRIVY_BINARY_PATH = original.bin;
+    if (original.cache === undefined) delete process.env.TRIVY_CACHE_DIR;
+    else process.env.TRIVY_CACHE_DIR = original.cache;
+  });
+
+  /** A stand-in trivy that, like the real one offline, exits 0 with an empty result for anything it cannot parse. */
+  function useFakeTrivy() {
+    const dir = mkdtempSync(join(tmpdir(), "fake-trivy-"));
+    const bin = join(dir, "trivy");
+    writeFileSync(bin, '#!/bin/sh\necho \'{"Results":[]}\'\nexit 0\n');
+    chmodSync(bin, 0o755);
+    process.env.TRIVY_BINARY_PATH = bin;
+    process.env.TRIVY_CACHE_DIR = join(dir, "cache");
+  }
+
+  const input = (files: Array<{ path: string; content: string }>) => ({
+    scanId: "scan-x",
+    projectId: "project-1",
+    organizationId: "org-1",
+    files,
+    timeoutMs: 20_000,
+  });
+
+  it("detects malformed JSON manifests and NUL-byte manifests, ignores valid and non-manifest files", () => {
+    expect(
+      findUnparsableManifests([
+        { path: "package-lock.json", content: '{"name":"x","packages":{' },
+        { path: "sub/package.json", content: '{"name":"ok"}' },
+        { path: "requirements.txt", content: "flask==0.5\n\u0000\n" },
+        { path: "src/app.js", content: "{ not json" },
+      ]).map((p) => p.message.split(":")[0])
+    ).toEqual(["package-lock.json", "requirements.txt"]);
+  });
+
+  it("a malformed package-lock.json yields PARTIAL (not COMPLETED) and dependency capabilities are not completed", async () => {
+    useFakeTrivy();
+    const result = await createTrivyEngine().execute(
+      input([
+        { path: "package.json", content: '{"name":"x","dependencies":{"lodash":"4.17.4"}}' },
+        { path: "package-lock.json", content: '{"name":"x","lockfileVersion":3,"packages":{' },
+      ])
+    );
+    expect(result.status).toBe("PARTIAL");
+    expect(result.errors.map((e) => e.code)).toContain("manifest_unparsable");
+    expect(result.capabilitiesCompleted).not.toContain("dependencies");
+    expect(result.capabilitiesCompleted).not.toContain("sbom");
+    expect(result.metrics).toEqual({ vulnerabilitiesFound: 0 });
+  });
+
+  it("control: valid manifests with the same empty result stay COMPLETED", async () => {
+    useFakeTrivy();
+    const result = await createTrivyEngine().execute(
+      input([
+        { path: "package.json", content: '{"name":"x","dependencies":{}}' },
+        { path: "package-lock.json", content: '{"name":"x","lockfileVersion":3,"packages":{}}' },
+      ])
+    );
+    expect(result.status).toBe("COMPLETED");
+    expect(result.errors).toEqual([]);
+    expect(result.capabilitiesCompleted).toContain("dependencies");
   });
 });
