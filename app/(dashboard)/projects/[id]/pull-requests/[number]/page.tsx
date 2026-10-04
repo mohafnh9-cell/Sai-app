@@ -6,6 +6,7 @@ import { VerdictStatusBadge } from "@/features/production-verdict/components/Ver
 import { getCachedServerAuthContext } from "@/lib/server/request-cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getLatestPullRequestScan } from "@/server/pull-request/get-pr-verdict";
+import { narrativeMayApprove } from "@/brain/production-verdict/narrative-guard";
 
 interface PageProps {
   params: Promise<{ id: string; number: string }>;
@@ -40,8 +41,14 @@ export default async function PullRequestSecurityPage({ params, searchParams }: 
     headSha: headSha ?? null,
   });
 
-  const go =
+  // "GO" is an approval claim: only when the evidence supports it (high
+  // confidence, every area evaluated). Otherwise a ready verdict is shown as
+  // "no blockers found, evidence limited".
+  const readyCompleted =
     prScan?.verdictStatus === "ready_to_ship" && prScan.scanStatus === "completed";
+  const evidenceLimited =
+    readyCompleted && !(prScan?.productionVerdict && narrativeMayApprove(prScan.productionVerdict));
+  const go = readyCompleted && !evidenceLimited;
   const noGo =
     prScan?.scanStatus === "completed" &&
     prScan.verdictStatus != null &&
@@ -79,10 +86,15 @@ export default async function PullRequestSecurityPage({ params, searchParams }: 
           <div className="rounded-xl border bg-card p-6 space-y-4">
             <div className="flex flex-wrap items-center gap-3">
               <span className="text-sm font-medium">Production Verdict</span>
-              {prScan.verdictStatus ? (
+              {evidenceLimited ? null : prScan.verdictStatus ? (
                 <VerdictStatusBadge status={prScan.verdictStatus as never} />
               ) : (
                 <span className="text-sm text-muted-foreground">Pending analysis</span>
+              )}
+              {evidenceLimited && (
+                <span className="rounded-full bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-700">
+                  NO BLOCKERS FOUND — EVIDENCE LIMITED
+                </span>
               )}
               {go && (
                 <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-700">
