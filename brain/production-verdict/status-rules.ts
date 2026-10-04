@@ -91,9 +91,12 @@ export function verdictHeadline(status: VerdictStatus): string {
   }
 }
 
-export function recommendedAction(status: VerdictStatus, blockersCount: number): string {
+export function recommendedAction(status: VerdictStatus, blockersCount: number, evidenceSupportsApproval = true): string {
   switch (status) {
     case "ready_to_ship":
+      if (!evidenceSupportsApproval) {
+        return "No blockers were found, but evidence is limited. Review the Production Verdict coverage and close the gaps before relying on it.";
+      }
       return "Deploy when your release process is ready. SequrAI will review every subsequent push.";
     case "almost_ready":
       return "Resolve the remaining blockers on your fastest path forward, then re-run the analysis.";

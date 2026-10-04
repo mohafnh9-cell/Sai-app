@@ -8,7 +8,7 @@ import {
   projectScoreAfterPriorities,
 } from "./projection";
 import { isNonBlockingSecretClassification } from "@/features/security-scanner/rules/secret-classification";
-import { applyNarrativeGuard } from "./narrative-guard";
+import { applyNarrativeGuard, narrativeMayApprove } from "./narrative-guard";
 import { summarizeConfidenceDistribution } from "@/brain/confidence/derive";
 import {
   PRODUCTION_VERDICT_VERSION,
@@ -194,6 +194,7 @@ export function generateProductionVerdict(input: VerdictEngineInput): {
     generatedAt: new Date().toISOString(),
   };
 
+  baseVerdict.recommendedAction = recommendedAction(status, blockers.blockersCount, narrativeMayApprove(baseVerdict));
   baseVerdict.executiveSummary =
     input.aiExecutiveSummary?.trim() || buildDeterministicSummary(baseVerdict, blockerConfidence);
   baseVerdict.methodologyNote = buildMethodologyNote(baseVerdict);
