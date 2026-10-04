@@ -102,4 +102,33 @@ describe("recordPushDetection", () => {
 
     expect(rows.get(PROJECT_1)?.commit_sha).toBe("bbb2222");
   });
+
+  it("a push to a non-default branch never overwrites the default branch's detected commit", async () => {
+    const rows = new Map<string, Record<string, unknown>>();
+    rows.set(PROJECT_1, { project_id: PROJECT_1, branch: "main", commit_sha: "mainhead", pushed_at: "2026-01-01T00:00:00.000Z" });
+    const admin = {
+      from(table: string) {
+        let eqValue: unknown;
+        return {
+          select() { return this; },
+          eq(_c: string, v: unknown) { eqValue = v; return this; },
+          async maybeSingle() {
+            if (table === "projects") return { data: { github_default_branch: "main" }, error: null };
+            return { data: rows.get(String(eqValue)) ?? null, error: null };
+          },
+          async upsert(row: Record<string, unknown>) { rows.set(String(row.project_id), row); return { error: null }; },
+        };
+      },
+    };
+    await recordPushDetection(admin as never, {
+      organizationId: "org-1", projectId: PROJECT_1, githubRepositoryId: 123,
+      detection: detection({ commitSha: "featurehead", branch: "feature/x", pushedAt: "2026-02-01T00:00:00.000Z" }),
+    });
+    expect(rows.get(PROJECT_1)?.commit_sha).toBe("mainhead");
+    await recordPushDetection(admin as never, {
+      organizationId: "org-1", projectId: PROJECT_1, githubRepositoryId: 123,
+      detection: detection({ commitSha: "newmain", branch: "main", pushedAt: "2026-02-02T00:00:00.000Z" }),
+    });
+    expect(rows.get(PROJECT_1)?.commit_sha).toBe("newmain");
+  });
 });

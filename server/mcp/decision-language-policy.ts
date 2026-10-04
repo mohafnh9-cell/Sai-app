@@ -17,7 +17,7 @@ export type DecisionStrength =
   | "BLOCKED" // do-not-deploy evidence
   | "INSUFFICIENT" // no answer possible (insufficient/failed/in progress/stale/unknown)
   | "QUALIFIED" // ready_to_ship classification, but confidence too low to recommend deploying
-  | "SUPPORTED" // no blockers in evaluated areas; some areas not evaluated; qualified wording only
+  | "SUPPORTED" // no blockers in evaluated areas; some areas not evaluated; qualified wording, NEVER a deploy recommendation
   | "HIGH_CONFIDENCE"; // ready, high confidence, all areas evaluated, current
 
 export type DecisionLanguagePolicy = {
@@ -79,7 +79,10 @@ export function deriveDecisionLanguagePolicy(input: PolicyInput): DecisionLangua
       decision: "deploy",
     };
   }
-  return { ...base, strength: "SUPPORTED", mayRecommendDeploy: true, decision: "deploy" };
+  // Medium confidence and/or unevaluated areas: no confirmed blockers, but a
+  // deployment recommendation (SHIP_IT) requires HIGH confidence AND complete
+  // coverage. The wording stays qualified ("no blockers found, with limits").
+  return { ...base, strength: "SUPPORTED", decision: "more_analysis_required" };
 }
 
 /** Area-aware coverage that can never read as complete while areas remain. */
