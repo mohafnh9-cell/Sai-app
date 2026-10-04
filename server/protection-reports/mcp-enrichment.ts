@@ -7,6 +7,8 @@ type McpEnrichable = {
   summary?: string;
   project?: { id?: string; name?: string };
   range?: string;
+  /** can_i_deploy: the canonical, policy-gated recommendation for the current verdict. */
+  deploymentRecommendation?: "SHIP_IT" | "DO_NOT_DEPLOY" | "MORE_ANALYSIS_REQUIRED";
 };
 
 /** Sprint 6 — report narrative on existing MCP tools (no new tools). */
@@ -34,14 +36,24 @@ export async function enrichMcpToolResultWithReports(
   if (toolName === "can_i_deploy") {
     const monthly = await getCurrentReport(admin, projectId, "monthly");
     if (!monthly) return result;
-    const teaser = [
-      monthly.founderSummary.moreProtectedNarrative,
-      "",
+    // The monthly report is a retrospective. Its "stronger posture" and
+    // "I would deploy today" lines are first-person approvals that must never
+    // be appended to a current decision the canonical policy does not
+    // recommend deploying.
+    const mayNarrateDeploy = result.deploymentRecommendation === "SHIP_IT";
+    const worries = [
       "What worries me:",
       ...monthly.founderSummary.whatWorriesSequrAI.slice(0, 2).map((w) => `• ${w}`),
-      "",
-      monthly.founderSummary.wouldDeployToday,
-    ].join("\n");
+    ];
+    const teaser = mayNarrateDeploy
+      ? [
+          monthly.founderSummary.moreProtectedNarrative,
+          "",
+          ...worries,
+          "",
+          monthly.founderSummary.wouldDeployToday,
+        ].join("\n")
+      : ["From the latest monthly protection report:", ...worries].join("\n");
     return {
       ...result,
       summary: `${result.summary ?? ""}\n\n${teaser}`.trim(),
