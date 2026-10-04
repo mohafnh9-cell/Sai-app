@@ -30,11 +30,15 @@ describe("protection-report teaser on can_i_deploy", () => {
       const out = await run(rec);
       expect(out.summary).not.toMatch(/I would deploy today|stronger protection posture|Yes —/);
       expect(out.summary).toContain("base");
+      // The structured attachment must not carry the approval-flavoured retrospective either.
+      expect(JSON.stringify(out.protectionReport)).not.toMatch(/I would deploy today|stronger protection posture|Yes —/);
+      expect(out.protectionReport?.narrative).toBe("");
     }
   );
 
   it("keeps the retrospective narrative only for SHIP_IT", async () => {
     const out = await run("SHIP_IT");
     expect(out.summary).toMatch(/I would deploy today/);
+    expect(JSON.stringify(out.protectionReport)).toMatch(/stronger protection posture/);
   });
 });
