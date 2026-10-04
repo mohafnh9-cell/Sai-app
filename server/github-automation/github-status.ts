@@ -43,8 +43,9 @@ export function statusFromSecurityCheck(
   checkStatus: "passed" | "failed" | "warning"
 ): "success" | "failure" | "pending" {
   if (checkStatus === "passed") return "success";
-  if (checkStatus === "failed") return "failure";
-  return "pending";
+  // "warning" (high findings / low score) is a terminal, non-clean result;
+  // reporting it as "pending" left the commit status waiting forever.
+  return "failure";
 }
 
 export function healthLabel(status: HealthStatus): string {

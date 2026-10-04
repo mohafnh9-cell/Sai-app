@@ -7,9 +7,13 @@ import {
 } from "@/server/github-automation/github-status";
 import {
   buildCheckRunExternalId,
+  githubDecisionPresentation,
   postGitHubCheckRun,
+  postUnavailableGitHubCheckRun,
   verdictStatusToCheckConclusion,
 } from "@/server/github-automation/github-check-run";
+import { githubVerdictLabel } from "@/brain/production-verdict/adapters/format";
+import { waitForScanVerdict } from "@/server/production-verdict/evidence-finalization";
 import { finalizeScanAutomation } from "@/server/github-automation/post-scan";
 import { resolveOrganizationGitHubToken } from "@/server/github-automation/token-resolver";
 import { formatGithubCheckDescription } from "@/brain/production-verdict/build-verdict";
@@ -125,11 +129,29 @@ export async function finalizeWebhookAutomationScan(
           ? `${input.appUrl}/projects/${input.projectId}/pull-requests/${input.pullRequestNumber}?head=${input.statusSha}`
           : `${input.appUrl}/projects/${input.projectId}/scans/${input.scanId}`
         : undefined;
+      // The Production Verdict is produced when the scan's engines finish,
+      // which is after the scan itself completes: wait (bounded) for it so a
+      // PR check is closed with the real verdict instead of being skipped.
+      if (input.pullRequestNumber != null) {
+        await waitForScanVerdict(admin, {
+          organizationId: input.organizationId,
+          projectId: input.projectId,
+          scanId: input.scanId,
+          maxMs: 90_000,
+        }).catch((error) => {
+          console.warn("pr_finalize_verdict_wait_failed", {
+            scanId: input.scanId,
+            message: error instanceof Error ? error.message : String(error),
+          });
+        });
+      }
       const persistedVerdict = await getProductionVerdictByScan(
         admin,
         input.organizationId,
         input.scanId
       );
+      const decisionVerdict = persistedVerdict ?? verdict.v1;
+      const presentation = githubDecisionPresentation(decisionVerdict, { checkStatus });
       const idempotencyKey = buildIdempotencyKey({
         organizationId: input.organizationId,
         projectId: input.projectId,
@@ -153,11 +175,12 @@ export async function finalizeWebhookAutomationScan(
             token: tokenResult.token,
             state: statusFromSecurityCheck(checkStatus),
             context: "sequrai/production",
+            // Never an approval label unless the canonical policy allows it.
             description: formatGithubCheckDescription({
               verdict,
               blockersIntroduced,
               blockersResolved,
-            }),
+            }).replace(githubVerdictLabel(decisionVerdict.status), presentation.label),
             targetUrl: reportUrl,
           });
         }
@@ -209,6 +232,48 @@ export async function finalizeWebhookAutomationScan(
           productionVerdictId: (verdictRow?.id as string | undefined) ?? null,
           githubCheckRunId: checkOutcome.result?.checkRunId ?? null,
           verdictStatus: persistedVerdict.status,
+        };
+      }
+
+      if (input.pullRequestNumber != null && !persistedVerdict) {
+        // No verdict within the wait: close the open check truthfully
+        // (neutral, not an approval) rather than leaving it in_progress.
+        const unavailableKey = buildIdempotencyKey({
+          organizationId: input.organizationId,
+          projectId: input.projectId,
+          scanId: input.scanId,
+          commitSha: input.statusSha,
+          operationType: "github_check_run",
+          suffix: "verdict_unavailable",
+        });
+        const outcome = await runIdempotentSideEffect(
+          admin,
+          {
+            idempotencyKey: unavailableKey,
+            organizationId: input.organizationId,
+            projectId: input.projectId,
+            scanId: input.scanId,
+            operationType: "github_check_run",
+          },
+          async () =>
+            postUnavailableGitHubCheckRun({
+              githubRepo: project.github_repo,
+              sha: input.statusSha!,
+              token: tokenResult.token,
+              reason: "verdict not produced in time",
+              reportUrl,
+              pullRequestNumber: input.pullRequestNumber,
+              externalId: buildCheckRunExternalId({
+                pullRequestNumber: input.pullRequestNumber!,
+                headSha: input.statusSha!,
+              }),
+            })
+        );
+        return {
+          checkStatus,
+          productionVerdictId: null,
+          githubCheckRunId: outcome.result?.checkRunId ?? null,
+          verdictStatus: null,
         };
       }
     }

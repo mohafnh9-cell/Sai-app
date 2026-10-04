@@ -29,6 +29,7 @@ import {
 } from "./scan-execution/scan-execution-trace";
 import { ensureProductionVerdictForCompletedScan } from "@/server/production-verdict/ensure-verdict-for-scan";
 import { startScanJobHeartbeat } from "./scan-job-heartbeat";
+import { withFinalizeFromJobMetadata } from "./finalize-from-metadata";
 
 function log(level: "info" | "error", event: string, fields: Record<string, unknown>) {
   const payload = { component: "run-scan-job", event, ...fields };
@@ -38,7 +39,7 @@ function log(level: "info" | "error", event: string, fields: Record<string, unkn
 
 export async function executeScanRunJob(
   admin: SupabaseClient,
-  payload: ScanRunPayload,
+  inputPayload: ScanRunPayload,
   input?: {
     inngestRunId?: string;
     attempt?: number;
@@ -54,8 +55,10 @@ export async function executeScanRunJob(
     reconcileOnly?: boolean;
   }
 ): Promise<void> {
+  const existingJob = await getScanJob(admin, inputPayload.scanJobId);
+  // Inngest delivers a payload without `finalize`; restore it from the job row.
+  const payload = withFinalizeFromJobMetadata(inputPayload, existingJob?.metadata);
   let runPayload = payload;
-  const existingJob = await getScanJob(admin, payload.scanJobId);
   if (existingJob && isTerminalScanJobStatus(existingJob.status)) {
     if (existingJob.status === "completed") {
       const { data: terminalScan } = await admin
