@@ -1,9 +1,17 @@
 import type { ProductionVerdictV1 } from "../schema";
 import { VERDICT_STATUS_LABELS } from "../schema";
+import { narrativeMayApprove } from "../narrative-guard";
 
-export function githubVerdictLabel(status: ProductionVerdictV1["status"]): string {
+export function githubVerdictLabel(
+  status: ProductionVerdictV1["status"],
+  evidence?: Pick<ProductionVerdictV1, "confidence" | "unevaluatedAreas" | "partiallyEvaluatedAreas">
+): string {
   switch (status) {
     case "ready_to_ship":
+      // Approval-strength wording only when the evidence supports it.
+      if (evidence && !narrativeMayApprove({ status, ...evidence })) {
+        return "SequrAI — No blockers found (evidence limited)";
+      }
       return "SequrAI — Ready to Ship";
     case "almost_ready":
       return "SequrAI — Review Recommended";
@@ -18,7 +26,7 @@ export function githubVerdictLabel(status: ProductionVerdictV1["status"]): strin
 
 export function formatGithubCheckDescription(verdict: ProductionVerdictV1): string {
   const parts = [
-    githubVerdictLabel(verdict.status),
+    githubVerdictLabel(verdict.status, verdict),
     verdict.score != null ? `${verdict.score}/100` : undefined,
     `${verdict.blockersCount} blockers`,
   ].filter(Boolean);
@@ -39,7 +47,7 @@ export function formatGithubCheckSummary(input: {
 }): string {
   const { verdict } = input;
   const lines = [
-    githubVerdictLabel(verdict.status),
+    githubVerdictLabel(verdict.status, verdict),
     verdict.score != null
       ? `Production Ready Score: ${verdict.score}/100`
       : "Production Ready Score unavailable",

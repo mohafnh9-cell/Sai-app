@@ -91,11 +91,14 @@ export function verdictHeadline(status: VerdictStatus): string {
   }
 }
 
+export const EVIDENCE_LIMITED_RECOMMENDED_ACTION =
+  "No blockers were found, but evidence is limited. Review the Production Verdict coverage and close the gaps before relying on it.";
+
 export function recommendedAction(status: VerdictStatus, blockersCount: number, evidenceSupportsApproval = true): string {
   switch (status) {
     case "ready_to_ship":
       if (!evidenceSupportsApproval) {
-        return "No blockers were found, but evidence is limited. Review the Production Verdict coverage and close the gaps before relying on it.";
+        return EVIDENCE_LIMITED_RECOMMENDED_ACTION;
       }
       return "Deploy when your release process is ready. SequrAI will review every subsequent push.";
     case "almost_ready":

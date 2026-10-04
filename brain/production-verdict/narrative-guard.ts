@@ -26,6 +26,8 @@ export const APPROVAL_PATTERNS: RegExp[] = [
   /(?:sufficient|enough|high)\s+confidence\s+to\s+(?:deploy|ship|release)/i,
   /(?<!\b(?:not|n't)\s+)\b(?:ok|okay|good|fine|clear)\s+to\s+(?:deploy|ship|go)\b/i,
   /\bgreen[\s-]?light\b/i,
+  /meets\s+the\s+current\s+readiness\s+threshold/i,
+  /deploy\s+when\s+your\s+release\s+process\s+is\s+ready/i,
   /go\s+ahead\s+and\s+(?:deploy|ship|release)/i,
   /\blo\s+desplegar[ií]a\b/i,
   /suficiente\s+confianza\s+para\s+(?:desplegar|publicar)/i,

@@ -1,12 +1,10 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import {
-  postGitHubCommitStatus,
-  statusFromSecurityCheck,
-} from "@/server/github-automation/github-status";
+import { postGitHubCommitStatus } from "@/server/github-automation/github-status";
 import {
   buildCheckRunExternalId,
+  commitStatusStateFor,
   githubDecisionPresentation,
   postGitHubCheckRun,
   postUnavailableGitHubCheckRun,
@@ -173,7 +171,7 @@ export async function finalizeWebhookAutomationScan(
             githubRepo: project.github_repo,
             sha: input.statusSha!,
             token: tokenResult.token,
-            state: statusFromSecurityCheck(checkStatus),
+            state: commitStatusStateFor(presentation, decisionVerdict.status, checkStatus),
             context: "sequrai/production",
             // Never an approval label unless the canonical policy allows it.
             description: formatGithubCheckDescription({

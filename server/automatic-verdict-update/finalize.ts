@@ -62,6 +62,28 @@ export async function finalizeProjectStateAfterAutomaticReview(
     (scan as { branch?: string | null }).branch
   );
 
+  if (!isDefaultBranch) {
+    // Second line of defence for the push/pull_request race: when a pull
+    // request review already owns this exact commit, the push review must not
+    // create a competing verdict.
+    const { data: sibling } = await admin
+      .from("scans")
+      .select("id")
+      .eq("repository_id", input.projectId)
+      .eq("branch", (scan as { branch?: string | null }).branch ?? "")
+      .eq("commit_sha", scan!.commit_sha)
+      .neq("id", input.scanId)
+      .neq("review_type", "automatic")
+      .limit(1);
+    if (sibling && sibling.length > 0) {
+      log("verdict_owned_by_pull_request_review", {
+        scanId: input.scanId,
+        ownerScanId: (sibling[0] as { id: string }).id,
+      });
+      return buildFinalizeSuccess(input.scanId);
+    }
+  }
+
   if (isDefaultBranch && scan!.security_score != null && scan!.completed_at) {
     const { error: projectError } = await admin
       .from("projects")
