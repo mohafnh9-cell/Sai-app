@@ -7,6 +7,7 @@ import {
   shouldFinalizeAutomaticVerdict,
   type AutomaticVerdictFinalizeResult,
 } from "@/brain/automatic-verdict-update";
+import { isDefaultBranchHead } from "@/server/repository-sync/persistence";
 import {
   generateAndPersistProductionVerdict,
   getProductionVerdictByScan,
@@ -27,7 +28,7 @@ export async function finalizeProjectStateAfterAutomaticReview(
   const { data: scan, error: scanError } = await admin
     .from("scans")
     .select(
-      "id, status, review_type, commit_sha, security_score, findings_count, completed_at"
+      "id, status, review_type, branch, commit_sha, security_score, findings_count, completed_at"
     )
     .eq("id", input.scanId)
     .eq("project_id", input.projectId)
@@ -53,7 +54,15 @@ export async function finalizeProjectStateAfterAutomaticReview(
     return buildFinalizeSuccess(input.scanId);
   }
 
-  if (scan!.security_score != null && scan!.completed_at) {
+  // Project-level score / scan-state pointers describe the default branch only;
+  // a feature-branch review must never move them.
+  const isDefaultBranch = await isDefaultBranchHead(
+    admin,
+    input.projectId,
+    (scan as { branch?: string | null }).branch
+  );
+
+  if (isDefaultBranch && scan!.security_score != null && scan!.completed_at) {
     const { error: projectError } = await admin
       .from("projects")
       .update({
@@ -83,18 +92,20 @@ export async function finalizeProjectStateAfterAutomaticReview(
       return buildFinalizeFailure("verdict_generation_failed", input.scanId);
     }
 
-    await admin
-      .from("repository_scan_state")
-      .upsert(
-        {
-          repository_id: input.projectId,
-          organization_id: input.organizationId,
-          last_full_scan_at: scan!.completed_at,
-          open_findings_count: scan!.findings_count ?? 0,
-          last_commit_sha: scan!.commit_sha,
-        },
-        { onConflict: "repository_id" }
-      );
+    if (isDefaultBranch) {
+      await admin
+        .from("repository_scan_state")
+        .upsert(
+          {
+            repository_id: input.projectId,
+            organization_id: input.organizationId,
+            last_full_scan_at: scan!.completed_at,
+            open_findings_count: scan!.findings_count ?? 0,
+            last_commit_sha: scan!.commit_sha,
+          },
+          { onConflict: "repository_id" }
+        );
+    }
 
     log("verdict_update_completed", {
       scanId: input.scanId,
