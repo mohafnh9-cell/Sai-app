@@ -79,4 +79,44 @@ describe("finalizeProductionVerdict", () => {
   it("maps deploy with warnings to almost_ready", () => {
     expect(mapSecurityDeploymentToVerdictStatus("DEPLOY_WITH_WARNINGS")).toBe("almost_ready");
   });
+
+  const decision = (primaryRecommendation: string) => ({
+    decision: {
+      deploymentVerdict: "SAFE_TO_DEPLOY" as const,
+      primaryRecommendation,
+      confidence: "high" as const,
+      decisionId: "00000000-0000-4000-8000-000000000098",
+    },
+    explanation: { founder: { headline: "Production review completed." } },
+  });
+
+  it("an insufficient_data verdict never takes 'Continue to production' from the security decision", () => {
+    const verdict = finalizeProductionVerdict({
+      verdict: baseVerdict({
+        status: "insufficient_data",
+        confidence: "low",
+        recommendedAction: "Run a full production analysis with sufficient repository coverage before shipping.",
+      }),
+      securityDecisionReport: decision("Continue to production with monitoring."),
+    });
+    expect(verdict.status).toBe("insufficient_data");
+    expect(verdict.recommendedAction).not.toMatch(/continue to production/i);
+    expect(verdict.recommendedAction).toMatch(/full production analysis/);
+  });
+
+  it("a ready verdict without approval-grade evidence does not take the decision's recommendation either", () => {
+    const verdict = finalizeProductionVerdict({
+      verdict: baseVerdict({ confidence: "medium", recommendedAction: "No blockers were found, but evidence is limited." }),
+      securityDecisionReport: decision("Continue to production with monitoring."),
+    });
+    expect(verdict.recommendedAction).not.toMatch(/continue to production/i);
+  });
+
+  it("an approval-grade ready verdict may still use the decision's recommendation", () => {
+    const verdict = finalizeProductionVerdict({
+      verdict: baseVerdict(),
+      securityDecisionReport: decision("Monitor the release for 24 hours."),
+    });
+    expect(verdict.recommendedAction).toBe("Monitor the release for 24 hours.");
+  });
 });
