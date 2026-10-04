@@ -1,4 +1,4 @@
-import { applyNarrativeGuard } from "./narrative-guard";
+import { applyNarrativeGuard, narrativeMayApprove } from "./narrative-guard";
 import { ProductionVerdictSchema, type ProductionVerdictV1, type VerdictStatus } from "./schema";
 
 const STATUS_SEVERITY: Record<VerdictStatus, number> = {
@@ -62,6 +62,19 @@ function mapDecisionConfidence(
   return "low";
 }
 
+/**
+ * The security-decision report's primary recommendation is free-form (it can
+ * be "Continue to production with monitoring."). It may only replace the
+ * evidence-derived, status-based recommended action where it cannot read as
+ * an approval: never for insufficient_data / analysis_failed, and for
+ * ready_to_ship only when the evidence supports approval.
+ */
+function decisionRecommendationMayReplace(status: VerdictStatus, verdict: ProductionVerdictV1): boolean {
+  if (status === "insufficient_data" || status === "analysis_failed") return false;
+  if (status === "ready_to_ship") return narrativeMayApprove({ ...verdict, status });
+  return true;
+}
+
 export function finalizeProductionVerdict(input: {
   verdict: ProductionVerdictV1;
   securityDecisionReport?: SecurityDecisionFinalizeInput | null;
@@ -88,7 +101,9 @@ export function finalizeProductionVerdict(input: {
       ...verdict,
       status,
       executiveSummary: input.securityDecisionReport.explanation.founder.headline,
-      recommendedAction: input.securityDecisionReport.decision.primaryRecommendation,
+      recommendedAction: decisionRecommendationMayReplace(status, verdict)
+        ? input.securityDecisionReport.decision.primaryRecommendation
+        : verdict.recommendedAction,
       // AI/security-decision output may only weaken the evidence-derived
       // confidence, never raise it.
       confidence: weakerConfidence(
