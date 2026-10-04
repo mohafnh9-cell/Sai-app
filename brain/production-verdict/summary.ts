@@ -1,6 +1,7 @@
 import { formatConfidenceDistribution, summarizeConfidenceDistribution } from "@/brain/confidence/derive";
 import type { ConfidenceDistribution } from "@/brain/confidence/types";
 import { VERDICT_STATUS_LABELS, type ProductionVerdictV1, type VerdictStatus } from "./schema";
+import { narrativeMayApprove } from "./narrative-guard";
 import { verdictHeadline } from "./status-rules";
 
 export function buildDeterministicSummary(
@@ -14,6 +15,8 @@ export function buildDeterministicSummary(
   | "topPriorities"
   | "evaluatedAreas"
   | "unevaluatedAreas"
+  | "partiallyEvaluatedAreas"
+  | "confidence"
 >,
   blockerConfidence?: ConfidenceDistribution
 ): string {
@@ -30,6 +33,11 @@ export function buildDeterministicSummary(
   }
 
   if (verdict.status === "ready_to_ship") {
+    if (!narrativeMayApprove(verdict)) {
+      const gaps = verdict.unevaluatedAreas.length + verdict.partiallyEvaluatedAreas.length;
+      const gapPart = gaps > 0 ? ` ${gaps} area${gaps === 1 ? " is" : "s are"} not fully evaluated.` : "";
+      return `No blockers found in the evidence analyzed. ${scorePart} Evidence confidence is ${verdict.confidence}, so this is not a deployment approval.${gapPart}`;
+    }
     return `${label}. ${scorePart} No production blockers detected. Your application meets the current readiness threshold.`;
   }
 
