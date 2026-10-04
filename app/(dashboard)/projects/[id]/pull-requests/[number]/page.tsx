@@ -49,10 +49,17 @@ export default async function PullRequestSecurityPage({ params, searchParams }: 
   const evidenceLimited =
     readyCompleted && !(prScan?.productionVerdict && narrativeMayApprove(prScan.productionVerdict));
   const go = readyCompleted && !evidenceLimited;
+  const completedVerdict = prScan?.scanStatus === "completed" ? prScan.verdictStatus : null;
+  // Same meaning as the GitHub Check: missing evidence is "more analysis
+  // required", a failed analysis is "analysis failed"; only confirmed
+  // non-ready results are NO-GO.
+  const moreAnalysis = completedVerdict === "insufficient_data";
+  const analysisFailed = completedVerdict === "analysis_failed";
   const noGo =
-    prScan?.scanStatus === "completed" &&
-    prScan.verdictStatus != null &&
-    prScan.verdictStatus !== "ready_to_ship";
+    completedVerdict != null &&
+    completedVerdict !== "ready_to_ship" &&
+    !moreAnalysis &&
+    !analysisFailed;
 
   return (
     <div className="mx-auto max-w-3xl space-y-8 px-4 py-10">
@@ -99,6 +106,16 @@ export default async function PullRequestSecurityPage({ params, searchParams }: 
               {go && (
                 <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-700">
                   GO
+                </span>
+              )}
+              {moreAnalysis && (
+                <span className="rounded-full bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-700">
+                  MORE ANALYSIS REQUIRED
+                </span>
+              )}
+              {analysisFailed && (
+                <span className="rounded-full bg-red-500/10 px-3 py-1 text-xs font-semibold text-red-700">
+                  ANALYSIS FAILED
                 </span>
               )}
               {noGo && (
