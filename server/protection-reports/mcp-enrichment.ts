@@ -57,7 +57,17 @@ export async function enrichMcpToolResultWithReports(
     return {
       ...result,
       summary: `${result.summary ?? ""}\n\n${teaser}`.trim(),
-      protectionReport: { type: "monthly", narrative: monthly.narrative, founderSummary: monthly.founderSummary },
+      // The structured attachment is gated like the text teaser: the
+      // retrospective narrative ("stronger protection posture", "I would
+      // deploy today") is only attached when the canonical recommendation is
+      // SHIP_IT; otherwise only the worries are exposed.
+      protectionReport: mayNarrateDeploy
+        ? { type: "monthly", narrative: monthly.narrative, founderSummary: monthly.founderSummary }
+        : {
+            type: "monthly",
+            narrative: "",
+            founderSummary: { whatWorriesSequrAI: monthly.founderSummary.whatWorriesSequrAI },
+          },
     };
   }
 
