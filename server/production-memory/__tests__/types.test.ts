@@ -17,7 +17,10 @@ describe("production memory types", () => {
 
   it("derives deploy answers from evidence, not status alone", () => {
     expect(deployAnswerFromVerdictEvidence(ev("ready_to_ship"))).toBe("go");
-    expect(deployAnswerFromVerdictEvidence(ev("ready_to_ship", "medium", 2))).toBe("go");
+    // Medium confidence / unevaluated areas never produce a deploy ("go") answer.
+    expect(deployAnswerFromVerdictEvidence(ev("ready_to_ship", "medium", 2))).toBe("not_yet");
+    expect(deployAnswerFromVerdictEvidence(ev("ready_to_ship", "high", 2))).toBe("not_yet");
+    expect(deployAnswerFromVerdictEvidence(ev("ready_to_ship", "medium", 0))).toBe("not_yet");
     // NEW-2: ready_to_ship + low confidence must never be recorded as "go".
     expect(deployAnswerFromVerdictEvidence(ev("ready_to_ship", "low"))).toBe("not_yet");
     expect(deployAnswerFromVerdictEvidence(ev("not_ready"))).toBe("no_go");

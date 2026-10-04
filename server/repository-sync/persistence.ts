@@ -131,6 +131,12 @@ export async function recordPushDetection(
     detection: ParsedPushDetection;
   }
 ): Promise<void> {
+  // `repository_sync_status` is the DEFAULT branch's "latest detected commit"
+  // (the freshness signal of the production decision). A push to any other
+  // branch must not overwrite it, or an unrelated feature branch would make
+  // the default branch's verdict read as stale.
+  if (!(await isDefaultBranchHead(admin, input.projectId, input.detection.branch))) return;
+
   const { data: existing } = await admin
     .from("repository_sync_status")
     .select("pushed_at, commit_sha")

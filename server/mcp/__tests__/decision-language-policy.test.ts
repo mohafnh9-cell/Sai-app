@@ -109,10 +109,10 @@ describe("decision language policy matrix", () => {
     ["almost_ready + low", { status: "almost_ready", baseDecision: "do_not_deploy", confidence: "low" }, "BLOCKED", false],
     ["needs_improvement + high", { status: "needs_improvement", baseDecision: "do_not_deploy" }, "BLOCKED", false],
     ["ready + low", { confidence: "low" }, "QUALIFIED", false],
-    ["ready + medium", { confidence: "medium" }, "SUPPORTED", true],
+    ["ready + medium", { confidence: "medium" }, "SUPPORTED", false],
     ["ready + high", {}, "HIGH_CONFIDENCE", true],
-    ["ready + high + unevaluated areas", { unevaluatedAreaCount: 4 }, "SUPPORTED", true],
-    ["ready + high + partial areas", { partiallyEvaluatedAreaCount: 1 }, "SUPPORTED", true],
+    ["ready + high + unevaluated areas", { unevaluatedAreaCount: 4 }, "SUPPORTED", false],
+    ["ready + high + partial areas", { partiallyEvaluatedAreaCount: 1 }, "SUPPORTED", false],
     ["ready + stale", { freshnessStatus: "stale" }, "INSUFFICIENT", false],
     ["ready + freshness unknown", { freshnessStatus: "unknown" }, "INSUFFICIENT", false],
     ["ready + review in progress", { reviewInProgress: true }, "INSUFFICIENT", false],
@@ -227,8 +227,8 @@ describe("NEW-2 through the real can_i_deploy path", () => {
       });
       const result = await canIDeploy(ctx(createFakeAdmin(tables(verdict))), {}, en);
       expectNoApproval(result.summary);
-      if (over.confidence === "low") expect(result.deploymentRecommendation).toBe("MORE_ANALYSIS_REQUIRED");
-      else expect(result.deploymentRecommendation).toBe("SHIP_IT");
+      // SHIP_IT needs HIGH confidence AND complete coverage; neither state qualifies.
+      expect(result.deploymentRecommendation).toBe("MORE_ANALYSIS_REQUIRED");
     }
   });
 
@@ -240,10 +240,10 @@ describe("NEW-2 through the real can_i_deploy path", () => {
     expect(result.evaluatedCoverage.complete).toBe(true);
   });
 
-  it("SUPPORTED (medium/high with unevaluated areas): qualified, discloses the gap, no first-person approval", async () => {
+  it("SUPPORTED (medium/high with unevaluated areas): never SHIP_IT, qualified, discloses the gap, no first-person approval", async () => {
     const verdict = READY({ unevaluatedAreas: [area("a"), area("b")] });
     const result = await canIDeploy(ctx(createFakeAdmin(tables(verdict))), {}, en);
-    expect(result.deploymentRecommendation).toBe("SHIP_IT");
+    expect(result.deploymentRecommendation).toBe("MORE_ANALYSIS_REQUIRED");
     expectNoApproval(result.summary);
     expect(result.summary).toMatch(/2 area\(s\) were not fully evaluated/);
     expect(result.summary).not.toMatch(/nothing (critical )?is blocking/i);
