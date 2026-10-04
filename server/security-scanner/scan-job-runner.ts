@@ -463,7 +463,8 @@ export class InlineScanJobRunner implements ScanJobRunner {
 
       const reviewOnly = context.persistMode === "review_only";
 
-      if (!reviewOnly) {
+      // Project-level score / last scan describe the default branch only.
+      if (!reviewOnly && (!context.branch || context.branch === snapshot.defaultBranch)) {
         await this.supabase
           .from("projects")
           .update({ security_score: score, last_scan_at: completedAt })
@@ -779,11 +780,13 @@ export class InlineScanJobRunner implements ScanJobRunner {
       commit_sha: snapshot.commitSha,
       omissions: snapshot.omissions,
     });
-    await this.supabase
-      .from("projects")
-      .update({ security_score: score, last_scan_at: completedAt })
-      .eq("id", context.repositoryId)
-      .eq("organization_id", context.organizationId);
+    if (!context.branch || context.branch === snapshot.defaultBranch) {
+      await this.supabase
+        .from("projects")
+        .update({ security_score: score, last_scan_at: completedAt })
+        .eq("id", context.repositoryId)
+        .eq("organization_id", context.organizationId);
+    }
     await this.updateState(context, {
       active_scan_id: null,
       last_scan_id: context.scanId,
