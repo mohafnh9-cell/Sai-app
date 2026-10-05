@@ -16,6 +16,8 @@ export type MissionControlPrimaryActionKind =
 export type MissionControlRecoveryReason =
   | "scoped_verdict_missing"
   | "manual_recovery"
+  /** Scan completed, verdict still being written (server-bounded window). */
+  | "verdict_materializing"
   | null;
 
 export type MissionControlScanButtonLabel = "cta" | "running" | "rescan" | "retry";

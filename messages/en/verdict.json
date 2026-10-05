@@ -4,6 +4,7 @@
   "canIDeploy": {
     "question": "Can I deploy?",
     "yes": "YES.",
+    "limited": "NO BLOCKERS FOUND — EVIDENCE LIMITED.",
     "almost": "ALMOST.",
     "no": "NO.",
     "insufficient": "NOT ENOUGH EVIDENCE YET."
@@ -72,6 +73,12 @@
       "headline": "READY TO SHIP",
       "description": "No production blockers. Meets the current readiness threshold.",
       "message": "Your application is ready to ship."
+    },
+    "ready_evidence_limited": {
+      "label": "No blockers found (evidence limited)",
+      "headline": "NO BLOCKERS FOUND — EVIDENCE LIMITED",
+      "description": "No production blockers were found in the evidence analyzed. This is not a deployment approval.",
+      "message": "No blockers were found in the evidence analyzed. This is not a deployment approval."
     },
     "almost_ready": {
       "label": "Almost Ready",

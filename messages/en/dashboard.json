@@ -5,6 +5,7 @@
   "readyToShipQuestion": "Ready to ship?",
   "deployYes": "Yes — ready to ship",
   "deployNo": "Not yet",
+  "deployEvidenceLimited": "No blockers found — evidence limited",
   "almostReady": "Almost ready",
   "fixThisFirst": "Fix this first",
   "fixIssue": "Fix in project",

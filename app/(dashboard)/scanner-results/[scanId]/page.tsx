@@ -19,6 +19,8 @@ import { getFindingsForScanResult } from "@/server/analysis-runs/get-scanner-res
 import { getProductionVerdictByScan } from "@/server/production-verdict/core";
 import { verdictExperienceFromVerdict } from "@/brain/production-verdict/experience-view";
 import { verdictStatusMessage } from "@/lib/i18n/verdict-copy";
+import { verdictAffirmsDeploy } from "@/brain/production-verdict/deployment-posture";
+import { canIDeployKey } from "@/brain/production-verdict/can-i-deploy-key";
 import { formatDurationCompact } from "@/lib/format/duration";
 import { formatLocalizedDate, formatRelativeLocalized } from "@/lib/i18n/format";
 import { scanResultStatus, scanResultStatusClass } from "@/lib/design-system/scan-status";
@@ -87,19 +89,11 @@ export default async function ScannerResultDetailPage({
 
   const view = verdict
     ? verdictExperienceFromVerdict(verdict, {
-        statusMessage: verdictStatusMessage(verdict.status, (key, p) => tAll(key, p)),
+        statusMessage: verdictStatusMessage(verdict.status, (key, p) => tAll(key, p), verdictAffirmsDeploy(verdict)),
       })
     : null;
 
-  const canDeployKey = view
-    ? view.status === "ready_to_ship"
-      ? "verdict.canIDeploy.yes"
-      : view.status === "almost_ready"
-        ? "verdict.canIDeploy.almost"
-        : view.status === "insufficient_data" || view.status === "analysis_failed"
-          ? "verdict.canIDeploy.insufficient"
-          : "verdict.canIDeploy.no"
-    : null;
+  const canDeployKey = view ? canIDeployKey(view.status, view.affirmsDeploy) : null;
 
   const topPriority = verdict?.topPriorities?.[0] ?? null;
 
@@ -152,7 +146,7 @@ export default async function ScannerResultDetailPage({
         >
           <div className="relative z-[1] space-y-6">
             <div className="space-y-3">
-              <VerdictStatusBadge status={view.status} />
+              <VerdictStatusBadge status={view.status} affirms={view.affirmsDeploy} />
               <p id="scan-verdict-heading" className="text-display-headline">
                 {tAll(canDeployKey)}
               </p>

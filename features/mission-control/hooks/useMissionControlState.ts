@@ -19,14 +19,16 @@ import {
 
 const POLL_INTERVAL_MS = 4000;
 
-function shouldPollMissionControl(state: MissionControlState | undefined): boolean {
+export function shouldPollMissionControl(state: MissionControlState | undefined): boolean {
   if (!state) return false;
   // Verdict generation lags a few seconds behind the scan flipping to "completed" — keep
   // polling through that gap instead of freezing on the "no verdict yet" recovery banner.
   return (
     state.status.reviewInProgress ||
     state.status.securityRunning ||
-    state.recoveryReason === "scoped_verdict_missing"
+    state.recoveryReason === "scoped_verdict_missing" ||
+    // Server-bounded: the reason disappears once a verdict exists, the scan failed, or the window elapses.
+    state.recoveryReason === "verdict_materializing"
   );
 }
 

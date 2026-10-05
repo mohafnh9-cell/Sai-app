@@ -2,8 +2,9 @@
 
 import type { ProtectionCenterSnapshot } from "@/features/continuous-protection/types";
 import {
-  protectionStatusAccent,
-  protectionStatusTone,
+  protectionDecisionAccent,
+  protectionDecisionKey,
+  protectionDecisionTone,
 } from "@/features/continuous-protection/types";
 import { useToggleContinuousProtection } from "@/features/continuous-protection/hooks/useToggleContinuousProtection";
 import { useI18n } from "@/lib/i18n/client";
@@ -36,7 +37,7 @@ export function MissionControlProtectionStatus({
 
   return (
     <section
-      className={`rounded-3xl border p-6 sm:p-8 space-y-5 animate-in fade-in duration-500 ${protectionStatusTone(model.status)}`}
+      className={`rounded-3xl border p-6 sm:p-8 space-y-5 animate-in fade-in duration-500 ${protectionDecisionTone(model.decision)}`}
       aria-labelledby="mission-control-protection-heading"
     >
       <div className="flex items-start justify-between gap-4">
@@ -46,11 +47,13 @@ export function MissionControlProtectionStatus({
           </p>
           <p
             id="mission-control-protection-heading"
-            className={`text-2xl sm:text-3xl font-semibold tracking-tight break-words ${protectionStatusAccent(model.status)}`}
+            className={`text-2xl sm:text-3xl font-semibold tracking-tight break-words ${protectionDecisionAccent(model.decision)}`}
           >
-            {t(`protection.status.${model.status}`)}
+            {t(`protection.posture.${protectionDecisionKey(model.decision)}`)}
           </p>
-          <p className="text-sm text-muted-foreground leading-relaxed">{model.statusHeadline}</p>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            {t(`protection.postureHint.${protectionDecisionKey(model.decision)}`)}
+          </p>
         </div>
 
         <div className="flex shrink-0 flex-col items-end gap-1.5">
@@ -110,14 +113,23 @@ export function MissionControlProtectionStatus({
             ))}
           </ul>
         </div>
-      ) : model.status === "PROTECTED" ? (
+      ) : model.decision.state === "verdict" && model.decision.posture === "ready" ? (
         <p className="text-sm text-muted-foreground">{t("protection.nothingUrgent")}</p>
       ) : null}
 
-      <p className="text-sm text-foreground/90">
-        <span className="font-medium">{t("protection.recommendation")}: </span>
-        {model.recommendation}
-      </p>
+      {model.recommendation ? (
+        <p className="text-sm text-foreground/90">
+          <span className="font-medium">{t("protection.recommendation")}: </span>
+          {model.recommendation}
+        </p>
+      ) : null}
+
+      {model.safeFix ? (
+        <p className="text-sm text-foreground/90">
+          <span className="font-medium">{t("protection.safeFixOffer")}: </span>
+          {model.safeFix.title}
+        </p>
+      ) : null}
     </section>
   );
 }

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { VerdictStatusBadge } from "./VerdictStatusBadge";
+import { canIDeployKey } from "@/brain/production-verdict/can-i-deploy-key";
 import { ProductionScoreDisplay } from "./ProductionScoreDisplay";
 import { ReadyToShipMoment } from "./ReadyToShipMoment";
 import { verdictToneClass } from "@/brain/production-verdict/status-ui";
@@ -57,12 +58,7 @@ export function ProductionVerdictHero({
   const tone = verdictToneClass(view.status);
 
   if (variant === "product") {
-    const canDeployKey =
-      view.status === "ready_to_ship"
-        ? "verdict.canIDeploy.yes"
-        : view.status === "almost_ready"
-          ? "verdict.canIDeploy.almost"
-          : "verdict.canIDeploy.no";
+    const canDeployKey = canIDeployKey(view.status, view.affirmsDeploy);
 
     return (
       <section className={`rounded-3xl border p-8 sm:p-10 surface-premium ${tone}`}>
@@ -76,7 +72,7 @@ export function ProductionVerdictHero({
             </p>
           </div>
           <div className="flex items-end justify-between gap-6 flex-wrap">
-            <VerdictStatusBadge status={view.status} />
+            <VerdictStatusBadge status={view.status} affirms={view.affirmsDeploy} />
             <ProductionScoreDisplay score={view.score} status={view.status} size="lg" />
           </div>
         </div>
@@ -99,12 +95,12 @@ export function ProductionVerdictHero({
               id="production-verdict-hero-heading"
               className="text-2xl md:text-3xl font-semibold tracking-tight uppercase"
             >
-              {verdictStatusHeadline(view.status, translate)}
+              {verdictStatusHeadline(view.status, translate, view.affirmsDeploy)}
             </h2>
-            <VerdictStatusBadge status={view.status} />
+            <VerdictStatusBadge status={view.status} affirms={view.affirmsDeploy} />
           </div>
           <p className="text-base text-foreground/90 leading-relaxed">
-            {verdictStatusMessage(view.status, translate)}
+            {verdictStatusMessage(view.status, translate, view.affirmsDeploy)}
           </p>
           {view.status === "insufficient_data" && (
             <ul className="text-sm text-muted-foreground space-y-1 list-disc pl-5">

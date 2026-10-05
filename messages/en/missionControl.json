@@ -236,11 +236,28 @@
       "REQUIRES_ATTENTION": "Requires attention",
       "NOT_PROTECTED": "Not protected"
     },
+    "posture": {
+      "analysis_in_progress": "Analysis in progress",
+      "no_verdict": "No verdict yet",
+      "ready": "Ready",
+      "ready_evidence_limited": "No blockers found — evidence limited",
+      "more_analysis_required": "More analysis required",
+      "not_ready": "Not ready to deploy"
+    },
+    "postureHint": {
+      "analysis_in_progress": "A review is running. The protection posture will appear once the Production Verdict exists.",
+      "no_verdict": "Run an analysis to get a Production Verdict. Until then there is no security decision.",
+      "ready": "The Production Verdict supports a deployment decision.",
+      "ready_evidence_limited": "No blockers were found in the evidence analyzed. This is not a deployment approval.",
+      "more_analysis_required": "The evidence is not enough for a deployment decision.",
+      "not_ready": "The Production Verdict found blockers that prevent deployment."
+    },
     "toggle": {
       "label": "Continuous Protection",
       "on": "Daily checks on",
       "off": "Daily checks off"
-    }
+    },
+    "safeFixOffer": "Apply Safe Fix for"
   },
   "history": {
     "lastReview": "Last scan: {time}",

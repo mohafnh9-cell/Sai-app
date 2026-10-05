@@ -19,6 +19,8 @@ export type ProtectionHealthBand = "strong" | "steady" | "at_risk" | "unwatched"
 
 export type HealthLabel = "excellent" | "good" | "needs_attention" | "at_risk";
 
+import type { ProtectionDecision } from "@/brain/production-verdict/protection-decision";
+
 export type StatusEvaluationInput = {
   continuousProtectionEnabled: boolean;
   continuousProtectionPaused: boolean;
@@ -26,13 +28,13 @@ export type StatusEvaluationInput = {
   hasSuccessfulReview: boolean;
   lastCheckAt: string | null;
   consecutiveDailyFailures: number;
-  deployAnswer: "go" | "no_go" | "not_yet" | null;
-  /** Canonical decision-language policy allows first-person deployment approval (high confidence, all areas evaluated). */
-  approvalEligible: boolean;
-  openCriticalCount: number;
-  openHighCount: number;
-  productionConfidence: number | null;
-  securityConfidence: number | null;
+  /**
+   * The ONLY security input: a projection of the canonical Production Verdict
+   * (see `protectionDecisionFor`). The status machine adds operational rules
+   * (protection off, no GitHub, stale checks) on top of it but never judges
+   * whether the application is safe on its own.
+   */
+  decision: ProtectionDecision;
   productionConfidenceDelta7d: number | null;
   securityConfidenceDelta7d: number | null;
   materialChangeIn7d: boolean;

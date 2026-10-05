@@ -1,3 +1,4 @@
+import { verdictAffirmsDeploy } from "@/brain/production-verdict/deployment-posture";
 import type { MissionControlState } from "@/features/mission-control/types/mission-control-state";
 import type { ProductionIntelligence } from "@/brain/production-intelligence/schema";
 import type { SecurityTimelineEvent } from "@/components/sequrai/SecurityTimeline";
@@ -65,7 +66,7 @@ export function buildSecurityTimelineEvents(
       at: verdict.generatedAt ?? state.status.lastAnalysisAt ?? new Date().toISOString(),
       label: copy.verdictUpdated(copy.verdictHeadline(verdict.status)),
       tone:
-        verdict.status === "ready_to_ship"
+        verdict.status === "ready_to_ship" && verdictAffirmsDeploy(verdict)
           ? "success"
           : verdict.status === "not_ready" || verdict.status === "analysis_failed"
             ? "danger"

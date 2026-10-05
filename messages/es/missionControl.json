@@ -236,11 +236,28 @@
       "REQUIRES_ATTENTION": "Requiere atención",
       "NOT_PROTECTED": "Sin proteger"
     },
+    "posture": {
+      "analysis_in_progress": "Análisis en curso",
+      "no_verdict": "Aún no hay veredicto",
+      "ready": "Listo",
+      "ready_evidence_limited": "Sin bloqueos — evidencia limitada",
+      "more_analysis_required": "Se necesita más análisis",
+      "not_ready": "No listo para desplegar"
+    },
+    "postureHint": {
+      "analysis_in_progress": "Hay una revisión en curso. El estado de protección aparecerá cuando exista el veredicto de producción.",
+      "no_verdict": "Ejecuta un análisis para obtener un veredicto de producción. Hasta entonces no hay una decisión de seguridad.",
+      "ready": "El veredicto de producción respalda una decisión de despliegue.",
+      "ready_evidence_limited": "No se encontraron bloqueos en la evidencia analizada. Esto no es una aprobación de despliegue.",
+      "more_analysis_required": "La evidencia no basta para una decisión de despliegue.",
+      "not_ready": "El veredicto de producción encontró bloqueos que impiden desplegar."
+    },
     "toggle": {
       "label": "Protección continua",
       "on": "Revisiones diarias activas",
       "off": "Revisiones diarias desactivadas"
-    }
+    },
+    "safeFixOffer": "Aplicar Safe Fix para"
   },
   "history": {
     "lastReview": "Última revisión de producción: {time}",

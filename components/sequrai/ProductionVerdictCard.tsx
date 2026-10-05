@@ -13,6 +13,8 @@ type ProductionVerdictCardProps = {
   eyebrow: string;
   headline: string;
   status: VerdictStatus;
+  /** Result of the canonical evidence gate; absent = a ready_to_ship status is not affirmed. */
+  affirmsDeploy?: boolean;
   score?: number | null;
   scoreLabel?: string;
   sourceBadge?: React.ReactNode;
@@ -44,6 +46,7 @@ export function ProductionVerdictCard({
   eyebrow,
   headline,
   status,
+  affirmsDeploy = false,
   score = null,
   scoreLabel,
   sourceBadge,
@@ -60,7 +63,7 @@ export function ProductionVerdictCard({
     <IntelligenceSurface
       id={id}
       aria-labelledby={headingId}
-      toneClass={verdictToneClass(status)}
+      toneClass={verdictToneClass(status === "ready_to_ship" && !affirmsDeploy ? "almost_ready" : status)}
       className={cn("product-hero", className)}
     >
       <div className="relative z-[1]">
@@ -70,7 +73,7 @@ export function ProductionVerdictCard({
         </div>
 
         <div className="mt-4 space-y-3">
-          <VerdictStatusBadge status={status} />
+          <VerdictStatusBadge status={status} affirms={affirmsDeploy} />
           <p id={headingId} className="text-display-headline">
             {headline}
           </p>

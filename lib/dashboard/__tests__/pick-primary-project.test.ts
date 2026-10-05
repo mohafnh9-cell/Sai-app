@@ -19,6 +19,7 @@ describe("pickPrimaryDashboardFocus", () => {
       status: "ready_to_ship",
       lastReviewedCommit: null,
       generatedAt: null,
+      affirmsDeploy: true,
     },
     {
       projectId: "b",
@@ -40,9 +41,22 @@ describe("pickPrimaryDashboardFocus", () => {
     expect(focus?.orgCanDeploy).toBe(false);
   });
 
-  it("marks org deployable when every project is ready", () => {
+  it("marks org deployable only when every project is ready AND its verdict passes the evidence gate", () => {
     const focus = pickPrimaryDashboardFocus([projects[0]], new Map());
     expect(focus?.orgCanDeploy).toBe(true);
+  });
+
+  it("a ready_to_ship status without the evidence to affirm it (low confidence / incomplete coverage) is never 'yes, deploy'", () => {
+    expect(pickPrimaryDashboardFocus([{ ...projects[0], affirmsDeploy: false }], new Map())?.orgCanDeploy).toBe(false);
+    // A summary without the flag (legacy / unknown evidence) is not affirmed either.
+    const { affirmsDeploy: _omit, ...unflagged } = projects[0];
+    expect(pickPrimaryDashboardFocus([unflagged], new Map())?.orgCanDeploy).toBe(false);
+  });
+
+  it("one unaffirmed project among ready ones keeps the whole portfolio from saying yes", () => {
+    const ready2 = { ...projects[0], projectId: "c", projectName: "Gamma" };
+    expect(pickPrimaryDashboardFocus([projects[0], { ...ready2, affirmsDeploy: false }], new Map())?.orgCanDeploy).toBe(false);
+    expect(pickPrimaryDashboardFocus([projects[0], ready2], new Map())?.orgCanDeploy).toBe(true);
   });
 });
 

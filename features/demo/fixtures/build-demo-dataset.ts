@@ -1,3 +1,4 @@
+import { verdictAffirmsDeploy } from "@/brain/production-verdict/deployment-posture";
 import "server-only";
 
 import {
@@ -164,6 +165,7 @@ function summaryFromVerdict(
       status: "insufficient_data",
       lastReviewedCommit: null,
       generatedAt: null,
+      affirmsDeploy: false,
     };
   }
 
@@ -178,6 +180,7 @@ function summaryFromVerdict(
     status: verdict.status,
     lastReviewedCommit: verdict.commitSha,
     generatedAt: verdict.generatedAt,
+    affirmsDeploy: verdictAffirmsDeploy(verdict),
   };
 }
 
@@ -386,6 +389,10 @@ function buildReadyToShip(): DemoDataset {
   acmeVerdict.blockersCount = 0;
   acmeVerdict.criticalBlockersCount = 0;
   acmeVerdict.highBlockersCount = 0;
+  // The demo's "ready" project is a fully evaluated, high-confidence example.
+  acmeVerdict.confidence = "high";
+  acmeVerdict.unevaluatedAreas = [];
+  acmeVerdict.partiallyEvaluatedAreas = [];
 
   const northwindVerdict = {
     ...generateProductionVerdict(

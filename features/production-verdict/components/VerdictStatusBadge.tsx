@@ -8,18 +8,21 @@ import { verdictStatusLabel } from "@/lib/i18n/verdict-copy";
 
 export function VerdictStatusBadge({
   status,
+  affirms,
   className,
 }: {
   status: VerdictStatus;
+  /** Result of `verdictAffirmsDeploy(verdict)`; without it a ready_to_ship status gets the evidence-limited label. */
+  affirms?: boolean | null;
   className?: string;
 }) {
   const { t } = useI18n();
   const { t: tv } = useI18n("verdict");
-  const label = verdictStatusLabel(status, (key, params) => t(key, params));
+  const label = verdictStatusLabel(status, (key, params) => t(key, params), affirms);
 
   return (
     <Badge
-      variant={verdictBadgeVariant(status)}
+      variant={verdictBadgeVariant(status === "ready_to_ship" && affirms !== true ? "almost_ready" : status)}
       className={className}
       aria-label={tv("badgeAriaLabel", { status: label })}
     >

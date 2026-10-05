@@ -12,6 +12,7 @@ import { MissionControlPrimaryAction } from "./MissionControlPrimaryAction";
 import { ProductionIntelligenceView } from "./ProductionIntelligenceView";
 import { fixPromptInputFromPriority, findingsByIdMap } from "@/brain/fix-prompt";
 import { AnalysisRunSelector } from "@/features/analysis-runs/components/AnalysisRunSelector";
+import { verdictAffirmsDeploy } from "@/brain/production-verdict/deployment-posture";
 import { ProjectOnboardedBanner } from "@/features/projects/components/ProjectOnboardedBanner";
 import { McpPromoBanner } from "@/features/mcp/components/McpPromoBanner";
 import { MissionControlActivityBanner } from "./MissionControlActivityBanner";
@@ -65,6 +66,8 @@ export function MissionControlExperience({
     primaryActionKind === "copy_safe_fix" && topPriority && safeFixPromptInput;
 
   const showScanActivity = state.status.reviewInProgress;
+  // The scan finished but its verdict is still being written: an in-progress state, never "no verdict yet".
+  const verdictMaterializing = state.recoveryReason === "verdict_materializing";
   const showAttackActivity = state.status.securityRunning;
   const staleVerdictWhileBusy = Boolean(verdict && (showScanActivity || showAttackActivity));
   const openFullReport =
@@ -104,7 +107,7 @@ export function MissionControlExperience({
       ) : null}
 
       {state.ui.showOnboardedBanner && verdict ? (
-        <ProjectOnboardedBanner readyToShip={verdict.status === "ready_to_ship"} />
+        <ProjectOnboardedBanner readyToShip={verdictAffirmsDeploy(verdict)} />
       ) : (
         <McpPromoBanner />
       )}
@@ -142,7 +145,7 @@ export function MissionControlExperience({
 
       {protectionCenter ? <MissionControlProtectionStatus model={protectionCenter} /> : null}
 
-      {showScanActivity && !verdict ? (
+      {(showScanActivity || verdictMaterializing) && !verdict ? (
         <MissionControlActivityBanner
           kind="scan"
           progress={state.status.progress}
@@ -165,7 +168,7 @@ export function MissionControlExperience({
         />
       ) : null}
 
-      {!verdict && !showScanActivity ? (
+      {!verdict && !showScanActivity && !verdictMaterializing ? (
         <div className="rounded-xl border border-dashed border-border/60 px-5 py-10 text-center space-y-2" role="status">
           <p className="text-sm font-medium">{t("empty.noVerdictTitle")}</p>
           <p className="text-sm text-muted-foreground">{t("empty.noVerdictBody")}</p>

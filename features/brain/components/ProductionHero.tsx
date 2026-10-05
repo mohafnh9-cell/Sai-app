@@ -170,6 +170,7 @@ export function ProductionHero({
         topPriorityTitle: null,
         evaluatedCoverage: 0,
         headline: "MORE ANALYSIS REQUIRED",
+        affirmsDeploy: false,
         subheadline: "Connect a project and run your first production readiness check.",
         analysisError: null,
       }}

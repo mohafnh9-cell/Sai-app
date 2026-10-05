@@ -15,6 +15,7 @@ type ProductionControlCenterProps = {
     readyToShipQuestion: string;
     deployYes: string;
     deployNo: string;
+    deployEvidenceLimited: string;
     almostReady: string;
     fixThisFirst: string;
     fixIssue: string;
@@ -32,15 +33,22 @@ export function ProductionControlCenter({
   const { primary, orgCanDeploy, topPriority } = focus;
   const projectHref = projectVerdictHref(primary.projectId);
   const isAlmostReady = primary.status === "almost_ready";
+  // ready_to_ship without the evidence to affirm it is "no blockers found, evidence
+  // limited" -- never "yes" and never a green tone.
+  const isReadyEvidenceLimited = !orgCanDeploy && primary.status === "ready_to_ship";
 
   const deployAnswer = orgCanDeploy
     ? labels.deployYes
-    : isAlmostReady
-      ? labels.almostReady
-      : labels.deployNo;
+    : isReadyEvidenceLimited
+      ? labels.deployEvidenceLimited
+      : isAlmostReady
+        ? labels.almostReady
+        : labels.deployNo;
 
   const ctaLabel = orgCanDeploy ? labels.reviewProject : labels.fixIssue;
-  const tone = orgCanDeploy ? verdictToneClass("ready_to_ship") : verdictToneClass(primary.status);
+  const tone = orgCanDeploy
+    ? verdictToneClass("ready_to_ship")
+    : verdictToneClass(isReadyEvidenceLimited ? "almost_ready" : primary.status);
 
   return (
     <IntelligenceSurface

@@ -9,6 +9,7 @@ import { VerdictStatusBadge } from "@/features/production-verdict/components/Ver
 import { ProductionVerdictHero } from "@/features/production-verdict/components/ProductionVerdictHero";
 import { useI18n } from "@/lib/i18n/client";
 import { verdictStatusMessage } from "@/lib/i18n/verdict-copy";
+import { verdictAffirmsDeploy } from "@/brain/production-verdict/deployment-posture";
 
 export type ProductionVerdictSurfaceVariant = "guided" | "default" | "product";
 
@@ -28,7 +29,7 @@ export function ProductionVerdictSurface({
     t(key, params);
 
   const view = verdictExperienceFromVerdict(verdict, {
-    statusMessage: verdictStatusMessage(verdict.status, translate),
+    statusMessage: verdictStatusMessage(verdict.status, translate, verdictAffirmsDeploy(verdict)),
   });
 
   if (variant === "default" || variant === "product") {
@@ -72,7 +73,7 @@ export function ProductionVerdictSurface({
           >
             {view.statusMessage}
           </h2>
-          <VerdictStatusBadge status={view.status} />
+          <VerdictStatusBadge status={view.status} affirms={view.affirmsDeploy} />
           <p className="text-sm text-muted-foreground max-w-md leading-relaxed">
             {view.executiveSummary}
           </p>
