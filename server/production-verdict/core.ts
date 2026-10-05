@@ -11,6 +11,7 @@ import { writeScanStatePointer } from "./scan-state-writer";
 import { hasIncompleteNativeRuleCoverage, isIncrementalScan } from "@/server/security-scanner/native-coverage";
 import { resolveScanCoverageForVerdict } from "@/brain/production-verdict/resolve-scan-coverage";
 import { loadPriorScanCoverage } from "@/server/production-verdict/load-prior-scan-coverage";
+import { findPreviousCompletedScan } from "@/server/security-scanner/previous-scan";
 import {
   buildAttackSimulationVerdictOverlay,
 } from "@/server/attack-simulation/integration/build-verdict-overlay";
@@ -198,28 +199,39 @@ export async function generateAndPersistProductionVerdict(
     if (existing) return existing;
   }
 
-  const [{ data: findings }, { data: previousScan }, { data: previousVerdict }] = await Promise.all([
+  // The baseline for deltas is this scan's own branch (then the default
+  // branch), never an unrelated feature branch's scan or verdict.
+  const previousScan = (await findPreviousCompletedScan(
+    admin,
+    {
+      projectId: input.projectId,
+      branch: (scan.branch as string | null | undefined) ?? null,
+      excludeScanId: input.scanId,
+    },
+    "id, security_score, critical_count, high_count, files_analyzed, files_discovered"
+  )) as {
+    id: string;
+    security_score: number | null;
+    critical_count: number | null;
+    high_count: number | null;
+  } | null;
+
+  const [{ data: findings }, { data: previousVerdict }] = await Promise.all([
     admin
       .from("scan_findings")
       .select("id, title, severity, category, rule_id, file_path, start_line, recommendation, confidence, evidence, metadata")
       .eq("scan_id", input.scanId),
-    admin
-      .from("scans")
-      .select("id, security_score, critical_count, high_count, files_analyzed, files_discovered")
-      .eq("project_id", input.projectId)
-      .eq("status", "completed")
-      .neq("id", input.scanId)
-      .order("completed_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-    admin
-      .from("production_verdicts")
-      .select("verdict, blockers_count")
-      .eq("organization_id", input.organizationId)
-      .eq("project_id", input.projectId)
-      .order("generated_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
+    previousScan
+      ? admin
+          .from("production_verdicts")
+          .select("verdict, blockers_count")
+          .eq("organization_id", input.organizationId)
+          .eq("project_id", input.projectId)
+          .eq("scan_id", previousScan.id)
+          .order("generated_at", { ascending: false })
+          .limit(1)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
   ]);
 
   const { data: aiReport } = await admin
@@ -248,6 +260,7 @@ export async function generateAndPersistProductionVerdict(
   const priorCoverage = await loadPriorScanCoverage(admin, {
     projectId: input.projectId,
     excludeScanId: input.scanId,
+    branch: (scan.branch as string | null | undefined) ?? null,
   });
   const coverage = resolveScanCoverageForVerdict({
     filesAnalyzed: (scan.files_analyzed as number | null) ?? (scan.files_scanned as number | null) ?? 0,

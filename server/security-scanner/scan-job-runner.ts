@@ -12,6 +12,7 @@ import { enrichFindingsWithDiffContext } from "@/features/security-analysis/git-
 import { stubNormalizedFile } from "@/features/security-scanner/normalization";
 import type { Confidence, Finding as ScannerFinding, Severity } from "@/features/security-scanner";
 import { buildFindingCorrelationKeyFromParts } from "@/lib/correlation/finding-identity";
+import { findPreviousCompletedScan, listPreviousCompletedScans } from "./previous-scan";
 import { generateAndPersistProductionVerdict } from "@/server/production-verdict/service";
 import {
   markVerdictEvidenceReady,
@@ -629,16 +630,16 @@ export class InlineScanJobRunner implements ScanJobRunner {
   private async loadPreviousScanCoverage(
     context: ScanContext
   ): Promise<{ filesAnalyzed: number; filesDiscovered: number } | null> {
-    const { data: rows } = await this.supabase
-      .from("scans")
-      .select("files_analyzed, files_discovered")
-      .eq("repository_id", context.repositoryId)
-      .eq("status", "completed")
-      .neq("id", context.scanId)
-      .order("completed_at", { ascending: false })
-      .limit(8);
+    // Branch-aware baseline (same branch, then the default branch): coverage
+    // must never be inherited from an unrelated feature branch's scan.
+    const rows = await listPreviousCompletedScans(
+      this.supabase,
+      { projectId: context.repositoryId, branch: context.branch, excludeScanId: context.scanId },
+      "files_analyzed, files_discovered",
+      8
+    );
 
-    const data = (rows ?? []).find((row) => ((row.files_analyzed as number | null) ?? 0) >= 3) ?? null;
+    const data = rows.find((row) => ((row.files_analyzed as number | null) ?? 0) >= 3) ?? null;
     if (!data) return null;
 
     const filesAnalyzed = (data.files_analyzed as number | null) ?? 0;
@@ -679,15 +680,14 @@ export class InlineScanJobRunner implements ScanJobRunner {
     }>
   ) {
     const changedSet = new Set(changedPaths);
-    const { data: lastScan } = await this.supabase
-      .from("scans")
-      .select("id")
-      .eq("repository_id", context.repositoryId)
-      .eq("status", "completed")
-      .neq("id", context.scanId)
-      .order("completed_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    // Findings are carried forward only from this branch's own previous scan
+    // (or, for a branch's first scan, the default branch). Never from another
+    // feature branch: that leaked findings for files that do not exist here.
+    const lastScan = await findPreviousCompletedScan(
+      this.supabase,
+      { projectId: context.repositoryId, branch: context.branch, excludeScanId: context.scanId },
+      "id"
+    );
 
     let retained: typeof newFindings = [];
     if (lastScan?.id) {
@@ -696,7 +696,7 @@ export class InlineScanJobRunner implements ScanJobRunner {
         .select(
           "rule_id, severity, category, title, description, confidence, file_path, start_line, evidence, recommendation, metadata, fingerprint"
         )
-        .eq("scan_id", lastScan.id)
+        .eq("scan_id", lastScan.id as string)
         .eq("status", "open");
 
       retained =

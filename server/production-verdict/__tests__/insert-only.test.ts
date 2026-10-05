@@ -126,18 +126,25 @@ function buildAdmin(input: {
                     }),
                   };
                 }
-                return {
-                  eq: () => ({
-                    neq: () => ({
-                      order: () => ({
-                        limit: () => ({
-                          maybeSingle: async () => ({ data: null, error: null }),
-                        }),
-                      }),
-                    }),
-                  }),
+                // Previous-scan baseline lookup (branch-aware): no previous scans.
+                const previousScans: Record<string, unknown> = {
+                  eq: () => previousScans,
+                  neq: () => previousScans,
+                  is: () => previousScans,
+                  order: () => previousScans,
+                  limit: async () => ({ data: [], error: null }),
                 };
+                return previousScans;
               },
+            }),
+          };
+        }
+        if (table === "projects") {
+          return {
+            select: () => ({
+              eq: () => ({
+                maybeSingle: async () => ({ data: { github_default_branch: "main" }, error: null }),
+              }),
             }),
           };
         }

@@ -17,6 +17,7 @@ import { resolveOrganizationGitHubToken } from "@/server/github-automation/token
 import { formatGithubCheckDescription } from "@/brain/production-verdict/build-verdict";
 import { buildScanProductionVerdict } from "@/server/brain/build-scan-verdict";
 import { getProductionVerdictByScan } from "@/server/production-verdict/service";
+import { findPreviousCompletedScan } from "@/server/security-scanner/previous-scan";
 import {
   buildIdempotencyKey,
   runIdempotentSideEffect,
@@ -66,15 +67,20 @@ export async function finalizeWebhookAutomationScan(
     categoryCounts[key] = (categoryCounts[key] ?? 0) + 1;
   }
 
-  const { data: previousScan } = await admin
+  const { data: currentScanRow } = await admin
     .from("scans")
-    .select("id, critical_count, high_count")
-    .eq("project_id", input.projectId)
-    .eq("status", "completed")
-    .neq("id", input.scanId)
-    .order("completed_at", { ascending: false })
-    .limit(1)
+    .select("branch")
+    .eq("id", input.scanId)
     .maybeSingle();
+  const previousScan = (await findPreviousCompletedScan(
+    admin,
+    {
+      projectId: input.projectId,
+      branch: (currentScanRow as { branch?: string | null } | null)?.branch ?? null,
+      excludeScanId: input.scanId,
+    },
+    "id, critical_count, high_count"
+  )) as { id: string; critical_count: number | null; high_count: number | null } | null;
 
   const previousBlockers =
     (previousScan?.critical_count ?? 0) + (previousScan?.high_count ?? 0);

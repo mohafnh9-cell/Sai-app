@@ -7,10 +7,12 @@
  * builders also support).
  */
 type Row = Record<string, unknown>;
-type Filter = { col: string; op: "eq" | "neq" | "in" | "gte" | "gt" | "lt" | "lte"; value: unknown };
+type Filter = { col: string; op: "eq" | "neq" | "in" | "gte" | "gt" | "lt" | "lte" | "isnull"; value: unknown };
 
 function matches(row: Row, filters: Filter[]): boolean {
   return filters.every((f) => {
+    // SQL `IS NULL`: a missing column is NULL.
+    if (f.op === "isnull") return row[f.col] == null;
     if (f.op === "eq") return row[f.col] === f.value;
     if (f.op === "neq") return row[f.col] !== f.value;
     if (f.op === "in") return Array.isArray(f.value) && (f.value as unknown[]).includes(row[f.col]);
@@ -88,7 +90,7 @@ class FakeQuery
     return this;
   }
   is(col: string, value: unknown) {
-    this.filters.push({ col, op: "eq", value: value === null ? null : value });
+    this.filters.push(value === null ? { col, op: "isnull", value: null } : { col, op: "eq", value });
     return this;
   }
   order(col: string, opts?: { ascending?: boolean }) {

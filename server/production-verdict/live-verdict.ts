@@ -87,6 +87,7 @@ export async function computeLiveProductionVerdict(
   const priorCoverage = await loadPriorScanCoverage(admin, {
     projectId: input.projectId,
     excludeScanId: scan.id,
+    branch: scan.branch ?? null,
   });
   const coverage = resolveScanCoverageForVerdict({
     filesAnalyzed: scan.files_analyzed ?? 0,

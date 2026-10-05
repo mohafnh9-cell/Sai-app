@@ -1,22 +1,21 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { listPreviousCompletedScans } from "@/server/security-scanner/previous-scan";
 import type { ScanCoverageSnapshot } from "@/brain/production-verdict/resolve-scan-coverage";
 
 export async function loadPriorScanCoverage(
   admin: SupabaseClient,
-  input: { projectId: string; excludeScanId: string }
+  input: { projectId: string; excludeScanId: string; branch?: string | null }
 ): Promise<ScanCoverageSnapshot | null> {
-  const { data: rows } = await admin
-    .from("scans")
-    .select("files_analyzed, files_discovered")
-    .eq("project_id", input.projectId)
-    .eq("status", "completed")
-    .neq("id", input.excludeScanId)
-    .order("completed_at", { ascending: false })
-    .limit(8);
+  const rows = await listPreviousCompletedScans(
+    admin,
+    { projectId: input.projectId, branch: input.branch, excludeScanId: input.excludeScanId },
+    "files_analyzed, files_discovered",
+    8
+  );
 
-  const data = (rows ?? []).find((row) => ((row.files_analyzed as number | null) ?? 0) >= 3) ?? null;
+  const data = rows.find((row) => ((row.files_analyzed as number | null) ?? 0) >= 3) ?? null;
   if (!data) return null;
 
   const filesAnalyzed = (data.files_analyzed as number | null) ?? 0;
