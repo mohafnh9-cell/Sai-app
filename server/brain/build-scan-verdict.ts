@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { toLegacyVerdict } from "@/brain/production-verdict/adapters/legacy";
 import type { LegacyProductionVerdict } from "@/brain/production-verdict/adapters/legacy";
 import { generateProductionVerdict } from "@/brain/production-verdict/engine";
+import { findPreviousCompletedScan } from "@/server/security-scanner/previous-scan";
 import {
   generateAndPersistProductionVerdict,
   getProductionVerdictByScan,
@@ -61,15 +62,11 @@ export async function buildScanProductionVerdict(
     .select("id, title, severity, category, rule_id, file_path, recommendation, evidence")
     .eq("scan_id", input.scanId);
 
-  const { data: previousScan } = await admin
-    .from("scans")
-    .select("security_score, critical_count, high_count")
-    .eq("project_id", input.projectId)
-    .eq("status", "completed")
-    .neq("id", input.scanId)
-    .order("completed_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  const previousScan = (await findPreviousCompletedScan(
+    admin,
+    { projectId: input.projectId, branch: scan?.branch ?? null, excludeScanId: input.scanId },
+    "security_score, critical_count, high_count"
+  )) as { security_score: number | null; critical_count: number | null; high_count: number | null } | null;
 
   const { verdict } = generateProductionVerdict({
     projectId: input.projectId,
