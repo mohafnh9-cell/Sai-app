@@ -93,7 +93,10 @@ describe("Mission Control view model", () => {
   });
 
   it("maps production verdict to mission display labels", () => {
-    expect(mapVerdictDisplay(minimalVerdict({ status: "ready_to_ship" }), t)).toBe("Ready for production");
+    // "Ready for production" requires the canonical evidence gate (high confidence + complete coverage).
+    const affirmed = { status: "ready_to_ship" as const, confidence: "high" as const, unevaluatedAreas: [], partiallyEvaluatedAreas: [] };
+    expect(mapVerdictDisplay(minimalVerdict(affirmed), t)).toBe("Ready for production");
+    expect(mapVerdictDisplay(minimalVerdict({ ...affirmed, confidence: "low" }), t)).toBe("Insufficient evidence");
     expect(mapVerdictDisplay(minimalVerdict({ status: "almost_ready" }), t)).toBe("Minor improvements required");
     expect(mapVerdictDisplay(null, t)).toBe("Insufficient evidence");
   });
@@ -146,7 +149,13 @@ describe("Mission Control sections", () => {
     const view = buildMissionControlView({
       projectId: "p",
       projectName: "x",
-      verdict: minimalVerdict({ status: "ready_to_ship", score: 90 }),
+      verdict: minimalVerdict({
+        status: "ready_to_ship",
+        score: 90,
+        confidence: "high",
+        unevaluatedAreas: [],
+        partiallyEvaluatedAreas: [],
+      }),
       scanInProgress: false,
       feedFromDb: [],
     });

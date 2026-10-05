@@ -1,3 +1,4 @@
+import { protectionDecisionFor } from "@/brain/production-verdict/protection-decision";
 import { describe, expect, it } from "vitest";
 import { safeParseProductionVerdict } from "@/brain/production-verdict/schema";
 import { finalizeProductionVerdict } from "@/brain/production-verdict/finalize-verdict";
@@ -93,12 +94,7 @@ describe("founder summary cannot bypass the policy", () => {
     hasSuccessfulReview: true,
     lastCheckAt: new Date().toISOString(),
     consecutiveDailyFailures: 0,
-    deployAnswer: deployAnswerFromVerdictEvidence(v),
-    approvalEligible: verdictAllowsFirstPersonApproval(v),
-    openCriticalCount: 0,
-    openHighCount: 0,
-    productionConfidence: 100,
-    securityConfidence: 100,
+    decision: protectionDecisionFor({ verdict: v, reviewInProgress: false }),
     productionConfidenceDelta7d: 0,
     securityConfidenceDelta7d: 0,
     materialChangeIn7d: false,

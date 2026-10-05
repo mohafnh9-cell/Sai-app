@@ -1,3 +1,4 @@
+import { verdictAffirmsDeploy } from "@/brain/production-verdict/deployment-posture";
 import type { ProductionVerdictV1 } from "@/brain/production-verdict/schema";
 import type { Translator } from "@/lib/i18n/types";
 import { namespaceTranslator } from "@/lib/i18n/review-progress";
@@ -134,7 +135,10 @@ export function mapVerdictDisplay(verdict: ProductionVerdictV1 | null, t: Transl
   if (!verdict) return t("verdict.display.insufficientEvidence") as MissionVerdictDisplay;
   switch (verdict.status) {
     case "ready_to_ship":
-      return t("verdict.display.safeToDeploy") as MissionVerdictDisplay;
+      // "Ready for production" only when the canonical evidence gate affirms it.
+      return t(
+        verdictAffirmsDeploy(verdict) ? "verdict.display.safeToDeploy" : "verdict.display.insufficientEvidence"
+      ) as MissionVerdictDisplay;
     case "almost_ready":
       return t("verdict.display.deployWithWarnings") as MissionVerdictDisplay;
     case "insufficient_data":
@@ -182,7 +186,7 @@ export function buildMissionControlView(
     ? t("status.cancelled")
     : input.scanInProgress
       ? t("status.analyzing")
-      : input.verdict?.status === "ready_to_ship"
+      : input.verdict?.status === "ready_to_ship" && verdictAffirmsDeploy(input.verdict)
         ? t("status.ready")
         : input.verdict
           ? t("status.review")

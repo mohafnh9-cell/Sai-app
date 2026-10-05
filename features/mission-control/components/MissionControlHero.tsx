@@ -6,6 +6,8 @@ import { ProductionVerdictCard } from "@/components/sequrai";
 import { ScoreDeltaSummary } from "@/features/production-verdict/components/ScoreDeltaSummary";
 import { useI18n } from "@/lib/i18n/client";
 import { verdictStatusMessage } from "@/lib/i18n/verdict-copy";
+import { verdictAffirmsDeploy } from "@/brain/production-verdict/deployment-posture";
+import { canIDeployKey } from "@/brain/production-verdict/can-i-deploy-key";
 import { formatPriorityTitleForLocale } from "@/lib/i18n/priority-display";
 
 /**
@@ -30,17 +32,10 @@ export function MissionControlHero({
     t(key, params);
 
   const view = verdictExperienceFromVerdict(verdict, {
-    statusMessage: verdictStatusMessage(verdict.status, translate),
+    statusMessage: verdictStatusMessage(verdict.status, translate, verdictAffirmsDeploy(verdict)),
   });
 
-  const canDeployKey =
-    view.status === "ready_to_ship"
-      ? "verdict.canIDeploy.yes"
-      : view.status === "almost_ready"
-        ? "verdict.canIDeploy.almost"
-        : view.status === "insufficient_data" || view.status === "analysis_failed"
-          ? "verdict.canIDeploy.insufficient"
-          : "verdict.canIDeploy.no";
+  const canDeployKey = canIDeployKey(view.status, view.affirmsDeploy);
 
   const topBlocker = verdict.topPriorities?.[0] ?? null;
   const why =
@@ -59,6 +54,7 @@ export function MissionControlHero({
       eyebrow={t("verdict.productionVerdict")}
       headline={t(canDeployKey)}
       status={view.status}
+      affirmsDeploy={view.affirmsDeploy}
       score={verdict.score}
       scoreLabel={tm("projectHome.verdictSummary.score")}
       stats={

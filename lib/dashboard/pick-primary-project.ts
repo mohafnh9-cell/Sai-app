@@ -32,8 +32,12 @@ export function pickPrimaryDashboardFocus(
 
   const primary = ranked[0];
   const verdict = verdicts.get(primary.projectId) ?? null;
+  // The affirmative "yes, deploy" answer needs more than a ready_to_ship status:
+  // every project's verdict must pass the canonical evidence gate (high
+  // confidence AND complete coverage). A missing flag means "not affirmed".
   const orgCanDeploy =
-    projects.length > 0 && projects.every((project) => project.status === "ready_to_ship");
+    projects.length > 0 &&
+    projects.every((project) => project.status === "ready_to_ship" && project.affirmsDeploy === true);
 
   return {
     primary,

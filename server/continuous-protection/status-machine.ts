@@ -8,7 +8,8 @@ function daysSince(iso: string | null): number | null {
 }
 
 /**
- * Deterministic protection status machine (doc 04). First matching rule wins.
+ * Operational protection status (doc 04). First matching rule wins. The
+ * security posture is the canonical Production Verdict's (`input.decision`).
  */
 export function evaluateProtectionStatus(input: StatusEvaluationInput): ProtectionStatusLabel {
   if (!input.continuousProtectionEnabled || input.continuousProtectionPaused) {
@@ -23,15 +24,6 @@ export function evaluateProtectionStatus(input: StatusEvaluationInput): Protecti
   if (input.consecutiveDailyFailures >= 3) {
     return "NOT_PROTECTED";
   }
-  if (
-    input.deployAnswer === "no_go" &&
-    input.openCriticalCount > 0 &&
-    input.lastCheckAt &&
-    (daysSince(input.lastCheckAt) ?? 0) > 1
-  ) {
-    return "NOT_PROTECTED";
-  }
-
   if (input.staleCheckWhileCpOn) {
     return "REQUIRES_ATTENTION";
   }
@@ -51,17 +43,17 @@ export function evaluateProtectionStatus(input: StatusEvaluationInput): Protecti
     return "REQUIRES_ATTENTION";
   }
 
-  if (
-    input.deployAnswer === "not_yet" ||
-    input.openHighCount > 0 ||
-    (input.productionConfidence != null && input.productionConfidence < 85)
-  ) {
-    return "SAFE_WITH_CAUTION";
+  // Security posture comes from the canonical verdict, never from this machine.
+  // Without a completed current verdict there is no decision to protect on.
+  if (input.decision.state !== "verdict") {
+    return "NOT_PROTECTED";
   }
-
-  // "PROTECTED" is a positive claim (it powers "I would deploy today"): it needs
-  // an explicit go decision that the evidence policy allows to be stated.
-  return input.deployAnswer === "go" && input.approvalEligible ? "PROTECTED" : "SAFE_WITH_CAUTION";
+  // "PROTECTED" is a positive claim: only when the canonical gate affirms it
+  // (ready_to_ship AND high confidence AND complete coverage). Every other
+  // posture -- no blockers but limited evidence, more analysis required, not
+  // ready -- needs attention. SAFE_WITH_CAUTION is no longer produced: it was a
+  // second, independent safety judgement.
+  return input.decision.posture === "ready" ? "PROTECTED" : "REQUIRES_ATTENTION";
 }
 
 export function isCheckStale(lastCheckAt: string | null, cpActive: boolean): boolean {

@@ -72,6 +72,8 @@ export type ProjectBrainSummary = {
   status: VerdictStatus;
   lastReviewedCommit: string | null;
   generatedAt: string | null;
+  /** The canonical evidence policy allows affirmative deployment language for this project's verdict. Absent = not affirmed. */
+  affirmsDeploy?: boolean;
 };
 
 export type ProductionRoadmapItem = {

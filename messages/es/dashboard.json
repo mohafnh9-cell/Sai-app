@@ -5,6 +5,7 @@
   "readyToShipQuestion": "¿Listo para desplegar?",
   "deployYes": "Sí — listo para desplegar",
   "deployNo": "Aún no",
+  "deployEvidenceLimited": "Sin bloqueos encontrados — evidencia limitada",
   "almostReady": "Casi listo",
   "fixThisFirst": "Arregla esto primero",
   "fixIssue": "Corregir en el proyecto",

@@ -3,7 +3,9 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ProductionVerdictV1 } from "@/brain/production-verdict/schema";
 import { getCurrentProductionVerdict } from "@/server/production-verdict/service";
-import { deployAnswerFromVerdictEvidence, verdictAllowsFirstPersonApproval } from "@/server/production-memory/types";
+import { deployAnswerFromVerdictEvidence } from "@/server/production-memory/types";
+import { protectionDecisionFor, type ProtectionDecision } from "@/brain/production-verdict/protection-decision";
+import { safeFixOffer, type SafeFixOffer } from "@/brain/production-verdict/safe-fix-eligibility";
 import {
   computeHealthBundle,
   confidenceTrendNarrative,
@@ -21,6 +23,10 @@ import {
 export type ProtectionCenterModel = {
   projectId: string;
   status: ProtectionStatusLabel;
+  /** The canonical-verdict projection the panel renders. The panel never decides safety itself. */
+  decision: ProtectionDecision;
+  /** Present only when a real, current, supported finding exists. */
+  safeFix: SafeFixOffer | null;
   statusHeadline: string;
   productionConfidence: number | null;
   securityConfidence: number | null;
@@ -63,8 +69,14 @@ export type ProtectionContext = {
   worries: string[];
   openCritical: number;
   openHigh: number;
+  /** Derived from the canonical decision policy (used by the alert engine); not a status-machine input. */
   deployAnswer: "go" | "no_go" | "not_yet" | null;
-  approvalEligible: boolean;
+  /** A default-branch review is running (repository_scan_state.active_scan_id). */
+  reviewInProgress: boolean;
+  /** repository_scan_state.last_scan_id: the scan the current verdict must belong to. */
+  currentScanId: string | null;
+  defaultBranch: string | null;
+  decision: ProtectionDecision;
 };
 
 export async function loadProtectionContext(
@@ -73,7 +85,7 @@ export async function loadProtectionContext(
 ): Promise<ProtectionContext | null> {
   const { data: project } = await admin
     .from("projects")
-    .select("id, organization_id, github_repo, github_repository_id")
+    .select("id, organization_id, github_repo, github_repository_id, github_default_branch")
     .eq("id", projectId)
     .maybeSingle();
 
@@ -81,7 +93,7 @@ export async function loadProtectionContext(
 
   const organizationId = project.organization_id as string;
 
-  const [cpRow, syncRow, profileRow, verdict, snapshots] = await Promise.all([
+  const [cpRow, syncRow, profileRow, verdict, snapshots, scanState] = await Promise.all([
     admin.from("project_continuous_protection").select("*").eq("project_id", projectId).maybeSingle(),
     admin.from("repository_sync_status").select("connection_status, commit_sha").eq("project_id", projectId).maybeSingle(),
     admin.from("project_memory_profile").select("first_protected_at").eq("project_id", projectId).maybeSingle(),
@@ -92,6 +104,11 @@ export async function loadProtectionContext(
       .eq("project_id", projectId)
       .order("snapshot_date", { ascending: false })
       .limit(8),
+    admin
+      .from("repository_scan_state")
+      .select("active_scan_id, last_scan_id")
+      .eq("repository_id", projectId)
+      .maybeSingle(),
   ]);
 
   const githubConnected =
@@ -114,6 +131,8 @@ export async function loadProtectionContext(
       ? latest.security_confidence - weekAgo.security_confidence
       : null;
 
+  const reviewInProgress = Boolean(scanState.data?.active_scan_id);
+  const decision = protectionDecisionFor({ verdict, reviewInProgress });
   const openCritical = verdict?.criticalBlockersCount ?? 0;
   const openHigh = verdict?.highBlockersCount ?? 0;
   const worries = verdict?.topPriorities?.slice(0, 3).map((p) => p.title) ?? [];
@@ -137,7 +156,10 @@ export async function loadProtectionContext(
     openCritical,
     openHigh,
     deployAnswer: verdict ? deployAnswerFromVerdictEvidence(verdict) : null,
-    approvalEligible: verdict ? verdictAllowsFirstPersonApproval(verdict) : false,
+    reviewInProgress,
+    currentScanId: (scanState.data?.last_scan_id as string | null | undefined) ?? null,
+    defaultBranch: (project.github_default_branch as string | null | undefined) ?? null,
+    decision,
   };
 }
 
@@ -156,12 +178,7 @@ export async function getProtectionCenterModel(
     hasSuccessfulReview: ctx.hasSuccessfulReview,
     lastCheckAt: ctx.lastCheckAt,
     consecutiveDailyFailures: ctx.consecutiveDailyFailures,
-    deployAnswer: ctx.deployAnswer,
-    approvalEligible: ctx.approvalEligible,
-    openCriticalCount: ctx.openCritical,
-    openHighCount: ctx.openHigh,
-    productionConfidence: ctx.productionConfidence,
-    securityConfidence: ctx.securityConfidence,
+    decision: ctx.decision,
     productionConfidenceDelta7d: ctx.productionDelta7d,
     securityConfidenceDelta7d: ctx.securityDelta7d,
     materialChangeIn7d: false,
@@ -202,29 +219,51 @@ export async function getProtectionCenterModel(
     .limit(1)
     .maybeSingle();
 
-  const recommendation =
-    status === "NOT_PROTECTED"
-      ? ctx.githubConnected
-        ? "Run a protection review to start continuous protection."
-        : "Connect GitHub to start protecting this application."
-      : status === "REQUIRES_ATTENTION"
-        ? "Review again after you apply Safe Fix."
-        : status === "SAFE_WITH_CAUTION"
-          ? "Apply Safe Fix."
-          : "Keep building — ask SequrAI before your next deploy.";
+  const hasVerdict = ctx.decision.state === "verdict" && ctx.verdict != null;
+
+  // The recommendation is the canonical verdict's own (policy-guarded) recommended
+  // action -- never a status-keyed static string. Without a verdict there is none.
+  const recommendation = hasVerdict ? ctx.verdict!.recommendedAction : "";
+
+  // "Apply Safe Fix" only for a real, current, supported finding.
+  let safeFix: SafeFixOffer | null = null;
+  const topFindingIds = hasVerdict ? ctx.verdict!.topPriorities?.[0]?.findingIds ?? [] : [];
+  if (hasVerdict && topFindingIds.length > 0) {
+    const { data: findingRows } = await admin
+      .from("scan_findings")
+      .select("id, project_id, scan_id, status, recommendation")
+      .eq("scan_id", ctx.verdict!.scanId)
+      .in("id", topFindingIds.slice(0, 50));
+    safeFix = safeFixOffer({
+      projectId,
+      currentScanId: ctx.currentScanId,
+      defaultBranch: ctx.defaultBranch,
+      verdict: ctx.verdict,
+      findings: (findingRows ?? []) as Array<{
+        id: string;
+        project_id: string;
+        scan_id: string;
+        status: string | null;
+        recommendation: string | null;
+      }>,
+    });
+  }
 
   return {
     projectId,
     status,
+    decision: ctx.decision,
+    safeFix,
     statusHeadline: statusHeadline(status),
-    productionConfidence: ctx.productionConfidence,
-    securityConfidence: ctx.securityConfidence,
+    // Scores and concerns are verdict-derived: shown only when a completed current verdict exists.
+    productionConfidence: hasVerdict ? ctx.productionConfidence : null,
+    securityConfidence: hasVerdict ? ctx.securityConfidence : null,
     healthScore: health.healthScore,
     healthLabel: health.healthLabel,
     protectionHealth: health.protectionHealth,
     productionHealth: health.productionHealth,
     securityHealth: health.securityHealth,
-    worriesTop3: ctx.worries,
+    worriesTop3: hasVerdict ? ctx.worries : [],
     recommendation,
     lastCheckedAt: ctx.lastCheckAt,
     continuousProtectionEnabled: ctx.cpEnabled,
@@ -273,12 +312,7 @@ export async function recomputeAndPersistProtectionState(
     hasSuccessfulReview: ctx.hasSuccessfulReview,
     lastCheckAt: ctx.lastCheckAt,
     consecutiveDailyFailures: ctx.consecutiveDailyFailures,
-    deployAnswer: ctx.deployAnswer,
-    approvalEligible: ctx.approvalEligible,
-    openCriticalCount: ctx.openCritical,
-    openHighCount: ctx.openHigh,
-    productionConfidence: ctx.productionConfidence,
-    securityConfidence: ctx.securityConfidence,
+    decision: ctx.decision,
     productionConfidenceDelta7d: ctx.productionDelta7d,
     securityConfidenceDelta7d: ctx.securityDelta7d,
     materialChangeIn7d: options?.materialChange ?? false,

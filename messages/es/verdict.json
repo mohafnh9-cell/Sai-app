@@ -4,6 +4,7 @@
   "canIDeploy": {
     "question": "¿Puedo desplegar?",
     "yes": "SÍ.",
+    "limited": "SIN BLOQUEOS — EVIDENCIA LIMITADA.",
     "almost": "CASI.",
     "no": "NO.",
     "insufficient": "AÚN NO LO SABEMOS."
@@ -72,6 +73,12 @@
       "headline": "LISTO PARA DESPLEGAR",
       "description": "No se han detectado bloqueos de producción.",
       "message": "Tu aplicación está lista para desplegar."
+    },
+    "ready_evidence_limited": {
+      "label": "Sin bloqueos (evidencia limitada)",
+      "headline": "SIN BLOQUEOS — EVIDENCIA LIMITADA",
+      "description": "No se encontraron bloqueos de producción en la evidencia analizada. Esto no es una aprobación de despliegue.",
+      "message": "No se encontraron bloqueos en la evidencia analizada. Esto no es una aprobación de despliegue."
     },
     "almost_ready": {
       "label": "Casi listo",

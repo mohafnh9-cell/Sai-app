@@ -1,3 +1,4 @@
+import { verdictAffirmsDeploy } from "@/brain/production-verdict/deployment-posture";
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -42,7 +43,7 @@ function averageDimensions(
   return result;
 }
 
-function summaryFromVerdict(
+export function summaryFromVerdict(
   project: { id: string; name: string; repository_health?: string | null },
   verdict: import("@/brain/production-verdict/schema").ProductionVerdictV1 | null
 ): ProjectBrainSummary {
@@ -58,6 +59,7 @@ function summaryFromVerdict(
       status: "insufficient_data",
       lastReviewedCommit: null,
       generatedAt: null,
+      affirmsDeploy: false,
     };
   }
 
@@ -72,6 +74,7 @@ function summaryFromVerdict(
     status: verdict.status,
     lastReviewedCommit: verdict.commitSha,
     generatedAt: verdict.generatedAt,
+    affirmsDeploy: verdictAffirmsDeploy(verdict),
   };
 }
 

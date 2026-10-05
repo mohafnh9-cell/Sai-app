@@ -130,6 +130,7 @@ export default async function DashboardPage({
                 readyToShipQuestion: t("readyToShipQuestion"),
                 deployYes: t("deployYes"),
                 deployNo: t("deployNo"),
+                deployEvidenceLimited: t("deployEvidenceLimited"),
                 almostReady: t("almostReady"),
                 fixThisFirst: t("fixThisFirst"),
                 fixIssue: t("fixIssue"),

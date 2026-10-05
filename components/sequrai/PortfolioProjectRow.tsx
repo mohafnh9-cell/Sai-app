@@ -42,6 +42,7 @@ export function PortfolioProjectRow({
     t(key, params);
 
   const status = summary?.status ?? verdictStatus ?? "insufficient_data";
+  const affirms = summary?.affirmsDeploy === true;
   const score = summary?.productionReady ?? null;
   const blockers = summary?.blockersCount ?? 0;
   const targetHref = href ?? projectVerdictHref(projectId);
@@ -84,7 +85,7 @@ export function PortfolioProjectRow({
               ) : null}
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <VerdictStatusBadge status={status} />
+              <VerdictStatusBadge status={status} affirms={affirms} />
               {blockers > 0 ? (
                 <span className="text-xs text-muted-foreground">
                   {tp("blockersCount", { count: blockers })}
@@ -92,7 +93,7 @@ export function PortfolioProjectRow({
               ) : null}
             </div>
             <p className="text-xs text-muted-foreground line-clamp-1">
-              {verdictStatusMessage(status, translate)}
+              {verdictStatusMessage(status, translate, affirms)}
             </p>
           </div>
         </div>

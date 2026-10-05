@@ -1,5 +1,6 @@
 import type { ProductionVerdictV1, VerdictStatus } from "./schema";
 import { verdictHeadlineDisplay, shouldShowScore } from "./status-ui";
+import { verdictAffirmsDeploy } from "./deployment-posture";
 
 export type VerdictExperienceView = {
   status: VerdictStatus;
@@ -25,6 +26,8 @@ export type VerdictExperienceView = {
   filesAnalyzed: number;
   showReadyMoment: boolean;
   showScore: boolean;
+  /** Canonical evidence policy allows affirmative deployment language for this verdict. */
+  affirmsDeploy: boolean;
 };
 
 const STATUS_MESSAGES: Record<VerdictStatus, string> = {
@@ -85,7 +88,12 @@ export function verdictExperienceFromVerdict(
   const evaluatedAreaCount =
     (verdict.evaluatedAreas?.length ?? 0) + (verdict.partiallyEvaluatedAreas?.length ?? 0);
 
+  const affirmsDeploy = verdictAffirmsDeploy(verdict);
+  const evidenceLimitedReady = verdict.status === "ready_to_ship" && !affirmsDeploy;
+
+  // The celebration moment is an approval signal: only when the evidence supports it.
   const showReadyMoment =
+    affirmsDeploy &&
     verdict.status === "ready_to_ship" &&
     verdict.blockersCount === 0 &&
     evaluatedAreaCount > 0 &&
@@ -93,8 +101,12 @@ export function verdictExperienceFromVerdict(
 
   return {
     status: verdict.status,
-    headline: verdictHeadlineDisplay(verdict.status),
-    statusMessage: options?.statusMessage ?? STATUS_MESSAGES[verdict.status],
+    headline: evidenceLimitedReady ? "NO BLOCKERS FOUND — EVIDENCE LIMITED" : verdictHeadlineDisplay(verdict.status),
+    statusMessage:
+      options?.statusMessage ??
+      (evidenceLimitedReady
+        ? "No blockers were found in the evidence analyzed. This is not a deployment approval."
+        : STATUS_MESSAGES[verdict.status]),
     score: verdict.score,
     scoreDelta: verdict.scoreDelta,
     blockersCount: verdict.blockersCount,
@@ -115,6 +127,7 @@ export function verdictExperienceFromVerdict(
     filesAnalyzed: verdict.filesAnalyzed,
     showReadyMoment,
     showScore,
+    affirmsDeploy,
   };
 }
 

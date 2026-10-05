@@ -6,6 +6,7 @@ import type { ProductionVerdictV1 } from "@/brain/production-verdict/schema";
 import type { SecurityTestPhase } from "@/features/security-testing/types";
 import { useI18n } from "@/lib/i18n/client";
 import { verdictStatusMessage } from "@/lib/i18n/verdict-copy";
+import { verdictAffirmsDeploy } from "@/brain/production-verdict/deployment-posture";
 
 export function MissionControlReason({
   verdict,
@@ -22,7 +23,7 @@ export function MissionControlReason({
     t(key, params);
 
   const view = verdictExperienceFromVerdict(verdict, {
-    statusMessage: verdictStatusMessage(verdict.status, translate),
+    statusMessage: verdictStatusMessage(verdict.status, translate, verdictAffirmsDeploy(verdict)),
   });
 
   const topBlocker = verdict.topPriorities?.[0] ?? null;

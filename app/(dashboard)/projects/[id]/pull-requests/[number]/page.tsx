@@ -94,7 +94,10 @@ export default async function PullRequestSecurityPage({ params, searchParams }: 
             <div className="flex flex-wrap items-center gap-3">
               <span className="text-sm font-medium">Production Verdict</span>
               {evidenceLimited ? null : prScan.verdictStatus ? (
-                <VerdictStatusBadge status={prScan.verdictStatus as never} />
+                <VerdictStatusBadge
+                  status={prScan.verdictStatus as never}
+                  affirms={Boolean(prScan.productionVerdict && narrativeMayApprove(prScan.productionVerdict))}
+                />
               ) : (
                 <span className="text-sm text-muted-foreground">Pending analysis</span>
               )}

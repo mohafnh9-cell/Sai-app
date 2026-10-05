@@ -1,5 +1,6 @@
 "use client";
 
+import { verdictAffirmsDeploy } from "@/brain/production-verdict/deployment-posture";
 import { useCallback, useMemo, useState } from "react";
 import { Loader2, Sparkles } from "lucide-react";
 import Link from "next/link";
@@ -44,7 +45,7 @@ export function OnboardingFinaleStep({
   const [recheckError, setRecheckError] = useState("");
 
   const verdict = recheckVerdict ?? initialVerdict;
-  const ready = verdict.status === "ready_to_ship";
+  const ready = verdictAffirmsDeploy(verdict);
   const topPriority = verdict.topPriorities[0] ?? null;
 
   const fixPromptInput = useMemo(() => {

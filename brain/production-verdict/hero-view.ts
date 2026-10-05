@@ -1,6 +1,6 @@
 import type { OrgBrainSnapshot } from "../types";
 import type { ProductionVerdictV1, VerdictStatus } from "./schema";
-import { narrativeMayApprove } from "./narrative-guard";
+import { verdictAffirmsDeploy } from "./deployment-posture";
 import { EVIDENCE_LIMITED_RECOMMENDED_ACTION } from "./status-rules";
 import { verdictHeadlineDisplay, verdictRecommendedAction, shouldShowScore } from "./status-ui";
 
@@ -16,6 +16,8 @@ export type ProductionHeroViewModel = {
   headline: string;
   subheadline: string;
   analysisError: string | null;
+  /** Canonical evidence policy allows affirmative deployment language. */
+  affirmsDeploy: boolean;
 };
 
 export function heroViewFromVerdict(verdict: ProductionVerdictV1): ProductionHeroViewModel {
@@ -34,7 +36,8 @@ export function heroViewFromVerdict(verdict: ProductionVerdictV1): ProductionHer
 
   // A ready_to_ship status is only headlined as ready when the evidence
   // supports approval (high confidence, every area evaluated).
-  const evidenceLimited = verdict.status === "ready_to_ship" && !narrativeMayApprove(verdict);
+  const affirmsDeploy = verdictAffirmsDeploy(verdict);
+  const evidenceLimited = verdict.status === "ready_to_ship" && !affirmsDeploy;
   if (evidenceLimited && !top) subheadline = EVIDENCE_LIMITED_RECOMMENDED_ACTION;
 
   return {
@@ -49,12 +52,14 @@ export function heroViewFromVerdict(verdict: ProductionVerdictV1): ProductionHer
     headline: evidenceLimited ? "NO BLOCKERS FOUND — EVIDENCE LIMITED" : verdictHeadlineDisplay(verdict.status),
     subheadline,
     analysisError: verdict.status === "analysis_failed" ? verdict.executiveSummary : null,
+    affirmsDeploy,
   };
 }
 
 export function heroViewFromOrgBrain(brain: OrgBrainSnapshot): ProductionHeroViewModel {
   const scored = brain.projects.filter((p) => p.productionReady !== null);
-  const ready = brain.projects.filter((p) => p.status === "ready_to_ship").length;
+  // "Ready" at portfolio level counts only projects whose verdict passed the canonical evidence gate.
+  const ready = brain.projects.filter((p) => p.status === "ready_to_ship" && p.affirmsDeploy === true).length;
 
   if (scored.length === 0) {
     return {
@@ -70,6 +75,7 @@ export function heroViewFromOrgBrain(brain: OrgBrainSnapshot): ProductionHeroVie
       subheadline:
         "Connect a project and run your first production readiness check to get started.",
       analysisError: null,
+      affirmsDeploy: false,
     };
   }
 
@@ -97,6 +103,7 @@ export function heroViewFromOrgBrain(brain: OrgBrainSnapshot): ProductionHeroVie
         : verdictHeadlineDisplay(status),
     subheadline: `${scored.length} project${scored.length === 1 ? "" : "s"} analyzed across your portfolio.`,
     analysisError: null,
+    affirmsDeploy: status === "ready_to_ship",
   };
 }
 
