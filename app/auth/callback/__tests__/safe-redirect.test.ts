@@ -40,7 +40,7 @@ async function locationOf(request: NextRequest) {
 }
 
 beforeEach(() => {
-  vi.mocked(enforceRateLimit).mockReturnValue(null);
+  vi.mocked(enforceRateLimit).mockResolvedValue(null);
   mockExchange(true);
 });
 
