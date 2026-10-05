@@ -74,10 +74,12 @@ export function formatGithubCheckSummary(input: {
 }
 
 export function formatMcpVerdictSummary(verdict: ProductionVerdictV1): string {
+  // ready_to_ship without the evidence to approve it is never presented as "READY TO SHIP".
+  const limitedReady = verdict.status === "ready_to_ship" && !narrativeMayApprove(verdict);
   const lines = [
-    VERDICT_STATUS_LABELS[verdict.status].toUpperCase(),
+    limitedReady ? "NO BLOCKERS FOUND (EVIDENCE LIMITED)" : VERDICT_STATUS_LABELS[verdict.status].toUpperCase(),
     verdict.score != null
-      ? `${verdict.score} / 100 Production Ready`
+      ? `${verdict.score} / 100 Production Ready Score`
       : "Production Ready Score unavailable",
     verdict.blockersCount > 0
       ? `${verdict.blockersCount} production blocker${verdict.blockersCount === 1 ? "" : "s"}.`

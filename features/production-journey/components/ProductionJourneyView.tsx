@@ -19,6 +19,7 @@ function TrendIcon({ trend }: { trend: ProductionJourney["trend"] }) {
   return <Minus className="h-4 w-4 text-muted-foreground" aria-hidden />;
 }
 
+import { journeyMaturityKey, journeyPostureKey } from "@/brain/production-journey/decision-display";
 import { withAnalysisRunQuery } from "@/features/analysis-runs/lib/build-run-query";
 import { projectVerdictHref } from "@/lib/navigation/project-hrefs";
 
@@ -26,10 +27,13 @@ export function ProductionJourneyView({
   journey,
   projectId,
   analysisRunLinksEnabled = false,
+  reviewInProgress = false,
 }: {
   journey: ProductionJourney;
   projectId: string;
   analysisRunLinksEnabled?: boolean;
+  /** A review is running: there is no final decision for the current run yet. */
+  reviewInProgress?: boolean;
 }) {
   const { t } = useI18n("productionJourney");
   const { href } = useDemoNavigation();
@@ -96,12 +100,22 @@ export function ProductionJourneyView({
           {journey.currentStatus && (
             <div>
               <p className="text-xs text-muted-foreground">{t("currentVerdict")}</p>
-              <VerdictStatusBadge status={journey.currentStatus} className="mt-1" />
+              <VerdictStatusBadge
+                status={journey.currentStatus}
+                affirms={journey.currentDeploymentPosture === "ready"}
+                className="mt-1"
+              />
             </div>
           )}
           <div>
             <p className="text-xs text-muted-foreground">{t("maturity")}</p>
-            <p className="text-sm font-medium mt-1">{t(`maturityValues.${journey.maturity}`)}</p>
+            <p className="text-sm font-medium mt-1">{t(`maturityValues.${journeyMaturityKey(journey, reviewInProgress)}`)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">{t("postureTitle")}</p>
+            <p className="text-sm font-medium mt-1" data-testid="journey-posture">
+              {t(`posture.${journeyPostureKey(journey, reviewInProgress)}`)}
+            </p>
           </div>
           {journey.currentFocusKey && (
             <div>
@@ -264,7 +278,7 @@ export function ProductionJourneyView({
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <VerdictStatusBadge status={point.status} />
+                <VerdictStatusBadge status={point.status} affirms={point.deploymentPosture === "ready"} />
                 {analysisRunLinksEnabled ? (
                   <Button variant="ghost" size="sm" asChild>
                     <Link

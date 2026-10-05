@@ -20,7 +20,7 @@ function formatRunLabel(
   const score =
     run.securityScore != null ? `${run.securityScore}/100` : t("analysisRun.selector.noScore");
   const statusKey = run.verdictStatus ?? run.status;
-  const status = formatAnalysisRunStatusLabel(statusKey, t, tVerdict);
+  const status = formatAnalysisRunStatusLabel(statusKey, t, tVerdict, run.deploymentPosture === "ready");
   return t("analysisRun.selector.runOption", {
     sha: shortSha(run.commitSha),
     score,

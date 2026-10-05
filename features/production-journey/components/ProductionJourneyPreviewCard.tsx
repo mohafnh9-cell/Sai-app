@@ -1,5 +1,6 @@
 "use client";
 
+import { journeyMaturityKey } from "@/brain/production-journey/decision-display";
 import Link from "next/link";
 import { ArrowRight, TrendingDown, TrendingUp, Minus } from "lucide-react";
 import type { ProductionJourneyPreview } from "@/brain/production-journey/schema";
@@ -47,10 +48,12 @@ export function ProductionJourneyPreviewCard({
   projectId,
   preview,
   timeline,
+  reviewInProgress = false,
 }: {
   projectId: string;
   preview: ProductionJourneyPreview;
   timeline?: ProductionJourneyPoint[];
+  reviewInProgress?: boolean;
 }) {
   const { t } = useI18n("productionJourney");
 
@@ -105,7 +108,7 @@ export function ProductionJourneyPreviewCard({
           </div>
           <div>
             <p className="text-xs text-muted-foreground">{t("maturity")}</p>
-            <p>{t(`maturityValues.${preview.maturity}`)}</p>
+            <p>{t(`maturityValues.${journeyMaturityKey(preview, reviewInProgress)}`)}</p>
           </div>
         </div>
         {chartTimeline.length >= 2 && <JourneyScoreChart timeline={chartTimeline} />}

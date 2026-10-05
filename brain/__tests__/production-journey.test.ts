@@ -172,6 +172,8 @@ describe("Block 6.5 Production Journey", () => {
     expect(calculateMaturity({
       validReviews: journey.validReviews,
       currentStatus: journey.currentStatus,
+      // Only the canonical posture ("ready": high confidence, complete coverage) may reach production_ready.
+      currentPosture: journey.currentDeploymentPosture,
       currentScore: journey.currentScore,
       trend: journey.trend,
       blockersResolved: journey.blockersResolved,

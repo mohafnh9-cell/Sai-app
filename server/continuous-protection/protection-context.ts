@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ProductionVerdictV1 } from "@/brain/production-verdict/schema";
 import { getCurrentProductionVerdict } from "@/server/production-verdict/service";
+import { getProductionReviewState } from "@/server/review-cancel/get-production-review-state";
 import { deployAnswerFromVerdictEvidence } from "@/server/production-memory/types";
 import { protectionDecisionFor, type ProtectionDecision } from "@/brain/production-verdict/protection-decision";
 import { safeFixOffer, type SafeFixOffer } from "@/brain/production-verdict/safe-fix-eligibility";
@@ -93,7 +94,7 @@ export async function loadProtectionContext(
 
   const organizationId = project.organization_id as string;
 
-  const [cpRow, syncRow, profileRow, verdict, snapshots, scanState] = await Promise.all([
+  const [cpRow, syncRow, profileRow, verdict, snapshots, scanState, reviewState] = await Promise.all([
     admin.from("project_continuous_protection").select("*").eq("project_id", projectId).maybeSingle(),
     admin.from("repository_sync_status").select("connection_status, commit_sha").eq("project_id", projectId).maybeSingle(),
     admin.from("project_memory_profile").select("first_protected_at").eq("project_id", projectId).maybeSingle(),
@@ -109,6 +110,9 @@ export async function loadProtectionContext(
       .select("active_scan_id, last_scan_id")
       .eq("repository_id", projectId)
       .maybeSingle(),
+    // The same review-state read Mission Control uses (scan_jobs-based), so both surfaces agree on
+    // "a review is running". Read-only: stale-review recovery stays with Mission Control.
+    getProductionReviewState(admin, { organizationId, projectId, recoverStale: false }),
   ]);
 
   const githubConnected =
@@ -131,7 +135,7 @@ export async function loadProtectionContext(
       ? latest.security_confidence - weekAgo.security_confidence
       : null;
 
-  const reviewInProgress = Boolean(scanState.data?.active_scan_id);
+  const reviewInProgress = reviewState.hasActiveReview || Boolean(scanState.data?.active_scan_id);
   const decision = protectionDecisionFor({ verdict, reviewInProgress });
   const openCritical = verdict?.criticalBlockersCount ?? 0;
   const openHigh = verdict?.highBlockersCount ?? 0;

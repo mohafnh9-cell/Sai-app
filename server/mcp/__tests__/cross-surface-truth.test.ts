@@ -13,6 +13,9 @@ import { canIDeployKey } from "@/brain/production-verdict/can-i-deploy-key";
 import { deploymentPostureOf, verdictAffirmsDeploy } from "@/brain/production-verdict/deployment-posture";
 import { protectionDecisionFor } from "@/brain/production-verdict/protection-decision";
 import { verdictStatusHeadline, verdictStatusLabel, verdictStatusMessage } from "@/lib/i18n/verdict-copy";
+import { buildProductionJourney } from "@/brain/production-journey/build";
+import { journeyMaturityKey, journeyPostureKey } from "@/brain/production-journey/decision-display";
+import { formatAnalysisRunStatusLabel } from "@/lib/i18n/analysis-run-status";
 import { summaryFromVerdict } from "@/server/brain/build-org-brain";
 import { pickPrimaryDashboardFocus } from "@/lib/dashboard/pick-primary-project";
 import { ProductionControlCenter } from "@/features/dashboard/components/ProductionControlCenter";
@@ -40,7 +43,7 @@ function translator(lang: Lang) {
 }
 
 /** Affirmative deployment language in any supported language. Negations ("not a deployment approval") do not count. */
-const AFFIRMATIVE = /(^|[^a-záéíóú])(yes|sí|si)(\b|\.|\s|—)|listo para desplegar|ready to ship|ready for production|safe to deploy|segura\b|ship[_ ]it|green light|approved|puedes desplegar/i;
+const AFFIRMATIVE = /(^|[^a-záéíóú])(yes|sí|si)(\b|\.|\s|—)|listo para desplegar|ready to ship|ready for production|safe to deploy|segura\b|ship[_ ]it|green light|approved|puedes desplegar|production ready|production maintained|ready to deploy|lista para producci[oó]n|producci[oó]n mantenida/i;
 /** Negations and the dashboard's question heading ("Ready to ship?") are not affirmations. */
 const NEUTRAL = /not a deployment approval|no es una aprobaci[oó]n|not ready to ship|not ready|no listo para desplegar|¿?(ready to ship|listo para desplegar)\?/gi;
 const affirmative = (text: string) => AFFIRMATIVE.test(text.replace(NEUTRAL, " "));
@@ -103,7 +106,20 @@ async function surfaces(verdict: ReturnType<typeof verdictFor>, lang: Lang) {
   });
   const protectionLabel = decision.state === "verdict" ? t(`missionControl.protection.posture.${decision.posture}`) : "";
 
+  // Production Journey (History tab): maturity + posture row, from the same persisted verdict.
+  const journey = buildProductionJourney([
+    {
+      id: "55555555-5555-4555-8555-555555555555", scanId: verdict.scanId, projectId: verdict.projectId, repositoryId: verdict.repositoryId,
+      generatedAt: verdict.generatedAt, commitSha: verdict.commitSha, branch: verdict.branch, status: verdict.status, score: verdict.score,
+      previousScore: null, scoreDelta: null, blockersCount: verdict.blockersCount, introducedBlockers: 0, resolvedBlockers: 0, verdict,
+    },
+  ]);
+  const journeyLabel = (key: string) => translator(lang)(`productionJourney.${key}`);
+
   const texts = {
+    journeyMaturity: journeyLabel(`maturityValues.${journeyMaturityKey(journey, false)}`),
+    journeyPosture: journeyLabel(`posture.${journeyPostureKey(journey, false)}`),
+    journeyMilestones: journey.milestones.map((m) => journeyLabel(m.titleKey)).join(" | "),
     badgeLabel: verdictStatusLabel(verdict.status, t, affirms),
     badgeHeadline: verdictStatusHeadline(verdict.status, t, affirms),
     badgeMessage: verdictStatusMessage(verdict.status, t, affirms),
@@ -113,6 +129,10 @@ async function surfaces(verdict: ReturnType<typeof verdictFor>, lang: Lang) {
     heroHeadline: hero.headline,
     dashboard: dashboardHtml,
     protection: protectionLabel,
+    // Run selector: label from the persisted verdict's CANONICAL posture (as list-analysis-runs computes it).
+    selector: formatAnalysisRunStatusLabel(verdict.status, (k) => t(`missionControl.${k}`), (k) => t(`verdict.${k}`), deploymentPostureOf(verdict) === "ready"),
+    // Scanner Results only knows the raw status: it must be conservative on its own.
+    scannerResults: verdictStatusLabel(verdict.status, t),
     github: `${gh.title} ${gh.label}`,
     mcp: `${mcp.summary} ${mcp.nextAction}`,
   };
@@ -131,6 +151,8 @@ describe("one canonical verdict -> consistent Web, Dashboard, Protection, GitHub
       expect(s.gh.conclusion).toBe("success");
       expect(s.commitState).toBe("success");
       expect(s.mcp.deploymentRecommendation).toBe("SHIP_IT");
+      expect(affirmative(s.texts.journeyMaturity)).toBe(true);
+      expect(affirmative(s.texts.journeyPosture)).toBe(true);
     });
 
     it.each(["ready_low_incomplete", "ready_medium_incomplete", "not_ready_low", "insufficient"] as const)(
@@ -170,3 +192,22 @@ describe("one canonical verdict -> consistent Web, Dashboard, Protection, GitHub
     expect(s.texts.protection).not.toMatch(/segura/i);
   });
 });
+
+describe("Phase 8I.1: status-only surfaces cannot produce approval language", () => {
+  it("the Scanner Results / history label (raw status only) is never affirmative, even for ready_to_ship", () => {
+    for (const lang of ["en", "es"] as const) {
+      const t = translator(lang);
+      for (const status of ["ready_to_ship", "almost_ready", "needs_improvement", "not_ready", "insufficient_data", "analysis_failed"] as const) {
+        expect(affirmative(verdictStatusLabel(status, t)), `${lang}/${status}`).toBe(false);
+      }
+    }
+  });
+
+  it("the run selector only reads 'ready' for the canonical 'ready' posture; HIGH + complete does", async () => {
+    for (const lang of ["en", "es"] as const) {
+      const s = await surfaces(verdictFor("ready_full"), lang);
+      expect(affirmative(s.texts.selector), `${lang} selector for a genuinely ready verdict`).toBe(true);
+    }
+  });
+});
+

@@ -19,7 +19,7 @@ const priority = (over: Record<string, unknown> = {}) => ({
   projectedScoreImpact: 5, affectedFiles: ["src/a.ts"], recommendedAction: "Use parameterized queries.", findingIds: ["f1"], ...over,
 });
 
-type World = { verdict?: Record<string, unknown> | null; activeScanId?: string | null; findings?: Array<Record<string, unknown>>; defaultBranch?: string | null };
+type World = { verdict?: Record<string, unknown> | null; activeScanId?: string | null; findings?: Array<Record<string, unknown>>; defaultBranch?: string | null; extra?: Record<string, unknown[]> };
 
 function world(w: World = {}): { admin: never; tables: FakeTables } {
   const verdict = w.verdict === null ? null : buildVerdictFixture({
@@ -38,6 +38,7 @@ function world(w: World = {}): { admin: never; tables: FakeTables } {
     protection_weekly_summaries: [],
     scan_findings: w.findings ?? [{ id: "f1", project_id: PROJECT, scan_id: SCAN, status: "open", recommendation: "Use parameterized queries." }],
   } as unknown as FakeTables;
+  Object.assign(tables, w.extra ?? {});
   return { admin: createFakeAdmin(tables) as never, tables };
 }
 
@@ -142,3 +143,45 @@ describe("protectionDecisionFor", () => {
     expect(protectionDecisionFor({ verdict, reviewInProgress: false })).toMatchObject({ state: "verdict", posture: "not_ready" });
   });
 });
+
+describe("Protection Status during an active scan (Phase 8I.1)", () => {
+  // The live-E2E shape: a new scan is running (scan_jobs row), repository_scan_state.active_scan_id is NOT set,
+  // and the previous scan's verdict is still the current one.
+  const NEW_SCAN = "44444444-4444-4444-8444-444444444444";
+  const running = {
+    scan_jobs: [{ id: "job-1", organization_id: ORG, project_id: PROJECT, scan_id: NEW_SCAN, status: "running", created_at: new Date().toISOString() }],
+    scans: [{ id: NEW_SCAN, repository_id: PROJECT, project_id: PROJECT, organization_id: ORG, branch: "main", status: "fetching_repository", commit_sha: "d1e1211", created_at: new Date().toISOString(), updated_at: new Date().toISOString(), started_at: new Date().toISOString(), queued_at: new Date().toISOString() }],
+  };
+  const previous = { status: "ready_to_ship", confidence: "low", blockersCount: 0, criticalBlockersCount: 0, highBlockersCount: 0, score: 100, topPriorities: [], unevaluatedAreas: [area("testing")] };
+
+  it("D. active scan + a previous verdict: explicit in-progress / no final decision, previous posture is NOT projected", async () => {
+    const m = await model({ verdict: previous, extra: running });
+    expect(m?.decision).toEqual({ state: "analysis_in_progress" });
+    expect(m?.status).not.toBe("PROTECTED");
+    expect(m).toMatchObject({ safeFix: null, recommendation: "", worriesTop3: [], productionConfidence: null, securityConfidence: null });
+  });
+
+  it("D'. an in-progress scan on another branch does not hide the default branch's verdict (branch isolation)", async () => {
+    const other = { ...running, scans: [{ ...running.scans[0], branch: "feature/x" }] };
+    const m = await model({ verdict: previous, extra: other });
+    expect(m?.decision).toMatchObject({ state: "verdict", posture: "ready_evidence_limited" });
+  });
+
+  it("E. scan completed + new verdict persisted: Protection shows the NEW canonical posture, bound to the new scan and commit", async () => {
+    const completed = {
+      scan_jobs: [{ ...running.scan_jobs[0], status: "completed" }],
+      scans: [{ ...running.scans[0], status: "completed", completed_at: new Date().toISOString() }],
+    };
+    const m = await model({ verdict: { ...previous, scanId: NEW_SCAN, commitSha: "d1e1211" }, extra: completed });
+    expect(m?.decision).toMatchObject({ state: "verdict", posture: "ready_evidence_limited", scanId: NEW_SCAN, commitSha: "d1e1211" });
+    expect(m?.status).toBe("REQUIRES_ATTENTION");
+  });
+
+  it("E'. the transition is ordered: running -> in progress; then persisted verdict -> canonical posture (never skips to approval)", async () => {
+    const during = await model({ verdict: previous, extra: running });
+    const after = await model({ verdict: { ...previous, scanId: NEW_SCAN, commitSha: "d1e1211", status: "not_ready", blockersCount: 3, confidence: "low" } });
+    expect(during?.decision.state).toBe("analysis_in_progress");
+    expect(after?.decision).toMatchObject({ state: "verdict", posture: "not_ready", scanId: NEW_SCAN });
+  });
+});
+
