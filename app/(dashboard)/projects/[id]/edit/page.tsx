@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getCachedServerAuthContext } from "@/lib/server/request-cache";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -18,7 +19,15 @@ export async function generateMetadata({
 }: EditProjectPageProps): Promise<Metadata> {
   const { id } = await params;
   const supabase = await createClient();
-  const { data } = await supabase.from("projects").select("name").eq("id", id).single();
+  const auth = await getCachedServerAuthContext();
+  // Same active-workspace scoping as the page body: never title a page with a project of another workspace.
+  if (!auth?.organizationId) return { title: "Edit Project" };
+  const { data } = await supabase
+    .from("projects")
+    .select("name")
+    .eq("id", id)
+    .eq("organization_id", auth.organizationId)
+    .maybeSingle();
   return { title: `Edit ${data?.name ?? "Project"}` };
 }
 
@@ -30,11 +39,17 @@ export default async function EditProjectPage({ params }: EditProjectPageProps) 
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
+  // Dashboard pages are scoped ACTIVE WORKSPACE -> PROJECT: explicit organization_id filter, not just RLS
+  // (same pattern as projects/[id]/page.tsx and the other project pages).
+  const auth = await getCachedServerAuthContext();
+  if (!auth?.organizationId) notFound();
+
   const { data: project, error } = await supabase
     .from("projects")
     .select("*")
     .eq("id", id)
-    .single();
+    .eq("organization_id", auth.organizationId)
+    .maybeSingle();
 
   if (error || !project) notFound();
 

@@ -103,10 +103,16 @@ export default async function ProjectJourneyPage({ params, searchParams }: Journ
   const { t: tm } = await getTranslator("missionControl");
   const { t } = await getTranslator("productionJourney");
 
+  // Dashboard pages are scoped ACTIVE WORKSPACE -> PROJECT -> DATA: explicit organization_id filter, not just RLS
+  // (same pattern as projects/[id]/page.tsx, mission-control, attack-center and scans). A project of another
+  // workspace the user belongs to must not render while that workspace is not active. Without an active workspace
+  // no project can be resolved (a user with no workspace has no RLS-visible project either).
+  if (!auth?.organizationId) notFound();
   const { data: project } = await supabase
     .from("projects")
     .select("id, name")
     .eq("id", projectId)
+    .eq("organization_id", auth.organizationId)
     .maybeSingle();
 
   if (!project) notFound();
