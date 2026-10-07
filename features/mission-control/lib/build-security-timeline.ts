@@ -10,7 +10,11 @@ export type SecurityTimelineCopy = {
   findingsDetected: (count: number) => string;
   risksIntroduced: (count: number) => string;
   verdictUpdated: (headline: string) => string;
-  verdictHeadline: (status: VerdictStatus) => string;
+  /**
+   * Headline for a verdict status. `affirms` is the canonical gate (`verdictAffirmsDeploy`): without it a
+   * ready_to_ship status must get the conservative "no blockers found, evidence limited" copy.
+   */
+  verdictHeadline: (status: VerdictStatus, affirms?: boolean) => string;
 };
 
 export function buildSecurityTimelineEvents(
@@ -64,7 +68,7 @@ export function buildSecurityTimelineEvents(
     events.push({
       id: "verdict-updated",
       at: verdict.generatedAt ?? state.status.lastAnalysisAt ?? new Date().toISOString(),
-      label: copy.verdictUpdated(copy.verdictHeadline(verdict.status)),
+      label: copy.verdictUpdated(copy.verdictHeadline(verdict.status, verdictAffirmsDeploy(verdict))),
       tone:
         verdict.status === "ready_to_ship" && verdictAffirmsDeploy(verdict)
           ? "success"
