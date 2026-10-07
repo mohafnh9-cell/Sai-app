@@ -7,7 +7,7 @@ const sampleData: ProtectionReportData = {
   protectionStatus: { start: "safe_with_caution", end: "protected", endLabel: "PROTECTED" },
   productionConfidence: { start: 89, end: 96, delta: 7 },
   securityConfidence: { start: 94, end: 98, delta: 4 },
-  whatImproved: ["Production confidence 89% → 96%."],
+  whatImproved: ["Production score 89% → 96%."],
   whatBecameWorse: [],
   openRecommendations: ["Authentication improvement on public API"],
   topPriorities: ["One authentication improvement."],

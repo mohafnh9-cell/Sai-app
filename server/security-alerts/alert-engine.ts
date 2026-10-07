@@ -143,7 +143,7 @@ export function buildProtectionAlertCandidates(
         dedupeKey: `${ctx.projectId}:conf_cliff:${day}`,
         titlePlain: "",
         bodyPlain: "",
-        changedBullets: [`Production confidence dropped ${prodDrop} points.`],
+        changedBullets: [`Production score dropped ${prodDrop} points.`],
         ctaType: "safe_fix",
       })
     );
@@ -156,7 +156,7 @@ export function buildProtectionAlertCandidates(
         dedupeKey: `${ctx.projectId}:prod_conf:${day}`,
         titlePlain: "",
         bodyPlain: "",
-        changedBullets: [`Production confidence ${previous?.production_confidence}% → ${latest?.production_confidence}%.`],
+        changedBullets: [`Production score ${previous?.production_confidence}% → ${latest?.production_confidence}%.`],
         ctaType: "review_again",
       })
     );
@@ -171,7 +171,7 @@ export function buildProtectionAlertCandidates(
         dedupeKey: `${ctx.projectId}:sec_conf:${day}`,
         titlePlain: "",
         bodyPlain: "",
-        changedBullets: [`Security confidence ${previous?.security_confidence}% → ${latest?.security_confidence}%.`],
+        changedBullets: [`Security score ${previous?.security_confidence}% → ${latest?.security_confidence}%.`],
         ctaType: "review_again",
       })
     );

@@ -68,7 +68,7 @@ export async function getProjectMemorySummary(
     if (healthTrend === "improving") {
       headline = "Your application is healthier than when SequrAI first protected it.";
     } else if (healthTrend === "needs_attention") {
-      headline = "SequrAI is watching — production confidence dipped recently.";
+      headline = "SequrAI is watching — production score dipped recently.";
     } else {
       headline = `SequrAI has been protecting this application for ${protectedDays} days.`;
     }

@@ -165,7 +165,10 @@
     "deploymentRecommendation": {
       "safe": "Procede cuando tu proceso de release lo permita.",
       "warnings": "Aborda las prioridades principales antes de un despliegue amplio.",
-      "blocked": "No despliegues hasta resolver los bloqueos."
+      "blocked": "No despliegues hasta resolver los bloqueos.",
+      "noVerdict": "Aún no hay un veredicto completado, así que no se puede aprobar el despliegue.",
+      "evidenceLimited": "No se encontraron bloqueos, pero la evidencia es insuficiente para aprobar el despliegue.",
+      "notReadyNoBlockers": "No despliegues todavía: atiende primero las prioridades principales."
     }
   },
   "technicalDetails": "Detalles técnicos",
@@ -222,8 +225,8 @@
   },
   "protection": {
     "eyebrow": "Estado de protección",
-    "productionConfidence": "Confianza de producción",
-    "securityConfidence": "Confianza de seguridad",
+    "productionConfidence": "Puntuación de producción",
+    "securityConfidence": "Puntuación de seguridad",
     "lastChecked": "Última revisión",
     "lastCheckedNever": "Aún no",
     "worriesTitle": "Lo que me preocupa",

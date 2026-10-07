@@ -165,7 +165,10 @@
     "deploymentRecommendation": {
       "safe": "Proceed when your release process allows.",
       "warnings": "Address top priorities before wide rollout.",
-      "blocked": "Do not deploy until blockers are resolved."
+      "blocked": "Do not deploy until blockers are resolved.",
+      "noVerdict": "There is no completed verdict yet, so deployment cannot be approved.",
+      "evidenceLimited": "No blockers were found, but the evidence is not sufficient to approve deployment.",
+      "notReadyNoBlockers": "Do not deploy yet: address the top priorities first."
     }
   },
   "technicalDetails": "Evidence",
@@ -222,8 +225,8 @@
   },
   "protection": {
     "eyebrow": "Protection Status",
-    "productionConfidence": "Production confidence",
-    "securityConfidence": "Security confidence",
+    "productionConfidence": "Production score",
+    "securityConfidence": "Security score",
     "lastChecked": "Last checked",
     "lastCheckedNever": "Not yet",
     "worriesTitle": "Things that worry me",

@@ -25,7 +25,7 @@ export function buildFounderSummary(
     (data.whatBecameWorse.length === 0 && data.statistics.dailyChecksCompleted > 0);
 
   const moreProtectedNarrative = moreProtected
-    ? `Yes — compared to ${prior}, ${projectName} is in a stronger protection posture. Production confidence ${trendWord(prod)} and security confidence ${trendWord(sec)}.`
+    ? `Yes — compared to ${prior}, ${projectName} is in a stronger protection posture. Production score ${trendWord(prod)} and security score ${trendWord(sec)}.`
     : `Honest answer: compared to ${prior}, a few things need attention — but SequrAI kept watching every day.`;
 
   const worries =

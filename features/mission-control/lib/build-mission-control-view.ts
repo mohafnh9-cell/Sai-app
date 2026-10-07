@@ -1,4 +1,4 @@
-import { verdictAffirmsDeploy } from "@/brain/production-verdict/deployment-posture";
+import { deploymentPostureOf, verdictAffirmsDeploy } from "@/brain/production-verdict/deployment-posture";
 import type { ProductionVerdictV1 } from "@/brain/production-verdict/schema";
 import type { Translator } from "@/lib/i18n/types";
 import { namespaceTranslator } from "@/lib/i18n/review-progress";
@@ -131,6 +131,24 @@ function deriveTeamStatus(
   };
 }
 
+/**
+ * The deployment sentence under the evidence card. It must agree with the canonical posture AND with the blocker
+ * count: "resolve blockers" is only true when there are blockers; limited evidence or a missing verdict is its own message.
+ */
+export function deploymentRecommendationText(
+  verdict: ProductionVerdictV1 | null,
+  verdictDisplay: string,
+  t: Translator
+): string {
+  if (verdictDisplay === t("verdict.display.safeToDeploy")) return t("verdict.deploymentRecommendation.safe");
+  if (verdictDisplay === t("verdict.display.deployWithWarnings")) return t("verdict.deploymentRecommendation.warnings");
+  if (!verdict) return t("verdict.deploymentRecommendation.noVerdict");
+  if (verdict.blockersCount > 0) return t("verdict.deploymentRecommendation.blocked");
+  return deploymentPostureOf(verdict) === "not_ready"
+    ? t("verdict.deploymentRecommendation.notReadyNoBlockers")
+    : t("verdict.deploymentRecommendation.evidenceLimited");
+}
+
 export function mapVerdictDisplay(verdict: ProductionVerdictV1 | null, t: Translator): MissionVerdictDisplay {
   if (!verdict) return t("verdict.display.insufficientEvidence") as MissionVerdictDisplay;
   switch (verdict.status) {
@@ -241,12 +259,7 @@ export function buildMissionControlView(
         objective.engineeringPlanStatus === "ready"
           ? t("verdict.engineeringPlanStatus.ready")
           : t("verdict.engineeringPlanStatus.pending"),
-      deploymentRecommendation:
-        verdictDisplay === t("verdict.display.safeToDeploy")
-          ? t("verdict.deploymentRecommendation.safe")
-          : verdictDisplay === t("verdict.display.deployWithWarnings")
-            ? t("verdict.deploymentRecommendation.warnings")
-            : t("verdict.deploymentRecommendation.blocked"),
+      deploymentRecommendation: deploymentRecommendationText(input.verdict, verdictDisplay, t),
       verdictStatus: input.verdict?.status ?? "insufficient_data",
       score: input.verdict?.score ?? null,
     },

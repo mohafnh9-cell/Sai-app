@@ -15,6 +15,7 @@ import { protectionDecisionFor } from "@/brain/production-verdict/protection-dec
 import { verdictStatusHeadline, verdictStatusLabel, verdictStatusMessage } from "@/lib/i18n/verdict-copy";
 import { buildProductionJourney } from "@/brain/production-journey/build";
 import { journeyMaturityKey, journeyPostureKey } from "@/brain/production-journey/decision-display";
+import { deploymentRecommendationText, mapVerdictDisplay } from "@/features/mission-control/lib/build-mission-control-view";
 import { formatAnalysisRunStatusLabel } from "@/lib/i18n/analysis-run-status";
 import { summaryFromVerdict } from "@/server/brain/build-org-brain";
 import { pickPrimaryDashboardFocus } from "@/lib/dashboard/pick-primary-project";
@@ -116,7 +117,10 @@ async function surfaces(verdict: ReturnType<typeof verdictFor>, lang: Lang) {
   ]);
   const journeyLabel = (key: string) => translator(lang)(`productionJourney.${key}`);
 
+  const mcT = (key: string) => translator(lang)(`missionControl.${key}`);
   const texts = {
+    // Evidence-card sentence: must agree with the canonical posture AND the blocker count.
+    evidenceCard: deploymentRecommendationText(verdict, mapVerdictDisplay(verdict, mcT as never), mcT as never),
     journeyMaturity: journeyLabel(`maturityValues.${journeyMaturityKey(journey, false)}`),
     journeyPosture: journeyLabel(`posture.${journeyPostureKey(journey, false)}`),
     journeyMilestones: journey.milestones.map((m) => journeyLabel(m.titleKey)).join(" | "),
@@ -152,6 +156,7 @@ describe("one canonical verdict -> consistent Web, Dashboard, Protection, GitHub
       expect(s.commitState).toBe("success");
       expect(s.mcp.deploymentRecommendation).toBe("SHIP_IT");
       expect(affirmative(s.texts.journeyMaturity)).toBe(true);
+      expect(s.texts.evidenceCard).toBe(translator(lang)("missionControl.verdict.deploymentRecommendation.safe"));
       expect(affirmative(s.texts.journeyPosture)).toBe(true);
     });
 
@@ -208,6 +213,20 @@ describe("Phase 8I.1: status-only surfaces cannot produce approval language", ()
       const s = await surfaces(verdictFor("ready_full"), lang);
       expect(affirmative(s.texts.selector), `${lang} selector for a genuinely ready verdict`).toBe(true);
     }
+  });
+});
+
+describe("Phase 8I.2: evidence card and score labels cannot contradict the canonical posture", () => {
+  it.each(["en", "es"] as const)("[%s] zero blockers + limited/insufficient evidence never says 'resolve blockers'", async (lang) => {
+    for (const kind of ["ready_low_incomplete", "ready_medium_incomplete", "insufficient"] as const) {
+      const s = await surfaces(verdictFor(kind), lang);
+      expect(s.texts.evidenceCard, `${lang}/${kind}`).not.toMatch(/blockers are resolved|resolver los bloqueos/i);
+    }
+  });
+
+  it.each(["en", "es"] as const)("[%s] blockers > 0 keeps blocker language", async (lang) => {
+    const s = await surfaces(verdictFor("not_ready_low"), lang);
+    expect(s.texts.evidenceCard).toBe(translator(lang)("missionControl.verdict.deploymentRecommendation.blocked"));
   });
 });
 

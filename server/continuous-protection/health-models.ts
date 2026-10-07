@@ -92,7 +92,7 @@ export function confidenceTrendNarrative(
     return "Something eroded trust this week — see what changed.";
   }
   if (prodUp && secUp) {
-    return "Production confidence is increasing — nice work.";
+    return "Production score is increasing — nice work.";
   }
   if (prodUp || secUp) {
     return "Confidence improved this week.";
