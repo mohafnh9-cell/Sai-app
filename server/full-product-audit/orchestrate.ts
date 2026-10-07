@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { VerdictStatus } from "@/brain/production-verdict/schema";
 import { LIVE_VERDICT_SCAN_SELECT } from "@/server/production-verdict/live-verdict";
+import { verdictAffirmsDeploy } from "@/brain/production-verdict/deployment-posture";
 import { getCurrentProductionVerdict, computeLiveProductionVerdict } from "@/server/production-verdict/service";
 import { ReviewNowError, triggerProductionReview } from "@/server/review-now/trigger-review";
 import { isMcpReviewRateLimited } from "@/server/review-now/rate-limit";
@@ -60,8 +61,10 @@ export type RunFullProductAuditInput = {
   userId: string;
 };
 
-function buildRecommendation(input: {
+export function buildRecommendation(input: {
   verdictStatus: VerdictStatus | null;
+  /** Canonical gate (`verdictAffirmsDeploy`): ready_to_ship alone never reads as "ship". */
+  affirmsDeploy?: boolean;
   topRisks: FullProductAuditResult["topRisks"];
   counts: FullProductAuditResult["counts"];
 }): string {
@@ -83,6 +86,9 @@ function buildRecommendation(input: {
     return "SequrAI doesn't have a completed verdict for this review yet, so it can't give a deploy recommendation. Run Full Product Audit again shortly.";
   }
   if (input.verdictStatus === "ready_to_ship") {
+    if (input.affirmsDeploy !== true) {
+      return "SequrAI found no confirmed dynamic vulnerabilities, but the evidence is limited (low confidence or incomplete coverage), so this is not a deployment approval. Review the Production Verdict coverage before relying on it.";
+    }
     return "SequrAI found no confirmed dynamic vulnerabilities blocking deploy. Ship when your release process is ready.";
   }
   if (input.verdictStatus === "not_ready" || (input.counts.critical + input.counts.high) > 0) {
@@ -418,7 +424,12 @@ export async function runFullProductAudit(
 
   const timedOut = reviewTimedOut || securityTests.timedOut;
   const phase = timedOut ? "partial" : "complete";
-  const recommendation = buildRecommendation({ verdictStatus, topRisks, counts });
+  const recommendation = buildRecommendation({
+    verdictStatus,
+    affirmsDeploy: verdict ? verdictAffirmsDeploy(verdict) : false,
+    topRisks,
+    counts,
+  });
   const attackChains = await loadAttackChainsSummary(admin, {
     organizationId: input.organizationId,
     scanId,

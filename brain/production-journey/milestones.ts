@@ -75,12 +75,16 @@ export function detectMilestones(timeline: ProductionJourneyPoint[]): Production
     }
 
     if (point.status === "ready_to_ship") {
-      const exists = milestones.some((m) => m.type === "ready_to_ship");
+      // "Ready to Ship reached" is a deployment conclusion: only for the canonical "ready" posture.
+      // Otherwise record the historical fact (no blockers found) without approval language.
+      const approved = point.deploymentPosture === "ready";
+      const type = approved ? "ready_to_ship" : "no_blockers_evidence_limited";
+      const exists = milestones.some((m) => m.type === type);
       if (!exists) {
         milestones.push({
-          id: `${point.verdictId}-ready_to_ship`,
-          type: "ready_to_ship",
-          titleKey: "milestones.readyToShip",
+          id: `${point.verdictId}-${type}`,
+          type,
+          titleKey: approved ? "milestones.readyToShip" : "milestones.noBlockersEvidenceLimited",
           reachedAt: point.generatedAt,
           score: point.score,
           verdictId: point.verdictId,
@@ -95,7 +99,7 @@ export function detectMilestones(timeline: ProductionJourneyPoint[]): Production
       }
     }
 
-    if (hadRegression && point.status === "ready_to_ship") {
+    if (hadRegression && point.status === "ready_to_ship" && point.deploymentPosture === "ready") {
       const exists = milestones.some(
         (m) => m.type === "recovered_after_regression" && m.reachedAt === point.generatedAt
       );

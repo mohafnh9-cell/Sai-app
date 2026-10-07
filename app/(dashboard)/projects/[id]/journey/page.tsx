@@ -14,6 +14,7 @@ import { ProductionJourneyView } from "@/features/production-journey/components/
 import { appendAnalysisRunSearchParams } from "@/features/analysis-runs/lib/build-run-query";
 import { resolveAnalysisRunForProject } from "@/server/analysis-runs/resolve-analysis-run";
 import { createAdminClient } from "@/server/security-scanner/admin-client";
+import { getProductionReviewState } from "@/server/review-cancel/get-production-review-state";
 import type { Metadata } from "next";
 import { z } from "zod";
 
@@ -112,6 +113,18 @@ export default async function ProjectJourneyPage({ params, searchParams }: Journ
 
   const journey = await getProductionJourneyByProject(supabase, projectId, user.id).catch(() => null);
 
+  // While a review runs there is no final decision for the current run: the journey must not present the
+  // previous verdict's posture as current (read-only; stale-review recovery stays with Mission Control).
+  const reviewInProgress = auth?.organizationId
+    ? await getProductionReviewState(createAdminClient(), {
+        organizationId: auth.organizationId,
+        projectId,
+        recoverStale: false,
+      })
+        .then((state) => state.hasActiveReview)
+        .catch(() => false)
+    : false;
+
   const { data: latestScan } = await supabase
     .from("scans")
     .select("id")
@@ -159,6 +172,7 @@ export default async function ProjectJourneyPage({ params, searchParams }: Journ
             journey={journey}
             projectId={projectId}
             analysisRunLinksEnabled={isolationEnabled}
+            reviewInProgress={reviewInProgress}
           />
         ) : (
           <p className="text-sm text-destructive">{t("loadFailed")}</p>

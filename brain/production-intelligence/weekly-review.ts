@@ -44,6 +44,6 @@ export function buildWeeklyReview(journey: ProductionJourney) {
     period30d: summarizePeriod(journey, 30),
     currentFocusKey: journey.currentFocusKey,
     estimatedMinutesToImprovement:
-      journey.currentStatus === "ready_to_ship" ? 0 : null,
+      journey.currentDeploymentPosture === "ready" ? 0 : null,
   };
 }

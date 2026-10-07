@@ -59,7 +59,8 @@
     "production_aware": "Production Aware",
     "approaching_production": "Approaching Production",
     "production_ready": "Production Ready",
-    "production_maintained": "Production Maintained"
+    "production_maintained": "Production Maintained",
+    "analysis_in_progress": "Analysis in progress"
   },
   "focus": {
     "authentication": "Authentication",
@@ -83,7 +84,8 @@
     "tenReviews": "Ten production reviews completed",
     "allCriticalResolved": "All critical blockers resolved",
     "bestScore": "Best score reached",
-    "recoveredAfterRegression": "Readiness recovered after regression"
+    "recoveredAfterRegression": "Readiness recovered after regression",
+    "noBlockersEvidenceLimited": "No blockers found (evidence limited)"
   },
   "highlights": {
     "scoreIncreased": "Score increased",
@@ -100,5 +102,14 @@
     "security": "Security",
     "verification": "Verification",
     "verdict": "Production Verdict"
+  },
+  "postureTitle": "Deployment posture",
+  "posture": {
+    "ready": "Ready to deploy",
+    "ready_evidence_limited": "No blockers found — evidence limited, not a deployment approval",
+    "more_analysis_required": "More analysis required",
+    "not_ready": "Not ready to deploy",
+    "analysis_in_progress": "Analysis in progress — no final security decision for this run yet",
+    "no_decision": "No verdict yet"
   }
 }

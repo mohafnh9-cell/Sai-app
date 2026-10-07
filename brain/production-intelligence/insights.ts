@@ -22,7 +22,7 @@ export function buildProductionInsights(journey: ProductionJourney): ProductionI
     });
   }
 
-  if (journey.currentStatus === "ready_to_ship") {
+  if (journey.currentDeploymentPosture === "ready") {
     insights.push({
       id: "ready-to-ship",
       messageKey: "insights.readyToShip",

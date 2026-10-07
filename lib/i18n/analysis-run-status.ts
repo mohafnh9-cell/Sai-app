@@ -1,4 +1,5 @@
 import type { VerdictStatus } from "@/brain/production-verdict/schema";
+import { verdictCopyKey } from "@/lib/i18n/verdict-copy";
 import type { Translator } from "@/lib/i18n/types";
 
 const VERDICT_STATUSES = new Set<string>([
@@ -22,14 +23,16 @@ const RUN_STATUS_KEYS: Record<string, string> = {
 export function formatAnalysisRunStatusLabel(
   status: string | null,
   t: Translator,
-  tVerdict: Translator
+  tVerdict: Translator,
+  /** Canonical gate result (`deploymentPostureOf(...) === "ready"`); absent = ready_to_ship is not affirmed. */
+  affirms?: boolean | null
 ): string {
   if (!status) {
     return t("analysisRun.selector.runStatus.unknown");
   }
 
   if (VERDICT_STATUSES.has(status)) {
-    return tVerdict(`status.${status as VerdictStatus}.label`);
+    return tVerdict(`status.${verdictCopyKey(status as VerdictStatus, affirms)}.label`);
   }
 
   const key = RUN_STATUS_KEYS[status];

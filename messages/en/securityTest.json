@@ -53,14 +53,14 @@
       "waitMessage": ""
     },
     "protected": {
-      "headline": "Ready for production",
+      "headline": "Security test passed",
       "description": "Security test complete. The issue no longer reproduces.",
       "primaryAction": "Back to Production Verdict",
       "waitMessage": ""
     },
     "completed_clean": {
-      "headline": "Ready for production",
-      "description": "No issues reproduced during the security test. Your application looks safe to deploy.",
+      "headline": "No issues reproduced",
+      "description": "No issues reproduced during this security test. This is not a deployment approval — check the Production Verdict before you deploy.",
       "primaryAction": "Back to Production Verdict",
       "waitMessage": ""
     }

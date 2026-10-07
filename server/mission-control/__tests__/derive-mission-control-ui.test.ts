@@ -31,6 +31,7 @@ function run(overrides: Partial<AnalysisRunListItem>): AnalysisRunListItem {
     completedAt: null,
     securityScore: null,
     verdictStatus: null,
+    deploymentPosture: null,
     ...overrides,
   };
 }

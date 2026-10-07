@@ -28,7 +28,7 @@ export function buildRecommendedAction(
     };
   }
 
-  if (journey.currentStatus === "ready_to_ship") {
+  if (journey.currentDeploymentPosture === "ready") {
     return {
       type: "maintain",
       titleKey: "recommendedAction.maintainReadiness",

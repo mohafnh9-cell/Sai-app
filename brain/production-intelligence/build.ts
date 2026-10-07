@@ -32,7 +32,7 @@ function resolveEmptyState(
   journey: ProductionJourney
 ): IntelligenceEmptyState | null {
   if (journey.validReviews === 0) return "first_review";
-  if (journey.currentStatus === "ready_to_ship") return "ready_to_ship";
+  if (journey.currentDeploymentPosture === "ready") return "ready_to_ship";
   if (journey.validReviews === 1) return "one_review";
   if (journey.currentBlockers === 0 && journey.validReviews >= 2) return "no_blockers";
   if (journey.trend === "improving") return "improving";

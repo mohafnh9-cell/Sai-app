@@ -59,7 +59,8 @@
     "production_aware": "Consciente de producción",
     "approaching_production": "Acercándose a producción",
     "production_ready": "Lista para producción",
-    "production_maintained": "Producción mantenida"
+    "production_maintained": "Producción mantenida",
+    "analysis_in_progress": "Análisis en curso"
   },
   "focus": {
     "authentication": "Autenticación",
@@ -83,7 +84,8 @@
     "tenReviews": "Diez revisiones de producción completadas",
     "allCriticalResolved": "Todos los bloqueos críticos resueltos",
     "bestScore": "Mejor score alcanzado",
-    "recoveredAfterRegression": "Preparación recuperada tras regresión"
+    "recoveredAfterRegression": "Preparación recuperada tras regresión",
+    "noBlockersEvidenceLimited": "Sin bloqueos encontrados (evidencia limitada)"
   },
   "highlights": {
     "scoreIncreased": "Score aumentó",
@@ -100,5 +102,14 @@
     "security": "Seguridad",
     "verification": "Verificación",
     "verdict": "Veredicto de producción"
+  },
+  "postureTitle": "Postura de despliegue",
+  "posture": {
+    "ready": "Listo para desplegar",
+    "ready_evidence_limited": "Sin bloqueos encontrados — evidencia limitada, no es una aprobación de despliegue",
+    "more_analysis_required": "Se necesita más análisis",
+    "not_ready": "No listo para desplegar",
+    "analysis_in_progress": "Análisis en curso — aún no hay decisión de seguridad final para este análisis",
+    "no_decision": "Aún no hay veredicto"
   }
 }

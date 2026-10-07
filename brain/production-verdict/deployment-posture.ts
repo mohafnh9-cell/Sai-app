@@ -17,6 +17,8 @@ export type DeploymentEvidence = Pick<
   "status" | "confidence" | "unevaluatedAreas" | "partiallyEvaluatedAreas"
 >;
 
+export const DEPLOYMENT_POSTURES = ["ready", "ready_evidence_limited", "more_analysis_required", "not_ready"] as const;
+
 export type DeploymentPosture =
   /** ready_to_ship AND high confidence AND complete coverage: affirmative language allowed. */
   | "ready"

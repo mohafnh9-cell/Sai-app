@@ -1,4 +1,5 @@
 import type { ProductionVerdictV1, VerdictStatus } from "@/brain/production-verdict/schema";
+import { deploymentPostureOf } from "@/brain/production-verdict/deployment-posture";
 import { JOURNEY_CONFIG } from "./config";
 import {
   type ProductionJourney,
@@ -44,6 +45,8 @@ function toTimelinePoint(record: VerdictJourneyRecord): ProductionJourneyPoint {
     branch: record.branch,
     score: record.score,
     status: record.status,
+    // The ONE canonical gate; an unreadable verdict stays undefined (never an approval).
+    deploymentPosture: record.verdict ? deploymentPostureOf(record.verdict) : undefined,
     scoreDelta: record.scoreDelta,
     blockersCount: record.blockersCount,
     introducedBlockersCount: record.introducedBlockers,
@@ -141,6 +144,7 @@ export function buildProductionJourney(
   const maturity = calculateMaturity({
     validReviews: validTimeline.length,
     currentStatus: latest?.status ?? null,
+    currentPosture: latest?.deploymentPosture ?? null,
     currentScore: latest?.score ?? null,
     trend,
     blockersResolved,
@@ -187,6 +191,7 @@ export function buildProductionJourney(
     lowestScore,
 
     currentStatus: latest?.status ?? null,
+    currentDeploymentPosture: latest?.deploymentPosture ?? null,
     previousStatus: previous?.status ?? null,
     bestStatus: bestStatusFromTimeline(timeline),
 
@@ -241,6 +246,7 @@ export function toJourneyPreview(journey: ProductionJourney) {
     scoreChange7d: journey.scoreChange7d,
     trend: journey.trend,
     maturity: journey.maturity,
+    currentDeploymentPosture: journey.currentDeploymentPosture,
     currentFocusKey: journey.currentFocusKey,
     currentMilestone: journey.currentMilestone,
     latestIntroducedTitles: journey.latestIntroducedTitles,

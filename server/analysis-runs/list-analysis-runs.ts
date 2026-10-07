@@ -1,6 +1,8 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { deploymentPostureOf, type DeploymentPosture } from "@/brain/production-verdict/deployment-posture";
+import { safeParseProductionVerdict } from "@/brain/production-verdict/schema";
 import type { AnalysisRunId } from "./types";
 
 export type AnalysisRunListItem = {
@@ -12,6 +14,8 @@ export type AnalysisRunListItem = {
   completedAt: string | null;
   securityScore: number | null;
   verdictStatus: string | null;
+  /** Canonical deployment posture of this run's persisted verdict; null when there is no readable verdict. */
+  deploymentPosture: DeploymentPosture | null;
 };
 
 export async function listAnalysisRunsForProject(
@@ -37,11 +41,23 @@ export async function listAnalysisRunsForProject(
 
   const { data: verdicts } = await admin
     .from("production_verdicts")
-    .select("scan_id, status")
+    .select("scan_id, status, verdict")
+    .eq("organization_id", input.organizationId)
+    .eq("project_id", input.projectId)
     .in("scan_id", runIds);
 
   const verdictByScan = new Map(
-    (verdicts ?? []).map((row) => [row.scan_id as string, row.status as string])
+    (verdicts ?? []).map((row) => {
+      // The deployment posture is derived from the full verdict through the canonical gate, never from status alone.
+      const parsed = safeParseProductionVerdict(row.verdict);
+      return [
+        row.scan_id as string,
+        {
+          status: row.status as string,
+          posture: parsed ? deploymentPostureOf(parsed) : null,
+        },
+      ] as const;
+    })
   );
 
   return (scans ?? []).map((row) => ({
@@ -52,6 +68,7 @@ export async function listAnalysisRunsForProject(
     createdAt: new Date(row.created_at as string).toISOString(),
     completedAt: row.completed_at ? new Date(row.completed_at as string).toISOString() : null,
     securityScore: (row.security_score as number | null) ?? null,
-    verdictStatus: verdictByScan.get(row.id as string) ?? null,
+    verdictStatus: verdictByScan.get(row.id as string)?.status ?? null,
+    deploymentPosture: verdictByScan.get(row.id as string)?.posture ?? null,
   }));
 }

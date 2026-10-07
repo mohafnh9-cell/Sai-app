@@ -122,3 +122,74 @@ describe("Mission Control keeps polling through the scan-completed -> verdict-pe
     expect(result.recoveryReason).toBe("scoped_verdict_missing");
   });
 });
+
+describe("deterministic poll loop: scan active -> scan completes -> verdict persisted -> new verdict appears (bounded)", () => {
+  // Simulates the client's refetchInterval: poll while shouldPollMissionControl(state), at most one fetch per tick.
+  async function pollUntilSettled(load: () => Promise<{ recoveryReason: string | null; verdict: unknown }>, reviewInProgress: () => boolean, maxTicks: number) {
+    const trace: Array<{ reason: string | null; hasVerdict: boolean; review: boolean }> = [];
+    for (let tick = 0; tick < maxTicks; tick += 1) {
+      const result = await load();
+      const review = reviewInProgress();
+      trace.push({ reason: result.recoveryReason, hasVerdict: result.verdict != null, review });
+      if (!shouldPollMissionControl(pollState(result.recoveryReason, review))) break;
+    }
+    return trace;
+  }
+
+  it("keeps polling while the scan runs, through the verdict lag, then stops exactly when the verdict appears", async () => {
+    type Phase = "running" | "completed_no_verdict" | "persisted";
+    let phase: Phase = "running" as Phase;
+    const verdict = { scanId: SCAN, status: "not_ready" };
+    const load = async () => {
+      if (phase === "persisted") {
+        getProductionVerdictByScan.mockResolvedValue(verdict);
+        getMissionControlView.mockResolvedValue({ view: {}, verdict });
+        return load0(admin({}));
+      }
+      return load0(admin(phase === "running" ? { status: "running", completed_at: null } : {}));
+    };
+    const load0 = (a: never) => loadMissionControlWithRecovery({} as never, PROJECT, ORG, { analysisRunId: SCAN, isolationEnabled: true, manualRecovery: false, admin: a });
+    const script: Phase[] = ["running", "running", "completed_no_verdict", "completed_no_verdict", "persisted"];
+    let i = 0;
+    const trace: Array<{ reason: string | null; hasVerdict: boolean; review: boolean }> = [];
+    while (i < script.length) {
+      phase = script[i]!;
+      const result = await load();
+      const review = phase === "running"; // the live review state is what keeps polling during the run
+      trace.push({ reason: result.recoveryReason, hasVerdict: result.verdict != null, review });
+      i += 1;
+      if (!shouldPollMissionControl(pollState(result.recoveryReason, review))) break;
+    }
+    expect(trace).toEqual([
+      { reason: null, hasVerdict: false, review: true },
+      { reason: null, hasVerdict: false, review: true },
+      { reason: "verdict_materializing", hasVerdict: false, review: false },
+      { reason: "verdict_materializing", hasVerdict: false, review: false },
+      { reason: null, hasVerdict: true, review: false }, // new verdict appears; polling stops here
+    ]);
+  });
+
+  it("is bounded: a verdict that never materializes ends polling within the window (no infinite loop)", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-10-05T12:00:00Z"));
+      const completedAt = new Date().toISOString();
+      const a = () => admin({ completed_at: completedAt });
+      const trace = await pollUntilSettled(
+        async () => {
+          const r = await loadMissionControlWithRecovery({} as never, PROJECT, ORG, { analysisRunId: SCAN, isolationEnabled: true, manualRecovery: false, admin: a() });
+          vi.advanceTimersByTime(4_000); // one POLL_INTERVAL_MS per tick
+          return r;
+        },
+        () => false,
+        1_000
+      );
+      expect(trace.length).toBeGreaterThan(1);
+      expect(trace.length).toBeLessThanOrEqual(Math.ceil(VERDICT_MATERIALIZATION_WINDOW_MS / 4_000) + 2);
+      expect(trace[trace.length - 1]).toMatchObject({ reason: null, hasVerdict: false });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+

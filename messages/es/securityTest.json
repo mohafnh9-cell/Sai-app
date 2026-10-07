@@ -53,14 +53,14 @@
       "waitMessage": ""
     },
     "protected": {
-      "headline": "Listo para producción",
+      "headline": "Prueba de seguridad superada",
       "description": "Protección verificada. El problema ya no se reproduce.",
       "primaryAction": "Volver al veredicto",
       "waitMessage": ""
     },
     "completed_clean": {
-      "headline": "Listo para producción",
-      "description": "No se reprodujeron problemas durante la validación. Tu aplicación parece segura para desplegar.",
+      "headline": "No se reprodujeron problemas",
+      "description": "No se reprodujeron problemas durante esta prueba de seguridad. No es una aprobación de despliegue: consulta el veredicto de producción antes de desplegar.",
       "primaryAction": "Volver al veredicto",
       "waitMessage": ""
     }

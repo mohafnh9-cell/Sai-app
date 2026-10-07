@@ -1,5 +1,9 @@
 import { z } from "zod";
 import { VerdictStatusSchema } from "@/brain/production-verdict/schema";
+import { DEPLOYMENT_POSTURES } from "@/brain/production-verdict/deployment-posture";
+
+/** Canonical deployment posture (deploymentPostureOf) of a verdict. Absent/unknown is never an approval. */
+export const DeploymentPostureSchema = z.enum(DEPLOYMENT_POSTURES);
 
 export const JourneyTrendSchema = z.enum([
   "improving",
@@ -28,6 +32,7 @@ export const MilestoneTypeSchema = z.enum([
   "score_70",
   "almost_ready",
   "ready_to_ship",
+  "no_blockers_evidence_limited",
   "ten_reviews",
   "all_critical_resolved",
   "best_score",
@@ -43,6 +48,8 @@ export const ProductionJourneyPointSchema = z.object({
   branch: z.string().nullable(),
   score: z.number().min(0).max(100).nullable(),
   status: VerdictStatusSchema,
+  /** Canonical posture of this point's verdict; `status` alone must never be read as a deployment decision. */
+  deploymentPosture: DeploymentPostureSchema.optional(),
   scoreDelta: z.number().nullable(),
   blockersCount: z.number().int().min(0),
   introducedBlockersCount: z.number().int().min(0),
@@ -100,6 +107,8 @@ export const ProductionJourneySchema = z.object({
   currentStatus: VerdictStatusSchema.nullable(),
   previousStatus: VerdictStatusSchema.nullable(),
   bestStatus: VerdictStatusSchema.nullable(),
+  /** Canonical posture of the latest verdict; null when there is none (or it predates this field). */
+  currentDeploymentPosture: DeploymentPostureSchema.nullable().default(null),
 
   totalReviews: z.number().int().min(0),
   validReviews: z.number().int().min(0),
@@ -146,6 +155,7 @@ export const ProductionJourneyPreviewSchema = ProductionJourneySchema.pick({
   scoreChange7d: true,
   trend: true,
   maturity: true,
+  currentDeploymentPosture: true,
   currentFocusKey: true,
   currentMilestone: true,
   latestIntroducedTitles: true,

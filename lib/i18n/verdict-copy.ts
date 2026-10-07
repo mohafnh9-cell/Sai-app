@@ -9,22 +9,23 @@ import type { Translator } from "./types";
  * (lists, history points) get the conservative "evidence limited" copy -- the
  * UI never reinterprets `ready_to_ship` on its own.
  */
-function copyKey(status: VerdictStatus, affirms?: boolean | null): string {
+/** Copy key for a verdict status; only an evidence-affirmed ready_to_ship keeps the affirmative copy. */
+export function verdictCopyKey(status: VerdictStatus, affirms?: boolean | null): string {
   return status === "ready_to_ship" && affirms !== true ? "ready_evidence_limited" : status;
 }
 
 export function verdictStatusLabel(status: VerdictStatus, t: Translator, affirms?: boolean | null): string {
-  return t(`verdict.status.${copyKey(status, affirms)}.label`);
+  return t(`verdict.status.${verdictCopyKey(status, affirms)}.label`);
 }
 
 export function verdictStatusHeadline(status: VerdictStatus, t: Translator, affirms?: boolean | null): string {
-  return t(`verdict.status.${copyKey(status, affirms)}.headline`);
+  return t(`verdict.status.${verdictCopyKey(status, affirms)}.headline`);
 }
 
 export function verdictStatusDescription(status: VerdictStatus, t: Translator, affirms?: boolean | null): string {
-  return t(`verdict.status.${copyKey(status, affirms)}.description`);
+  return t(`verdict.status.${verdictCopyKey(status, affirms)}.description`);
 }
 
 export function verdictStatusMessage(status: VerdictStatus, t: Translator, affirms?: boolean | null): string {
-  return t(`verdict.status.${copyKey(status, affirms)}.message`);
+  return t(`verdict.status.${verdictCopyKey(status, affirms)}.message`);
 }
