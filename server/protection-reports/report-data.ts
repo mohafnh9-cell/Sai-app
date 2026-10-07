@@ -136,16 +136,16 @@ export async function loadReportSourceData(
   const whatBecameWorse: string[] = [];
 
   if (prodEnd != null && prodStart != null && prodEnd > prodStart) {
-    whatImproved.push(`Production confidence ${prodStart}% → ${prodEnd}%.`);
+    whatImproved.push(`Production score ${prodStart}% → ${prodEnd}%.`);
   }
   if (secEnd != null && secStart != null && secEnd > secStart) {
-    whatImproved.push(`Security confidence ${secStart}% → ${secEnd}%.`);
+    whatImproved.push(`Security score ${secStart}% → ${secEnd}%.`);
   }
   if (prodEnd != null && prodStart != null && prodEnd < prodStart) {
-    whatBecameWorse.push(`Production confidence ${prodStart}% → ${prodEnd}%.`);
+    whatBecameWorse.push(`Production score ${prodStart}% → ${prodEnd}%.`);
   }
   if (secEnd != null && secStart != null && secEnd < secStart) {
-    whatBecameWorse.push(`Security confidence ${secStart}% → ${secEnd}%.`);
+    whatBecameWorse.push(`Security score ${secStart}% → ${secEnd}%.`);
   }
 
   for (const e of ev.filter((x) => x.type === "fix_verified").slice(-5)) {
@@ -198,7 +198,7 @@ export async function loadReportSourceData(
     milestones: milestoneLines,
     projectEvolution: [
       `Status at period end: ${statusLabel(statusEnd)}`,
-      ...(prodEnd != null ? [`Production confidence: ${prodEnd}%`] : []),
+      ...(prodEnd != null ? [`Production score: ${prodEnd}%`] : []),
     ],
     continuousProtectionOn: cpOn,
   };

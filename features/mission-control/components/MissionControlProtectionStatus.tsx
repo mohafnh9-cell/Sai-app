@@ -32,6 +32,9 @@ export function MissionControlProtectionStatus({
     ? formatRelativeLocalized(locale, model.lastCheckedAt, relativeLabels)
     : t("protection.lastCheckedNever");
 
+  // NOTE: despite the field names (kept for API compatibility) these are SCORES, not confidence:
+  // productionConfidence = verdict.score, securityConfidence = scan security score
+  // (server/production-memory/record-writes.ts). Real confidence is `decision.confidence`.
   const showConfidence =
     model.productionConfidence != null || model.securityConfidence != null;
 
@@ -85,13 +88,13 @@ export function MissionControlProtectionStatus({
           <div>
             <p className="text-xs text-muted-foreground">{t("protection.productionConfidence")}</p>
             <p className="text-xl font-semibold tabular-nums mt-1">
-              {model.productionConfidence != null ? `${model.productionConfidence}%` : "—"}
+              {model.productionConfidence != null ? `${model.productionConfidence}/100` : "—"}
             </p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">{t("protection.securityConfidence")}</p>
             <p className="text-xl font-semibold tabular-nums mt-1">
-              {model.securityConfidence != null ? `${model.securityConfidence}%` : "—"}
+              {model.securityConfidence != null ? `${model.securityConfidence}/100` : "—"}
             </p>
           </div>
         </div>

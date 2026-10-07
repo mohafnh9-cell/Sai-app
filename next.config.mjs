@@ -34,7 +34,6 @@ const nextConfig = {
     return [
       { source: "/timeline", destination: "/dashboard", permanent: true },
       { source: "/ai-fixes", destination: "/projects", permanent: true },
-      { source: "/projects/:id/journey", destination: "/projects/:id", permanent: true },
       { source: "/projects/:id/scans", destination: "/projects/:id", permanent: true },
     ];
   },

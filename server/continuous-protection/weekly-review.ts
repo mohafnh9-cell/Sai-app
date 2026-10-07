@@ -66,15 +66,15 @@ export async function runWeeklyProtectionReview(
   if (prodDelta != null && prodDelta !== 0) {
     changes.push(
       prodDelta > 0
-        ? `Production confidence improved by ${prodDelta} points.`
-        : `Production confidence decreased by ${Math.abs(prodDelta)} points.`
+        ? `Production score improved by ${prodDelta} points.`
+        : `Production score decreased by ${Math.abs(prodDelta)} points.`
     );
   }
   if (secDelta != null && secDelta !== 0) {
     changes.push(
       secDelta > 0
-        ? `Security confidence improved by ${secDelta} points.`
-        : `Security confidence decreased by ${Math.abs(secDelta)} points.`
+        ? `Security score improved by ${secDelta} points.`
+        : `Security score decreased by ${Math.abs(secDelta)} points.`
     );
   }
   if (changes.length === 0) {
@@ -88,8 +88,8 @@ export async function runWeeklyProtectionReview(
     `YOUR APPLICATION IS: ${status.replace(/_/g, " ")}`,
     "",
     "This week at a glance",
-    `• Production confidence: ${prodStart ?? "—"}% → ${prodEnd ?? "—"}%`,
-    `• Security confidence: ${secStart ?? "—"}% → ${secEnd ?? "—"}%`,
+    `• Production score: ${prodStart ?? "—"}% → ${prodEnd ?? "—"}%`,
+    `• Security score: ${secStart ?? "—"}% → ${secEnd ?? "—"}%`,
     `• Protection checks completed: ${checksCompleted}/7`,
     "",
     trendNarrative,

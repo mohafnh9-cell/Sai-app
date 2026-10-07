@@ -185,3 +185,15 @@ describe("Protection Status during an active scan (Phase 8I.1)", () => {
   });
 });
 
+describe("current TokenAi-shaped posture stays conservative (Phase 8I.2)", () => {
+  it("E. insufficient_data + LOW + 10 blockers: more_analysis_required, never protected / safe / ready", async () => {
+    const m = await model({ verdict: { status: "insufficient_data", score: 32, confidence: "low", blockersCount: 10, criticalBlockersCount: 1, highBlockersCount: 9 } });
+    expect(m?.decision).toMatchObject({ state: "verdict", posture: "more_analysis_required", verdictStatus: "insufficient_data", confidence: "low" });
+    expect(m?.status).toBe("REQUIRES_ATTENTION");
+    expect(m?.status).not.toBe("PROTECTED");
+    expect(m?.status).not.toBe("SAFE_WITH_CAUTION");
+    // Safe Fix only for the real, current-scan finding
+    expect(m?.safeFix).toMatchObject({ findingCount: 1 });
+  });
+});
+

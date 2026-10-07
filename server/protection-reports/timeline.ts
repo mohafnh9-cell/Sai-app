@@ -33,7 +33,7 @@ export function buildTimelineEntries(
       episodeKind: "confidence_change",
       periodKey,
       icon: "confidence",
-      titlePlain: "Production confidence shifted",
+      titlePlain: "Production score shifted",
       subtitlePlain: `${data.productionConfidence.start ?? "—"}% → ${data.productionConfidence.end ?? "—"}%`,
     });
   }
