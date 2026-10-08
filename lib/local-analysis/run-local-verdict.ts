@@ -1,4 +1,7 @@
 import { generateProductionVerdict, verdictHeadline } from "@/brain/production-verdict/engine";
+import { verdictAffirmsDeploy } from "@/brain/production-verdict/deployment-posture";
+import type { ProductionVerdictV1 } from "@/brain/production-verdict/schema";
+import { EVIDENCE_LIMITED_HEADLINE } from "@/brain/production-verdict/status-rules";
 import { getGitContext, parseGitFileCounts, resolveScopeFromArgs } from "./git-scope";
 import { mapVerdictFindingsToPublic } from "./map-findings";
 import type {
@@ -80,6 +83,18 @@ export async function runLocalProductionVerdict(
   return buildLocalProductionVerdictResult(result);
 }
 
+/**
+ * The headline of the agent-facing local narrative. A raw `ready_to_ship` status never grants "READY TO SHIP" by
+ * itself: it needs the canonical deployment-approval gate (`verdictAffirmsDeploy`: high confidence AND every area
+ * evaluated). Missing or unreadable confidence/coverage is not approval. Other statuses keep their headline.
+ */
+export function localVerdictHeadline(
+  verdict: Pick<ProductionVerdictV1, "status" | "confidence" | "unevaluatedAreas" | "partiallyEvaluatedAreas">
+): string {
+  if (verdict.status === "ready_to_ship" && !verdictAffirmsDeploy(verdict)) return EVIDENCE_LIMITED_HEADLINE;
+  return verdictHeadline(verdict.status);
+}
+
 function buildLocalProductionVerdictResult(result: LocalOrchestratorResult): LocalProductionVerdictResult {
   const publicFindings = mapVerdictFindingsToPublic(result.findings);
   const actionableFindings = publicFindings.filter((finding) => !finding.safeToIgnore);
@@ -146,7 +161,7 @@ function buildLocalProductionVerdictResult(result: LocalOrchestratorResult): Loc
       verdictStatus: verdict.status,
       score: verdict.score,
       findings: actionableFindings,
-      headline: verdictHeadline(verdict.status),
+      headline: localVerdictHeadline(verdict),
       executiveSummary: verdict.executiveSummary,
       topPriorities: verdict.topPriorities.map((priority) => priority.title),
       reason: result.phase === "incomplete" || result.phase === "cancelled" ? engineErrorMessage : undefined,

@@ -46,6 +46,7 @@ const READY_TO_SHIP_FILES: Record<string, Class> = {
   "lib/i18n/verdict-copy.ts": "A",
   "server/continuous-protection/status-machine.ts": "A",
   "server/full-product-audit/orchestrate.ts": "A",
+  "lib/local-analysis/run-local-verdict.ts": "A", // local narrative headline gated by verdictAffirmsDeploy (localVerdictHeadline)
   "server/full-product-audit/format-response.ts": "A", // headline gated by result.affirmsDeploy (auditHeadline)
   "server/full-product-audit/types.ts": "A", // carries the canonical affirmsDeploy flag
   "server/github-automation/github-check-run.ts": "A",
