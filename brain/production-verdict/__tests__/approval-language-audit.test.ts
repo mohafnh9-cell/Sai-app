@@ -56,7 +56,7 @@ const READY_TO_SHIP_FILES: Record<string, Class> = {
   "server/production-memory/types.ts": "A",
   "brain/autopilot-experience/build-state.ts": "B",
   "brain/fix-prompt/build-production-fix-prompt.ts": "B",
-  "brain/production-verdict/adapters/legacy.ts": "B",
+  "brain/production-verdict/adapters/legacy.ts": "A", // legacy headline gated by verdictAffirmsDeploy (legacyVerdictHeadline)
   "brain/production-verdict/schema.ts": "B",
   "brain/production-verdict/status-ui.ts": "B",
   "features/mission-control/components/MissionControlExperience.tsx": "B",
