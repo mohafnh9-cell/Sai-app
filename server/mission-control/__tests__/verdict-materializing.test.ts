@@ -193,3 +193,33 @@ describe("deterministic poll loop: scan active -> scan completes -> verdict pers
   });
 });
 
+
+describe("previous verdict + newer completed scan still writing its verdict (stale-verdict window)", () => {
+  const OLD = "99999999-9999-4999-8999-999999999991";
+  const oldVerdict = { scanId: OLD, status: "ready_to_ship" };
+
+  it("unscoped load: the older READY verdict is flagged verdict_materializing, so polling continues and the UI marks it outdated", async () => {
+    getMissionControlView.mockResolvedValue({ view: {}, verdict: oldVerdict });
+    const result = await load(admin({}), { analysisRunId: null });
+    expect(result.recoveryReason).toBe("verdict_materializing");
+    expect(shouldPollMissionControl(pollState(result.recoveryReason))).toBe(true);
+  });
+
+  it("once the newer scan's verdict is the current one the flag clears and polling stops", async () => {
+    getMissionControlView.mockResolvedValue({ view: {}, verdict: { scanId: SCAN, status: "ready_to_ship" } });
+    const result = await load(admin({}), { analysisRunId: null });
+    expect(result.recoveryReason).toBeNull();
+  });
+
+  it("bounded: a newer scan whose verdict never arrives stops being 'materializing' after the window", async () => {
+    getMissionControlView.mockResolvedValue({ view: {}, verdict: oldVerdict });
+    const result = await load(admin({ completed_at: ago(VERDICT_MATERIALIZATION_WINDOW_MS + 5_000) }), { analysisRunId: null });
+    expect(result.recoveryReason).toBeNull();
+  });
+
+  it("a failed newer scan does not mask the current verdict", async () => {
+    getMissionControlView.mockResolvedValue({ view: {}, verdict: oldVerdict });
+    const result = await load(admin({ status: "failed", completed_at: null }), { analysisRunId: null });
+    expect(result.recoveryReason).toBeNull();
+  });
+});
