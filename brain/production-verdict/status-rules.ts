@@ -91,6 +91,9 @@ export function verdictHeadline(status: VerdictStatus): string {
   }
 }
 
+/** Headline for a ready_to_ship status whose evidence does not support approval (same wording as the web hero). */
+export const EVIDENCE_LIMITED_HEADLINE = "NO BLOCKERS FOUND — EVIDENCE LIMITED";
+
 export const EVIDENCE_LIMITED_RECOMMENDED_ACTION =
   "No blockers were found, but evidence is limited. Review the Production Verdict coverage and close the gaps before relying on it.";
 

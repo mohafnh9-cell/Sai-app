@@ -214,6 +214,7 @@ export async function runFullProductAudit(
       reviewId: scanId,
       commitSha: (scanRow?.commit_sha as string | null) ?? null,
       verdictStatus: null,
+      affirmsDeploy: false,
       score: null,
       counts: {
         critical: 0,
@@ -424,9 +425,11 @@ export async function runFullProductAudit(
 
   const timedOut = reviewTimedOut || securityTests.timedOut;
   const phase = timedOut ? "partial" : "complete";
+  // The ONE canonical approval gate for this audit: the recommendation and the formatter's headline both consume it.
+  const affirmsDeploy = verdict ? verdictAffirmsDeploy(verdict) : false;
   const recommendation = buildRecommendation({
     verdictStatus,
-    affirmsDeploy: verdict ? verdictAffirmsDeploy(verdict) : false,
+    affirmsDeploy,
     topRisks,
     counts,
   });
@@ -462,6 +465,8 @@ export async function runFullProductAudit(
     reviewId: scanId,
     commitSha: (verdictScanRow.commit_sha as string | null) ?? null,
     verdictStatus,
+    // Canonical approval gate, computed once above from the full verdict; formatters consume it, never re-derive it.
+    affirmsDeploy,
     score: verdict?.score ?? null,
     counts,
     topRisks,

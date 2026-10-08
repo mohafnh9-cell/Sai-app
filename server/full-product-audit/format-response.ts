@@ -1,6 +1,6 @@
 import "server-only";
 
-import { verdictHeadline } from "@/brain/production-verdict/status-rules";
+import { EVIDENCE_LIMITED_HEADLINE, verdictHeadline } from "@/brain/production-verdict/status-rules";
 import type { McpTranslator } from "@/server/mcp/i18n";
 import { buildTextResponse } from "@/server/mcp/response-format";
 import {
@@ -187,9 +187,20 @@ function appendStaticVsDynamic(lines: string[], t: McpTranslator) {
   lines.push(t("fullProductAudit.report.staticDynamicDistinction"));
 }
 
+/**
+ * The audit's headline. A raw `ready_to_ship` status never grants "READY TO SHIP" by itself: it needs the
+ * canonical approval gate (`affirmsDeploy`, set once by the orchestrator from `verdictAffirmsDeploy`). A missing or
+ * false flag gets the conservative evidence-limited headline.
+ */
+function auditHeadline(result: Pick<FullProductAuditResult, "verdictStatus" | "affirmsDeploy">): string {
+  if (!result.verdictStatus) return "IN PROGRESS";
+  if (result.verdictStatus === "ready_to_ship" && result.affirmsDeploy !== true) return EVIDENCE_LIMITED_HEADLINE;
+  return verdictHeadline(result.verdictStatus);
+}
+
 function appendFinalVerdict(lines: string[], t: McpTranslator, result: FullProductAuditResult) {
   lines.push("", t("fullProductAudit.report.finalVerdictHeader"));
-  lines.push(result.verdictStatus ? verdictHeadline(result.verdictStatus) : "IN PROGRESS");
+  lines.push(auditHeadline(result));
   lines.push(buildExecutiveSummaryLine(result));
   lines.push("", t("fullProductAudit.report.whatWeKnowHeader"));
   lines.push(`✓ ${t("fullProductAudit.report.knownSourceAnalyzed")}`);
@@ -232,7 +243,7 @@ export function formatFullProductAuditResponse(
   result: FullProductAuditResult,
   t: McpTranslator
 ): FullProductAuditMcpResponse {
-  const headline = result.verdictStatus ? verdictHeadline(result.verdictStatus) : "IN PROGRESS";
+  const headline = auditHeadline(result);
   const lines: string[] = [
     t("fullProductAudit.intro"),
     "",

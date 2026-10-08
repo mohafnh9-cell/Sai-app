@@ -141,6 +141,12 @@ export type FullProductAuditResult = {
   reviewId: string | null;
   commitSha: string | null;
   verdictStatus: VerdictStatus | null;
+  /**
+   * Canonical deployment-approval gate for this audit's verdict (`verdictAffirmsDeploy`: ready_to_ship AND high
+   * confidence AND every area evaluated). `verdictStatus` alone is raw metadata and never grants approval wording;
+   * false when there is no verdict.
+   */
+  affirmsDeploy: boolean;
   score: number | null;
   counts: FullProductAuditCounts;
   topRisks: ConsolidatedAuditFinding[];
