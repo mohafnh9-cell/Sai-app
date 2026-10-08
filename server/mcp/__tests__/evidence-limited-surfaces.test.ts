@@ -5,6 +5,9 @@ import { heroViewFromVerdict } from "@/brain/production-verdict/hero-view";
 import { containsApprovalLanguage } from "@/brain/production-verdict/narrative-guard";
 import { githubDecisionPresentation, commitStatusStateFor } from "@/server/github-automation/github-check-run";
 import { getMcpTranslator } from "@/server/mcp/i18n";
+import { formatFullProductAuditResponse } from "@/server/full-product-audit/format-response";
+import { buildRecommendation } from "@/server/full-product-audit/orchestrate";
+import { verdictAffirmsDeploy } from "@/brain/production-verdict/deployment-posture";
 import { canIDeploy } from "@/server/mcp/tools/can-i-deploy";
 import { createFakeAdmin } from "./fake-admin";
 import { buildVerdictFixture, verdictRow } from "./verdict-fixture";
@@ -61,6 +64,25 @@ describe("evidence-limited ready verdict across customer surfaces", () => {
     expect(mcp.summary).toMatch(/not a guarantee|not a deployment approval/);
     expect(gh.conclusion).toBe("neutral");
     expect(commitStatusStateFor(gh, stored.status, "passed")).toBe("pending");
+  });
+
+  it("Full Product Audit (MCP) shows the same evidence-limited posture: no READY TO SHIP headline, consistent recommendation", async () => {
+    const { stored } = await surfaces(limited);
+    const affirmsDeploy = verdictAffirmsDeploy(stored);
+    const counts = { critical: 0, high: 0, medium: 0, low: 0, info: 0, confirmed: 0, likely: 0, potential: 0, notReproduced: 0, falsePositive: 0, notApplicable: 0 };
+    const result = {
+      mode: "full_product_audit", phase: "complete", project: { id: P, name: "A", repositoryFullName: null }, reviewId: stored.scanId, commitSha: stored.commitSha,
+      verdictStatus: stored.status, affirmsDeploy, score: stored.score, counts, topRisks: [], whatToFixFirst: [], findings: [],
+      engines: { codeReview: { scanId: stored.scanId, findingsCount: 0, rulesRun: 1 }, securityTesting: { campaignId: null, executionsRun: 0, executionsCompleted: 0, adaptersExecuted: [], adaptersSelectedFromFindings: [], runtimeMode: "mock", dynamicTargetSource: "none", skippedReason: null, notSafelyTestableCount: 0 } },
+      dynamicVerification: { offered: false, decision: null, authorizedTarget: null, awaitingUrl: false, awaitingAuthorization: false, awaitingScopeApproval: false, notSafelyTestableCount: 0 },
+      safeFixAvailable: false, safeFixBlockerId: null,
+      recommendation: buildRecommendation({ verdictStatus: stored.status, affirmsDeploy, topRisks: [], counts }),
+      summary: "", timedOut: false, nextAction: "n",
+    } as never;
+    const audit = formatFullProductAuditResponse(result, getMcpTranslator("en"));
+    expect(audit.summary).not.toContain("READY TO SHIP");
+    expect(audit.summary).toContain("EVIDENCE LIMITED");
+    expect(containsApprovalLanguage(audit.summary), audit.summary).toBe(false);
   });
 
   it("legacy stored approval text is neutralised at read time (stored text is not the only guard)", async () => {

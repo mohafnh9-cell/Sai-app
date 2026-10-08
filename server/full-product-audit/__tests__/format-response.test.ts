@@ -41,6 +41,7 @@ function baseResult(overrides: Partial<FullProductAuditResult>): FullProductAudi
     reviewId: "scan-1",
     commitSha: "abc",
     verdictStatus: null,
+    affirmsDeploy: false,
     score: null,
     counts: {
       critical: 0,

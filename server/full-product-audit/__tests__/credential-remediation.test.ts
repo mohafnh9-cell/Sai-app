@@ -47,6 +47,7 @@ function result(findings: ConsolidatedAuditFinding[]): FullProductAuditResult {
     reviewId: "scan",
     commitSha: "abc",
     verdictStatus: "insufficient_data",
+    affirmsDeploy: false,
     score: 100,
     counts: {
       critical: 0, high: 0, medium: 0, low: 0, info: findings.length,
