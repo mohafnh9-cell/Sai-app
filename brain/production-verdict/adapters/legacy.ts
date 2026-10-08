@@ -1,6 +1,7 @@
 import type { ProductionVerdictV1, VerdictStatus } from "../schema";
 import { VERDICT_STATUS_LABELS } from "../schema";
-import { verdictHeadline } from "../status-rules";
+import { EVIDENCE_LIMITED_HEADLINE, verdictHeadline } from "../status-rules";
+import { verdictAffirmsDeploy } from "../deployment-posture";
 
 /** @deprecated Use ProductionVerdictV1 from schema.ts — legacy UI adapter */
 export type LegacyProductionVerdictStatus =
@@ -54,6 +55,18 @@ export const LEGACY_VERDICT_LABELS: Record<LegacyProductionVerdictStatus, string
   not_scanned: VERDICT_STATUS_LABELS.insufficient_data,
 };
 
+/**
+ * The legacy human-readable headline. A raw `ready_to_ship` status never yields "READY TO SHIP" by itself: it needs
+ * the canonical approval gate (`verdictAffirmsDeploy`: high confidence AND every area evaluated; missing or
+ * unreadable evidence is not approval). The machine-readable `status` and `v1` fields are unchanged.
+ */
+export function legacyVerdictHeadline(
+  verdict: Pick<ProductionVerdictV1, "status" | "confidence" | "unevaluatedAreas" | "partiallyEvaluatedAreas">
+): string {
+  if (verdict.status === "ready_to_ship" && !verdictAffirmsDeploy(verdict)) return EVIDENCE_LIMITED_HEADLINE;
+  return verdictHeadline(verdict.status);
+}
+
 export function toLegacyVerdict(verdict: ProductionVerdictV1): LegacyProductionVerdict {
   const legacyStatus = STATUS_TO_LEGACY[verdict.status];
   const allAreas = [
@@ -64,7 +77,7 @@ export function toLegacyVerdict(verdict: ProductionVerdictV1): LegacyProductionV
 
   return {
     status: legacyStatus,
-    headline: verdictHeadline(verdict.status),
+    headline: legacyVerdictHeadline(verdict),
     score: verdict.score,
     blockersCount: verdict.blockersCount,
     improvementsCount: Math.max(0, verdict.findingsCount - verdict.blockersCount),
