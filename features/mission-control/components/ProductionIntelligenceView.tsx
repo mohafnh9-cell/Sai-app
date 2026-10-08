@@ -78,7 +78,7 @@ export function ProductionIntelligenceView({
     findingsDetected: (count) => t("timeline.findingsDetected", { count }),
     risksIntroduced: (count) => t("timeline.risksIntroduced", { count }),
     verdictUpdated: (headline) => t("timeline.verdictUpdated", { headline }),
-    verdictHeadline: (status) => verdictStatusHeadline(status, tAll),
+    verdictHeadline: (status, affirms) => verdictStatusHeadline(status, tAll, affirms),
   }, intelligence);
   const lastAnalysis = state.status.lastAnalysisAt
     ? formatRelativeLocalized(locale, state.status.lastAnalysisAt, {
