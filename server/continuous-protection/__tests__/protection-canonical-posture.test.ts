@@ -52,6 +52,22 @@ describe("Protection Status is a projection of the canonical verdict (never its 
     expect(m).toMatchObject({ productionConfidence: null, securityConfidence: null, worriesTop3: [], recommendation: "", safeFix: null });
   });
 
+  it("B2. a newer scan completed but its verdict is not written yet -> analysis_in_progress, never the previous scan's posture", async () => {
+    const ready = { status: "ready_to_ship", confidence: "high", score: 95, blockersCount: 0, criticalBlockersCount: 0, highBlockersCount: 0, topPriorities: [] };
+    const newer = { id: "44444444-4444-4444-8444-444444444444", project_id: PROJECT, repository_id: PROJECT, branch: "main", status: "completed", completed_at: new Date(Date.now() - 10_000).toISOString() };
+    const m = await model({ verdict: ready, extra: { scans: [newer] } });
+    expect(m?.decision).toEqual({ state: "analysis_in_progress" });
+    expect(m?.safeFix).toBeNull();
+  });
+
+  it("B3. once the newer scan's verdict is current (or the window elapsed) the posture is derived from it again", async () => {
+    const ready = { status: "ready_to_ship", confidence: "high", score: 95, blockersCount: 0, criticalBlockersCount: 0, highBlockersCount: 0, topPriorities: [] };
+    const sameScan = { id: SCAN, project_id: PROJECT, repository_id: PROJECT, branch: "main", status: "completed", completed_at: new Date(Date.now() - 10_000).toISOString() };
+    expect((await model({ verdict: ready, extra: { scans: [sameScan] } }))?.decision.state).toBe("verdict");
+    const stale = { ...sameScan, id: "44444444-4444-4444-8444-444444444444", completed_at: new Date(Date.now() - 600_000).toISOString() };
+    expect((await model({ verdict: ready, extra: { scans: [stale] } }))?.decision.state).toBe("verdict");
+  });
+
   it("B. a scan in progress -> analysis_in_progress even if an older verdict exists", async () => {
     const m = await model({ activeScanId: "scan-running" });
     expect(m?.decision).toEqual({ state: "analysis_in_progress" });

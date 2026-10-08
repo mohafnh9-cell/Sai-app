@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ProductionVerdictV1 } from "@/brain/production-verdict/schema";
 import { getCurrentProductionVerdict } from "@/server/production-verdict/service";
+import { newerScanAwaitingVerdict } from "@/server/production-verdict/pending-verdict";
 import { getProductionReviewState } from "@/server/review-cancel/get-production-review-state";
 import { deployAnswerFromVerdictEvidence } from "@/server/production-memory/types";
 import { protectionDecisionFor, type ProtectionDecision } from "@/brain/production-verdict/protection-decision";
@@ -135,7 +136,12 @@ export async function loadProtectionContext(
       ? latest.security_confidence - weekAgo.security_confidence
       : null;
 
-  const reviewInProgress = reviewState.hasActiveReview || Boolean(scanState.data?.active_scan_id);
+  // A newer scan that already completed but has not written its verdict yet is still "a review in
+  // progress": `verdict` is then the previous scan's, which must not be shown as the current posture.
+  const reviewInProgress =
+    reviewState.hasActiveReview ||
+    Boolean(scanState.data?.active_scan_id) ||
+    (verdict ? await newerScanAwaitingVerdict(admin, projectId, verdict.scanId) : false);
   const decision = protectionDecisionFor({ verdict, reviewInProgress });
   const openCritical = verdict?.criticalBlockersCount ?? 0;
   const openHigh = verdict?.highBlockersCount ?? 0;

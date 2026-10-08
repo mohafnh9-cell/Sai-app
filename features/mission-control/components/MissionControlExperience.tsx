@@ -69,7 +69,9 @@ export function MissionControlExperience({
   // The scan finished but its verdict is still being written: an in-progress state, never "no verdict yet".
   const verdictMaterializing = state.recoveryReason === "verdict_materializing";
   const showAttackActivity = state.status.securityRunning;
-  const staleVerdictWhileBusy = Boolean(verdict && (showScanActivity || showAttackActivity));
+  const staleVerdictWhileBusy = Boolean(
+    verdict && (showScanActivity || showAttackActivity || verdictMaterializing)
+  );
   const openFullReport =
     state.ui.openTechnicalDetails ||
     state.ui.showReviewCompleteBanner ||
@@ -158,7 +160,7 @@ export function MissionControlExperience({
           state={state}
           intelligence={productionIntelligence}
           areasProgress={areasProgress}
-          showScanActivity={showScanActivity}
+          showScanActivity={showScanActivity || verdictMaterializing}
           showAttackActivity={showAttackActivity}
           staleVerdictWhileBusy={staleVerdictWhileBusy}
           showSafeFixCard={Boolean(showSafeFixCard)}

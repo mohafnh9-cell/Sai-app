@@ -9,6 +9,11 @@ import {
 } from "@/server/production-verdict/service";
 import { findPreviousCompletedScan } from "@/server/security-scanner/previous-scan";
 import { getMissionControlView } from "./get-mission-control";
+import {
+  isVerdictMaterializing,
+  newerScanAwaitingVerdict,
+  VERDICT_MATERIALIZATION_WINDOW_MS,
+} from "@/server/production-verdict/pending-verdict";
 
 export type MissionControlRecoveryReason =
   | "scoped_verdict_missing"
@@ -21,24 +26,7 @@ export type MissionControlRecoveryReason =
   | "verdict_materializing"
   | null;
 
-export const VERDICT_MATERIALIZATION_WINDOW_MS = 120_000;
-
-/**
- * True while a completed scan may still be materializing its verdict.
- * Terminal outcomes end it: a verdict exists (caller never asks), the scan did
- * not complete (failed / cancelled / still running -> not "materializing"), or
- * the window elapsed (the verdict is genuinely missing: stop, do not poll forever).
- */
-export function isVerdictMaterializing(
-  scan: { status?: string | null; completed_at?: string | null } | null | undefined,
-  now: number = Date.now()
-): boolean {
-  if (!scan || scan.status !== "completed" || !scan.completed_at) return false;
-  const completedAt = Date.parse(scan.completed_at);
-  if (!Number.isFinite(completedAt)) return false;
-  const age = now - completedAt;
-  return age < VERDICT_MATERIALIZATION_WINDOW_MS && age > -VERDICT_MATERIALIZATION_WINDOW_MS;
-}
+export { VERDICT_MATERIALIZATION_WINDOW_MS, isVerdictMaterializing };
 
 async function scanMaterializingVerdict(
   dataClient: SupabaseClient,
@@ -103,10 +91,13 @@ export async function loadMissionControlWithRecovery(
     const unscoped = await getMissionControlView(supabase, projectId, organizationId, {
       admin: input.admin,
     });
+    // No verdict yet, OR a verdict that belongs to an OLDER scan while a newer completed scan is
+    // still writing its own: the older verdict is history, not the current decision.
     const materializing =
       !input.manualRecovery &&
-      !unscoped.verdict &&
-      (await scanMaterializingVerdict(dataClient, projectId, null));
+      (unscoped.verdict
+        ? await newerScanAwaitingVerdict(dataClient, projectId, unscoped.verdict.scanId)
+        : await scanMaterializingVerdict(dataClient, projectId, null));
     return {
       view: unscoped.view,
       verdict: unscoped.verdict,
