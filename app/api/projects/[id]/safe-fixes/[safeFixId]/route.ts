@@ -9,6 +9,7 @@ import {
   markSafeFixApplied,
   verifySafeFix,
 } from "@/server/safe-fix-engine/verify";
+import { mapSafeFixError } from "@/server/safe-fix-engine/http-errors";
 import { requireProjectApiAccess } from "@/server/projects/project-access";
 import { isFeatureEnabled } from "@/server/feature-flags";
 import {
@@ -89,23 +90,16 @@ export async function POST(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  if (action === "approve") {
-    await approveSafeFix(admin, { safeFixId, organizationId: orgId, projectId, actor: access.userId });
-    return NextResponse.json({ ok: true, state: "APPROVED" });
-  }
-  if (action === "reopen") {
-    try {
-      await reopenSafeFix(admin, { safeFixId, organizationId: orgId, projectId, actor: access.userId });
-    } catch (error) {
-      if (error instanceof Error && error.message.startsWith("invalid_transition")) {
-        return NextResponse.json({ error: error.message }, { status: 409 });
-      }
-      throw error;
+  try {
+    if (action === "approve") {
+      await approveSafeFix(admin, { safeFixId, organizationId: orgId, projectId, actor: access.userId });
+      return NextResponse.json({ ok: true, state: "APPROVED" });
     }
-    return NextResponse.json({ ok: true, state: "READY" });
-  }
-  if (action === "applied") {
-    try {
+    if (action === "reopen") {
+      await reopenSafeFix(admin, { safeFixId, organizationId: orgId, projectId, actor: access.userId });
+      return NextResponse.json({ ok: true, state: "READY" });
+    }
+    if (action === "applied") {
       const { binding } = await markSafeFixApplied(admin, {
         safeFixId,
         organizationId: orgId,
@@ -114,38 +108,36 @@ export async function POST(
         commitSha: parsedBody.data.commitSha ?? null,
       });
       return NextResponse.json({ ok: true, state: "APPLIED", binding });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "";
-      if (message === "proposal_commit_unsupported") {
-        // Deployed ahead of migration 067: recording a commit is not available yet; nothing was changed.
-        return NextResponse.json({ error: message }, { status: 503 });
-      }
-      if (
-        message.startsWith("invalid_transition") ||
-        message === "proposal_commit_locked" ||
-        message === "proposal_commit_is_base_commit" ||
-        message === "proposal_commit_conflict"
-      ) {
-        return NextResponse.json({ error: message }, { status: 409 });
-      }
-      throw error;
     }
+
+    // verify: only an APPLIED record can be verified. Refuse anything else up front, writing nothing
+    // (a race that changes the state after this check is refused by the same rule inside verifySafeFix).
+    if (existing.lifecycleState !== "APPLIED") {
+      return NextResponse.json(
+        { error: `invalid_transition:${existing.lifecycleState}->VERIFYING` },
+        { status: 409 }
+      );
+    }
+
+    const isolationEnabled = isFeatureEnabled("analysis_run_isolation", { organizationId: orgId });
+    const { runId: analysisRunId } = await resolveAnalysisRunIdForIsolation(admin, {
+      projectId,
+      organizationId: orgId,
+      requestedRunId: requestedAnalysisRunIdFromRequest(request),
+      isolationEnabled,
+    });
+
+    const verification = await verifySafeFix(admin, {
+      safeFixId,
+      organizationId: orgId,
+      projectId,
+      analysisRunId,
+      actor: access.userId,
+    });
+    return NextResponse.json({ ok: true, verification });
+  } catch (error) {
+    const mapped = mapSafeFixError(error);
+    if (mapped) return NextResponse.json({ error: mapped.error }, { status: mapped.status });
+    throw error;
   }
-
-  const isolationEnabled = isFeatureEnabled("analysis_run_isolation", { organizationId: orgId });
-  const { runId: analysisRunId } = await resolveAnalysisRunIdForIsolation(admin, {
-    projectId,
-    organizationId: orgId,
-    requestedRunId: requestedAnalysisRunIdFromRequest(request),
-    isolationEnabled,
-  });
-
-  const verification = await verifySafeFix(admin, {
-    safeFixId,
-    organizationId: orgId,
-    projectId,
-    analysisRunId,
-    actor: access.userId,
-  });
-  return NextResponse.json({ ok: true, verification });
 }
