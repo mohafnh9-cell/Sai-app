@@ -32,6 +32,12 @@ describe("Production Journey route is reachable", () => {
     expect(page).toMatch(/getProductionReviewState/);
   });
 
+  it("the journey also treats a newer completed scan awaiting its verdict as in progress (never the previous posture)", () => {
+    const page = readFileSync("app/(dashboard)/projects/[id]/journey/page.tsx", "utf8");
+    expect(page).toMatch(/newerScanAwaitingVerdict\(/);
+    expect(page).toMatch(/getCurrentProductionVerdict\(admin, workspaceId/);
+  });
+
   it("the journey is built from verdicts through the canonical posture (not raw status)", () => {
     expect(readFileSync("brain/production-journey/build.ts", "utf8")).toMatch(/deploymentPostureOf\(record\.verdict\)/);
     expect(readFileSync("brain/production-journey/maturity.ts", "utf8")).toMatch(/currentPosture === "ready"/);
