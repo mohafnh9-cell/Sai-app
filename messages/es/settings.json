@@ -86,5 +86,7 @@
   "workspaceManageDescription": "Cambia entre los Workspaces a los que tienes acceso.",
   "workspaceManageCta": "Gestionar Workspaces",
   "dangerTitle": "Zona de peligro",
-  "dangerSubtitle": "Acciones irreversibles para tu cuenta."
+  "dangerSubtitle": "Acciones irreversibles para tu cuenta.",
+  "oauthConsentSensitiveNote": "No se concede salvo que lo marques: puede iniciar análisis, ejecutar auditorías o autorizar pruebas de seguridad en tu aplicación.",
+  "oauthConsentNothingSelected": "Selecciona al menos una capacidad para permitir el acceso."
 }

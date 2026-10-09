@@ -29,6 +29,42 @@ export type McpScope = (typeof ALL_MCP_SCOPES)[number];
  * on /oauth/authorize still grants all scopes (unchanged, for compatibility). `safe_fix` under `mcp:fix:read` also
  * records a Safe Fix proposal in SequrAI's own database (see docs/PILOT_SPRINT_CHECKLIST.md); it never writes to GitHub.
  */
+/**
+ * Scopes that START work, spend analysis capacity or authorize active testing of a deployed target. They are never granted by
+ * default at consent: the person approving must opt in to each one. (`mcp:fix:read` is NOT in this list: `safe_fix` only records a
+ * Safe Fix proposal in SequrAI's own database.)
+ */
+export const SENSITIVE_MCP_SCOPES: readonly McpScope[] = [MCP_SCOPE_REVIEW_RUN, MCP_SCOPE_AUDIT_RUN, MCP_SCOPE_TARGET_AUTHORIZE];
+
+export function isSensitiveMcpScope(scope: string): boolean {
+  return (SENSITIVE_MCP_SCOPES as readonly string[]).includes(scope);
+}
+
+/**
+ * The scopes a consent actually grants -- decided here, NEVER by what the client asked for.
+ *  - `selected` given (the consent screen's checkboxes): it must be a non-empty subset of what was requested.
+ *  - `selected` absent: only the requested NON-sensitive scopes (a client that omits `scope`, or asks for everything, does not
+ *    obtain review/audit/target-authorization by accident).
+ * Throws McpError(400, invalid_scope) otherwise.
+ */
+export function resolveGrantedScopes(requested: string[], selected?: string[] | null): McpScope[] {
+  const valid = (scope: string): scope is McpScope => (ALL_MCP_SCOPES as readonly string[]).includes(scope);
+  const requestedValid = [...new Set(requested.filter(valid))];
+  const granted =
+    selected == null
+      ? requestedValid.filter((scope) => !isSensitiveMcpScope(scope))
+      : [...new Set(selected)];
+  if (granted.length === 0) {
+    throw new McpError(400, "invalid_scope", "Select at least one capability to grant");
+  }
+  for (const scope of granted) {
+    if (!valid(scope) || !requestedValid.includes(scope)) {
+      throw new McpError(400, "invalid_scope", `Scope not requested or unknown: ${scope}`);
+    }
+  }
+  return granted as McpScope[];
+}
+
 export const MCP_INITIAL_REQUEST_SCOPES: readonly McpScope[] = [
   MCP_SCOPE_STATUS_READ,
   MCP_SCOPE_DISCOVER_READ,
