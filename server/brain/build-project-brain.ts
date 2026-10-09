@@ -1,5 +1,7 @@
 import "server-only";
 
+import { newerScanAwaitingVerdict } from "@/server/production-verdict/pending-verdict";
+
 import { guardNarrativeForVerdict } from "@/brain/production-verdict/narrative-guard";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
@@ -82,7 +84,7 @@ export async function buildProjectBrain(
     .maybeSingle();
   if (!project) return null;
 
-  const [scanState, health, latestScan, currentVerdict, priorities, latestReport, activity] =
+  const [scanState, health, latestScan, persistedVerdict, priorities, latestReport, activity] =
     await Promise.all([
       supabase
         .from("repository_scan_state")
@@ -120,6 +122,16 @@ export async function buildProjectBrain(
         .maybeSingle(),
       mergeProjectActivity(supabase, project.organization_id, projectId, 10),
     ]);
+
+  // A newer completed scan whose own verdict is not persisted yet: the persisted verdict belongs to an
+  // OLDER scan and must not be exposed as the project's current verdict (no verdict = conservative).
+  const awaitingNewerVerdict = persistedVerdict
+    ? await newerScanAwaitingVerdict(supabase, projectId, persistedVerdict.scanId)
+    : false;
+  const currentVerdict = awaitingNewerVerdict ? null : persistedVerdict;
+  if (awaitingNewerVerdict) {
+    log("previous_verdict_withheld_awaiting_newer", { projectId, previousScanId: persistedVerdict?.scanId });
+  }
 
   const securityScore =
     latestScan.data?.security_score ??
