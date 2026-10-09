@@ -47,8 +47,10 @@ async function completedScans(
     .from("scans")
     .select(columns)
     .eq("project_id", scope.projectId)
-    .eq("status", "completed")
-    .neq("id", scope.excludeScanId);
+    .eq("status", "completed");
+  // An empty exclusion means "exclude nothing". `.neq("id", "")` is an invalid uuid comparison:
+  // PostgREST rejects it, the lookup silently returns no rows, and callers see "no previous scan".
+  if (scope.excludeScanId) query = query.neq("id", scope.excludeScanId);
   query = "eq" in branchFilter ? query.eq("branch", branchFilter.eq) : query.is("branch", null);
   const { data } = await query.order("completed_at", { ascending: false }).limit(limit);
   return (data ?? []) as unknown as Row[];
