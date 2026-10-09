@@ -61,9 +61,9 @@ Preparación: anotar `BASE` = SHA completo del último commit analizado y su `sc
 | 3 | El agente (o una persona) aplica el cambio y hace **commit C1** a `main` → se dispara el análisis en la nube | — |
 | 4 | `POST …/safe-fixes/<F1>` `{"action":"applied","commitSha":"<C1 completo>"}` | 200 `{"ok":true,"state":"APPLIED","binding":"exact_proposal_commit"}` |
 | 5 | Verificar **antes** de que termine el análisis de C1 | 200, `verification.outcome` ≠ `passed`, `statement":"not_verified"`, razones incluyen `verification_scan_missing` (o `verdict_missing`); estado final `FAILED`, **no** `VERIFIED` |
-| 6 | Esperar a que el análisis de C1 esté `completed` con veredicto persistido; reabrir la corrección: `FAILED → READY` (el equipo repite el ciclo `approve` → `applied`) y `verify` | 200 `outcome:"passed"`, `binding:"exact_proposal_commit"`, `statement:"exact_commit_rescan_clean"`, `verifiedCommitSha == C1`; `GET …/<F1>` → `lifecycleState:"VERIFIED"`, `proposalCommitSha:"<C1>"` |
+| 6 | Esperar a que el análisis de C1 esté `completed` con veredicto persistido. Reabrir: `{"action":"reopen"}` → 200 `{"ok":true,"state":"READY"}`; repetir `{"action":"approve"}` y `{"action":"applied","commitSha":"<C1>"}` (mismo SHA: no cambia nada); y `{"action":"verify"}` | 200 `outcome:"passed"`, `binding:"exact_proposal_commit"`, `statement:"exact_commit_rescan_clean"`, `verifiedCommitSha == C1`; `GET …/<F1>` → `lifecycleState:"VERIFIED"`, `proposalCommitSha:"<C1>"` |
 
-> El paso 5→6 prueba que **verificar antes** no aprueba nada. Si se prefiere un solo ciclo, esperar el análisis antes del paso 4.
+> El paso 5→6 prueba que **verificar antes** no aprueba nada. Una verificación que no puede concluir deja el registro en `FAILED`; `reopen` (solo válido desde `FAILED`, 409 en cualquier otro estado) lo devuelve a `READY` conservando el SHA registrado. Si se prefiere un solo ciclo, esperar el análisis antes del paso 4.
 
 **Negativos (cada uno con una corrección nueva `F2`, `F3`, …):**
 
