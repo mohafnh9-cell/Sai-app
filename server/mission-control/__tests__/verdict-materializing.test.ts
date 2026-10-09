@@ -116,17 +116,21 @@ describe("Mission Control keeps polling through the scan-completed -> verdict-pe
     expect(manual.recoveryReason).toBe("manual_recovery");
   });
 
-  it("scoped run completed seconds ago with no verdict while an older verdict exists -> verdict_materializing (older verdict is outdated)", async () => {
+  it("scoped run completed seconds ago with no verdict while an older verdict exists -> verdict null + verdict_materializing; the older verdict is never read", async () => {
     getCurrentProductionVerdict.mockResolvedValue({ scanId: "older", status: "not_ready" });
     const result = await load(admin({}));
+    expect(result.verdict).toBeNull();
+    expect(getCurrentProductionVerdict).not.toHaveBeenCalled();
     expect(result.recoveryReason).toBe("verdict_materializing");
     expect(shouldPollMissionControl(pollState(result.recoveryReason))).toBe(true);
   });
 
-  it("a historical scoped run (outside the window) with no verdict keeps the existing scoped_verdict_missing fallback", async () => {
-    getCurrentProductionVerdict.mockResolvedValue({ scanId: "older", status: "not_ready" });
+  it("a historical scoped run (outside the window) with no verdict stays empty: no substitution, no polling", async () => {
+    getCurrentProductionVerdict.mockResolvedValue({ scanId: "older", status: "ready_to_ship" });
     const result = await load(admin({ completed_at: ago(VERDICT_MATERIALIZATION_WINDOW_MS + 5_000) }));
-    expect(result.recoveryReason).toBe("scoped_verdict_missing");
+    expect(result.verdict).toBeNull();
+    expect(result.recoveryReason).toBeNull();
+    expect(shouldPollMissionControl(pollState(result.recoveryReason))).toBe(false);
   });
 });
 
@@ -234,13 +238,14 @@ describe("previous verdict + newer completed scan still writing its verdict (sta
 describe("scoped and unscoped Mission Control agree on the materialization gap", () => {
   const OLD = "99999999-9999-4999-8999-999999999992";
   for (const status of ["ready_to_ship", "not_ready"]) {
-    it(`previous ${status} + newer completed scan without verdict -> both paths report verdict_materializing`, async () => {
+    it(`previous ${status} + newer completed scan without verdict -> both paths report verdict_materializing and the scoped path exposes no verdict`, async () => {
       const previous = { scanId: OLD, status };
       getCurrentProductionVerdict.mockResolvedValue(previous);
       getMissionControlView.mockResolvedValue({ view: {}, verdict: previous });
       const scoped = await load(admin({}));
       const unscoped = await load(admin({}), { analysisRunId: null });
       expect(scoped.recoveryReason).toBe("verdict_materializing");
+      expect(scoped.verdict).toBeNull();
       expect(unscoped.recoveryReason).toBe("verdict_materializing");
     });
   }
@@ -248,7 +253,9 @@ describe("scoped and unscoped Mission Control agree on the materialization gap",
   it("clears when the scoped verdict arrives; failed/cancelled scoped runs are not materializing", async () => {
     getCurrentProductionVerdict.mockResolvedValue({ scanId: OLD, status: "ready_to_ship" });
     for (const status of ["failed", "cancelled"]) {
-      expect((await load(admin({ status, completed_at: null }))).recoveryReason).toBe("scoped_verdict_missing");
+      const failed = await load(admin({ status, completed_at: null }));
+      expect(failed.recoveryReason).toBeNull();
+      expect(failed.verdict).toBeNull();
     }
     getProductionVerdictByScan.mockResolvedValue({ scanId: SCAN, status: "ready_to_ship" });
     expect((await load(admin({}))).recoveryReason).toBeNull();

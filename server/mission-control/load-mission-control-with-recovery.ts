@@ -4,7 +4,6 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ProductionVerdictV1 } from "@/brain/production-verdict/schema";
 import type { MissionControlView } from "@/features/mission-control/types";
 import {
-  getCurrentProductionVerdict,
   getProductionVerdictByScan,
 } from "@/server/production-verdict/service";
 import { findPreviousCompletedScan } from "@/server/security-scanner/previous-scan";
@@ -69,11 +68,9 @@ type LoadInput = {
 };
 
 /**
- * Recovery ladder:
- * 1. Resolve scoped verdict first (cheap lookup)
- * 2. Load scoped Mission Control view only when scoped verdict exists
- * 3. Fall back to current production verdict + unscoped view when scoped run has no verdict
- * 4. Empty scoped state when neither exists
+ * A selected run only exposes its OWN verdict. A run without one stays pending (or empty once the
+ * materialization window has elapsed): the project's previous verdict is never substituted, because it
+ * belongs to an older scan. Project-wide recovery is available only through explicit manual recovery.
  */
 export async function loadMissionControlWithRecovery(
   supabase: SupabaseClient,
@@ -120,32 +117,6 @@ export async function loadMissionControlWithRecovery(
       runScoped: true,
       activeRunId: scopedRunId,
       recoveryReason: null,
-    };
-  }
-
-  const currentVerdict = await getCurrentProductionVerdict(dataClient, organizationId, projectId);
-  if (currentVerdict) {
-    console.info({
-      component: "mission-control-recovery",
-      event: "fallback_to_current_verdict",
-      projectId,
-      requestedRunId: scopedRunId,
-    });
-    const unscoped = await getMissionControlView(supabase, projectId, organizationId, {
-      admin: input.admin,
-      preloadedVerdict: currentVerdict,
-    });
-    // The requested run completed but its own verdict is still being written: the verdict we fall
-    // back to belongs to an OLDER scan and must be treated as outdated (same signal as the
-    // unscoped path), not as "your current production view".
-    // A failed lookup keeps the existing labeled fallback rather than breaking the page.
-    const materializing = await scanMaterializingVerdict(dataClient, projectId, scopedRunId).catch(() => false);
-    return {
-      view: unscoped.view,
-      verdict: unscoped.verdict,
-      runScoped: false,
-      activeRunId: scopedRunId,
-      recoveryReason: materializing ? "verdict_materializing" : "scoped_verdict_missing",
     };
   }
 
