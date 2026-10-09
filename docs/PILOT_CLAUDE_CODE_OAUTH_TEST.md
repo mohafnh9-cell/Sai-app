@@ -97,3 +97,20 @@ update public.mcp_oauth_access_tokens  set revoked_at = now() where client_id = 
 update public.mcp_oauth_clients set status = 'disabled', updated_at = now() where client_id = 'sequrai-claude-code-pilot';
 ```
 - Comprobar después: `select status from public.mcp_oauth_clients where client_id='sequrai-claude-code-pilot'` → `disabled`; ninguna fila con `revoked_at is null`.
+
+## 8. Resultados observados (2026-10-09)
+Separados por tipo de evidencia. Nada de esto es la prueba de claude.ai ni del entorno del cliente.
+
+**Despliegue y registro.** PR #67, #68 y #66 fusionadas a mano (`6fe99cb`, `5b0d3bd`, `ee585c7`); producción sirve `ee585c7`. Migración 069 aplicada una sola vez (`INSERT 0 1`); los 3 clientes existentes con hash de fila idéntico antes y después. `/oauth/authorize` con el redirect exacto lleva a login; con otro puerto responde `invalid_redirect_uri`.
+
+**Consentimiento** (observado por la persona, no por el agente): workspace Sequrai, solo las 3 capacidades previstas, texto de Safe Fix correcto.
+
+**Conexión y ámbitos** (metadatos, sin secretos): un token de acceso (1 h, caduca 14:53 UTC) y un token de refresco (30 días), ambos con `client_id = sequrai-claude-code-pilot`, `organization_id = 3635d73b…` (Sequrai) y `scopes = {mcp:status:read, mcp:discover:read, mcp:fix:read}`; sin revocar. `claude mcp get`: cliente y puerto configurados.
+
+**Rechazos** (proyecto inexistente `00000000-0000-4000-8000-000000000000`): `review_now`, `cancel_review`, `full_product_audit` y `authorize_dynamic_target` fallaron con "Insufficient scope for this tool" antes de resolver el proyecto. Límite: la interfaz de Claude Code solo muestra el texto del error; `isError`, `code: insufficient_scope` y `requiredScope` están verificados a nivel de protocolo en #66, no en esta ejecución. Control negativo: `can_i_deploy` con el mismo id respondió "No se encontró este proyecto en tu organización" (llega a la resolución del proyecto; no demuestra recorrido funcional).
+
+**Herramientas permitidas sobre `sequrai-e2e-test`** (respuestas reales, commit `1eb0930`, escaneo `65e2b8db`, sin reanálisis): `can_i_deploy` → `ready_to_ship`, 100/100, 0 bloqueos, cobertura 8 de 12 áreas, recomendación `MORE_ANALYSIS_REQUIRED`, no obsoleto; `what_changed` → sin cambios (100 → 100); `production_history` → 34 revisiones, tendencia estable; `discover_application` → 0 tecnologías, confianza 20 %, 13 archivos.
+- Observaciones: (a) el texto de `can_i_deploy` mezcla español e inglés y combina "Heads up — something needs attention" (alerta del 5 oct.) con "NO SE ENCONTRARON BLOQUEOS"; (b) aparece una alerta `deploy_blocked` creada a las 13:54:11 UTC aunque `can_i_deploy` se anuncia sin cómputo (no se ha determinado qué la creó); (c) `discover_application` persistió un informe de descubrimiento (`cached: false`); no es un escaneo.
+- **`safe_fix` no se ejecutó:** el escaneo vigente solo tiene 3 hallazgos informativos y 0 bloqueos; no hay hallazgo elegible, así que el recorrido funcional (propuesta → commit → verificación exacta) **no está verificado** con un agente real.
+
+**Conexión correcta ≠ recorrido funcional.** Verificado: autenticación, ámbitos concedidos, rechazo de 4 herramientas, lectura de 4 herramientas. Pendiente: `safe_fix` y el ciclo de corrección con un agente real, refresco (se observa a partir de las 14:53), y la integración del entorno del cliente (A16).
