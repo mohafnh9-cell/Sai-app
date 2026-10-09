@@ -94,5 +94,7 @@
   "deleteAccountFailed": "Could not delete account",
   "deleteAccountSuccess": "Your account was deleted.",
   "oauthConsentSensitiveNote": "Not granted unless you tick it: this can start analyses, run audits or authorize security tests on your application.",
-  "oauthConsentNothingSelected": "Select at least one capability to allow access."
+  "oauthConsentNothingSelected": "Select at least one capability to allow access.",
+  "oauthConsentWorkspace": "Workspace this connection will access",
+  "oauthConsentWorkspaceNote": "The connection is limited to this workspace. If it is not the one you expect, press Cancel and switch workspace first."
 }

@@ -59,11 +59,20 @@ export async function GET(request: Request) {
     defaultGranted: !isSensitiveMcpScope(scope),
   }));
 
+  // The workspace the token will be bound to (the user's ACTIVE workspace when authorization started). The person approving
+  // must be able to see it: it is the only tenant the connection will ever reach.
+  const { data: organization } = await supabase
+    .from("organizations")
+    .select("name")
+    .eq("id", authRequest.organization_id)
+    .maybeSingle();
+
   return NextResponse.json({
     requestId: authRequest.id,
     clientName: client.client_name,
     clientId: authRequest.client_id,
     organizationId: authRequest.organization_id,
+    organizationName: (organization?.name as string | undefined) ?? null,
     scopes: scopeDetails,
     redirectUri: authRequest.redirect_uri,
   });

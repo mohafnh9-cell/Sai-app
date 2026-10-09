@@ -12,7 +12,10 @@ const state = vi.hoisted(() => ({
 
 vi.mock("@/server/http/rate-limit", () => ({ enforceRateLimit: async () => null }));
 vi.mock("@/lib/supabase/server", () => ({
-  createClient: async () => ({ auth: { getUser: async () => ({ data: { user: { id: "user-1" } } }) } }),
+  createClient: async () => ({
+    auth: { getUser: async () => ({ data: { user: { id: "user-1" } } }) },
+    from: () => ({ select: () => ({ eq: (_c: string, id: string) => ({ maybeSingle: async () => ({ data: id === "org-sequrai" ? { name: "Sequrai" } : null }) }) }) }),
+  }),
 }));
 vi.mock("@/server/mcp/oauth/clients", () => ({ getOAuthClient: async () => ({ client_name: "Claude Code" }) }));
 vi.mock("@/server/mcp/oauth/authorization-requests", () => ({
@@ -55,6 +58,11 @@ describe("consent decides what is granted, not what the client asked for", () =>
     expect(fix.descriptionEs).toMatch(/guarda una propuesta Safe Fix persistente/i);
     expect(fix.descriptionEs).toMatch(/no modifica tu c[oó]digo ni escribe en GitHub/i);
     for (const item of body.scopes) expect(`${item.description} ${item.descriptionEs}`).not.toMatch(/strictly read-only|solo lectura/i);
+  });
+
+  it("the consent payload names the workspace the token will be bound to (so the person can verify it is Sequrai)", async () => {
+    const body = await (await GET(new Request("http://x/api/oauth/consent?request_id=req-1"))).json();
+    expect(body).toMatchObject({ organizationId: "org-sequrai", organizationName: "Sequrai" });
   });
 
   it("opting in is explicit: ticking a sensitive capability grants exactly the ticked set", async () => {
