@@ -48,7 +48,9 @@ export async function enrichMcpSafeFixWithV2(
         ...mcpResult,
         safeFixV2: generated.record,
         safeFixStatus: "in_flight",
-        safeFixNote: `A Safe Fix for this blocker is already in progress (state ${generated.record.lifecycleState}, id ${generated.record.id}) and was built on a previous analysis. It was kept unchanged; no new proposal was created. Finish or reopen that one first.`,
+        // Recommendation ids are positional ("priority-1-authentication"): on a newer analysis the same id can name a DIFFERENT
+        // finding. The in-progress correction is therefore identified by its title and analysis, never presented as this blocker's.
+        safeFixNote: `A Safe Fix with the same recommendation id ("${generated.record.recommendationId}") is already in progress (state ${generated.record.lifecycleState}, id ${generated.record.id}, titled "${generated.record.prDraft?.prTitle ?? generated.record.recommendationId}", built on analysis ${generated.record.reviewId ?? "unknown"}). It is not necessarily this blocker: ids are positional and may refer to a different finding on a newer analysis. It was kept unchanged and no new proposal was created. Finish or reopen that one first.`,
       };
     }
     if (generated.status !== "ready") return mcpResult;
