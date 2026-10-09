@@ -12,7 +12,7 @@ export {
   trustNarrativeForBand,
 } from "./confidence";
 export { generateSafeFix } from "./generate";
-export { verifySafeFix, approveSafeFix, markSafeFixApplied } from "./verify";
+export { verifySafeFix, approveSafeFix, markSafeFixApplied, reopenSafeFix } from "./verify";
 export { preparePullRequestDraft } from "./pr-preparation";
 export {
   listSafeFixHistory,

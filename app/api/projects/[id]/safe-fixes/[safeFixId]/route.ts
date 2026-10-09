@@ -5,6 +5,7 @@ import { createAdminClient } from "@/server/security-scanner/admin-client";
 import { getSafeFixById } from "@/server/safe-fix-engine/history";
 import {
   approveSafeFix,
+  reopenSafeFix,
   markSafeFixApplied,
   verifySafeFix,
 } from "@/server/safe-fix-engine/verify";
@@ -21,7 +22,7 @@ const paramsSchema = z.object({
 });
 
 const bodySchema = z.object({
-  action: z.enum(["approve", "applied", "verify"]).optional(),
+  action: z.enum(["approve", "applied", "verify", "reopen"]).optional(),
   /** With action "applied": the commit of the customer's change (full SHA). Enables exact-commit verification. */
   commitSha: z.string().regex(/^[0-9a-fA-F]{40}$/).optional(),
 });
@@ -91,6 +92,17 @@ export async function POST(
   if (action === "approve") {
     await approveSafeFix(admin, { safeFixId, organizationId: orgId, projectId, actor: access.userId });
     return NextResponse.json({ ok: true, state: "APPROVED" });
+  }
+  if (action === "reopen") {
+    try {
+      await reopenSafeFix(admin, { safeFixId, organizationId: orgId, projectId, actor: access.userId });
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith("invalid_transition")) {
+        return NextResponse.json({ error: error.message }, { status: 409 });
+      }
+      throw error;
+    }
+    return NextResponse.json({ ok: true, state: "READY" });
   }
   if (action === "applied") {
     try {

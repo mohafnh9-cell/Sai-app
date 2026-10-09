@@ -292,3 +292,20 @@ export async function markSafeFixApplied(
   });
   return { binding: commitSha ? "exact_proposal_commit" : "assisted_unbound" };
 }
+
+/**
+ * Operator action (API only): a verification that could not conclude -- e.g. the rescan of the reported commit
+ * had not finished -- leaves the record FAILED. Reopening returns it to READY so the approve -> applied -> verify
+ * cycle can be repeated. The recorded proposal commit is kept (reporting the same SHA again is a no-op).
+ */
+export async function reopenSafeFix(
+  admin: SupabaseClient,
+  input: { safeFixId: string; organizationId: string; projectId: string; actor: string }
+): Promise<void> {
+  await transitionSafeFixState(admin, {
+    ...input,
+    // No `fromState`: the transition validates the record's ACTUAL state (only FAILED may go back to READY here).
+    toState: "READY",
+    reason: "operator_reopened_after_failed_verification",
+  });
+}

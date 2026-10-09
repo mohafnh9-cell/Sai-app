@@ -14,7 +14,7 @@ import { createFakeAdmin, type FakeTables } from "@/server/mcp/__tests__/fake-ad
 import { buildVerdictFixture, verdictRow } from "@/server/mcp/__tests__/verdict-fixture";
 import { matchKeysForNativeFinding } from "../finding-identity";
 import { setSafeFixProposalCommit } from "../proposal-commit";
-import { approveSafeFix, markSafeFixApplied, verifySafeFix } from "../verify";
+import { approveSafeFix, markSafeFixApplied, reopenSafeFix, verifySafeFix } from "../verify";
 import { decideFindingVerification, type VerificationEvidence } from "../verification-rules";
 
 // A proposal bound to a commit is verified against the completed scan of EXACTLY that commit.
@@ -321,5 +321,25 @@ describe("assisted pilot flow: instructions -> customer's agent commits -> resca
     expect((await setSafeFixProposalCommit(admin, { safeFixId: SAFE_FIX, scope, commitSha: PROPOSAL_SHA, actor: "u" })).state).toBe("APPROVED");
     expect((await setSafeFixProposalCommit(admin, { safeFixId: SAFE_FIX, scope, commitSha: LATER_SHA, actor: "u" })).state).toBe("READY");
     expect(tables.safe_fix_records![0].proposal_commit_sha).toBe(LATER_SHA);
+  });
+
+  it("verifying too early fails; reopen -> approve -> applied(same SHA) -> verify passes once the commit's scan is complete", async () => {
+    const { admin, tables } = build({ proposalSha: null, state: "READY", rescans: [scanRow(PROPOSAL_SCAN, PROPOSAL_SHA, { status: "running" })] });
+    await approveSafeFix(admin, ids);
+    await markSafeFixApplied(admin, { ...ids, commitSha: PROPOSAL_SHA });
+    expect((await verify(admin)).outcome).not.toBe("passed");
+    expect(tables.safe_fix_records![0].lifecycle_state).toBe("FAILED");
+
+    tables.scans![1].status = "completed"; // the cloud scan of the reported commit finishes
+    await reopenSafeFix(admin, ids);
+    expect(tables.safe_fix_records![0]).toMatchObject({ lifecycle_state: "READY", proposal_commit_sha: PROPOSAL_SHA });
+    await approveSafeFix(admin, ids);
+    await markSafeFixApplied(admin, { ...ids, commitSha: PROPOSAL_SHA }); // same SHA: no-op, no reopen of the approval
+    expect(await verify(admin)).toMatchObject({ outcome: "passed", statement: "exact_commit_rescan_clean", verifiedCommitSha: PROPOSAL_SHA });
+  });
+
+  it("reopen is only valid from FAILED", async () => {
+    const { admin } = build({ proposalSha: PROPOSAL_SHA, state: "VERIFIED" });
+    await expect(reopenSafeFix(admin, ids)).rejects.toThrow("invalid_transition");
   });
 });
