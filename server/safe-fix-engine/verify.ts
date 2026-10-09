@@ -67,6 +67,38 @@ async function verifySafeFixInner(
     relatedReviewId: record.reviewId,
   });
 
+  // Past this point the record is VERIFYING, a state no API action can leave. If anything fails before a
+  // result is stored, move it to FAILED (reopen-able) instead of leaving it stuck, then surface the error.
+  try {
+    return await evaluateVerification(admin, input, record, scope);
+  } catch (error) {
+    await transitionSafeFixState(admin, {
+      safeFixId: record.id,
+      organizationId: input.organizationId,
+      projectId: input.projectId,
+      fromState: "VERIFYING",
+      toState: "FAILED",
+      actor: input.actor ?? "system",
+      reason: `verification_error:${(error instanceof Error ? error.message : "unknown").slice(0, 120)}`,
+      relatedRecommendationId: record.recommendationId,
+      relatedReviewId: record.reviewId,
+    }).catch(() => undefined);
+    throw error;
+  }
+}
+
+async function evaluateVerification(
+  admin: SupabaseClient,
+  input: {
+    safeFixId: string;
+    organizationId: string;
+    projectId: string;
+    analysisRunId?: string | null;
+    actor?: string;
+  },
+  record: NonNullable<Awaited<ReturnType<typeof getSafeFixById>>>,
+  scope: { organizationId: string; projectId: string }
+): Promise<SafeFixVerificationResult> {
   const baseline = record.document;
   const baselineSnap = (await admin
     .from("safe_fix_records")

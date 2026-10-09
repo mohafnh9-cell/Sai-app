@@ -12,7 +12,7 @@ vi.mock("../memory-bridge", async (importOriginal) => ({
 
 import { createFakeAdmin, type FakeTables } from "@/server/mcp/__tests__/fake-admin";
 import { mapSafeFixError } from "../http-errors";
-import { verifySafeFix } from "../verify";
+import { reopenSafeFix, verifySafeFix } from "../verify";
 
 describe("mapSafeFixError", () => {
   it.each([
@@ -55,4 +55,37 @@ describe("verifySafeFix outside APPLIED refuses BEFORE writing anything (engine 
       expect(tables.safe_fix_verifications).toEqual([]);
     }
   );
+});
+
+describe("a verification that fails midway does not strand the record in VERIFYING", () => {
+  const ORG = "org-a";
+  const PROJECT = "11111111-1111-4111-8111-111111111111";
+  const FIX = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+
+  function world() {
+    const tables = {
+      safe_fix_records: [{
+        id: FIX, organization_id: ORG, project_id: PROJECT, recommendation_id: "rec", review_id: null, verdict_id: null, lifecycle_state: "APPLIED",
+        confidence_band: "HIGH", confidence_score: 80, document: {}, pr_draft: {}, baseline_snapshot: {},
+        created_at: "2026-10-01T00:00:00.000Z", updated_at: "2026-10-01T00:00:00.000Z",
+      }],
+      safe_fix_lifecycle_events: [], safe_fix_verifications: [], scans: [], production_verdicts: [], repository_scan_state: [],
+    } as unknown as FakeTables;
+    const real = createFakeAdmin(tables) as unknown as { from: (n: string) => unknown };
+    // The database fails while storing the verification result (after the record is already VERIFYING).
+    const admin = { from: (name: string) => { if (name === "safe_fix_verifications") throw new Error("connection reset"); return real.from(name); } } as never;
+    return { tables, admin, real: real as never };
+  }
+
+  it("moves VERIFYING -> FAILED with an auditable reason, rethrows the real error, and reopen then works", async () => {
+    const { tables, admin, real } = world();
+    await expect(verifySafeFix(admin, { safeFixId: FIX, organizationId: ORG, projectId: PROJECT })).rejects.toThrow("connection reset");
+    expect(tables.safe_fix_records![0].lifecycle_state).toBe("FAILED");
+    const reasons = tables.safe_fix_lifecycle_events!.map((e) => `${e.from_state}->${e.to_state}:${String(e.reason).slice(0, 60)}`);
+    expect(reasons).toEqual(["APPLIED->VERIFYING:verification_started", "VERIFYING->FAILED:verification_error:connection reset"]);
+    expect(tables.safe_fix_verifications).toEqual([]);
+
+    await reopenSafeFix(real, { safeFixId: FIX, organizationId: ORG, projectId: PROJECT, actor: "operator" });
+    expect(tables.safe_fix_records![0].lifecycle_state).toBe("READY");
+  });
 });
