@@ -135,12 +135,17 @@ export async function loadMissionControlWithRecovery(
       admin: input.admin,
       preloadedVerdict: currentVerdict,
     });
+    // The requested run completed but its own verdict is still being written: the verdict we fall
+    // back to belongs to an OLDER scan and must be treated as outdated (same signal as the
+    // unscoped path), not as "your current production view".
+    // A failed lookup keeps the existing labeled fallback rather than breaking the page.
+    const materializing = await scanMaterializingVerdict(dataClient, projectId, scopedRunId).catch(() => false);
     return {
       view: unscoped.view,
       verdict: unscoped.verdict,
       runScoped: false,
       activeRunId: scopedRunId,
-      recoveryReason: "scoped_verdict_missing",
+      recoveryReason: materializing ? "verdict_materializing" : "scoped_verdict_missing",
     };
   }
 
