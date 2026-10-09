@@ -221,6 +221,14 @@ async function verifySafeFixInner(
     protectionStatusImproved,
     newIssuesIntroduced,
     binding,
+    statement:
+      outcome !== "passed"
+        ? "not_verified"
+        : binding === "exact_proposal_commit"
+          ? "exact_commit_rescan_clean"
+          : "later_analysis_clean_unbound",
+    verifiedScanId: evaluatedScanId,
+    verifiedCommitSha: evidence.verificationScan?.commitSha ?? null,
     details: { confidenceDelta, reasons: decision.reasons },
   };
 }

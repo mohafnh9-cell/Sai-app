@@ -104,6 +104,10 @@ export async function POST(
       return NextResponse.json({ ok: true, state: "APPLIED", binding });
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
+      if (message === "proposal_commit_unsupported") {
+        // Deployed ahead of migration 067: recording a commit is not available yet; nothing was changed.
+        return NextResponse.json({ error: message }, { status: 503 });
+      }
       if (
         message.startsWith("invalid_transition") ||
         message === "proposal_commit_locked" ||

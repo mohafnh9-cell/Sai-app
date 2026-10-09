@@ -16,6 +16,7 @@ import {
 import { transitionSafeFixState } from "../lifecycle";
 import { summarizeSafeFixImpact } from "../memory-bridge";
 import { verifySafeFix } from "../verify";
+import { loadVerificationEvidence } from "../verification-evidence";
 
 // The service-role client bypasses RLS, so every Safe Fix access must carry organization + project.
 
@@ -104,5 +105,51 @@ describe("reads are scoped", () => {
     expect(mine.proposed).toBe(1);
     const crossed = await summarizeSafeFixImpact(admin, { organizationId: ORG_A, projectId: PROJECT_B }, "2026-10-01", "2026-10-31");
     expect(crossed.proposed).toBe(0);
+  });
+});
+
+describe("verification evidence reads scans only inside the organization + project", () => {
+  const ORG = "org-a";
+  const P = "11111111-1111-4111-8111-111111111111";
+  const FOREIGN_ORG_SCAN = "aaaaaaaa-0000-4000-8000-000000000001";
+  const FOREIGN_PROJECT_SCAN = "aaaaaaaa-0000-4000-8000-000000000002";
+  const OWN_SCAN = "aaaaaaaa-0000-4000-8000-000000000003";
+  const scan = (id: string, over: Record<string, unknown> = {}) => ({
+    id, status: "completed", created_at: "2026-03-05T00:00:00.000Z", commit_sha: "c".repeat(40), branch: "main",
+    project_id: P, repository_id: P, organization_id: ORG, metrics: {}, omissions: [], ...over,
+  });
+  const admin = (scans: Array<Record<string, unknown>>) =>
+    createFakeAdmin({
+      scans,
+      scan_findings: [{ id: "x", scan_id: FOREIGN_ORG_SCAN, project_id: P, fingerprint: "fp", rule_id: "r", file_path: "a.ts", title: "t", metadata: null }],
+      external_engine_findings: [],
+      security_jobs: [],
+      production_verdicts: [],
+    } as unknown as FakeTables) as never;
+  const load = (a: never, over: { baselineScanId?: string | null; verificationScanId?: string | null }) =>
+    loadVerificationEvidence(a, { organizationId: ORG, projectId: P, baselineScanId: null, verificationScanId: null, recommendationId: "rec", ...over });
+
+  it("a rescan of another organization is never loaded (no row, no findings read)", async () => {
+    const evidence = await load(admin([scan(FOREIGN_ORG_SCAN, { organization_id: "org-z" })]), { verificationScanId: FOREIGN_ORG_SCAN });
+    expect(evidence.verificationScan).toBeNull();
+    expect(evidence.rescanKeys).toBeNull();
+    expect(evidence.verdict).toBeNull();
+  });
+
+  it("a rescan of another project is never loaded", async () => {
+    const evidence = await load(admin([scan(FOREIGN_PROJECT_SCAN, { project_id: "99999999-9999-4999-8999-999999999999" })]), { verificationScanId: FOREIGN_PROJECT_SCAN });
+    expect(evidence.verificationScan).toBeNull();
+    expect(evidence.rescanKeys).toBeNull();
+  });
+
+  it("a baseline scan of another organization/project is never loaded", async () => {
+    const evidence = await load(admin([scan(FOREIGN_ORG_SCAN, { organization_id: "org-z" })]), { baselineScanId: FOREIGN_ORG_SCAN });
+    expect(evidence.baselineScan).toBeNull();
+    expect(evidence.targetsFullyResolved).toBe(false);
+  });
+
+  it("a scan inside the scope is loaded", async () => {
+    const evidence = await load(admin([scan(OWN_SCAN)]), { verificationScanId: OWN_SCAN });
+    expect(evidence.verificationScan?.id).toBe(OWN_SCAN);
   });
 });

@@ -81,6 +81,17 @@ export type SafeFixVerificationResult = {
    * NOT a verified automatic patch.
    */
   binding: "exact_proposal_commit" | "assisted_unbound";
+  /**
+   * Machine-readable statement a client can localize. It says WHAT was verified:
+   * - exact_commit_rescan_clean: a complete rescan of exactly the customer's reported commit no longer contains the finding.
+   * - later_analysis_clean_unbound: a later complete analysis no longer contains the finding. NOT tied to a specific
+   *   commit of a fix and NOT a verified patch.
+   * - not_verified: see details.reasons.
+   */
+  statement: "exact_commit_rescan_clean" | "later_analysis_clean_unbound" | "not_verified";
+  /** The scan and commit that were actually evaluated (null when none was found). */
+  verifiedScanId: string | null;
+  verifiedCommitSha: string | null;
   details: Record<string, unknown>;
 };
 
@@ -89,6 +100,8 @@ export type SafeFixReportSummary = {
   applied: number;
   verified: number;
   failed: number;
+  /** Subset of `verified` whose verification was bound to the exact commit of the customer's change. */
+  verifiedExactCommit?: number;
   mostImpactfulTitle: string | null;
   confidenceGained: number | null;
 };

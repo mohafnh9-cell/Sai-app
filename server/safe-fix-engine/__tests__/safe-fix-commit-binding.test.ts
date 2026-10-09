@@ -107,6 +107,7 @@ describe("proposal bound to a commit: the rescan must be exactly that commit", (
     const result = await verify(admin);
     expect(result.outcome).toBe("passed");
     expect(result.binding).toBe("exact_proposal_commit");
+    expect(result).toMatchObject({ statement: "exact_commit_rescan_clean", verifiedScanId: PROPOSAL_SCAN, verifiedCommitSha: PROPOSAL_SHA });
     expect(tables.safe_fix_records![0].lifecycle_state).toBe("VERIFIED");
     expect(tables.safe_fix_verifications![0].details).toMatchObject({
       binding: "exact_proposal_commit", baseCommitSha: BASE_SHA, proposalCommitSha: PROPOSAL_SHA, verifiedCommitSha: PROPOSAL_SHA, verificationScanId: PROPOSAL_SCAN,
@@ -117,6 +118,7 @@ describe("proposal bound to a commit: the rescan must be exactly that commit", (
     const { admin, tables } = build({ proposalSha: PROPOSAL_SHA, rescans: [scanRow(LATER_SCAN, LATER_SHA)] });
     const result = await verify(admin);
     expect(result.outcome).not.toBe("passed");
+    expect(result.statement).toBe("not_verified");
     expect(result.details.reasons).toContain("verification_scan_missing");
     expect(tables.safe_fix_records![0].lifecycle_state).not.toBe("VERIFIED");
   });
@@ -301,7 +303,10 @@ describe("assisted pilot flow: instructions -> customer's agent commits -> resca
     const { admin } = build({ proposalSha: null, state: "READY", rescans: [scanRow(LATER_SCAN, LATER_SHA)] });
     await approveSafeFix(admin, ids);
     expect(await markSafeFixApplied(admin, ids)).toEqual({ binding: "assisted_unbound" });
-    expect((await verify(admin, LATER_SCAN)).binding).toBe("assisted_unbound");
+    const unbound = await verify(admin, LATER_SCAN);
+    expect(unbound.binding).toBe("assisted_unbound");
+    // What the client may say: a LATER analysis no longer has the finding -- not "a verified patch of commit X".
+    expect(unbound).toMatchObject({ statement: "later_analysis_clean_unbound", verifiedScanId: LATER_SCAN, verifiedCommitSha: LATER_SHA });
   });
 
   it("a commit cannot be recorded on a record that is not APPROVED (no half-applied state)", async () => {

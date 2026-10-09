@@ -187,8 +187,16 @@ export async function loadVerificationEvidence(
     proposalCommitSha?: string | null;
   }
 ): Promise<VerificationEvidence> {
+  // Scans are read INSIDE the caller's organization + project (the service-role client bypasses RLS):
+  // a scan of another tenant is "missing", never loaded and then rejected afterwards.
   const baselineRes = input.baselineScanId
-    ? await admin.from("scans").select(SCAN_COLUMNS).eq("id", input.baselineScanId).maybeSingle()
+    ? await admin
+        .from("scans")
+        .select(SCAN_COLUMNS)
+        .eq("id", input.baselineScanId)
+        .eq("organization_id", input.organizationId)
+        .eq("project_id", input.projectId)
+        .maybeSingle()
     : { data: null };
   const baselineRow = (baselineRes.data ?? null) as Row | null;
 
@@ -214,7 +222,13 @@ export async function loadVerificationEvidence(
   }
 
   const rescanRes = verificationScanId
-    ? await admin.from("scans").select(SCAN_COLUMNS).eq("id", verificationScanId).maybeSingle()
+    ? await admin
+        .from("scans")
+        .select(SCAN_COLUMNS)
+        .eq("id", verificationScanId)
+        .eq("organization_id", input.organizationId)
+        .eq("project_id", input.projectId)
+        .maybeSingle()
     : { data: null };
   const rescanRow = (rescanRes.data ?? null) as Row | null;
 
@@ -252,6 +266,7 @@ export async function loadVerificationEvidence(
         .from("scan_findings")
         .select("id, fingerprint, rule_id, file_path, title, metadata")
         .eq("scan_id", verificationScan.id)
+        .eq("project_id", input.projectId)
         .range(from, to)
     );
     const externalRows = await loadAllRows((from, to) =>
