@@ -15,6 +15,8 @@ import { appendAnalysisRunSearchParams } from "@/features/analysis-runs/lib/buil
 import { resolveAnalysisRunForProject } from "@/server/analysis-runs/resolve-analysis-run";
 import { createAdminClient } from "@/server/security-scanner/admin-client";
 import { getProductionReviewState } from "@/server/review-cancel/get-production-review-state";
+import { getCurrentProductionVerdict } from "@/server/production-verdict/service";
+import { newerScanAwaitingVerdict } from "@/server/production-verdict/pending-verdict";
 import type { Metadata } from "next";
 import { z } from "zod";
 
@@ -121,15 +123,23 @@ export default async function ProjectJourneyPage({ params, searchParams }: Journ
 
   // While a review runs there is no final decision for the current run: the journey must not present the
   // previous verdict's posture as current (read-only; stale-review recovery stays with Mission Control).
-  const reviewInProgress = auth?.organizationId
-    ? await getProductionReviewState(createAdminClient(), {
-        organizationId: auth.organizationId,
+  // The same holds once the newest scan has completed but its own verdict is not persisted yet.
+  const workspaceId = auth.organizationId;
+  const reviewInProgress = await (async () => {
+    try {
+      const admin = createAdminClient();
+      const state = await getProductionReviewState(admin, {
+        organizationId: workspaceId,
         projectId,
         recoverStale: false,
-      })
-        .then((state) => state.hasActiveReview)
-        .catch(() => false)
-    : false;
+      });
+      if (state.hasActiveReview) return true;
+      const current = await getCurrentProductionVerdict(admin, workspaceId, projectId);
+      return current ? await newerScanAwaitingVerdict(admin, projectId, current.scanId) : false;
+    } catch {
+      return false;
+    }
+  })();
 
   const { data: latestScan } = await supabase
     .from("scans")
