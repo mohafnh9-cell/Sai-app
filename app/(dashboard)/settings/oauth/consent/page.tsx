@@ -11,6 +11,7 @@ type ConsentPayload = {
   clientName: string;
   clientId: string;
   organizationId: string;
+  organizationName?: string | null;
   scopes: { scope: string; description: string; descriptionEs?: string; sensitive?: boolean; defaultGranted?: boolean }[];
   redirectUri: string;
 };
@@ -115,6 +116,14 @@ function OAuthConsentForm() {
             {t("oauthConsentSubtitle", { client: payload.clientName })}
           </p>
         </div>
+      </div>
+
+      <div className="rounded-lg border border-border/60 bg-muted/20 p-4 space-y-1">
+        <p className="text-xs text-muted-foreground">{t("oauthConsentWorkspace")}</p>
+        <p className="text-sm font-semibold" data-testid="oauth-consent-workspace">
+          {payload.organizationName ?? payload.organizationId}
+        </p>
+        <p className="text-xs text-muted-foreground">{t("oauthConsentWorkspaceNote")}</p>
       </div>
 
       <div className="rounded-lg border border-border/60 bg-muted/20 p-4 space-y-3">

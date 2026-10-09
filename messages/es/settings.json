@@ -88,5 +88,7 @@
   "dangerTitle": "Zona de peligro",
   "dangerSubtitle": "Acciones irreversibles para tu cuenta.",
   "oauthConsentSensitiveNote": "No se concede salvo que lo marques: puede iniciar análisis, ejecutar auditorías o autorizar pruebas de seguridad en tu aplicación.",
-  "oauthConsentNothingSelected": "Selecciona al menos una capacidad para permitir el acceso."
+  "oauthConsentNothingSelected": "Selecciona al menos una capacidad para permitir el acceso.",
+  "oauthConsentWorkspace": "Workspace al que tendrá acceso esta conexión",
+  "oauthConsentWorkspaceNote": "La conexión queda limitada a este workspace. Si no es el que esperas, pulsa Cancelar y cambia de workspace primero."
 }
