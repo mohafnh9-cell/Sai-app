@@ -4,6 +4,14 @@ Leyenda de entornos (nunca se mezclan): **L** = pruebas locales/CI (código, bas
 Estado: **aprobado** (observado en ese entorno) · **pendiente** · **fallido**. "Aprobado L" no equivale a aprobado P.
 Última actualización: 2026-10-09 (tarde). **Desplegado:** #60, #62, #61 (despliegue 6960499262, SHA `0a076ed`) y migraciones 067 y 068. #59 (docs) en esta fusión.
 
+## 0. Condiciones del piloto (alcance acotado)
+1. **Un solo repositorio**, seleccionado mediante la GitHub App ("Only select repositories").
+2. **Solo la rama principal (por defecto).** Los veredictos, la propuesta y la verificación se refieren a esa rama; un análisis de otra rama no cuenta como evidencia (la verificación exige la misma rama que el análisis base). Commits en otras ramas quedan fuera del piloto.
+3. **Una sola corrección asistida en curso a la vez.** Es una **norma de procedimiento**, no una garantía técnica: el índice de la migración 068 limita a una corrección abierta por *(proyecto, id de recomendación)*; dos recomendaciones distintas podrían estar abiertas a la vez. Hasta que exista una cola, el equipo SequrAI no inicia otra corrección hasta cerrar la anterior (`VERIFIED`, `FAILED` o `SUPERSEDED`).
+4. SequrAI no escribe en el repositorio del cliente (ver permisos de la GitHub App) y el agente del cliente hace el commit.
+5. MCP del cliente por **OAuth con permisos mínimos** (§C); nunca claves `seq_live_…`.
+6. Los ids de recomendación son **posicionales**: un mismo id puede nombrar otro hallazgo en un análisis posterior. `safe_fix` nunca reutiliza en silencio una propuesta de otro análisis (reutiliza solo con el mismo análisis base); con una corrección en curso de un análisis anterior responde `in_flight` (conservador) y nombra su título y análisis (PR #64).
+
 ## A. Preparación técnica del piloto (debe quedar validada el día 11)
 
 | # | Criterio | L | M | P | Estado | Evidencia / bloqueo |
@@ -20,6 +28,8 @@ Estado: **aprobado** (observado en ese entorno) · **pendiente** · **fallido**.
 | A10 | `safe_fix` repetido/concurrente: reutiliza; nunca sustituye APPROVED/APPLIED/VERIFYING | ✔ (#62; PostgreSQL real local) | **pendiente** (vía MCP) | ✔ (vía API) | **aprobado por API; pendiente por MCP** | Producción: 5 simultáneas → 1 registro; repetición con `APPROVED` preservado; `in_flight` 409 conservando el registro; BD sin duplicados abiertos ni pérdidas. Migración 068 **aplicada** |
 | A11 | Errores controlados y procedimiento de recuperación probado | ✔ | — | ✔ | **aprobado** | `reopen`, 409 por cambio de SHA, 409 de A9, `in_flight`. Recuperación de servicio: redeploy 6958950455 (`c8ada24`), columnas e índice se conservan. Retirar el índice solo con motivo (efecto: vuelve la convergencia por reconciliación, sin garantía estricta ante carreras) |
 | A12 | Documentación consistente con lo observado | — | — | — | **pendiente** | Revisión final el día 11 |
+| A14 | OAuth con permisos mínimos: el cliente ve solo las 3 capacidades de lectura en la pantalla de consentimiento | ✔ (#63, abierta) | **pendiente** | **pendiente** | **pendiente** | La pantalla solo aprueba o deniega lo que el cliente pide, y sin `scope` concede los 6. #63 añade la pista `scope=` al desafío 401; hay que **observar** la pantalla real |
+| A15 | Ids posicionales: nunca se reutiliza en silencio la propuesta de otro hallazgo | ✔ (#64, abierta) | — | — | **pendiente de fusionar** | Sin defecto: la reutilización exige el mismo análisis base. Pruebas nuevas con hallazgos distintos bajo el mismo id |
 | A13 | Limitación SQL en el motor cloud | ✔ (nativo) | — | **pendiente** | **pendiente (aceptado como límite)** | Reproductor `known-gap-sql-concatenation.test.ts`; la comprobación en la nube requiere un commit adicional de prueba (sin autorizar) |
 
 ## B. Comprobaciones de la instalación del cliente (durante el onboarding; no se ha accedido a ella)
@@ -63,3 +73,19 @@ Estado: **aprobado** (observado en ese entorno) · **pendiente** · **fallido**.
 2. Sesión B (aislamiento entre organizaciones).
 3. Resultado del paso visual 1 (Mission Control) y continuar la guía.
 4. Autorización conjunta de despliegue (solicitud única, abajo).
+
+
+## Registro de cambios efectivos y de recuperación (2026-10-09)
+**Aclaración sobre el "rollback":** **no se ejecutó ningún rollback.** En los informes aparece "Recuperación" como un procedimiento *identificado* (redeploy del despliegue estable anterior, conservando datos, columnas e índice), no como una acción realizada. No se redesplegó nada anterior, no se eliminó ninguna columna ni dato y no se retiró el índice 068. Despliegue estable de referencia hoy: 6960713230 (`b2c3a027`; el código es el de `0a076ed`, 6960499262); el estable previo al lote era 6958950455 (`c8ada24`).
+
+Cambios efectivos y motivo:
+| Cambio | Motivo |
+|---|---|
+| Copias locales de las tablas de Safe Fix + restauración en PostgreSQL local (dos lotes) | Respaldo recuperable antes de migrar |
+| Migración **067** (`proposal_commit_sha`, nullable) | Verificación ligada al SHA exacto |
+| Migración **068** (índice único parcial, una corrección abierta por proyecto + recomendación) | Garantía estricta frente a creaciones simultáneas |
+| Fusión y despliegue de #57, #58, #55, #56, #54, #60, #62, #61, #59 | Correcciones y documentación del flujo (cada una con su CI) |
+| Commits de prueba en `mohafnh9-cell/sequrai-e2e-test`: 4 (primer E2E) + 4 (segundo); cada serie termina con un commit que restaura el árbol base; sin reescribir historial | Validar la verificación por SHA exacto y la repetición/concurrencia |
+| Análisis que esos pushes dispararon + 1 análisis manual (comprobación del brain en un análisis real) | Evidencia de producción |
+| Datos de prueba creados en producción: registros Safe Fix `69b2b7eb…` y `e8283511…` (ambos `VERIFIED`), sus eventos y verificaciones | Resultado de las pruebas; se conservan como evidencia |
+| Ningún cambio de ámbitos MCP, de credenciales ni de configuración | — |
