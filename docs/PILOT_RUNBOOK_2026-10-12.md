@@ -81,6 +81,8 @@ Preparación: anotar `BASE` = SHA completo del último commit analizado y su `sc
 
 Limpieza: revertir los commits de prueba y dejar el repositorio en `BASE` (con autorización); conservar el registro de IDs de análisis y respuestas como evidencia.
 
+> **Procedimiento operativo detallado (incluye qué 409 pueden haber modificado el registro):** `docs/PILOT_MANUAL_CHECKS_2026-10-09.md` §4. Regla: tras cualquier no-200, volver a consultar el registro antes de repetir.
+
 ## 3. SQL por concatenación omitido (alcance conocido; no se amplía el piloto)
 
 - Reproductor: `lib/local-analysis/__tests__/known-gap-sql-concatenation.test.ts`.
