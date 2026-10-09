@@ -114,3 +114,24 @@ Separados por tipo de evidencia. Nada de esto es la prueba de claude.ai ni del e
 - **`safe_fix` no se ejecutó:** el escaneo vigente solo tiene 3 hallazgos informativos y 0 bloqueos; no hay hallazgo elegible, así que el recorrido funcional (propuesta → commit → verificación exacta) **no está verificado** con un agente real.
 
 **Conexión correcta ≠ recorrido funcional.** Verificado: autenticación, ámbitos concedidos, rechazo de 4 herramientas, lectura de 4 herramientas. Pendiente: `safe_fix` y el ciclo de corrección con un agente real, refresco (se observa a partir de las 14:53), y la integración del entorno del cliente (A16).
+
+## 9. Recorrido funcional y retirada (2026-10-09, `sequrai-e2e-test` únicamente)
+**Commits (3, sin reescribir historial):** `407a784` fixture inerte `auth.insecure-jwt` (`algorithms: ["none"]`; sin secretos, no exportado ni invocado, `jsonwebtoken` no instalado) → scan: 1 crítico, `not_ready` 64. `0604453` corrección `algorithms: ["HS256"]` → scan `8d094b8f`: 0 hallazgos, `ready_to_ship` 100. `cd09ef6` restauración: árbol idéntico al de la línea base `1eb0930` (0 archivos de diferencia); scan `ready_to_ship` 100. Solo se ejecutaron los scans disparados por esos commits.
+
+**Propuesta persistente (desde Claude Code):** `safe_fix` sin id → `choose_blocker` con un candidato (`priority-1-authentication`); con id → registro `3370e9f0…` (`safeFixStatus: created`, vinculado al scan `9bda61b1` del commit `407a784`). Evento de ciclo de vida `PROPOSED→READY` (`mcp`, `generation_complete`).
+
+**Flujo asistido (sesión del navegador del usuario, una acción cada vez, comprobando la base de datos entre pasos):** GET → `READY`, `proposalCommitSha: null`. `approve` → `APPROVED` (evento `founder_approved`). `applied` con SHA completo → `APPLIED`, `binding: exact_proposal_commit`, `proposal_commit_sha = 06044532cf77…`. `verify` → `VERIFIED`, `outcome: passed`, `statement: exact_commit_rescan_clean`, `verifiedScanId = 8d094b8f…` (su `commit_sha` es `0604453…`), `verifiedCommitSha = 0604453…`, `confidenceDelta +36`, `newIssuesIntroduced: false`. Las 3 propuestas anteriores del proyecto (`c439438e`, `69b2b7eb`, `e8283511`) conservan el mismo hash de fila.
+
+**Alerta `deploy_blocked` (`e42adfa4`, 13:54:11 UTC):** creada por la llamada `can_i_deploy` de esta prueba (evento `deploy_readiness_checked` con clave `deploy_check:mcp:…T13:54` a las 13:54:11.7 y `alert_sent` a las 13:54:12.1; código en `server/mcp/execute-tool.ts`: `recordDeployCheckMemory` + `evaluateDeployCheckAlert`). Las alertas `deploy_blocked` del 23/24 sept y 4 oct son históricas (otros scans). Efecto: escritura en `protection_events` y `security_alerts` (canal `in_app`, deduplicada por scan, enfriamiento ~24 h); no lanza scan ni escribe en GitHub. "Sin cómputo" ≠ "sin efectos secundarios". Está bajo `mcp:status:read` y la pantalla de consentimiento no lo menciona: decisión de diseño pendiente (declararlo o mover la evaluación al evaluador programado).
+
+**Retirada:** tokens de acceso (1) y refresco (1) del cliente con `revoked_at` establecido; cliente `status = disabled`; los otros 3 clientes con hash de fila idéntico. Tras revocar, la llamada MCP real fue rechazada ("necesita iniciar sesión de nuevo") y no se emitieron tokens nuevos (siguen 1 acceso y 1 refresco). `/oauth/authorize` con el cliente deshabilitado → `invalid_client`. Configuración local `sequrai-pilot` eliminada (`claude mcp remove`); `.mcp.json` sin modificar. **Límite:** el rechazo del refresco por el servidor no se probó presentando el token (no se leen secretos): se sustenta en `revoked_at` y en el código de `tokens.ts` (token revocado → `invalid_grant`); el refresco real sigue **pendiente**.
+
+## 10. Defectos registrados (sin corregir)
+1. `api.mass-assignment` marca aserciones sobre respuestas en pruebas (`expect(body).toMatchObject({organizationId…})`); conservar los fixtures vulnerables (`tests/security-benchmark/**`).
+2. `introducedBlockers`: el motor compara bloqueos totales del veredicto con críticos+altos del scan anterior, y el estado de GitHub usa otra base (1 vs 22).
+3. `/oauth/authorize` redirige con `error=invalid_redirect_uri` a un URI no registrado, y con `invalid_client` al URI indicado para un cliente deshabilitado; el estándar indica no redirigir (gravedad baja).
+4. `safe_fix` devuelve `status: ready` con `lifecycleState: PROPOSED` (registro capturado antes de la transición); debe mostrar `READY`.
+5. `can_i_deploy` escribe memoria y alertas bajo un ámbito de lectura; texto mezclado en/es y con alertas históricas.
+
+## 11. Criterios del piloto aún pendientes
+Pruebas visuales (Mission Control, Journey, sondeo visible, dashboard/proyectos); aislamiento entre organizaciones con la sesión B; refresco real del token; integración del entorno del cliente (A16) y comprobaciones B1–B8; límite SQL del motor cloud. **El piloto no se declara completo.**
