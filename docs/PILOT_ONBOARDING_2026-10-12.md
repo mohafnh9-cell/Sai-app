@@ -34,15 +34,30 @@ Fuera del piloto: generación automática de parches, permisos de escritura en G
 | Veredicto nunca presenta un veredicto anterior como actual (Protection, Mission Control con ámbito, brain) | Verificado en producción para un escaneo | Fase 8I.3.25: 303 muestras, 0 apariciones del veredicto anterior (PR #55, #56) |
 | Journey durante el intervalo | **PENDIENTE** | No se pudo leer el DOM renderizado; ver §5 |
 | Polling con pestaña visible | **PENDIENTE** | Las pestañas del entorno automatizado siempre reportan `hidden`; ver §5 |
-| Brain durante un escaneo en curso | **PENDIENTE (conocido)** | Muestra el veredicto anterior mientras corre el escaneo; no hay campo de "en curso" |
+| Brain durante un escaneo en curso | Corregido en PR #57 (sin desplegar) | `verdictState: historical_review_in_progress`, `reviewInProgress`, `productionReady` retenido, respuesta `no-store`; tests `build-project-brain-awaiting-verdict.test.ts`. **Sin comprobar en producción** |
+| Lectura de escaneos de verificación acotada por organización/proyecto | Implementado y probado localmente (PR #57) | `safe-fix-isolation.test.ts` (acceso cruzado) |
+| Compatibilidad de la migración 067 (código antes que migración) | Implementado y probado localmente (PR #57) | `safe-fix-migration-compat.test.ts`: lecturas siguen; escribir el SHA se rechaza (503) sin efectos |
 | Aislamiento entre organizaciones/proyectos en Safe Fix | Implementado y probado localmente (PR #57, sin fusionar) | `safe-fix-isolation.test.ts` |
 | Verificación atada al commit exacto | Implementado y probado localmente (PR #57, sin fusionar) | `safe-fix-commit-binding.test.ts` |
 | Migración 067 | **No aplicada** | `database/migrations/067_safe_fix_proposal_commit.sql` |
 | Recorrido completo con un cambio real en producción | **PENDIENTE** (depende de #57 + 067) | — |
 
+## 3b. Qué se probó realmente y qué sigue simulado
+
+| Tramo del flujo | Estado | Detalle |
+|---|---|---|
+| Conectar repositorio | **No probado** | Requiere un repositorio real y autorización |
+| Analizar | **Real, solo motor local** | El motor local (el mismo que usa `sequrai_local_audit`) sobre un repositorio temporal con git: antes del arreglo (commit `e6d7c41`) detectó `secrets.exposed` (crítico); tras el commit de arreglo (`27ecd50`) ese hallazgo ya no aparece. **Limitación:** no marcó la concatenación SQL del ejemplo (cobertura del motor nativo) |
+| Generar instrucciones | **Probado en pruebas unitarias** | Contenido del documento Safe Fix; no se ejecutó la herramienta MCP en producción |
+| Corregir con el agente y commit nuevo | **Simulado** | En la prueba real fue un cambio de archivo + `git commit` hechos por el propio test, no por un agente de cliente |
+| Reanalizar | **Real en el motor local; simulado en la nube** | El escáner en la nube (GitHub App, webhook, motores externos) no se ejecutó |
+| Verificar (commit exacto) | **Probado con base de datos simulada** | `safe-fix-commit-binding.test.ts` ejecuta el código real de verificación sobre tablas en memoria. **No probado contra la base de datos real ni con la migración 067** |
+
+Conclusión: la lógica de verificación y de aislamiento está probada; **el recorrido completo con repositorio conectado, escáner en la nube y base de datos real no se ha ejecutado**.
+
 ## 4. Verificar con el commit exacto (tras desplegar PR #57)
 
-`POST /api/projects/<id>/safe-fixes/<safeFixId>` con `{"action":"approve"}`, luego `{"action":"applied","commitSha":"<SHA completo de 40 caracteres>"}`, y cuando el análisis de ese commit haya terminado `{"action":"verify"}`. La verificación solo acepta el análisis completo de **ese** commit; un commit posterior no cuenta. Sin `commitSha` el registro queda como documental (`assisted_unbound`): no se presenta como parche verificado. **No existe todavía interfaz para este paso**; en el piloto lo hace el equipo de SequrAI.
+`POST /api/projects/<id>/safe-fixes/<safeFixId>` con `{"action":"approve"}`, luego `{"action":"applied","commitSha":"<SHA completo de 40 caracteres>"}`, y cuando el análisis de ese commit haya terminado `{"action":"verify"}`. La verificación solo acepta el análisis completo de **ese** commit; un commit posterior no cuenta. Sin `commitSha` el registro queda como documental (`assisted_unbound`): el resultado dice que **un análisis posterior** ya no contiene el hallazgo (`statement: later_analysis_clean_unbound`), nunca que exista un parche verificado de un commit. Si la migración 067 no está aplicada, registrar un `commitSha` devuelve 503 `proposal_commit_unsupported` sin cambiar nada. **No existe todavía interfaz para este paso**; en el piloto lo hace el equipo de SequrAI.
 
 ## 5. Procedimiento manual pendiente (Journey y polling, pestaña visible)
 
@@ -58,11 +73,11 @@ Requiere un navegador real con la pestaña en primer plano y una sesión del pro
 ## 6. Criterios para incorporar al cliente el día 12 (todos deben cumplirse)
 
 **Bloqueantes**
-1. PR #57 revisada, fusionada y **desplegada**; migración 067 aplicada **con autorización** y verificada.
+1. PR #57 revisada, fusionada y **desplegada**; migración 067 aplicada **con autorización** y verificada (orden recomendado: migración primero; el código también tolera desplegarse antes).
 2. Prueba de aislamiento: dos organizaciones y dos proyectos; ninguna lectura ni escritura cruzada de Safe Fix en producción.
 3. Recorrido completo en el repositorio de prueba con un **cambio real**: análisis → instrucciones → commit del agente → reanálisis → verificación atada a ese SHA → `VERIFIED`; y un caso negativo (commit posterior que no corrige) → no verificado.
 4. Conexión **solo mediante GitHub App** con permisos de solo lectura de código. El inicio de sesión OAuth heredado solicita el ámbito `repo admin:repo_hook` (lectura y escritura de repositorios): **no** debe usarse para el cliente. Comprobar `github_auth_mode = github_app` y el `permissions` de la instalación.
-5. Procedimiento de §5 ejecutado con pestaña visible, sin ver nunca un veredicto anterior como actual.
+5. Procedimiento de §5 ejecutado con pestaña visible, sin ver nunca un veredicto anterior como actual; además, durante un escaneo en curso `GET /api/brain/project/<id>` devuelve `verdictState: historical_review_in_progress` y `productionReady.readyForProduction: false`.
 6. Ningún fallo abierto de aislamiento, verificación ni presentación de veredictos.
 
 **Necesarios**
