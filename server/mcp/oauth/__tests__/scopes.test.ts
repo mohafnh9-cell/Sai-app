@@ -47,7 +47,7 @@ describe("MCP OAuth scopes", () => {
   });
 });
 
-describe("a connection granted exactly the three read-only scopes", () => {
+describe("a connection granted exactly the three least-privilege scopes", () => {
   const READ = ["mcp:status:read", "mcp:discover:read", "mcp:fix:read"];
   const allowed = ["can_i_deploy", "what_changed", "production_history", "discover_application", "safe_fix"];
   const rejected = ["review_now", "cancel_review", "full_product_audit", "authorize_dynamic_target"];

@@ -32,7 +32,7 @@ const post = (body: unknown) => POST(new Request("http://x/api/oauth/consent", {
 beforeEach(() => { state.requested = [...ALL]; state.codeScopes = null; state.audit = []; state.deleted = 0; });
 
 describe("consent decides what is granted, not what the client asked for", () => {
-  it("a client that asked for ALL six (or omitted scope) and a plain 'Allow' receives ONLY the three read-only scopes", async () => {
+  it("a client that asked for ALL six (or omitted scope) and a plain 'Allow' receives ONLY the three least-privilege scopes", async () => {
     const response = await post({ request_id: "req-1", action: "approve" });
     expect(response.status).toBe(200);
     expect(state.codeScopes).toEqual(READ);
@@ -45,6 +45,16 @@ describe("consent decides what is granted, not what the client asked for", () =>
     const byScope = Object.fromEntries(body.scopes.map((s: { scope: string; sensitive: boolean; defaultGranted: boolean }) => [s.scope, s]));
     for (const scope of READ) expect(byScope[scope]).toMatchObject({ sensitive: false, defaultGranted: true });
     for (const scope of ["mcp:review:run", "mcp:audit:run", "mcp:target:authorize"]) expect(byScope[scope]).toMatchObject({ sensitive: true, defaultGranted: false });
+  });
+
+  it("the fix capability states that SequrAI saves a persistent proposal and does not change code or write to GitHub (en + es); no default capability is described as strictly read-only", async () => {
+    const body = await (await GET(new Request("http://x/api/oauth/consent?request_id=req-1"))).json();
+    const fix = body.scopes.find((item: { scope: string }) => item.scope === "mcp:fix:read");
+    expect(fix.description).toMatch(/saves a persistent Safe Fix proposal/i);
+    expect(fix.description).toMatch(/does not change your code or write to GitHub/i);
+    expect(fix.descriptionEs).toMatch(/guarda una propuesta Safe Fix persistente/i);
+    expect(fix.descriptionEs).toMatch(/no modifica tu c[oó]digo ni escribe en GitHub/i);
+    for (const item of body.scopes) expect(`${item.description} ${item.descriptionEs}`).not.toMatch(/strictly read-only|solo lectura/i);
   });
 
   it("opting in is explicit: ticking a sensitive capability grants exactly the ticked set", async () => {

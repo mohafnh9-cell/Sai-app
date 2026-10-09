@@ -11,14 +11,14 @@ type ConsentPayload = {
   clientName: string;
   clientId: string;
   organizationId: string;
-  scopes: { scope: string; description: string; sensitive?: boolean; defaultGranted?: boolean }[];
+  scopes: { scope: string; description: string; descriptionEs?: string; sensitive?: boolean; defaultGranted?: boolean }[];
   redirectUri: string;
 };
 
 function OAuthConsentForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { t } = useI18n("settings");
+  const { t, locale } = useI18n("settings");
   const requestId = searchParams.get("request_id");
 
   const [payload, setPayload] = useState<ConsentPayload | null>(null);
@@ -137,7 +137,7 @@ function OAuthConsentForm() {
                   }
                 />
                 <label htmlFor={inputId} className="space-y-0.5">
-                  <span className="block text-foreground">{item.description}</span>
+                  <span className="block text-foreground">{locale === "es" ? item.descriptionEs ?? item.description : item.description}</span>
                   {item.sensitive ? (
                     <span className="block text-xs text-warning">{t("oauthConsentSensitiveNote")}</span>
                   ) : null}

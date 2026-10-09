@@ -54,7 +54,7 @@ export function mcpUnauthorizedResponse(message = "Unauthorized"): NextResponse 
     ? `${issuer}/.well-known/oauth-protected-resource`
     : undefined;
 
-  // `scope` = the minimal read-only set to request first (a hint; see MCP_INITIAL_REQUEST_SCOPES).
+  // `scope` = the least-privilege set to request first (a hint; see MCP_INITIAL_REQUEST_SCOPES).
   const scopeHint = `scope="${MCP_INITIAL_REQUEST_SCOPES.join(" ")}"`;
   const wwwAuth = resourceMetadata
     ? `Bearer realm="sequrai-mcp", resource_metadata="${resourceMetadata}", ${scopeHint}`

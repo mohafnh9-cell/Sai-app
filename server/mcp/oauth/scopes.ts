@@ -23,8 +23,8 @@ export const ALL_MCP_SCOPES = [
 export type McpScope = (typeof ALL_MCP_SCOPES)[number];
 
 /**
- * The scopes an OAuth client should request FIRST (initial authorization): read-only status, discovery and Safe Fix
- * instructions. Advertised in the 401 challenge (`scope="..."`, RFC 6750 / MCP authorization spec) so a spec-following client
+ * The scopes an OAuth client should request FIRST (initial authorization): status, discovery and Safe Fix
+ * instructions (the least-privilege set: it starts no analyses; `safe_fix` does save a Safe Fix proposal in SequrAI). Advertised in the 401 challenge (`scope="..."`, RFC 6750 / MCP authorization spec) so a spec-following client
  * asks for these instead of every scope. It is a HINT: a client may still request more explicitly, and omitting `scope`
  * on /oauth/authorize still grants all scopes (unchanged, for compatibility). `safe_fix` under `mcp:fix:read` also
  * records a Safe Fix proposal in SequrAI's own database (see docs/PILOT_SPRINT_CHECKLIST.md); it never writes to GitHub.
@@ -94,8 +94,9 @@ export const SCOPE_DESCRIPTIONS: Record<McpScope, { en: string; es: string }> = 
     es: "Descubrir arquitectura de aplicaciones en repositorios conectados",
   },
   [MCP_SCOPE_FIX_READ]: {
-    en: "Generate Safe Fix prompts for identified blockers",
-    es: "Generar prompts Safe Fix para blockers identificados",
+    // Honest wording: safe_fix is not purely a read. It saves a persistent Safe Fix proposal in SequrAI (never in GitHub).
+    en: "Generate Safe Fix instructions for identified blockers. SequrAI saves a persistent Safe Fix proposal in your workspace; it does not change your code or write to GitHub.",
+    es: "Generar instrucciones Safe Fix para los bloqueos identificados. SequrAI guarda una propuesta Safe Fix persistente en tu workspace; no modifica tu código ni escribe en GitHub.",
   },
   [MCP_SCOPE_REVIEW_RUN]: {
     en: "Run and cancel production reviews on GitHub repositories",

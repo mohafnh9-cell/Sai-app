@@ -53,6 +53,7 @@ export async function GET(request: Request) {
   const scopeDetails = authRequest.scopes.map((scope) => ({
     scope,
     description: SCOPE_DESCRIPTIONS[scope as McpScope]?.en ?? scope,
+    descriptionEs: SCOPE_DESCRIPTIONS[scope as McpScope]?.es ?? scope,
     // Sensitive capabilities start UNCHECKED on the consent screen: the person must opt in to each.
     sensitive: isSensitiveMcpScope(scope),
     defaultGranted: !isSensitiveMcpScope(scope),

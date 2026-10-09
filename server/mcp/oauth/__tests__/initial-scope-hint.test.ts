@@ -9,7 +9,7 @@ const OLD = process.env.NEXT_PUBLIC_APP_URL;
 beforeEach(() => { process.env.NEXT_PUBLIC_APP_URL = "https://app.example"; });
 afterEach(() => { process.env.NEXT_PUBLIC_APP_URL = OLD; });
 
-describe("401 challenge advertises the minimal read-only scopes to request first", () => {
+describe("401 challenge advertises the least-privilege scopes to request first", () => {
   it("carries resource_metadata AND scope=<status, discover, fix:read>", () => {
     const header = mcpUnauthorizedResponse().headers.get("WWW-Authenticate") ?? "";
     expect(header).toContain('resource_metadata="https://app.example/.well-known/oauth-protected-resource"');
