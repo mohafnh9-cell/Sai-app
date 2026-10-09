@@ -5,6 +5,7 @@ import { getCurrentProductionVerdict } from "@/server/production-verdict/service
 import { loadProtectionContext } from "@/server/continuous-protection/protection-context";
 import { getSafeFixById, storeSafeFixHistoryUpdate } from "./history";
 import { transitionSafeFixState } from "./lifecycle";
+import { setSafeFixProposalCommit } from "./proposal-commit";
 import { loadVerificationEvidence } from "./verification-evidence";
 import { decideFindingVerification } from "./verification-rules";
 import { appendSafeFixMemoryEvent } from "./memory-bridge";
@@ -242,12 +243,35 @@ export async function approveSafeFix(
   });
 }
 
+/**
+ * Assisted flow: the customer's own agent applies the approved instructions. `commitSha` is the commit
+ * of the customer's change; when given, verification later requires the rescan of exactly that commit.
+ * Without it the record stays documentary: it is never presented as a verified patch (`assisted_unbound`).
+ */
 export async function markSafeFixApplied(
   admin: SupabaseClient,
-  input: { safeFixId: string; organizationId: string; projectId: string; actor: string }
-): Promise<void> {
+  input: { safeFixId: string; organizationId: string; projectId: string; actor: string; commitSha?: string | null }
+): Promise<{ binding: "exact_proposal_commit" | "assisted_unbound" }> {
+  const { commitSha, ...rest } = input;
+  if (commitSha) {
+    // Do not record a commit on a record that cannot move to APPLIED (leaves no half-applied state).
+    const current = await getSafeFixById(admin, input.safeFixId, {
+      organizationId: input.organizationId,
+      projectId: input.projectId,
+    });
+    if (!current) throw new Error("safe_fix_not_found");
+    if (current.lifecycleState !== "APPROVED") {
+      throw new Error(`invalid_transition:${current.lifecycleState}->APPLIED`);
+    }
+    await setSafeFixProposalCommit(admin, {
+      safeFixId: input.safeFixId,
+      scope: { organizationId: input.organizationId, projectId: input.projectId },
+      commitSha,
+      actor: input.actor,
+    });
+  }
   await transitionSafeFixState(admin, {
-    ...input,
+    ...rest,
     toState: "APPLIED",
     reason: "founder_applied",
   });
@@ -258,4 +282,5 @@ export async function markSafeFixApplied(
     payload: { safeFixId: input.safeFixId },
     idempotencyKey: `applied:${input.safeFixId}`,
   });
+  return { binding: commitSha ? "exact_proposal_commit" : "assisted_unbound" };
 }

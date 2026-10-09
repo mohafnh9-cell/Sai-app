@@ -10,8 +10,16 @@ const FULL_SHA = /^[0-9a-f]{40}$/i;
 /** States in which the proposal's commit must not move: a verification or an applied claim is in flight. */
 const LOCKED: ReadonlySet<SafeFixLifecycleState> = new Set(["APPLIED", "VERIFYING", "SUPERSEDED"]);
 
-/** States whose approval/verification described the previous content and must be reopened on change. */
-const REOPEN: ReadonlySet<SafeFixLifecycleState> = new Set(["APPROVED", "VERIFIED", "FAILED"]);
+/**
+ * Whether recording `next` over `current` invalidates the state the record is in. A first commit on an
+ * APPROVED record (current === null) is the customer reporting WHERE the approved instructions were
+ * applied, not a change of the approved content, so the approval stands. A VERIFIED record was verified
+ * without a commit binding (assisted), so binding a commit later reopens it. FAILED is reopened to retry.
+ */
+function reopens(state: SafeFixLifecycleState, current: string | null): boolean {
+  if (state === "VERIFIED" || state === "FAILED") return true;
+  return state === "APPROVED" && current !== null;
+}
 
 /**
  * Records the commit that contains the proposed change. Only a real change has a commit: nothing
@@ -51,7 +59,7 @@ export async function setSafeFixProposalCommit(
   }
 
   let state = record.lifecycleState;
-  if (REOPEN.has(state)) {
+  if (reopens(state, current)) {
     await transitionSafeFixState(admin, {
       safeFixId: record.id,
       organizationId: input.scope.organizationId,

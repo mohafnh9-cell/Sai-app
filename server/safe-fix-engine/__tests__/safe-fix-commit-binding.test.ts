@@ -14,7 +14,7 @@ import { createFakeAdmin, type FakeTables } from "@/server/mcp/__tests__/fake-ad
 import { buildVerdictFixture, verdictRow } from "@/server/mcp/__tests__/verdict-fixture";
 import { matchKeysForNativeFinding } from "../finding-identity";
 import { setSafeFixProposalCommit } from "../proposal-commit";
-import { verifySafeFix } from "../verify";
+import { approveSafeFix, markSafeFixApplied, verifySafeFix } from "../verify";
 import { decideFindingVerification, type VerificationEvidence } from "../verification-rules";
 
 // A proposal bound to a commit is verified against the completed scan of EXACTLY that commit.
@@ -268,5 +268,53 @@ describe("changing the proposal commit invalidates earlier approval/verification
     const { transitionSafeFixState } = await import("../lifecycle");
     const { admin } = build({ proposalSha: PROPOSAL_SHA, state: "VERIFIED" });
     await expect(transitionSafeFixState(admin, { safeFixId: SAFE_FIX, organizationId: ORG, projectId: PROJECT, toState: "READY", actor: "u", reason: "because" })).rejects.toThrow("invalid_transition");
+  });
+});
+
+describe("assisted pilot flow: instructions -> customer's agent commits -> rescan -> verify", () => {
+  const scope = { organizationId: ORG, projectId: PROJECT };
+  const ids = { safeFixId: SAFE_FIX, organizationId: ORG, projectId: PROJECT, actor: "customer" };
+
+  it("approve -> applied WITH the customer's commit -> rescan of that commit -> VERIFIED, bound to the commit", async () => {
+    const { admin, tables } = build({ proposalSha: null, state: "READY" });
+    await approveSafeFix(admin, ids);
+    expect(await markSafeFixApplied(admin, { ...ids, commitSha: PROPOSAL_SHA })).toEqual({ binding: "exact_proposal_commit" });
+    expect(tables.safe_fix_records![0]).toMatchObject({ lifecycle_state: "APPLIED", proposal_commit_sha: PROPOSAL_SHA });
+    const result = await verify(admin);
+    expect(result).toMatchObject({ outcome: "passed", binding: "exact_proposal_commit" });
+    expect(tables.safe_fix_verifications![0].details).toMatchObject({ baseCommitSha: BASE_SHA, verifiedCommitSha: PROPOSAL_SHA });
+  });
+
+  it("the customer reports a commit whose rescan is not finished yet (pending) -> NOT VERIFIED; no other scan substitutes", async () => {
+    const { admin, tables } = build({
+      proposalSha: null, state: "READY",
+      rescans: [scanRow(PROPOSAL_SCAN, PROPOSAL_SHA, { status: "running" }), scanRow(LATER_SCAN, LATER_SHA)],
+    });
+    await approveSafeFix(admin, ids);
+    await markSafeFixApplied(admin, { ...ids, commitSha: PROPOSAL_SHA });
+    const result = await verify(admin);
+    expect(result.outcome).not.toBe("passed");
+    expect(tables.safe_fix_records![0].lifecycle_state).not.toBe("VERIFIED");
+  });
+
+  it("applied WITHOUT a commit stays documentary: verification is reported assisted_unbound, never an exact-commit proof", async () => {
+    const { admin } = build({ proposalSha: null, state: "READY", rescans: [scanRow(LATER_SCAN, LATER_SHA)] });
+    await approveSafeFix(admin, ids);
+    expect(await markSafeFixApplied(admin, ids)).toEqual({ binding: "assisted_unbound" });
+    expect((await verify(admin, LATER_SCAN)).binding).toBe("assisted_unbound");
+  });
+
+  it("a commit cannot be recorded on a record that is not APPROVED (no half-applied state)", async () => {
+    const { admin, tables } = build({ proposalSha: null, state: "READY" });
+    await expect(markSafeFixApplied(admin, { ...ids, commitSha: PROPOSAL_SHA })).rejects.toThrow("invalid_transition");
+    expect(tables.safe_fix_records![0]).toMatchObject({ lifecycle_state: "READY" });
+    expect(tables.safe_fix_records![0].proposal_commit_sha ?? null).toBeNull();
+  });
+
+  it("a first commit on an APPROVED record keeps the approval; a later different commit reopens it", async () => {
+    const { admin, tables } = build({ proposalSha: null, state: "APPROVED" });
+    expect((await setSafeFixProposalCommit(admin, { safeFixId: SAFE_FIX, scope, commitSha: PROPOSAL_SHA, actor: "u" })).state).toBe("APPROVED");
+    expect((await setSafeFixProposalCommit(admin, { safeFixId: SAFE_FIX, scope, commitSha: LATER_SHA, actor: "u" })).state).toBe("READY");
+    expect(tables.safe_fix_records![0].proposal_commit_sha).toBe(LATER_SHA);
   });
 });
