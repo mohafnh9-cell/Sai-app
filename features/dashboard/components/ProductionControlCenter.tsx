@@ -21,6 +21,7 @@ type ProductionControlCenterProps = {
     fixIssue: string;
     reviewProject: string;
     firstVerdictWelcome: string;
+    analysisInProgress: string;
   };
 };
 
@@ -30,14 +31,16 @@ export function ProductionControlCenter({
   showFirstVerdictWelcome = false,
   labels,
 }: ProductionControlCenterProps) {
-  const { primary, orgCanDeploy, topPriority } = focus;
+  const { primary, orgCanDeploy, topPriority, primaryHistorical } = focus;
   const projectHref = projectVerdictHref(primary.projectId);
   const isAlmostReady = primary.status === "almost_ready";
   // ready_to_ship without the evidence to affirm it is "no blockers found, evidence
   // limited" -- never "yes" and never a green tone.
   const isReadyEvidenceLimited = !orgCanDeploy && primary.status === "ready_to_ship";
 
-  const deployAnswer = orgCanDeploy
+  const deployAnswer = primaryHistorical
+    ? labels.analysisInProgress
+    : orgCanDeploy
     ? labels.deployYes
     : isReadyEvidenceLimited
       ? labels.deployEvidenceLimited
@@ -45,8 +48,10 @@ export function ProductionControlCenter({
         ? labels.almostReady
         : labels.deployNo;
 
-  const ctaLabel = orgCanDeploy ? labels.reviewProject : labels.fixIssue;
-  const tone = orgCanDeploy
+  const ctaLabel = orgCanDeploy || primaryHistorical ? labels.reviewProject : labels.fixIssue;
+  const tone = primaryHistorical
+    ? verdictToneClass("insufficient_data")
+    : orgCanDeploy
     ? verdictToneClass("ready_to_ship")
     : verdictToneClass(isReadyEvidenceLimited ? "almost_ready" : primary.status);
 

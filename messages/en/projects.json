@@ -124,5 +124,7 @@
   "onboardedBannerReady": "You're ready to ship. Connect MCP in your code agent to check before every deploy.",
   "onboardedBannerFix": "Fix the issue above, then connect MCP in your code agent to re-check from your editor.",
   "onboardedConnectCursor": "Connect MCP in your agent",
-  "onboardedDismiss": "Dismiss"
+  "onboardedDismiss": "Dismiss",
+  "analysisInProgress": "Analysis in progress",
+  "previousResultHistorical": "Previous result (historical, not the current decision)"
 }

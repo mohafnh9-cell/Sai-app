@@ -48,5 +48,6 @@
   "authBypassBanner": "Bypass de autenticación activo (SEQURAI_BYPASS_AUTH) — eliminar antes de producción",
   "mcpConnectionTitle": "MCP",
   "mcpConnected": "Conectado",
-  "mcpNotConnected": "No conectado"
+  "mcpNotConnected": "No conectado",
+  "analysisInProgressAnswer": "Análisis en curso — aún no hay decisión de despliegue para esta versión"
 }

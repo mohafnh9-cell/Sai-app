@@ -67,6 +67,7 @@ export default async function DemoDashboardPage({
                   fixIssue: t("fixIssue"),
                   reviewProject: t("reviewProject"),
                   firstVerdictWelcome: t("firstVerdictWelcome"),
+                analysisInProgress: t("analysisInProgressAnswer"),
                 }}
               />
             )}

@@ -39,6 +39,14 @@ export type BrainActivityEvent = {
   source: "repository_activity" | "security_timeline";
 };
 
+/**
+ * How a persisted verdict relates to the version being analyzed.
+ * current: it belongs to the latest completed analysis. historical_review_in_progress: a review of a newer version is
+ * running, so it is HISTORY. pending_verdict: a newer scan completed but its own verdict is not persisted yet.
+ * none: there is no verdict.
+ */
+export type BrainVerdictState = "current" | "historical_review_in_progress" | "pending_verdict" | "none";
+
 export type ProjectBrainSnapshot = {
   projectId: string;
   organizationId: string;
@@ -57,7 +65,7 @@ export type ProjectBrainSnapshot = {
    * pending_verdict: a newer scan completed but its own verdict is not persisted yet; no verdict is exposed.
    * none: no verdict exists.
    */
-  verdictState: "current" | "historical_review_in_progress" | "pending_verdict" | "none";
+  verdictState: BrainVerdictState;
   /** The review currently running on the default branch (the version being analyzed), if any. */
   reviewInProgress: { scanId: string; commitSha: string | null } | null;
   productionReady: ProductionReadyScore;
@@ -88,6 +96,10 @@ export type ProjectBrainSummary = {
   generatedAt: string | null;
   /** The canonical evidence policy allows affirmative deployment language for this project's verdict. Absent = not affirmed. */
   affirmsDeploy?: boolean;
+  /** Scan the persisted verdict belongs to (absent in snapshots cached before this field existed). */
+  verdictScanId?: string | null;
+  /** Absent = unknown (old cached snapshot); consumers must not read absence as "current" for affirmations. */
+  verdictState?: BrainVerdictState;
 };
 
 export type ProductionRoadmapItem = {

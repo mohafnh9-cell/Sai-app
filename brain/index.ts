@@ -3,6 +3,7 @@ export type {
   BrainPriority,
   OrgBrainSnapshot,
   ProductionReadyScore,
+  BrainVerdictState,
   ProjectBrainSnapshot,
   ProjectBrainSummary,
   ReadinessDimensionKey,

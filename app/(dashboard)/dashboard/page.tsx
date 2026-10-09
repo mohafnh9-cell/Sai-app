@@ -136,6 +136,7 @@ export default async function DashboardPage({
                 fixIssue: t("fixIssue"),
                 reviewProject: t("reviewProject"),
                 firstVerdictWelcome: t("firstVerdictWelcome"),
+                analysisInProgress: t("analysisInProgressAnswer"),
               }}
             />
             {showPortfolio ? (
