@@ -11,7 +11,7 @@ import {
   getSafeFixById,
   listSafeFixHistory,
   storeSafeFixHistoryUpdate,
-  supersedeOpenFixesForRecommendation,
+  supersedeReplaceableFixes,
 } from "../history";
 import { transitionSafeFixState } from "../lifecycle";
 import { summarizeSafeFixImpact } from "../memory-bridge";
@@ -79,7 +79,7 @@ describe("writes cannot cross a tenant boundary", () => {
 
   it("supersede only touches the caller's organization/project", async () => {
     const { admin, tables } = world();
-    await supersedeOpenFixesForRecommendation(admin, A, "rec-1");
+    expect(await supersedeReplaceableFixes(admin, A, [FIX_A, FIX_B])).toBe(1);
     expect(tables.safe_fix_records![0].lifecycle_state).toBe("SUPERSEDED");
     expect(tables.safe_fix_records![1].lifecycle_state).toBe("READY");
   });

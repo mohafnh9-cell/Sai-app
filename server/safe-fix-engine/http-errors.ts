@@ -6,7 +6,14 @@
  */
 export type SafeFixHttpError = { status: 404 | 409 | 503; error: string };
 
+function isUniqueViolation(error: unknown): boolean {
+  return Boolean(error && typeof error === "object" && (error as { code?: string }).code === "23505");
+}
+
 export function mapSafeFixError(error: unknown): SafeFixHttpError | null {
+  // Migration 068: another open correction already exists for this recommendation (e.g. reopening a FAILED/VERIFIED record
+  // after a new proposal was created). Nothing was changed.
+  if (isUniqueViolation(error)) return { status: 409, error: "open_fix_exists" };
   const message = error instanceof Error ? error.message : "";
   if (message === "safe_fix_not_found") return { status: 404, error: "Not found" };
   if (message === "proposal_commit_unsupported") return { status: 503, error: message };

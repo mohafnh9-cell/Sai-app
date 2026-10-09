@@ -96,5 +96,6 @@ export async function POST(
     actor: access.userId,
   });
 
-  return NextResponse.json({ projectId, result });
+  // A correction already in flight on another analysis blocks a new proposal: explicit 409, nothing changed.
+  return NextResponse.json({ projectId, result }, { status: result.status === "in_flight" ? 409 : 200 });
 }

@@ -17,7 +17,15 @@ export async function enrichMcpSafeFixWithV2(
   admin: SupabaseClient,
   organizationId: string,
   mcpResult: McpSafeFixResult
-): Promise<McpSafeFixResult & { safeFixV2?: SafeFixRecord; engineerSummary?: string }> {
+): Promise<
+  McpSafeFixResult & {
+    safeFixV2?: SafeFixRecord;
+    engineerSummary?: string;
+    /** created: a new proposal; reused: the existing proposal for this analysis (idempotent); in_flight: refused, see note. */
+    safeFixStatus?: "created" | "reused" | "in_flight";
+    safeFixNote?: string;
+  }
+> {
   if (mcpResult.status !== "prompt_ready" || !mcpResult.project?.id) {
     return mcpResult;
   }
@@ -33,6 +41,16 @@ export async function enrichMcpSafeFixWithV2(
       actor: "mcp",
     });
 
+    if (generated.status === "in_flight") {
+      // A correction for this blocker is already approved / applied / being verified on a different analysis. Nothing
+      // was created or changed; say so explicitly instead of handing out a second, competing proposal.
+      return {
+        ...mcpResult,
+        safeFixV2: generated.record,
+        safeFixStatus: "in_flight",
+        safeFixNote: `A Safe Fix for this blocker is already in progress (state ${generated.record.lifecycleState}, id ${generated.record.id}) and was built on a previous analysis. It was kept unchanged; no new proposal was created. Finish or reopen that one first.`,
+      };
+    }
     if (generated.status !== "ready") return mcpResult;
 
     const doc = generated.record.document;
@@ -51,6 +69,10 @@ export async function enrichMcpSafeFixWithV2(
       ...mcpResult,
       summary: `${engineerSummary}\n\n---\n\n${mcpResult.summary ?? ""}`.trim(),
       safeFixV2: generated.record,
+      safeFixStatus: generated.reused ? "reused" : "created",
+      ...(generated.reused
+        ? { safeFixNote: `This blocker already has a Safe Fix for the same analysis (state ${generated.record.lifecycleState}, id ${generated.record.id}); it was reused, not duplicated.` }
+        : {}),
       engineerSummary,
     };
   } catch (error) {

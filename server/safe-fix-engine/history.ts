@@ -76,27 +76,64 @@ export async function persistGeneratedSafeFix(
   return mapSafeFixRow(data);
 }
 
-export async function supersedeOpenFixesForRecommendation(
+/** A correction a person has acted on: never replaced or superseded by a new request. */
+export const IN_FLIGHT_STATES: ReadonlySet<SafeFixLifecycleState> = new Set(["APPROVED", "APPLIED", "VERIFYING"]);
+/** Open but not acted on yet: safe to replace when a newer analysis produces a new proposal. */
+export const REPLACEABLE_STATES: ReadonlySet<SafeFixLifecycleState> = new Set(["PROPOSED", "READY"]);
+
+/** Open (not terminal) corrections for one recommendation, oldest first. */
+export async function listOpenFixesForRecommendation(
   admin: SupabaseClient,
   scope: SafeFixScope,
   recommendationId: string
-): Promise<void> {
-  const { data: rows } = await admin
+): Promise<SafeFixRecord[]> {
+  const { data } = await admin
     .from("safe_fix_records")
-    .select("id")
+    .select("*")
     .eq("organization_id", scope.organizationId)
     .eq("project_id", scope.projectId)
     .eq("recommendation_id", recommendationId)
-    .in("lifecycle_state", OPEN_STATES);
+    .in("lifecycle_state", OPEN_STATES)
+    .order("created_at", { ascending: true });
+  return (data ?? []).map(mapSafeFixRow);
+}
 
-  for (const row of rows ?? []) {
-    await admin
-      .from("safe_fix_records")
-      .update({ lifecycle_state: "SUPERSEDED", updated_at: new Date().toISOString() })
-      .eq("id", row.id)
-      .eq("organization_id", scope.organizationId)
-      .eq("project_id", scope.projectId);
-  }
+/**
+ * Supersedes PROPOSED/READY corrections only. The state condition is part of the UPDATE itself, so a record that is
+ * approved (or applied, or being verified) a moment earlier is NOT touched: the check and the write are one atomic
+ * statement, not a read followed by a write. Returns how many records were superseded.
+ */
+export async function supersedeReplaceableFixes(
+  admin: SupabaseClient,
+  scope: SafeFixScope,
+  ids: string[]
+): Promise<number> {
+  if (ids.length === 0) return 0;
+  const { data } = await admin
+    .from("safe_fix_records")
+    .update({ lifecycle_state: "SUPERSEDED", updated_at: new Date().toISOString() })
+    .in("id", ids)
+    .eq("organization_id", scope.organizationId)
+    .eq("project_id", scope.projectId)
+    .in("lifecycle_state", [...REPLACEABLE_STATES])
+    .select("id");
+  return data?.length ?? 0;
+}
+
+/**
+ * The single correction that survives when several are open for the same recommendation (concurrent creations).
+ * CALLER-INDEPENDENT on purpose: every concurrent caller must pick the same record, otherwise each would supersede the
+ * other's and none would survive. In-flight first (oldest), otherwise the newest proposal.
+ */
+export function pickSurvivingFix(open: SafeFixRecord[]): SafeFixRecord | null {
+  if (open.length === 0) return null;
+  const byAge = [...open].sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+  return byAge.find((r) => IN_FLIGHT_STATES.has(r.lifecycleState)) ?? byAge[byAge.length - 1];
+}
+
+/** Postgres unique violation (the partial unique index of migration 068, when applied). */
+export function isUniqueViolation(error: unknown): boolean {
+  return Boolean(error && typeof error === "object" && (error as { code?: string }).code === "23505");
 }
 
 export async function listSafeFixHistory(
