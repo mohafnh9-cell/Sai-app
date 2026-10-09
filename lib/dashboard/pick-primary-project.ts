@@ -10,8 +10,15 @@ const STATUS_WEIGHT: Record<VerdictStatus, number> = {
   ready_to_ship: 5,
 };
 
+/** A persisted verdict that is not the current decision (a newer review is running / its verdict is pending). */
+export function isHistoricalSummary(project: ProjectBrainSummary): boolean {
+  return project.verdictState === "historical_review_in_progress" || project.verdictState === "pending_verdict";
+}
+
 export type DashboardFocus = {
   primary: ProjectBrainSummary;
+  /** The primary project's verdict is historical: show "analysis in progress", never a deployment answer. */
+  primaryHistorical: boolean;
   verdict: ProductionVerdictV1 | null;
   orgCanDeploy: boolean;
   topPriority: ProductionVerdictV1["topPriorities"][number] | null;
@@ -24,6 +31,10 @@ export function pickPrimaryDashboardFocus(
   if (!projects.length) return null;
 
   const ranked = [...projects].sort((a, b) => {
+    // Projects with a CURRENT verdict come first; a historical one only leads when nothing else can.
+    const historicalA = isHistoricalSummary(a) ? 1 : 0;
+    const historicalB = isHistoricalSummary(b) ? 1 : 0;
+    if (historicalA !== historicalB) return historicalA - historicalB;
     const weightA = STATUS_WEIGHT[a.status] ?? 99;
     const weightB = STATUS_WEIGHT[b.status] ?? 99;
     if (weightA !== weightB) return weightA - weightB;
@@ -37,13 +48,17 @@ export function pickPrimaryDashboardFocus(
   // confidence AND complete coverage). A missing flag means "not affirmed".
   const orgCanDeploy =
     projects.length > 0 &&
-    projects.every((project) => project.status === "ready_to_ship" && project.affirmsDeploy === true);
+    projects.every(
+      (project) => project.status === "ready_to_ship" && project.affirmsDeploy === true && !isHistoricalSummary(project)
+    );
+  const primaryHistorical = isHistoricalSummary(primary);
 
   return {
     primary,
-    verdict,
+    primaryHistorical,
+    verdict: primaryHistorical ? null : verdict,
     orgCanDeploy,
-    topPriority: verdict?.topPriorities[0] ?? null,
+    topPriority: primaryHistorical ? null : verdict?.topPriorities[0] ?? null,
   };
 }
 

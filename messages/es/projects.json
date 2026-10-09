@@ -124,5 +124,7 @@
   "onboardedBannerReady": "Estás listo para desplegar. Conecta MCP en tu agente de código para comprobar antes de cada despliegue.",
   "onboardedBannerFix": "Arregla el problema de arriba y conecta MCP en tu agente de código para revisar de nuevo desde el editor.",
   "onboardedConnectCursor": "Conectar MCP en tu agente",
-  "onboardedDismiss": "Cerrar"
+  "onboardedDismiss": "Cerrar",
+  "analysisInProgress": "Análisis en curso",
+  "previousResultHistorical": "Resultado anterior (histórico, no es la decisión actual)"
 }

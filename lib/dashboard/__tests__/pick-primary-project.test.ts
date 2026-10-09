@@ -69,3 +69,35 @@ describe("greeting helpers", () => {
     expect(firstNameFromUser({ fullName: "Mohamed Fornah", email: "m@x.com" })).toBe("Mohamed");
   });
 });
+
+describe("pickPrimaryDashboardFocus with a verdict that is no longer the current decision", () => {
+  const base = { scoreDelta: null, projectedScore: null, healthStatus: null, lastReviewedCommit: null, generatedAt: null };
+  const ready: ProjectBrainSummary = { ...base, projectId: "a", projectName: "Alpha", productionReady: 96, blockersCount: 0, status: "ready_to_ship", affirmsDeploy: true, verdictState: "current" };
+  const readyButRunning: ProjectBrainSummary = { ...ready, productionReady: null, affirmsDeploy: false, verdictState: "historical_review_in_progress" };
+  const notReady: ProjectBrainSummary = { ...base, projectId: "b", projectName: "Beta", productionReady: 40, blockersCount: 2, status: "not_ready", verdictState: "current" };
+
+  it("the only project is mid-analysis: the focus is historical -> no deployment answer, no stale top priority", () => {
+    const focus = pickPrimaryDashboardFocus([readyButRunning], new Map());
+    expect(focus).toMatchObject({ primaryHistorical: true, orgCanDeploy: false, verdict: null, topPriority: null });
+  });
+
+  it("an affirmative answer for the organization is impossible while any project is historical", () => {
+    const focus = pickPrimaryDashboardFocus([ready, { ...ready, projectId: "c", affirmsDeploy: true, verdictState: "pending_verdict" }], new Map());
+    expect(focus?.orgCanDeploy).toBe(false);
+  });
+
+  it("a project with a CURRENT verdict leads over a historical one, whatever the stored status was", () => {
+    const focus = pickPrimaryDashboardFocus([{ ...notReady, projectId: "r", status: "not_ready", verdictState: "historical_review_in_progress" }, ready], new Map());
+    expect(focus?.primary.projectId).toBe("a");
+    expect(focus?.primaryHistorical).toBe(false);
+  });
+
+  it("control: all current and affirmed -> yes", () => {
+    expect(pickPrimaryDashboardFocus([ready], new Map())?.orgCanDeploy).toBe(true);
+  });
+
+  it("snapshots cached before verdictState existed behave as before (no state = not historical)", () => {
+    const legacy = { ...ready, verdictState: undefined };
+    expect(pickPrimaryDashboardFocus([legacy], new Map())).toMatchObject({ primaryHistorical: false, orgCanDeploy: true });
+  });
+});
