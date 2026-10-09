@@ -383,7 +383,8 @@ describe("CRIT-007 verification never passes on weak evidence", () => {
   it("K: a rescan that belongs to a different project -> NOT VERIFIED", async () => {
     const { result, state } = await run({ rescan: { project_id: OTHER_PROJECT } });
     NOT_VERIFIED(state, result.outcome);
-    expect(result.details.reasons).toContain("wrong_project");
+    // The scan is not even loaded: reads are scoped to the project, so it is "missing" (not rejected afterwards).
+    expect(result.details.reasons).toContain("verification_scan_missing");
   });
 
   it("L: a rescan that belongs to a different repository -> NOT VERIFIED", async () => {

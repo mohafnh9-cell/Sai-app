@@ -1,6 +1,8 @@
 import "server-only";
 
 import { newerScanAwaitingVerdict } from "@/server/production-verdict/pending-verdict";
+import { isActiveReviewScanStatus } from "@/brain/automatic-review/review-status";
+import { scanInBranchScope } from "@/server/review-start/branch-scope";
 
 import { guardNarrativeForVerdict } from "@/brain/production-verdict/narrative-guard";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -78,7 +80,7 @@ export async function buildProjectBrain(
   const { data: project } = await supabase
     .from("projects")
     .select(
-      "id, organization_id, name, github_repo, security_score, last_scan_at, webhook_enabled, repository_health"
+      "id, organization_id, name, github_repo, github_default_branch, security_score, last_scan_at, webhook_enabled, repository_health"
     )
     .eq("id", projectId)
     .maybeSingle();
@@ -133,6 +135,34 @@ export async function buildProjectBrain(
     log("previous_verdict_withheld_awaiting_newer", { projectId, previousScanId: persistedVerdict?.scanId });
   }
 
+  // A review of a newer version is running on the default branch: the persisted verdict is HISTORY, not a
+  // decision about the version being analyzed. Same scope rule as the rest of the product (default branch).
+  const defaultBranch = (project as { github_default_branch?: string | null }).github_default_branch ?? null;
+  const { data: openScans } = await supabase
+    .from("scans")
+    .select("id, status, branch, commit_sha")
+    .eq("project_id", projectId)
+    .eq("organization_id", project.organization_id)
+    .in("status", ["queued", "fetching_repository", "indexing", "scanning", "calculating_score"])
+    .order("created_at", { ascending: false })
+    .limit(20);
+  const runningScan =
+    (openScans ?? []).find(
+      (scan) =>
+        isActiveReviewScanStatus(String(scan.status)) &&
+        scanInBranchScope(scan.branch as string | null, null, defaultBranch)
+    ) ?? null;
+  const reviewInProgress = runningScan
+    ? { scanId: runningScan.id as string, commitSha: (runningScan.commit_sha as string | null) ?? null }
+    : null;
+  const verdictState: ProjectBrainSnapshot["verdictState"] = !persistedVerdict
+    ? "none"
+    : awaitingNewerVerdict
+      ? "pending_verdict"
+      : reviewInProgress
+        ? "historical_review_in_progress"
+        : "current";
+
   const securityScore =
     latestScan.data?.security_score ??
     health.data?.security_score ??
@@ -140,7 +170,8 @@ export async function buildProjectBrain(
     scanState.data?.last_security_score ??
     null;
 
-  const productionReady = currentVerdict
+  // No readiness flag is derived from a historical verdict.
+  const productionReady = currentVerdict && verdictState === "current"
     ? productionReadyFromVerdict(currentVerdict)
     : EMPTY_PRODUCTION_READY;
 
@@ -171,6 +202,8 @@ export async function buildProjectBrain(
     projectName: project.name,
     githubRepo: project.github_repo,
     currentVerdict,
+    verdictState,
+    reviewInProgress,
     productionReady,
     securityScore,
     riskScore,

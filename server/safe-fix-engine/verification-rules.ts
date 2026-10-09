@@ -33,6 +33,8 @@ export type VerificationReason =
   | "commit_unknown"
   | "same_commit"
   | "branch_mismatch"
+  | "proposal_commit_mismatch"
+  | "proposal_changed_during_verification"
   | "verdict_missing"
   | "verdict_scan_mismatch"
   | "insufficient_coverage"
@@ -58,6 +60,12 @@ export type VerificationEvidence = {
   targetsFullyResolved: boolean;
   /** Identity keys of every finding in the rescan; null when they could not be loaded. */
   rescanKeys: ReadonlySet<string> | null;
+  /**
+   * Full SHA of the commit that contains the proposed change; null for a documentary proposal.
+   * When set, the rescan must be of EXACTLY this commit -- a later or different commit is not
+   * evidence about this proposal even if the finding is gone from it.
+   */
+  proposalCommitSha?: string | null;
 };
 
 export type VerificationDecision = {
@@ -111,6 +119,12 @@ function identityReasons(evidence: VerificationEvidence): VerificationReason[] {
 
   if (baseline.branch && rescan.branch && baseline.branch !== rescan.branch) {
     reasons.push("branch_mismatch");
+  }
+
+  if (evidence.proposalCommitSha) {
+    const wanted = evidence.proposalCommitSha.trim().toLowerCase();
+    const got = rescan.commitSha?.trim().toLowerCase() ?? "";
+    if (!got || got !== wanted) reasons.push("proposal_commit_mismatch");
   }
   return reasons;
 }

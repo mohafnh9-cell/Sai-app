@@ -40,6 +40,9 @@ export type SafeFixPrDraft = {
   rollbackChecklist: string[];
 };
 
+/** Tenant scope every Safe Fix access must carry, including with a client that bypasses RLS. */
+export type SafeFixScope = { organizationId: string; projectId: string };
+
 export type SafeFixRecord = {
   id: string;
   organizationId: string;
@@ -52,6 +55,12 @@ export type SafeFixRecord = {
   confidenceScore: number;
   document: SafeFixDocumentV2;
   prDraft: SafeFixPrDraft;
+  /**
+   * Full SHA of the commit that CONTAINS the proposed change. Null for documentary proposals (the
+   * current flow), which have no commit of their own. Distinct from the base commit, which is the
+   * commit of the baseline scan (`reviewId`) the proposal was generated from.
+   */
+  proposalCommitSha: string | null;
   confidenceDelta: number | null;
   protectionDelta: string | null;
   createdAt: string;
@@ -66,6 +75,23 @@ export type SafeFixVerificationResult = {
   productionConfidenceImproved: boolean;
   protectionStatusImproved: boolean;
   newIssuesIntroduced: boolean;
+  /**
+   * exact_proposal_commit: the rescan was required to be exactly the proposal's commit.
+   * assisted_unbound: documentary proposal with no commit; "the finding is gone from a later scan",
+   * NOT a verified automatic patch.
+   */
+  binding: "exact_proposal_commit" | "assisted_unbound";
+  /**
+   * Machine-readable statement a client can localize. It says WHAT was verified:
+   * - exact_commit_rescan_clean: a complete rescan of exactly the customer's reported commit no longer contains the finding.
+   * - later_analysis_clean_unbound: a later complete analysis no longer contains the finding. NOT tied to a specific
+   *   commit of a fix and NOT a verified patch.
+   * - not_verified: see details.reasons.
+   */
+  statement: "exact_commit_rescan_clean" | "later_analysis_clean_unbound" | "not_verified";
+  /** The scan and commit that were actually evaluated (null when none was found). */
+  verifiedScanId: string | null;
+  verifiedCommitSha: string | null;
   details: Record<string, unknown>;
 };
 
@@ -74,6 +100,8 @@ export type SafeFixReportSummary = {
   applied: number;
   verified: number;
   failed: number;
+  /** Subset of `verified` whose verification was bound to the exact commit of the customer's change. */
+  verifiedExactCommit?: number;
   mostImpactfulTitle: string | null;
   confidenceGained: number | null;
 };

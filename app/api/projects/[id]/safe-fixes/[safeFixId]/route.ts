@@ -5,6 +5,7 @@ import { createAdminClient } from "@/server/security-scanner/admin-client";
 import { getSafeFixById } from "@/server/safe-fix-engine/history";
 import {
   approveSafeFix,
+  reopenSafeFix,
   markSafeFixApplied,
   verifySafeFix,
 } from "@/server/safe-fix-engine/verify";
@@ -21,7 +22,9 @@ const paramsSchema = z.object({
 });
 
 const bodySchema = z.object({
-  action: z.enum(["approve", "applied", "verify"]).optional(),
+  action: z.enum(["approve", "applied", "verify", "reopen"]).optional(),
+  /** With action "applied": the commit of the customer's change (full SHA). Enables exact-commit verification. */
+  commitSha: z.string().regex(/^[0-9a-fA-F]{40}$/).optional(),
 });
 
 export async function GET(
@@ -43,11 +46,11 @@ export async function GET(
   if (!access.ok) return access.response;
 
   const admin = createAdminClient();
-  const record = await getSafeFixById(admin, safeFixId);
-  if (!record || record.projectId !== projectId) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
-  if (record.organizationId !== access.project.organization_id) {
+  const record = await getSafeFixById(admin, safeFixId, {
+    organizationId: access.project.organization_id,
+    projectId,
+  });
+  if (!record) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
   return NextResponse.json({ safeFix: record });
@@ -81,8 +84,8 @@ export async function POST(
   const admin = createAdminClient();
   const orgId = access.project.organization_id;
 
-  const existing = await getSafeFixById(admin, safeFixId);
-  if (!existing || existing.projectId !== projectId || existing.organizationId !== orgId) {
+  const existing = await getSafeFixById(admin, safeFixId, { organizationId: orgId, projectId });
+  if (!existing) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
@@ -90,9 +93,43 @@ export async function POST(
     await approveSafeFix(admin, { safeFixId, organizationId: orgId, projectId, actor: access.userId });
     return NextResponse.json({ ok: true, state: "APPROVED" });
   }
+  if (action === "reopen") {
+    try {
+      await reopenSafeFix(admin, { safeFixId, organizationId: orgId, projectId, actor: access.userId });
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith("invalid_transition")) {
+        return NextResponse.json({ error: error.message }, { status: 409 });
+      }
+      throw error;
+    }
+    return NextResponse.json({ ok: true, state: "READY" });
+  }
   if (action === "applied") {
-    await markSafeFixApplied(admin, { safeFixId, organizationId: orgId, projectId, actor: access.userId });
-    return NextResponse.json({ ok: true, state: "APPLIED" });
+    try {
+      const { binding } = await markSafeFixApplied(admin, {
+        safeFixId,
+        organizationId: orgId,
+        projectId,
+        actor: access.userId,
+        commitSha: parsedBody.data.commitSha ?? null,
+      });
+      return NextResponse.json({ ok: true, state: "APPLIED", binding });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (message === "proposal_commit_unsupported") {
+        // Deployed ahead of migration 067: recording a commit is not available yet; nothing was changed.
+        return NextResponse.json({ error: message }, { status: 503 });
+      }
+      if (
+        message.startsWith("invalid_transition") ||
+        message === "proposal_commit_locked" ||
+        message === "proposal_commit_is_base_commit" ||
+        message === "proposal_commit_conflict"
+      ) {
+        return NextResponse.json({ error: message }, { status: 409 });
+      }
+      throw error;
+    }
   }
 
   const isolationEnabled = isFeatureEnabled("analysis_run_isolation", { organizationId: orgId });

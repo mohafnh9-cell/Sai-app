@@ -183,17 +183,53 @@ export async function loadVerificationEvidence(
     verificationScanId: string | null;
     recommendationId: string;
     storedTargets?: unknown;
+    /** Commit that contains the proposed change; null for a documentary proposal. */
+    proposalCommitSha?: string | null;
   }
 ): Promise<VerificationEvidence> {
-  const [baselineRes, rescanRes] = await Promise.all([
-    input.baselineScanId
-      ? admin.from("scans").select(SCAN_COLUMNS).eq("id", input.baselineScanId).maybeSingle()
-      : Promise.resolve({ data: null }),
-    input.verificationScanId
-      ? admin.from("scans").select(SCAN_COLUMNS).eq("id", input.verificationScanId).maybeSingle()
-      : Promise.resolve({ data: null }),
-  ]);
+  // Scans are read INSIDE the caller's organization + project (the service-role client bypasses RLS):
+  // a scan of another tenant is "missing", never loaded and then rejected afterwards.
+  const baselineRes = input.baselineScanId
+    ? await admin
+        .from("scans")
+        .select(SCAN_COLUMNS)
+        .eq("id", input.baselineScanId)
+        .eq("organization_id", input.organizationId)
+        .eq("project_id", input.projectId)
+        .maybeSingle()
+    : { data: null };
   const baselineRow = (baselineRes.data ?? null) as Row | null;
+
+  // A proposal bound to a commit is verified against the completed scan of EXACTLY that commit
+  // (same organization, project and branch as the baseline) -- never "the latest scan". An explicitly
+  // named scan is still loaded as given so the rules can reject it when it is another commit.
+  let verificationScanId = input.verificationScanId;
+  if (input.proposalCommitSha && !verificationScanId) {
+    let query = admin
+      .from("scans")
+      .select("id")
+      .eq("organization_id", input.organizationId)
+      .eq("project_id", input.projectId)
+      .eq("status", "completed")
+      .eq("commit_sha", input.proposalCommitSha.trim().toLowerCase());
+    const baselineBranch = (baselineRow?.branch as string | null | undefined) ?? null;
+    if (baselineBranch) query = query.eq("branch", baselineBranch);
+    const { data: exact } = await query
+      .order("completed_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    verificationScanId = (exact?.id as string | undefined) ?? null;
+  }
+
+  const rescanRes = verificationScanId
+    ? await admin
+        .from("scans")
+        .select(SCAN_COLUMNS)
+        .eq("id", verificationScanId)
+        .eq("organization_id", input.organizationId)
+        .eq("project_id", input.projectId)
+        .maybeSingle()
+    : { data: null };
   const rescanRow = (rescanRes.data ?? null) as Row | null;
 
   const baselineScan = scanFacts(baselineRow);
@@ -230,6 +266,7 @@ export async function loadVerificationEvidence(
         .from("scan_findings")
         .select("id, fingerprint, rule_id, file_path, title, metadata")
         .eq("scan_id", verificationScan.id)
+        .eq("project_id", input.projectId)
         .range(from, to)
     );
     const externalRows = await loadAllRows((from, to) =>
@@ -262,5 +299,6 @@ export async function loadVerificationEvidence(
     targets: targetResolution.targets,
     targetsFullyResolved: targetResolution.fullyResolved,
     rescanKeys,
+    proposalCommitSha: input.proposalCommitSha ?? null,
   };
 }

@@ -34,7 +34,7 @@ export async function appendSafeFixMemoryEvent(
 /** Report integration (Sprint 7) — read by monthly report jobs via API/SQL without editing Sprint 6. */
 export async function summarizeSafeFixImpact(
   admin: SupabaseClient,
-  projectId: string,
+  scope: { organizationId: string; projectId: string },
   periodStart: string,
   periodEnd: string
 ): Promise<SafeFixReportSummary> {
@@ -43,8 +43,10 @@ export async function summarizeSafeFixImpact(
 
   const { data: records } = await admin
     .from("safe_fix_records")
-    .select("id, lifecycle_state, document, confidence_delta, created_at")
-    .eq("project_id", projectId)
+    // "*": tolerates databases where migration 067 (proposal_commit_sha) has not been applied yet.
+    .select("*")
+    .eq("organization_id", scope.organizationId)
+    .eq("project_id", scope.projectId)
     .gte("created_at", startIso)
     .lte("created_at", endIso);
 
@@ -54,6 +56,9 @@ export async function summarizeSafeFixImpact(
     ["APPLIED", "VERIFYING", "VERIFIED"].includes(r.lifecycle_state as string)
   ).length;
   const verified = rows.filter((r) => r.lifecycle_state === "VERIFIED").length;
+  const verifiedExactCommit = rows.filter(
+    (r) => r.lifecycle_state === "VERIFIED" && Boolean(r.proposal_commit_sha)
+  ).length;
   const failed = rows.filter((r) => r.lifecycle_state === "FAILED").length;
 
   const best = rows
@@ -71,6 +76,7 @@ export async function summarizeSafeFixImpact(
     proposed,
     applied,
     verified,
+    verifiedExactCommit,
     failed,
     mostImpactfulTitle: doc?.executiveSummary?.slice(0, 120) ?? null,
     confidenceGained,

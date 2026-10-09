@@ -5,6 +5,7 @@ import { getCurrentProductionVerdict } from "@/server/production-verdict/service
 import { loadProtectionContext } from "@/server/continuous-protection/protection-context";
 import { getSafeFixById, storeSafeFixHistoryUpdate } from "./history";
 import { transitionSafeFixState } from "./lifecycle";
+import { setSafeFixProposalCommit } from "./proposal-commit";
 import { loadVerificationEvidence } from "./verification-evidence";
 import { decideFindingVerification } from "./verification-rules";
 import { appendSafeFixMemoryEvent } from "./memory-bridge";
@@ -51,14 +52,9 @@ async function verifySafeFixInner(
     actor?: string;
   }
 ): Promise<SafeFixVerificationResult> {
-  const record = await getSafeFixById(admin, input.safeFixId);
-  if (
-    !record ||
-    record.projectId !== input.projectId ||
-    record.organizationId !== input.organizationId
-  ) {
-    throw new Error("safe_fix_not_found");
-  }
+  const scope = { organizationId: input.organizationId, projectId: input.projectId };
+  const record = await getSafeFixById(admin, input.safeFixId, scope);
+  if (!record) throw new Error("safe_fix_not_found");
 
   await transitionSafeFixState(admin, {
     safeFixId: record.id,
@@ -76,16 +72,20 @@ async function verifySafeFixInner(
     .from("safe_fix_records")
     .select("baseline_snapshot")
     .eq("id", record.id)
+    .eq("organization_id", input.organizationId)
+    .eq("project_id", input.projectId)
     .maybeSingle())?.data?.baseline_snapshot as Record<string, unknown> | undefined;
 
-  // The verification scan is the latest evaluation unless one is named -- never
-  // the baseline scan the recommendation was generated from.
-  const currentVerdict = await getCurrentProductionVerdict(
-    admin,
-    input.organizationId,
-    input.projectId
-  );
-  const verificationScanId = input.analysisRunId ?? currentVerdict?.scanId ?? null;
+  // A proposal bound to a commit is verified against the completed scan of EXACTLY that commit; the
+  // latest scan (or any named run) is never substituted for it. A documentary proposal has no commit
+  // of its own and keeps the assisted flow: the latest evaluation unless one is named -- never the
+  // baseline scan the recommendation was generated from.
+  const proposalCommitSha = record.proposalCommitSha;
+  const bound = Boolean(proposalCommitSha);
+  const currentVerdict = bound
+    ? null
+    : await getCurrentProductionVerdict(admin, input.organizationId, input.projectId);
+  const verificationScanId = bound ? null : input.analysisRunId ?? currentVerdict?.scanId ?? null;
 
   const evidence = await loadVerificationEvidence(admin, {
     organizationId: input.organizationId,
@@ -94,12 +94,28 @@ async function verifySafeFixInner(
     verificationScanId,
     recommendationId: record.recommendationId,
     storedTargets: baselineSnap?.targetFindings,
+    proposalCommitSha,
   });
 
   // The ONLY thing that can produce "passed": the exact target finding(s)
   // absent from a complete, valid rescan of the same project and repository.
-  const decision = decideFindingVerification(evidence);
+  // The scan actually evaluated (resolved by commit for a bound proposal), not the requested id.
+  const evaluatedScanId = evidence.verificationScan?.id ?? verificationScanId;
+  let decision = decideFindingVerification(evidence);
+
+  // The proposal may have changed while the rescan was being evaluated: a verification of the old
+  // content must not approve the new content.
+  const latest = await getSafeFixById(admin, record.id, scope);
+  if (!latest || (latest.proposalCommitSha ?? null) !== (proposalCommitSha ?? null)) {
+    decision = {
+      outcome: "partial",
+      reasons: [...decision.reasons, "proposal_changed_during_verification"],
+      remainingTargetIds: decision.remainingTargetIds,
+      targetsAbsent: false,
+    };
+  }
   const outcome = decision.outcome;
+  const binding = bound ? ("exact_proposal_commit" as const) : ("assisted_unbound" as const);
 
   // Secondary evidence, recorded for context. None of it can cause VERIFIED.
   const verdict = evidence.verdict;
@@ -141,9 +157,15 @@ async function verifySafeFixInner(
         executiveSummary: baseline.executiveSummary,
         reasons: decision.reasons,
         baselineScanId: record.reviewId,
-        verificationScanId,
+        verificationScanId: evaluatedScanId,
         targetFindingIds: evidence.targets.map((target) => target.findingId),
         remainingTargetIds: decision.remainingTargetIds,
+        binding,
+        // base = commit of the baseline scan the proposal was generated from;
+        // proposal = commit that contains the proposed change (null: documentary, no commit).
+        baseCommitSha: evidence.baselineScan?.commitSha ?? null,
+        proposalCommitSha: proposalCommitSha ?? null,
+        verifiedCommitSha: evidence.verificationScan?.commitSha ?? null,
       },
     })
     .select("id")
@@ -165,13 +187,18 @@ async function verifySafeFixInner(
         ? "verification_passed"
         : `verification_${outcome}:${decision.reasons.join(",")}`,
     relatedRecommendationId: record.recommendationId,
-    relatedReviewId: verificationScanId ?? record.reviewId,
+    relatedReviewId: evaluatedScanId ?? record.reviewId,
   });
 
-  await storeSafeFixHistoryUpdate(admin, record.id, {
-    confidenceDelta,
-    protectionDelta: protectionStatusImproved ? "improved" : "unchanged",
-  });
+  await storeSafeFixHistoryUpdate(
+    admin,
+    record.id,
+    {
+      confidenceDelta,
+      protectionDelta: protectionStatusImproved ? "improved" : "unchanged",
+    },
+    scope
+  );
 
   const memoryType =
     outcome === "passed" ? "safe_fix_verified" : outcome === "failed" ? "safe_fix_failed" : "safe_fix_applied";
@@ -193,6 +220,15 @@ async function verifySafeFixInner(
     productionConfidenceImproved,
     protectionStatusImproved,
     newIssuesIntroduced,
+    binding,
+    statement:
+      outcome !== "passed"
+        ? "not_verified"
+        : binding === "exact_proposal_commit"
+          ? "exact_commit_rescan_clean"
+          : "later_analysis_clean_unbound",
+    verifiedScanId: evaluatedScanId,
+    verifiedCommitSha: evidence.verificationScan?.commitSha ?? null,
     details: { confidenceDelta, reasons: decision.reasons },
   };
 }
@@ -215,12 +251,35 @@ export async function approveSafeFix(
   });
 }
 
+/**
+ * Assisted flow: the customer's own agent applies the approved instructions. `commitSha` is the commit
+ * of the customer's change; when given, verification later requires the rescan of exactly that commit.
+ * Without it the record stays documentary: it is never presented as a verified patch (`assisted_unbound`).
+ */
 export async function markSafeFixApplied(
   admin: SupabaseClient,
-  input: { safeFixId: string; organizationId: string; projectId: string; actor: string }
-): Promise<void> {
+  input: { safeFixId: string; organizationId: string; projectId: string; actor: string; commitSha?: string | null }
+): Promise<{ binding: "exact_proposal_commit" | "assisted_unbound" }> {
+  const { commitSha, ...rest } = input;
+  if (commitSha) {
+    // Do not record a commit on a record that cannot move to APPLIED (leaves no half-applied state).
+    const current = await getSafeFixById(admin, input.safeFixId, {
+      organizationId: input.organizationId,
+      projectId: input.projectId,
+    });
+    if (!current) throw new Error("safe_fix_not_found");
+    if (current.lifecycleState !== "APPROVED") {
+      throw new Error(`invalid_transition:${current.lifecycleState}->APPLIED`);
+    }
+    await setSafeFixProposalCommit(admin, {
+      safeFixId: input.safeFixId,
+      scope: { organizationId: input.organizationId, projectId: input.projectId },
+      commitSha,
+      actor: input.actor,
+    });
+  }
   await transitionSafeFixState(admin, {
-    ...input,
+    ...rest,
     toState: "APPLIED",
     reason: "founder_applied",
   });
@@ -230,5 +289,23 @@ export async function markSafeFixApplied(
     type: "safe_fix_applied",
     payload: { safeFixId: input.safeFixId },
     idempotencyKey: `applied:${input.safeFixId}`,
+  });
+  return { binding: commitSha ? "exact_proposal_commit" : "assisted_unbound" };
+}
+
+/**
+ * Operator action (API only): a verification that could not conclude -- e.g. the rescan of the reported commit
+ * had not finished -- leaves the record FAILED. Reopening returns it to READY so the approve -> applied -> verify
+ * cycle can be repeated. The recorded proposal commit is kept (reporting the same SHA again is a no-op).
+ */
+export async function reopenSafeFix(
+  admin: SupabaseClient,
+  input: { safeFixId: string; organizationId: string; projectId: string; actor: string }
+): Promise<void> {
+  await transitionSafeFixState(admin, {
+    ...input,
+    // No `fromState`: the transition validates the record's ACTUAL state (only FAILED may go back to READY here).
+    toState: "READY",
+    reason: "operator_reopened_after_failed_verification",
   });
 }

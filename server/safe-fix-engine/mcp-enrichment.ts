@@ -2,7 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSafeFixById } from "./history";
-import type { SafeFixRecord } from "./types";
+import type { SafeFixRecord, SafeFixScope } from "./types";
 
 type McpSafeFixResult = {
   status?: string;
@@ -66,7 +66,8 @@ export async function enrichMcpSafeFixWithV2(
 
 export async function loadSafeFixForMcpSummary(
   admin: SupabaseClient,
-  safeFixId: string
+  safeFixId: string,
+  scope: SafeFixScope
 ): Promise<SafeFixRecord | null> {
-  return getSafeFixById(admin, safeFixId);
+  return getSafeFixById(admin, safeFixId, scope);
 }
