@@ -63,6 +63,8 @@ Preparación: anotar `BASE` = SHA completo del último commit analizado y su `sc
 | 5 | Verificar **antes** de que termine el análisis de C1 | 200, `verification.outcome` ≠ `passed`, `statement":"not_verified"`, razones incluyen `verification_scan_missing` (o `verdict_missing`); estado final `FAILED`, **no** `VERIFIED` |
 | 6 | Esperar a que el análisis de C1 esté `completed` con veredicto persistido. Reabrir: `{"action":"reopen"}` → 200 `{"ok":true,"state":"READY"}`; repetir `{"action":"approve"}` y `{"action":"applied","commitSha":"<C1>"}` (mismo SHA: no cambia nada); y `{"action":"verify"}` | 200 `outcome:"passed"`, `binding:"exact_proposal_commit"`, `statement:"exact_commit_rescan_clean"`, `verifiedCommitSha == C1`; `GET …/<F1>` → `lifecycleState:"VERIFIED"`, `proposalCommitSha:"<C1>"` |
 
+> **Comportamiento real observado (2026-10-09):** informar un `commitSha` **distinto** del ya registrado sobre un registro `APPROVED` invalida la aprobación (la aprobación era del contenido anterior): el registro vuelve a `READY`, el SHA nuevo queda guardado y la llamada responde **409 `invalid_transition:READY->APPLIED`**. Hay que repetir `approve` y luego `applied` con el mismo SHA. Es intencionado.
+>
 > El paso 5→6 prueba que **verificar antes** no aprueba nada. Una verificación que no puede concluir deja el registro en `FAILED`; `reopen` (solo válido desde `FAILED`, 409 en cualquier otro estado) lo devuelve a `READY` conservando el SHA registrado. Si se prefiere un solo ciclo, esperar el análisis antes del paso 4.
 
 **Negativos (cada uno con una corrección nueva `F2`, `F3`, …):**
