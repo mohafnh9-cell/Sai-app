@@ -25,6 +25,9 @@ describe("mapSafeFixError", () => {
   ])("%s -> %i", (message, status) => {
     expect(mapSafeFixError(new Error(message))?.status).toBe(status);
   });
+  it("a database unique violation (another open correction exists, migration 068) -> 409 open_fix_exists", () => {
+    expect(mapSafeFixError({ code: "23505", message: "duplicate key" })).toEqual({ status: 409, error: "open_fix_exists" });
+  });
   it("unknown errors and non-errors are not mapped (they stay real failures)", () => {
     expect(mapSafeFixError(new Error("boom"))).toBeNull();
     expect(mapSafeFixError("invalid_transition")).toBeNull();
