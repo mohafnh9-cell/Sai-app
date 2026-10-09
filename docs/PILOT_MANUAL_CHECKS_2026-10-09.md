@@ -111,7 +111,7 @@ Tabla de respuestas no-200 (¿pudo cambiar el registro?):
 | 409 `proposal_commit_conflict` / `proposal_commit_locked` | **Posible** (puede haberse reabierto antes) | Consultar y decidir |
 | 409 `invalid_transition:READY->READY` / `VERIFIED->READY` (`reopen` fuera de `FAILED`) | No | `reopen` solo desde `FAILED` |
 | 503 `proposal_commit_unsupported` | No | La migración 067 no está aplicada |
-`verify` no devuelve 409: devuelve 200 con `outcome` y deja el registro en `VERIFIED` o `FAILED`.
+`verify` solo debe llamarse con el registro en `APPLIED`: entonces devuelve 200 con `outcome` y lo deja en `VERIFIED` o `FAILED`. Si se llama en otro estado, la transición se rechaza antes de escribir nada y la API responde con un error de servidor (500, no capturado hoy; sin cambios en el registro): consulta el estado y sigue la secuencia.
 
 Reglas: no verificar antes de que termine el análisis del SHA informado; no informar el SHA de otra rama; un registro solo se puede ligar a un SHA a la vez; para un cambio nuevo del cliente, nuevo SHA ⇒ repetir `approve` → `applied`.
 Evidencia en cada paso: copia de la respuesta JSON y del `GET` posterior, con hora.
