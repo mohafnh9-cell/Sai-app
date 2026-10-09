@@ -5,7 +5,7 @@ Todo lo que sigue se ejecutó realmente, salvo donde se indique. Recursos: base 
 ## 1. Copia de seguridad y migración 067
 - Copia lógica (CSV completo) de `safe_fix_records` (9), `safe_fix_lifecycle_events` (9), `safe_fix_verifications` (0), con suma de comprobación.
 - **Restauración probada** en un PostgreSQL local de prueba: mismas filas y misma suma (`md5` del JSON ordenado, sesión UTC): `safe_fix_records` `abfed18c…`, eventos `b1ba78c7…`. Limitación: es una copia de las tablas afectadas, no un volcado completo; las copias automáticas de la plataforma no se pudieron comprobar desde aquí.
-- 067 aplicada con `lock_timeout=5s` (SHA256 del fichero igual al de la PR). Resultado: columna `proposal_commit_sha text NULL`, `CHECK` presente, **9/9 registros NULL**, y exportación de las columnas originales **idéntica byte a byte** a la copia.
+- 067 aplicada con `lock_timeout=5s` (fichero idéntico al de la PR #57; md5 `af6bfa95…`). Resultado: columna `proposal_commit_sha text NULL`, `CHECK` presente, **9/9 registros NULL**, y exportación de las columnas originales **idéntica byte a byte** a la copia.
 - Después del E2E, los 9 registros anteriores siguen **idénticos byte a byte**.
 
 ## 2. Despliegue
