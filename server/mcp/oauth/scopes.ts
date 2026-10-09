@@ -22,6 +22,19 @@ export const ALL_MCP_SCOPES = [
 
 export type McpScope = (typeof ALL_MCP_SCOPES)[number];
 
+/**
+ * The scopes an OAuth client should request FIRST (initial authorization): read-only status, discovery and Safe Fix
+ * instructions. Advertised in the 401 challenge (`scope="..."`, RFC 6750 / MCP authorization spec) so a spec-following client
+ * asks for these instead of every scope. It is a HINT: a client may still request more explicitly, and omitting `scope`
+ * on /oauth/authorize still grants all scopes (unchanged, for compatibility). `safe_fix` under `mcp:fix:read` also
+ * records a Safe Fix proposal in SequrAI's own database (see docs/PILOT_SPRINT_CHECKLIST.md); it never writes to GitHub.
+ */
+export const MCP_INITIAL_REQUEST_SCOPES: readonly McpScope[] = [
+  MCP_SCOPE_STATUS_READ,
+  MCP_SCOPE_DISCOVER_READ,
+  MCP_SCOPE_FIX_READ,
+];
+
 /** Single source of truth: tool → required scope. */
 export const TOOL_REQUIRED_SCOPE: Record<string, McpScope> = {
   can_i_deploy: MCP_SCOPE_STATUS_READ,

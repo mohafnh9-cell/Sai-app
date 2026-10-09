@@ -1,6 +1,7 @@
 import "server-only";
 
 import { NextResponse } from "next/server";
+import { MCP_INITIAL_REQUEST_SCOPES } from "./scopes";
 
 export type OAuthErrorCode =
   | "invalid_request"
@@ -53,9 +54,11 @@ export function mcpUnauthorizedResponse(message = "Unauthorized"): NextResponse 
     ? `${issuer}/.well-known/oauth-protected-resource`
     : undefined;
 
+  // `scope` = the minimal read-only set to request first (a hint; see MCP_INITIAL_REQUEST_SCOPES).
+  const scopeHint = `scope="${MCP_INITIAL_REQUEST_SCOPES.join(" ")}"`;
   const wwwAuth = resourceMetadata
-    ? `Bearer realm="sequrai-mcp", resource_metadata="${resourceMetadata}"`
-    : `Bearer realm="sequrai-mcp"`;
+    ? `Bearer realm="sequrai-mcp", resource_metadata="${resourceMetadata}", ${scopeHint}`
+    : `Bearer realm="sequrai-mcp", ${scopeHint}`;
 
   return NextResponse.json(
     { error: "invalid_token", error_description: message, code: "unauthorized" },
