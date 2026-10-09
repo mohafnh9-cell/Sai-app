@@ -11,19 +11,21 @@ type ConsentPayload = {
   clientName: string;
   clientId: string;
   organizationId: string;
-  scopes: { scope: string; description: string }[];
+  scopes: { scope: string; description: string; descriptionEs?: string; sensitive?: boolean; defaultGranted?: boolean }[];
   redirectUri: string;
 };
 
 function OAuthConsentForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { t } = useI18n("settings");
+  const { t, locale } = useI18n("settings");
   const requestId = searchParams.get("request_id");
 
   const [payload, setPayload] = useState<ConsentPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  // What the person grants. Sensitive capabilities (start reviews/audits, authorize security tests) start UNCHECKED.
+  const [selected, setSelected] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const loadConsent = useCallback(async () => {
@@ -42,6 +44,11 @@ function OAuthConsentForm() {
 
     const data = await response.json();
     setPayload(data);
+    setSelected(
+      (data as ConsentPayload).scopes
+        .filter((item) => item.defaultGranted ?? !item.sensitive)
+        .map((item) => item.scope)
+    );
     setLoading(false);
   }, [requestId, t]);
 
@@ -60,7 +67,7 @@ function OAuthConsentForm() {
       const response = await fetch("/api/oauth/consent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ request_id: requestId, action }),
+        body: JSON.stringify({ request_id: requestId, action, ...(action === "approve" ? { scopes: selected } : {}) }),
       });
 
       const data = await response.json();
@@ -112,16 +119,41 @@ function OAuthConsentForm() {
 
       <div className="rounded-lg border border-border/60 bg-muted/20 p-4 space-y-3">
         <p className="text-sm font-medium">{t("oauthConsentCapabilities")}</p>
-        <ul className="list-disc space-y-2 pl-5 text-sm text-muted-foreground">
-          {payload.scopes.map((item) => (
-            <li key={item.scope}>{item.description}</li>
-          ))}
+        <ul className="space-y-3 text-sm text-muted-foreground">
+          {payload.scopes.map((item) => {
+            const inputId = `oauth-scope-${item.scope}`;
+            return (
+              <li key={item.scope} className="flex items-start gap-2">
+                <input
+                  id={inputId}
+                  type="checkbox"
+                  className="mt-1 h-4 w-4 shrink-0 accent-primary"
+                  checked={selected.includes(item.scope)}
+                  disabled={submitting}
+                  onChange={(event) =>
+                    setSelected((current) =>
+                      event.target.checked ? [...current, item.scope] : current.filter((scope) => scope !== item.scope)
+                    )
+                  }
+                />
+                <label htmlFor={inputId} className="space-y-0.5">
+                  <span className="block text-foreground">{locale === "es" ? item.descriptionEs ?? item.description : item.description}</span>
+                  {item.sensitive ? (
+                    <span className="block text-xs text-warning">{t("oauthConsentSensitiveNote")}</span>
+                  ) : null}
+                </label>
+              </li>
+            );
+          })}
         </ul>
+        {selected.length === 0 ? (
+          <p className="text-xs text-destructive">{t("oauthConsentNothingSelected")}</p>
+        ) : null}
         <p className="text-xs text-muted-foreground">{t("oauthConsentRemoteOnly")}</p>
       </div>
 
       <div className="flex flex-col gap-2 sm:flex-row">
-        <Button className="flex-1" disabled={submitting} onClick={() => void handleAction("approve")}>
+        <Button className="flex-1" disabled={submitting || selected.length === 0} onClick={() => void handleAction("approve")}>
           {submitting ? t("oauthConsentSubmitting") : t("oauthConsentApprove")}
         </Button>
         <Button

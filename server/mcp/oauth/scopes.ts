@@ -22,6 +22,55 @@ export const ALL_MCP_SCOPES = [
 
 export type McpScope = (typeof ALL_MCP_SCOPES)[number];
 
+/**
+ * The scopes an OAuth client should request FIRST (initial authorization): status, discovery and Safe Fix
+ * instructions (the least-privilege set: it starts no analyses; `safe_fix` does save a Safe Fix proposal in SequrAI). Advertised in the 401 challenge (`scope="..."`, RFC 6750 / MCP authorization spec) so a spec-following client
+ * asks for these instead of every scope. It is a HINT: a client may still request more explicitly, and omitting `scope`
+ * on /oauth/authorize still grants all scopes (unchanged, for compatibility). `safe_fix` under `mcp:fix:read` also
+ * records a Safe Fix proposal in SequrAI's own database (see docs/PILOT_SPRINT_CHECKLIST.md); it never writes to GitHub.
+ */
+/**
+ * Scopes that START work, spend analysis capacity or authorize active testing of a deployed target. They are never granted by
+ * default at consent: the person approving must opt in to each one. (`mcp:fix:read` is NOT in this list: `safe_fix` only records a
+ * Safe Fix proposal in SequrAI's own database.)
+ */
+export const SENSITIVE_MCP_SCOPES: readonly McpScope[] = [MCP_SCOPE_REVIEW_RUN, MCP_SCOPE_AUDIT_RUN, MCP_SCOPE_TARGET_AUTHORIZE];
+
+export function isSensitiveMcpScope(scope: string): boolean {
+  return (SENSITIVE_MCP_SCOPES as readonly string[]).includes(scope);
+}
+
+/**
+ * The scopes a consent actually grants -- decided here, NEVER by what the client asked for.
+ *  - `selected` given (the consent screen's checkboxes): it must be a non-empty subset of what was requested.
+ *  - `selected` absent: only the requested NON-sensitive scopes (a client that omits `scope`, or asks for everything, does not
+ *    obtain review/audit/target-authorization by accident).
+ * Throws McpError(400, invalid_scope) otherwise.
+ */
+export function resolveGrantedScopes(requested: string[], selected?: string[] | null): McpScope[] {
+  const valid = (scope: string): scope is McpScope => (ALL_MCP_SCOPES as readonly string[]).includes(scope);
+  const requestedValid = [...new Set(requested.filter(valid))];
+  const granted =
+    selected == null
+      ? requestedValid.filter((scope) => !isSensitiveMcpScope(scope))
+      : [...new Set(selected)];
+  if (granted.length === 0) {
+    throw new McpError(400, "invalid_scope", "Select at least one capability to grant");
+  }
+  for (const scope of granted) {
+    if (!valid(scope) || !requestedValid.includes(scope)) {
+      throw new McpError(400, "invalid_scope", `Scope not requested or unknown: ${scope}`);
+    }
+  }
+  return granted as McpScope[];
+}
+
+export const MCP_INITIAL_REQUEST_SCOPES: readonly McpScope[] = [
+  MCP_SCOPE_STATUS_READ,
+  MCP_SCOPE_DISCOVER_READ,
+  MCP_SCOPE_FIX_READ,
+];
+
 /** Single source of truth: tool → required scope. */
 export const TOOL_REQUIRED_SCOPE: Record<string, McpScope> = {
   can_i_deploy: MCP_SCOPE_STATUS_READ,
@@ -45,8 +94,9 @@ export const SCOPE_DESCRIPTIONS: Record<McpScope, { en: string; es: string }> = 
     es: "Descubrir arquitectura de aplicaciones en repositorios conectados",
   },
   [MCP_SCOPE_FIX_READ]: {
-    en: "Generate Safe Fix prompts for identified blockers",
-    es: "Generar prompts Safe Fix para blockers identificados",
+    // Honest wording: safe_fix is not purely a read. It saves a persistent Safe Fix proposal in SequrAI (never in GitHub).
+    en: "Generate Safe Fix instructions for identified blockers. SequrAI saves a persistent Safe Fix proposal in your workspace; it does not change your code or write to GitHub.",
+    es: "Generar instrucciones Safe Fix para los bloqueos identificados. SequrAI guarda una propuesta Safe Fix persistente en tu workspace; no modifica tu código ni escribe en GitHub.",
   },
   [MCP_SCOPE_REVIEW_RUN]: {
     en: "Run and cancel production reviews on GitHub repositories",

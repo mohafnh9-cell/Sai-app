@@ -7,7 +7,8 @@ import {
 } from "@/server/mcp/oauth/authorization-requests";
 import { createAuthorizationCode } from "@/server/mcp/oauth/codes";
 import { logOAuthEvent, clientIp } from "@/server/mcp/oauth/audit";
-import { SCOPE_DESCRIPTIONS } from "@/server/mcp/oauth/scopes";
+import { SCOPE_DESCRIPTIONS, isSensitiveMcpScope, resolveGrantedScopes } from "@/server/mcp/oauth/scopes";
+import { McpError } from "@/server/mcp/auth";
 import type { McpScope } from "@/server/mcp/oauth/scopes";
 import { OAuthError, oauthErrorResponse } from "@/server/mcp/oauth/errors";
 import { enforceRateLimit } from "@/server/http/rate-limit";
@@ -16,6 +17,8 @@ import { z } from "zod";
 const consentBodySchema = z.object({
   request_id: z.string().trim().min(1),
   action: z.enum(["approve", "deny"]),
+  /** The capabilities the person chose to grant (subset of what was requested). Absent = the non-sensitive ones only. */
+  scopes: z.array(z.string().trim().min(1)).max(16).optional(),
 });
 
 export const runtime = "nodejs";
@@ -50,6 +53,10 @@ export async function GET(request: Request) {
   const scopeDetails = authRequest.scopes.map((scope) => ({
     scope,
     description: SCOPE_DESCRIPTIONS[scope as McpScope]?.en ?? scope,
+    descriptionEs: SCOPE_DESCRIPTIONS[scope as McpScope]?.es ?? scope,
+    // Sensitive capabilities start UNCHECKED on the consent screen: the person must opt in to each.
+    sensitive: isSensitiveMcpScope(scope),
+    defaultGranted: !isSensitiveMcpScope(scope),
   }));
 
   return NextResponse.json({
@@ -79,7 +86,7 @@ export async function POST(request: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
-  const { request_id: requestId, action } = parsed.data;
+  const { request_id: requestId, action, scopes: selectedScopes } = parsed.data;
 
   const authRequest = await getAuthorizationRequest(requestId, user.id);
   if (!authRequest) {
@@ -109,6 +116,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ redirectTo: url.toString() });
     }
 
+    // What is granted is decided here from what the person selected, not from what the client requested.
+    let grantedScopes: string[];
+    try {
+      grantedScopes = resolveGrantedScopes(authRequest.scopes, selectedScopes);
+    } catch (error) {
+      if (error instanceof McpError) {
+        return NextResponse.json({ error: "invalid_scope", error_description: error.message }, { status: 400 });
+      }
+      throw error;
+    }
+
     const code = await createAuthorizationCode({
       clientId: authRequest.client_id,
       userId: authRequest.user_id,
@@ -116,7 +134,7 @@ export async function POST(request: Request) {
       redirectUri: authRequest.redirect_uri,
       codeChallenge: authRequest.code_challenge,
       codeChallengeMethod: authRequest.code_challenge_method,
-      scopes: authRequest.scopes,
+      scopes: grantedScopes,
     });
 
     await deleteAuthorizationRequest(requestId);
@@ -126,8 +144,9 @@ export async function POST(request: Request) {
       userId: user.id,
       organizationId: authRequest.organization_id,
       clientId: authRequest.client_id,
-      scopes: authRequest.scopes,
+      scopes: grantedScopes,
       result: "success",
+      metadata: { requestedScopes: authRequest.scopes, narrowed: grantedScopes.length < authRequest.scopes.length },
       ip: clientIp(request),
     });
 
