@@ -18,12 +18,31 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { calculateSafeFixConfidence, historicalSuccessRate } from "./confidence";
 import { buildFromPromptInput } from "./v2-document";
 import { preparePullRequestDraft } from "./pr-preparation";
-import { persistGeneratedSafeFix, supersedeOpenFixesForRecommendation } from "./history";
+import {
+  IN_FLIGHT_STATES,
+  isUniqueViolation,
+  listOpenFixesForRecommendation,
+  persistGeneratedSafeFix,
+  pickSurvivingFix,
+  supersedeReplaceableFixes,
+} from "./history";
 import { transitionSafeFixState } from "./lifecycle";
 import { appendSafeFixMemoryEvent } from "./memory-bridge";
 import type { SafeFixRecord } from "./types";
 import { incrementMetricCounter } from "@/server/observability/metrics";
 import { withOperationTiming } from "@/server/observability/operation-timing";
+
+/**
+ * ready: a proposal for this recommendation and this base analysis (`reused` = an existing one was returned, nothing new was
+ *   created -- the call is idempotent).
+ * in_flight: a correction for this recommendation is already approved/applied/being verified on a DIFFERENT base analysis, so
+ *   a new proposal is refused and the existing record is kept untouched. The caller must finish or reopen that one.
+ */
+export type GenerateSafeFixResult =
+  | { status: "no_blockers" }
+  | { status: "choose_blocker"; blockers: Array<{ id: string; title: string; severity: string }> }
+  | { status: "ready"; record: SafeFixRecord; reused?: boolean }
+  | { status: "in_flight"; record: SafeFixRecord; reason: "different_base_analysis" };
 
 export type GenerateSafeFixInput = {
   organizationId: string;
@@ -39,11 +58,7 @@ export type GenerateSafeFixInput = {
 export async function generateSafeFix(
   admin: SupabaseClient,
   input: GenerateSafeFixInput
-): Promise<
-  | { status: "no_blockers" }
-  | { status: "choose_blocker"; blockers: Array<{ id: string; title: string; severity: string }> }
-  | { status: "ready"; record: SafeFixRecord }
-> {
+): Promise<GenerateSafeFixResult> {
   return withOperationTiming(
     "safe_fix.generate",
     () => generateSafeFixInner(admin, input),
@@ -54,11 +69,7 @@ export async function generateSafeFix(
 async function generateSafeFixInner(
   admin: SupabaseClient,
   input: GenerateSafeFixInput
-): Promise<
-  | { status: "no_blockers" }
-  | { status: "choose_blocker"; blockers: Array<{ id: string; title: string; severity: string }> }
-  | { status: "ready"; record: SafeFixRecord }
-> {
+): Promise<GenerateSafeFixResult> {
   const requestedId = input.blockerId?.trim() || input.priorityId?.trim() || input.findingId?.trim();
   const verdict = input.analysisRunId
     ? await getProductionVerdictByScan(admin, input.organizationId, input.analysisRunId)
@@ -139,6 +150,11 @@ async function generateSafeFixInner(
     recommendationId = finding.id as string;
   }
 
+  // Idempotency and in-flight protection, decided BEFORE anything is generated or written.
+  const scope = { organizationId: input.organizationId, projectId: input.projectId };
+  const existing = await resolveExistingFix(admin, scope, recommendationId, verdict.scanId);
+  if (existing) return existing;
+
   const fixResult = buildProductionFixPrompt(promptInput);
   const { verified, failed } = await countVerificationOutcomes(admin, input.projectId);
   const { band, score } = calculateSafeFixConfidence({
@@ -158,11 +174,10 @@ async function generateSafeFixInner(
     assessment: fixResult.assessment,
   });
 
-  await supersedeOpenFixesForRecommendation(
-    admin,
-    { organizationId: input.organizationId, projectId: input.projectId },
-    recommendationId
-  );
+  // Older, never-approved proposals for this recommendation are replaceable. In-flight ones never are (the state condition
+  // is part of the UPDATE, so an approval that lands in between wins).
+  const open = await listOpenFixesForRecommendation(admin, scope, recommendationId);
+  await supersedeReplaceableFixes(admin, scope, open.filter((r) => r.reviewId !== verdict.scanId).map((r) => r.id));
 
   // Preserve the exact finding identity this fix targets, so verification can
   // later prove THOSE findings are gone rather than infer it from counts.
@@ -173,26 +188,35 @@ async function generateSafeFixInner(
     recommendationId,
   }).catch(() => ({ targets: [], fullyResolved: false }));
 
-  const record = await persistGeneratedSafeFix(admin, {
-    organizationId: input.organizationId,
-    projectId: input.projectId,
-    recommendationId,
-    reviewId: verdict.scanId,
-    verdictId: null,
-    confidenceBand: band,
-    confidenceScore: score,
-    document,
-    prDraft,
-    baseline: {
-      verdictStatus: verdict.status,
-      score: verdict.score,
-      blockersCount: verdict.blockersCount,
-      priorityTitle: priority?.title ?? promptInput.issueTitle,
-      // Empty when identity could not be fully resolved; verification then
-      // re-resolves from the baseline scan and otherwise fails closed.
-      targetFindings: resolvedTargets.fullyResolved ? resolvedTargets.targets : [],
-    },
-  });
+  let record: SafeFixRecord;
+  try {
+    record = await persistGeneratedSafeFix(admin, {
+      organizationId: input.organizationId,
+      projectId: input.projectId,
+      recommendationId,
+      reviewId: verdict.scanId,
+      verdictId: null,
+      confidenceBand: band,
+      confidenceScore: score,
+      document,
+      prDraft,
+      baseline: {
+        verdictStatus: verdict.status,
+        score: verdict.score,
+        blockersCount: verdict.blockersCount,
+        priorityTitle: priority?.title ?? promptInput.issueTitle,
+        // Empty when identity could not be fully resolved; verification then
+        // re-resolves from the baseline scan and otherwise fails closed.
+        targetFindings: resolvedTargets.fullyResolved ? resolvedTargets.targets : [],
+      },
+    });
+  } catch (error) {
+    // A concurrent request created (or approved) the open correction first (unique index, migration 068): hand back the winner.
+    if (!isUniqueViolation(error)) throw error;
+    const winner = await resolveExistingFix(admin, scope, recommendationId, verdict.scanId);
+    if (winner) return winner;
+    throw error;
+  }
 
   await transitionSafeFixState(admin, {
     safeFixId: record.id,
@@ -218,8 +242,41 @@ async function generateSafeFixInner(
     idempotencyKey: `safe_fix_proposed:${record.id}`,
   });
 
+  // Concurrent creators (no unique index yet) can both have inserted. Every caller computes the same survivor; the others
+  // are superseded only while still replaceable, and a caller whose record lost returns the survivor instead.
+  const afterInsert = await listOpenFixesForRecommendation(admin, scope, recommendationId);
+  const survivor = pickSurvivingFix(afterInsert);
+  if (survivor && survivor.id !== record.id) {
+    await supersedeReplaceableFixes(admin, scope, afterInsert.filter((r) => r.id !== survivor.id).map((r) => r.id));
+    return survivor.reviewId === verdict.scanId
+      ? { status: "ready", record: survivor, reused: true }
+      : { status: "in_flight", record: survivor, reason: "different_base_analysis" };
+  }
+  if (survivor) {
+    await supersedeReplaceableFixes(admin, scope, afterInsert.filter((r) => r.id !== survivor.id).map((r) => r.id));
+  }
+
   incrementMetricCounter("safe_fix_generated_total");
   return { status: "ready", record };
+}
+
+/** An open correction already answers this request, or one in flight on another base analysis blocks it. */
+async function resolveExistingFix(
+  admin: SupabaseClient,
+  scope: { organizationId: string; projectId: string },
+  recommendationId: string,
+  baseScanId: string
+): Promise<GenerateSafeFixResult | null> {
+  const open = await listOpenFixesForRecommendation(admin, scope, recommendationId);
+  const inFlight = open.find((r) => IN_FLIGHT_STATES.has(r.lifecycleState)); // oldest first
+  if (inFlight) {
+    return inFlight.reviewId === baseScanId
+      ? { status: "ready", record: inFlight, reused: true }
+      : { status: "in_flight", record: inFlight, reason: "different_base_analysis" };
+  }
+  const sameBase = open.find((r) => r.reviewId === baseScanId);
+  if (sameBase) return { status: "ready", record: sameBase, reused: true };
+  return null; // only replaceable proposals of an older base (or none): a new proposal supersedes them
 }
 
 async function countVerificationOutcomes(admin: SupabaseClient, projectId: string) {
