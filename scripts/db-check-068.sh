@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# Throwaway-cluster check of migration 067 on a REAL PostgreSQL (needs PostgreSQL >= 14 binaries on PATH).
+# Throwaway-cluster check of migration 068 on a REAL PostgreSQL (needs PostgreSQL >= 14 binaries on PATH).
 # Builds the database from database/migrations/001-066 with minimal Supabase stand-ins (roles, auth schema,
-# realtime publication), then runs database/tests/067_safe_fix_proposal_commit_check.sql in the order
-# "before 067 -> apply 067 -> after 067 -> RLS -> rollback rehearsal". Touches nothing but its own temp cluster.
+# realtime publication), applies 001-067, then runs database/tests/068_safe_fix_one_open_per_recommendation_check.sql in the order
+# "duplicates present -> migration refuses -> resolve -> apply -> constraint behaviour". Touches nothing but its own temp cluster.
+# The ERROR lines it prints are the EXPECTED refusal of the migration while duplicates exist; only FAIL lines are failures.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 export LC_ALL="${LC_ALL:-en_US.UTF-8}"
@@ -24,8 +25,8 @@ create extension if not exists pgcrypto; create extension if not exists pg_trgm;
 create publication supabase_realtime;
 SQL
 for f in $(ls database/migrations/*.sql | sort); do
-  case "$f" in *067_*|*068_*) continue;; esac           # 067 is applied BY the check, in the middle of it
+  case "$f" in *068_*) continue;; esac           # 068 is applied BY the check, in the middle of it
   "${P[@]}" -f "$f" >/dev/null 2>&1 || { echo "migration failed: $f"; exit 1; }
 done
-echo "migrations 001-066 applied"
-"${P[@]}" -f database/tests/067_safe_fix_proposal_commit_check.sql 2>&1 | sed -e 's/^psql:[^ ]* //' -e 's/^NOTICE:  //' | grep -E "PASS|FAIL|ERROR" 
+echo "migrations 001-067 applied"
+"${P[@]}" -f database/tests/068_safe_fix_one_open_per_recommendation_check.sql 2>&1 | sed -e 's/^psql:[^ ]* //' -e 's/^NOTICE:  //' | grep -E "PASS|FAIL|ERROR" 
