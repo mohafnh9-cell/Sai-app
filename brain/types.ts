@@ -44,8 +44,22 @@ export type ProjectBrainSnapshot = {
   organizationId: string;
   projectName: string;
   githubRepo: string | null;
-  /** Canonical persisted Production Verdict v1 — single source of truth. */
+  /**
+   * Canonical persisted Production Verdict v1 — single source of truth.
+   * Only a CURRENT verdict (`verdictState === "current"`) describes the latest version of the code.
+   * While a review of a newer version is running it is HISTORY: it is kept for context, `productionReady`
+   * is withheld, and it must never be read as an approval of the version being analyzed.
+   */
   currentVerdict: ProductionVerdictV1 | null;
+  /**
+   * current: the verdict belongs to the latest completed analysis.
+   * historical_review_in_progress: a review of a newer version is running; `currentVerdict` is historical.
+   * pending_verdict: a newer scan completed but its own verdict is not persisted yet; no verdict is exposed.
+   * none: no verdict exists.
+   */
+  verdictState: "current" | "historical_review_in_progress" | "pending_verdict" | "none";
+  /** The review currently running on the default branch (the version being analyzed), if any. */
+  reviewInProgress: { scanId: string; commitSha: string | null } | null;
   productionReady: ProductionReadyScore;
   securityScore: number | null;
   riskScore: number | null;

@@ -195,6 +195,8 @@ function buildProjectBrainSnapshot(
     projectName: project.name,
     githubRepo: project.github_repo,
     currentVerdict: verdict,
+    verdictState: verdict ? "current" : "none",
+    reviewInProgress: null,
     productionReady: verdict ? productionReadyFromVerdict(verdict) : EMPTY_PRODUCTION_READY,
     securityScore: verdict?.score ?? null,
     riskScore: verdict?.score != null ? Math.max(0, 100 - (verdict.score ?? 0)) : null,

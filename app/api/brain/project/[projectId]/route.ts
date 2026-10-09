@@ -47,7 +47,8 @@ export async function GET(
     { brain },
     {
       headers: {
-        "Cache-Control": "private, max-age=30",
+        // The snapshot carries the "review in progress / verdict is historical" state: it must not be cached.
+        "Cache-Control": "private, no-store",
       },
     }
   );
