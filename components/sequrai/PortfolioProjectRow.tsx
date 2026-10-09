@@ -42,11 +42,13 @@ export function PortfolioProjectRow({
     t(key, params);
 
   const status = summary?.status ?? verdictStatus ?? "insufficient_data";
-  const affirms = summary?.affirmsDeploy === true;
-  const score = summary?.productionReady ?? null;
+  // A newer review is running (or its verdict is pending): the stored verdict is HISTORY, not the current decision.
+  const historical = summary?.verdictState === "historical_review_in_progress" || summary?.verdictState === "pending_verdict";
+  const affirms = !historical && summary?.affirmsDeploy === true;
+  const score = historical ? null : summary?.productionReady ?? null;
   const blockers = summary?.blockersCount ?? 0;
   const targetHref = href ?? projectVerdictHref(projectId);
-  const tone = needsAttention ? verdictSurfaceClass(status) : "";
+  const tone = needsAttention && !historical ? verdictSurfaceClass(status) : "";
 
   const lastAnalyzed = lastScanAt ?? summary?.generatedAt ?? null;
   const lastLabel = lastAnalyzed
@@ -85,15 +87,23 @@ export function PortfolioProjectRow({
               ) : null}
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <VerdictStatusBadge status={status} affirms={affirms} />
-              {blockers > 0 ? (
+              {historical ? (
+                <span className="inline-flex items-center rounded-md border border-border/60 bg-muted/40 px-2 py-0.5 text-xs font-medium text-foreground">
+                  {tp("analysisInProgress")}
+                </span>
+              ) : (
+                <VerdictStatusBadge status={status} affirms={affirms} />
+              )}
+              {!historical && blockers > 0 ? (
                 <span className="text-xs text-muted-foreground">
                   {tp("blockersCount", { count: blockers })}
                 </span>
               ) : null}
             </div>
             <p className="text-xs text-muted-foreground line-clamp-1">
-              {verdictStatusMessage(status, translate, affirms)}
+              {historical
+                ? tp("previousResultHistorical")
+                : verdictStatusMessage(status, translate, affirms)}
             </p>
           </div>
         </div>

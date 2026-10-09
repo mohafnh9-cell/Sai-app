@@ -14,6 +14,7 @@ import { getLatestVerdictsByOrganization } from "@/server/production-verdict/ser
 import { productionReadyFromVerdict } from "./verdict-view-model";
 import { mergeProjectActivity } from "./build-project-brain";
 import { createAdminClient } from "@/server/security-scanner/admin-client";
+import { applyLiveVerdictStates, loadLiveVerdictStates } from "./live-verdict-state";
 
 const ORG_BRAIN_CACHE_TTL_MS = 20_000;
 
@@ -60,6 +61,8 @@ export function summaryFromVerdict(
       lastReviewedCommit: null,
       generatedAt: null,
       affirmsDeploy: false,
+      verdictScanId: null,
+      verdictState: "none",
     };
   }
 
@@ -75,6 +78,8 @@ export function summaryFromVerdict(
     lastReviewedCommit: verdict.commitSha,
     generatedAt: verdict.generatedAt,
     affirmsDeploy: verdictAffirmsDeploy(verdict),
+    verdictScanId: verdict.scanId,
+    verdictState: "current",
   };
 }
 
@@ -164,7 +169,7 @@ export async function getCachedOrgBrain(
     .maybeSingle();
 
   if (cached && new Date(cached.expires_at as string).getTime() > Date.now()) {
-    return cached.payload as OrgBrainSnapshot;
+    return withLiveVerdictState(supabase, organizationId, cached.payload as OrgBrainSnapshot);
   }
 
   const snapshot = await buildOrgBrain(supabase, organizationId);
@@ -179,5 +184,19 @@ export async function getCachedOrgBrain(
     { onConflict: "organization_id" }
   );
 
-  return snapshot;
+  // The cache stores the pure snapshot; the live state is applied on every read (never cached).
+  return withLiveVerdictState(supabase, organizationId, snapshot);
+}
+
+/**
+ * The 20 s snapshot cache must not decide whether a verdict is the CURRENT decision: a scan that starts or finishes
+ * after the snapshot was taken changes that immediately. Applied on every read, cache hit or not.
+ */
+async function withLiveVerdictState(
+  supabase: SupabaseClient,
+  organizationId: string,
+  snapshot: OrgBrainSnapshot
+): Promise<OrgBrainSnapshot> {
+  const states = await loadLiveVerdictStates(supabase, organizationId, snapshot.projects);
+  return { ...snapshot, projects: applyLiveVerdictStates(snapshot.projects, states) };
 }
