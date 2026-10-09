@@ -2,7 +2,7 @@
 
 Leyenda de entornos (nunca se mezclan): **L** = pruebas locales/CI (código, base de datos de prueba local) · **M** = agente MCP real contra producción · **P** = producción (aplicación, scanner cloud y base de datos reales).
 Estado: **aprobado** (observado en ese entorno) · **pendiente** · **fallido**. "Aprobado L" no equivale a aprobado P.
-Última actualización: 2026-10-09. PR abiertas: #59 (docs), #60, #61, #62 (código, sin fusionar ni desplegar).
+Última actualización: 2026-10-09 (tarde). **Desplegado:** #60, #62, #61 (despliegue 6960499262, SHA `0a076ed`) y migraciones 067 y 068. #59 (docs) en esta fusión.
 
 ## A. Preparación técnica del piloto (debe quedar validada el día 11)
 
@@ -15,10 +15,10 @@ Estado: **aprobado** (observado en ese entorno) · **pendiente** · **fallido**.
 | A5 | Aislamiento entre organizaciones con dos sesiones reales | ✔ (unit + PostgreSQL) | — | ✔ solo entre proyectos de la misma org (404) | **pendiente** | Falta la sesión B (usuario de una org de prueba no protegida, no miembro de Sequrai). Script exacto en `PILOT_MANUAL_CHECKS_2026-10-09.md` §2 |
 | A6 | Journey y polling visible (primer plano y al volver de otra pestaña) | ✔ (lógica) | — | **pendiente** | **pendiente** | Paso visual 1 enviado, esperando resultado. Hasta observarlo no se da por superado ningún paso |
 | A7 | Estados históricos no se presentan como aprobación actual (Mission Control, Journey, Protection, brain de proyecto) | ✔ | — | ✔ por API; visual **pendiente** | **pendiente** | API del brain de proyecto verificada en producción; **el brain de proyecto no tiene componente visible**. Journey/Mission Control: guía visual |
-| A8 | Dashboard y Proyectos (OrgBrain) no presentan un veredicto anterior como actual | ✔ (#61) | — | **pendiente** | **pendiente** | Defecto reproducido y corregido en #61 (sin desplegar). Verificación visual: paso 10 de la guía |
-| A9 | `verify` fuera de `APPLIED` → 409 controlado; verificación a medias no deja `VERIFYING` atascado | ✔ (#60) | — | **pendiente** | **pendiente** | #60 sin desplegar; hoy producción responde 500 en el primer caso |
-| A10 | `safe_fix` repetido/concurrente: reutiliza; nunca sustituye APPROVED/APPLIED/VERIFYING | ✔ (#62) | **pendiente** | **pendiente** | **pendiente** | #62 (apila sobre #60). Migración 068 opcional, **no aplicada**; comprobada en PostgreSQL real local |
-| A11 | Errores controlados y procedimiento de recuperación probado | ✔ | — | ✔ parcial | **pendiente** | `reopen` y recuperación del 409 por cambio de SHA: probados en producción. Falta producción para A9/A10 |
+| A8 | Dashboard y Proyectos (OrgBrain) no presentan un veredicto anterior como actual | ✔ (#61) | — | **desplegado; sin observar** | **pendiente** | Defecto reproducido y corregido en #61 (desplegado). Verificación **visual** pendiente: paso 10 de la guía (nadie lo ha observado) |
+| A9 | `verify` fuera de `APPLIED` → 409 controlado; verificación a medias no deja `VERIFYING` atascado | ✔ (#60) | — | ✔ (409) | **aprobado** (409 en producción) | 6 × 409 sin cambios sobre un registro `VERIFIED`. El caso "falla a medias → `FAILED`" solo está probado en local (no se provocó un fallo en producción) |
+| A10 | `safe_fix` repetido/concurrente: reutiliza; nunca sustituye APPROVED/APPLIED/VERIFYING | ✔ (#62; PostgreSQL real local) | **pendiente** (vía MCP) | ✔ (vía API) | **aprobado por API; pendiente por MCP** | Producción: 5 simultáneas → 1 registro; repetición con `APPROVED` preservado; `in_flight` 409 conservando el registro; BD sin duplicados abiertos ni pérdidas. Migración 068 **aplicada** |
+| A11 | Errores controlados y procedimiento de recuperación probado | ✔ | — | ✔ | **aprobado** | `reopen`, 409 por cambio de SHA, 409 de A9, `in_flight`. Recuperación de servicio: redeploy 6958950455 (`c8ada24`), columnas e índice se conservan. Retirar el índice solo con motivo (efecto: vuelve la convergencia por reconciliación, sin garantía estricta ante carreras) |
 | A12 | Documentación consistente con lo observado | — | — | — | **pendiente** | Revisión final el día 11 |
 | A13 | Limitación SQL en el motor cloud | ✔ (nativo) | — | **pendiente** | **pendiente (aceptado como límite)** | Reproductor `known-gap-sql-concatenation.test.ts`; la comprobación en la nube requiere un commit adicional de prueba (sin autorizar) |
 

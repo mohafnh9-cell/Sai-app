@@ -57,3 +57,36 @@ Base de datos: 3 filas en `safe_fix_verifications` (`partial`, `failed`, `passed
 - Registro documental sin SHA en producción (`later_analysis_clean_unbound`): solo pruebas unitarias; tras el E2E ya no quedan bloqueos para generar otra propuesta.
 - Limitación SQL en el motor en la nube: pendiente (requiere un commit adicional de prueba, fuera de los tres autorizados).
 - GitHub App e instalación del cliente: pendiente de coordinar con el cliente.
+
+
+---
+
+# Lote 2 (2026-10-09, tarde) — migración 068, despliegue de #60/#62/#61 y pruebas de repetición/concurrencia
+
+## Copia de seguridad y migración 068
+- Copia de `safe_fix_records` (10), `safe_fix_lifecycle_events` (28), `safe_fix_verifications` (3) y **restauración probada** en un PostgreSQL local (mismos recuentos y mismo `md5` del JSON ordenado, sesión UTC). La copia de la tabla contiene necesariamente filas del proyecto protegido; solo se leyeron y quedan en una carpeta local privada.
+- Comprobación de duplicados antes de aplicar: **0** pares (proyecto, recomendación) con más de un registro abierto (7 `READY`, 2 `SUPERSEDED`, 1 `VERIFIED`).
+- Alcance del índice: único y parcial sobre `(project_id, recommendation_id)` para `PROPOSED/READY/APPROVED/APPLIED/VERIFYING`; los terminales pueden repetirse. Los identificadores (`priority-1-web`, …) son posicionales y se repiten entre análisis; el índice los trata como **una clave por proyecto** (un segundo análisis con la corrección anterior en curso recibe `in_flight`). No distingue ramas (limitación conocida).
+- Ensayo del archivo exacto (`md5 cd5cda1a…`) sobre la copia restaurada: índice creado. Aplicada en producción con `lock_timeout=5s`: índice `uq_safe_fix_one_open_per_recommendation` presente; los 10 registros **idénticos byte a byte**.
+
+## Fusiones y despliegues
+| PR | Fusión | Despliegue (Producción) |
+|---|---|---|
+| #60 | `dba5f9fa` 12:06:03Z | 6960242908 `success` |
+| #62 | `448bc516` (rama actualizada contra `main` tras #60; conflictos de `add/add` resueltos conservando la versión de #62; diff final = solo los cambios de #62; CI verde) | — |
+| #61 | `0a076ed7` (rama actualizada; diff = sus 16 archivos; CI verde) | 6960499262 `success`, SHA = `main` |
+Despliegue estable anterior para recuperación: 6958950455 (`c8ada24`).
+
+## Pruebas en `sequrai-e2e-test` (4 commits: fixture → solo docs → arreglo → restauración; árbol final = base original)
+| Prueba | Resultado real |
+|---|---|
+| 409 sobre el registro `VERIFIED` existente: `verify`, acción por defecto, `approve`, `reopen`, `applied` con y sin SHA | **6 × 409** `invalid_transition:VERIFIED->…`; estado, SHA y `updatedAt` idénticos antes y después |
+| 5 creaciones simultáneas sobre una clave nueva | 5 × 200, **un único id** (1 creada + 4 `reused`); BD: **1** registro abierto |
+| Repetición con el registro `READY` / tras `approve` / repetir | mismo id, `reused:true`; **estado `APPROVED` preservado**; sin eventos nuevos |
+| Commit solo de documentación (análisis base nuevo) con el registro `APPROVED`: 1 + 5 simultáneas | **409 `in_flight`** (`different_base_analysis`) en las 6; registro `APPROVED` conservado, `reviewId` anterior |
+| `applied(F2)` → `verify` (arreglo real) | `passed`, `exact_commit_rescan_clean`, `VERIFIED`, SHA y análisis de F2 |
+| BD tras las pruebas | 0 pares con >1 abierto; **0** eventos `SUPERSEDED` desde `APPROVED/APPLIED/VERIFYING`; los 10 registros anteriores idénticos byte a byte |
+No se observó si algún `INSERT` concurrente chocó con el índice (el resultado es el esperado, el camino `23505` no se vio directamente).
+
+## Sigue sin verificarse
+Recorrido con agente MCP real (sin credencial); aislamiento con sesión B; Journey, polling visible y dashboard/proyectos en la interfaz durante un análisis; limitación SQL en el motor cloud; instalación del cliente.

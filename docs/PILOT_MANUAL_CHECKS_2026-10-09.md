@@ -132,7 +132,14 @@ Tabla de respuestas no-200 (¿pudo cambiar el registro?):
 | 409 `proposal_commit_conflict` / `proposal_commit_locked` | **Posible** (puede haberse reabierto antes) | Consultar y decidir |
 | 409 `invalid_transition:READY->READY` / `VERIFIED->READY` (`reopen` fuera de `FAILED`) | No | `reopen` solo desde `FAILED` |
 | 503 `proposal_commit_unsupported` | No | La migración 067 no está aplicada |
-`verify` solo debe llamarse con el registro en `APPLIED`: entonces devuelve 200 con `outcome` y lo deja en `VERIFIED` o `FAILED`. Si se llama en otro estado devuelve **409 `invalid_transition:<estado>->VERIFYING` sin escribir nada** (corrección en la PR #60; **hasta que #60 esté desplegada la API responde 500**, también sin cambios en el registro): consulta el estado y sigue la secuencia.
+`verify` solo debe llamarse con el registro en `APPLIED`: entonces devuelve 200 con `outcome` y lo deja en `VERIFIED` o `FAILED`. Si se llama en otro estado devuelve **409 `invalid_transition:<estado>->VERIFYING` sin escribir nada** (desplegado desde #60; verificado en producción el 2026-10-09 sobre un registro `VERIFIED`): consulta el estado y sigue la secuencia.
+
+### 4.2 Crear la propuesta repetidas veces (`safe_fix` por MCP o `POST …/safe-fixes`)
+- Mismo bloqueo y **mismo análisis base** ⇒ se devuelve el **mismo registro** (`reused: true` en la API; `safeFixStatus: "reused"` en MCP). No se crea nada ni se cambia su estado, aunque ya esté `APPROVED`, `APPLIED` o `VERIFYING`.
+- Análisis base **distinto** con una corrección ya `APPROVED/APPLIED/VERIFYING` ⇒ **409 `in_flight`** (API) / `safeFixStatus: "in_flight"` + `safeFixNote` (MCP): el registro en curso se conserva y no se crea otro. Acabar o reabrir ese registro primero.
+- Una propuesta `PROPOSED/READY` de un análisis anterior sí se reemplaza (queda `SUPERSEDED`) por la del análisis nuevo.
+- `409 open_fix_exists`: al reabrir un registro mientras existe otro abierto para la misma recomendación (índice de la migración 068). Cerrar o marcar el otro primero.
+- Localizar siempre el registro con `GET …/safe-fixes` (el id también viaja en `safeFixV2.id` de MCP).
 
 Reglas: no verificar antes de que termine el análisis del SHA informado; no informar el SHA de otra rama; un registro solo se puede ligar a un SHA a la vez; para un cambio nuevo del cliente, nuevo SHA ⇒ repetir `approve` → `applied`.
 Evidencia en cada paso: copia de la respuesta JSON y del `GET` posterior, con hora.
