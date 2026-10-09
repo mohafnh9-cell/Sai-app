@@ -9,7 +9,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const fake = vi.hoisted(() => ({ admin: null as unknown }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => fake.admin }));
 vi.mock("@/lib/supabase/server", () => ({
-  createClient: async () => ({ auth: { getUser: async () => ({ data: { user: { id: "user-1" } } }) } }),
+  createClient: async () => ({
+    auth: { getUser: async () => ({ data: { user: { id: "user-1" } } }) },
+    // The consent screen also names the workspace (PR #68); harmless when the route does not read it yet.
+    from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { name: "Sequrai" } }) }) }) }),
+  }),
 }));
 vi.mock("@/server/workspaces/service", () => ({ resolveActiveWorkspaceIdForUser: async () => "org-sequrai" }));
 vi.mock("@/server/http/rate-limit", () => ({ enforceRateLimit: async () => null }));
