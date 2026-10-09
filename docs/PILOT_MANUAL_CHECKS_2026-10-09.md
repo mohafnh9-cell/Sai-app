@@ -42,7 +42,9 @@ Detener con `stopBrainMonitor()`.
 | # | hh:mm:ss | Captura (archivo) | Observado | ¿Coincide? |
 |---|---|---|---|---|
 
-Límites: esta guía comprueba la **interfaz** (lo que el brain devuelve por API ya se verificó en segundo plano el 2026-10-09; no sustituye los pasos 4–8).
+### 1.3 El "brain" y su representación visible
+- **Brain de proyecto** (`GET /api/brain/project/<id>`, el que tiene `verdictState` / `reviewInProgress`): **no existe ningún componente que lo muestre**. Solo lo sirve la API (`app/api/brain/project/[projectId]/route.ts`) y el conjunto de datos de demostración. Su comprobación visual **no existe**; lo observado el 2026-10-09 es únicamente la respuesta de la API y **no cuenta como prueba visual**.
+- **Brain de organización** (otro objeto, `OrgBrainSnapshot`): sí es visible, en `/dashboard` y `/projects` (tarjetas de proyecto: estado, puntuación). Se guarda en caché 20 s y **no tiene en cuenta un análisis en curso**. Se comprueba en el paso 10; hasta entonces es un riesgo abierto, no una verificación.
 
 ## 2. Aislamiento entre organizaciones (dos sesiones reales)
 
@@ -50,16 +52,31 @@ Límites: esta guía comprueba la **interfaz** (lo que el brain devuelve por API
 
 Usar el registro `VERIFIED` (los intentos de escritura son inocuos aunque falle el control: `reopen`/`approve` sobre `VERIFIED` devuelven 409).
 
-Con la sesión **B** (consola de `APP`):
-| # | Petición | Esperado (nunca 200 con datos) |
+Con la sesión **B** (consola de DevTools en cualquier página de `APP`; una sola ejecución, solo hace las 9 peticiones de la tabla; las 3 de escritura son inocuas porque el registro está `VERIFIED`):
+```js
+(async()=>{
+  const P='2005075a-fc80-4bcc-a080-52bf8195cf2f', ID='69b2b7eb-c9ab-4ce0-9f39-c9a54d0b28ca', SCAN='ddd71144-7e16-45a7-a81a-c0551ca26b09';
+  const post=(a)=>['POST',`/api/projects/${P}/safe-fixes/${ID}`,{action:a}];
+  const reqs=[['GET',`/api/projects/${P}/safe-fixes`],['GET',`/api/projects/${P}/safe-fixes/${ID}`],post('verify'),post('approve'),post('reopen'),
+    ['GET',`/api/brain/project/${P}`],['GET',`/api/projects/${P}/mission-control`],['GET',`/api/projects/${P}/protection-center`],['GET',`/api/repositories/${P}/scans/${SCAN}`]];
+  const rows=[];
+  for(const [m,u,b] of reqs){
+    const r=await fetch(u,{method:m,credentials:'same-origin',cache:'no-store',headers:b?{'Content-Type':'application/json'}:{},body:b?JSON.stringify(b):undefined});
+    const t=await r.text();
+    rows.push({request:`${m} ${u.replace(P,'P').replace(ID,'ID').replace(SCAN,'SCAN')}`,status:r.status,leaksData:/lifecycleState|proposalCommitSha|productionVerdict|currentVerdict|"verdict"|safeFixes/.test(t),body:t.slice(0,70)});
+  }
+  console.table(rows);
+  console.log(rows.every(x=>[401,403,404].includes(x.status)&&!x.leaksData)?'ISOLATION OK (all denied, no data)':'ISOLATION FAILED - stop and report');
+})();
+```
+Criterio de aprobado: las 9 filas con `status` 401/403/404 y `leaksData: false`; la última línea dice `ISOLATION OK`. Guardar captura de la tabla con la hora y de la identidad de la sesión B (organización activa) visible.
+Tabla de referencia de lo esperado:
+| # | Petición | Esperado |
 |---|---|---|
-| 1 | `GET /api/projects/P/safe-fixes` | 404 `{"error":"Not found"}` |
-| 2 | `GET /api/projects/P/safe-fixes/<id>` | 404 |
-| 3 | `POST /api/projects/P/safe-fixes/<id>` `{"action":"verify"}` | 404 |
-| 4 | `POST …` `{"action":"approve"}` y `{"action":"reopen"}` | 404 |
-| 5 | `GET /api/brain/project/P` | 404 o 403 |
-| 6 | `GET /api/projects/P/mission-control` y `/protection-center` | 404 |
-| 7 | (opcional) con un proyecto `PB` propio de B: `GET /api/projects/PB/safe-fixes/<id de Sequrai>` | 404 |
+| 1–5 | `GET …/safe-fixes`, `GET …/safe-fixes/<id>`, `POST verify|approve|reopen` | 404 `{"error":"Not found"}` |
+| 6 | `GET /api/brain/project/P` | 404 (o 403) |
+| 7–8 | `GET …/mission-control`, `…/protection-center` | 404 |
+| 9 | `GET /api/repositories/P/scans/SCAN` | 404 (o 403) |
 Después, con la sesión **A**: `GET /api/projects/P/safe-fixes/<id>` → sigue `VERIFIED`, mismo `updatedAt`. Evidencia: captura de consola con petición y respuesta de cada fila y la hora.
 
 Ya verificado (no sustituye lo anterior): mismo `safeFixId` bajo **otro proyecto de la misma organización** → 404 en GET y POST (producción, 2026-10-09); filtros por organización/proyecto en pruebas unitarias y RLS en PostgreSQL real (`scripts/db-check-067.sh`).
@@ -79,13 +96,15 @@ Pendiente de coordinar con el cliente; **no se ha accedido** a su instalación n
 
 Lo ejecuta el equipo de SequrAI por API (`POST APP/api/projects/<P>/safe-fixes[/<id>]`, sesión de miembro). **Regla de oro: tras cualquier respuesta que no sea 200 vuelve a consultar el registro (`GET …/safe-fixes/<id>`) y decide con `lifecycleState` y `proposalCommitSha`; no repitas a ciegas.**
 
-Secuencia normal:
-1. `POST …/safe-fixes` `{"priorityId":"<id del bloqueo>"}` → anota `record.id` y `record.reviewId` (análisis base). Estado final tras la llamada: `READY`; `proposalCommitSha: null`.
-2. `{"action":"approve"}` → `APPROVED`.
+Secuencia normal (cada paso termina con un `GET …/safe-fixes/<id>` y se compara con lo esperado **antes** de pasar al siguiente; ante cualquier no-200, o si el `GET` no coincide, **parar y consultar** en vez de reintentar):
+1. `POST …/safe-fixes` `{"priorityId":"<id del bloqueo>"}` → anota `record.id` y `record.reviewId` (análisis base). `GET` esperado: `lifecycleState: READY`, `proposalCommitSha: null`.
+2. `{"action":"approve"}` → 200. `GET` esperado: `APPROVED`.
 3. El agente del cliente corrige y hace commit. Obtén el **SHA completo** (40 caracteres) del commit del cambio.
 4. Espera a que el análisis en la nube de **ese** SHA esté `completed` con veredicto (`GET …/mission-control` → `productionVerdict.commitSha` = SHA).
-5. `{"action":"applied","commitSha":"<SHA>"}` → 200 `binding: exact_proposal_commit`, estado `APPLIED`.
-6. `{"action":"verify"}` → leer `verification.outcome`, `statement`, `verifiedCommitSha`, `verifiedScanId`.
+5. `{"action":"applied","commitSha":"<SHA>"}` → 200 `binding: exact_proposal_commit`. `GET` esperado: `APPLIED`, `proposalCommitSha = <SHA>`.
+6. `{"action":"verify"}` → leer `verification.outcome`, `statement`, `verifiedCommitSha`, `verifiedScanId`. `GET` esperado: `VERIFIED` (si `passed`) o `FAILED`.
+
+**Antes de cualquier reintento** (tras un 409/503/500 o un resultado no concluyente): `GET` → anotar `lifecycleState` y `proposalCommitSha` → decidir con la tabla de abajo. Nunca reenviar la misma llamada sin haber consultado.
 
 Cómo interpretar `verify`:
 | Resultado | Qué decir al cliente | Siguiente paso |
@@ -108,10 +127,12 @@ Tabla de respuestas no-200 (¿pudo cambiar el registro?):
 | 409 `proposal_commit_is_base_commit` | No | Usar el commit del cambio, no el base |
 | 409 `invalid_transition:READY->APPLIED` **con SHA distinto del registrado** | **Sí** (READY + SHA nuevo) | Consultar; `approve`; `applied` mismo SHA |
 | 409 `invalid_transition:<estado>->APPLIED` con registro no `APPROVED` y un `commitSha` | No (se comprueba antes de escribir) | `approve` primero |
+| 409 `invalid_transition:<estado>->VERIFYING` (`verify` fuera de `APPLIED`) | No | Consultar; seguir la secuencia |
+| 409 `invalid_transition:<estado>->APPROVED` (`approve` fuera de `READY`) | No | Consultar |
 | 409 `proposal_commit_conflict` / `proposal_commit_locked` | **Posible** (puede haberse reabierto antes) | Consultar y decidir |
 | 409 `invalid_transition:READY->READY` / `VERIFIED->READY` (`reopen` fuera de `FAILED`) | No | `reopen` solo desde `FAILED` |
 | 503 `proposal_commit_unsupported` | No | La migración 067 no está aplicada |
-`verify` solo debe llamarse con el registro en `APPLIED`: entonces devuelve 200 con `outcome` y lo deja en `VERIFIED` o `FAILED`. Si se llama en otro estado, la transición se rechaza antes de escribir nada y la API responde con un error de servidor (500, no capturado hoy; sin cambios en el registro): consulta el estado y sigue la secuencia.
+`verify` solo debe llamarse con el registro en `APPLIED`: entonces devuelve 200 con `outcome` y lo deja en `VERIFIED` o `FAILED`. Si se llama en otro estado devuelve **409 `invalid_transition:<estado>->VERIFYING` sin escribir nada** (corrección en la PR #60; **hasta que #60 esté desplegada la API responde 500**, también sin cambios en el registro): consulta el estado y sigue la secuencia.
 
 Reglas: no verificar antes de que termine el análisis del SHA informado; no informar el SHA de otra rama; un registro solo se puede ligar a un SHA a la vez; para un cambio nuevo del cliente, nuevo SHA ⇒ repetir `approve` → `applied`.
 Evidencia en cada paso: copia de la respuesta JSON y del `GET` posterior, con hora.
