@@ -40,7 +40,10 @@ export async function GET(
   if (!access.ok) return access.response;
 
   const admin = createAdminClient();
-  const history = await listSafeFixHistory(admin, projectId);
+  const history = await listSafeFixHistory(admin, {
+    organizationId: access.project.organization_id,
+    projectId,
+  });
   return NextResponse.json({ projectId, safeFixes: history });
 }
 

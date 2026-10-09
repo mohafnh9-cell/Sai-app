@@ -34,7 +34,7 @@ export async function appendSafeFixMemoryEvent(
 /** Report integration (Sprint 7) — read by monthly report jobs via API/SQL without editing Sprint 6. */
 export async function summarizeSafeFixImpact(
   admin: SupabaseClient,
-  projectId: string,
+  scope: { organizationId: string; projectId: string },
   periodStart: string,
   periodEnd: string
 ): Promise<SafeFixReportSummary> {
@@ -44,7 +44,8 @@ export async function summarizeSafeFixImpact(
   const { data: records } = await admin
     .from("safe_fix_records")
     .select("id, lifecycle_state, document, confidence_delta, created_at")
-    .eq("project_id", projectId)
+    .eq("organization_id", scope.organizationId)
+    .eq("project_id", scope.projectId)
     .gte("created_at", startIso)
     .lte("created_at", endIso);
 

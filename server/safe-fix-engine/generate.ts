@@ -158,7 +158,11 @@ async function generateSafeFixInner(
     assessment: fixResult.assessment,
   });
 
-  await supersedeOpenFixesForRecommendation(admin, input.projectId, recommendationId);
+  await supersedeOpenFixesForRecommendation(
+    admin,
+    { organizationId: input.organizationId, projectId: input.projectId },
+    recommendationId
+  );
 
   // Preserve the exact finding identity this fix targets, so verification can
   // later prove THOSE findings are gone rather than infer it from counts.

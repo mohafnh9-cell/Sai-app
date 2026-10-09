@@ -43,11 +43,11 @@ export async function GET(
   if (!access.ok) return access.response;
 
   const admin = createAdminClient();
-  const record = await getSafeFixById(admin, safeFixId);
-  if (!record || record.projectId !== projectId) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
-  if (record.organizationId !== access.project.organization_id) {
+  const record = await getSafeFixById(admin, safeFixId, {
+    organizationId: access.project.organization_id,
+    projectId,
+  });
+  if (!record) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
   return NextResponse.json({ safeFix: record });
@@ -81,8 +81,8 @@ export async function POST(
   const admin = createAdminClient();
   const orgId = access.project.organization_id;
 
-  const existing = await getSafeFixById(admin, safeFixId);
-  if (!existing || existing.projectId !== projectId || existing.organizationId !== orgId) {
+  const existing = await getSafeFixById(admin, safeFixId, { organizationId: orgId, projectId });
+  if (!existing) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 

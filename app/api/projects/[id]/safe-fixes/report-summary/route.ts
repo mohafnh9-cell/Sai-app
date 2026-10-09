@@ -25,6 +25,11 @@ export async function GET(
   if (!access.ok) return access.response;
 
   const admin = createAdminClient();
-  const summary = await summarizeSafeFixImpact(admin, projectId, periodStart, periodEnd);
+  const summary = await summarizeSafeFixImpact(
+    admin,
+    { organizationId: access.project.organization_id, projectId },
+    periodStart,
+    periodEnd
+  );
   return NextResponse.json({ projectId, periodStart, periodEnd, safeFixSummary: summary });
 }

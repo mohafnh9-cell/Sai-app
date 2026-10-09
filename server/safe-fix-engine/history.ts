@@ -6,6 +6,7 @@ import type {
   SafeFixLifecycleState,
   SafeFixPrDraft,
   SafeFixRecord,
+  SafeFixScope,
 } from "./types";
 
 const OPEN_STATES: SafeFixLifecycleState[] = [
@@ -29,6 +30,8 @@ export function mapSafeFixRow(row: Record<string, unknown>): SafeFixRecord {
     confidenceScore: row.confidence_score as number,
     document: row.document as SafeFixDocumentV2,
     prDraft: row.pr_draft as SafeFixPrDraft,
+    // Records created before migration 067 have no column value: documentary, unbound.
+    proposalCommitSha: (row.proposal_commit_sha as string | null | undefined) ?? null,
     confidenceDelta: (row.confidence_delta as number) ?? null,
     protectionDelta: (row.protection_delta as string) ?? null,
     createdAt: row.created_at as string,
@@ -75,13 +78,14 @@ export async function persistGeneratedSafeFix(
 
 export async function supersedeOpenFixesForRecommendation(
   admin: SupabaseClient,
-  projectId: string,
+  scope: SafeFixScope,
   recommendationId: string
 ): Promise<void> {
   const { data: rows } = await admin
     .from("safe_fix_records")
-    .select("id, organization_id, lifecycle_state")
-    .eq("project_id", projectId)
+    .select("id")
+    .eq("organization_id", scope.organizationId)
+    .eq("project_id", scope.projectId)
     .eq("recommendation_id", recommendationId)
     .in("lifecycle_state", OPEN_STATES);
 
@@ -89,29 +93,43 @@ export async function supersedeOpenFixesForRecommendation(
     await admin
       .from("safe_fix_records")
       .update({ lifecycle_state: "SUPERSEDED", updated_at: new Date().toISOString() })
-      .eq("id", row.id);
+      .eq("id", row.id)
+      .eq("organization_id", scope.organizationId)
+      .eq("project_id", scope.projectId);
   }
 }
 
 export async function listSafeFixHistory(
   admin: SupabaseClient,
-  projectId: string,
+  scope: SafeFixScope,
   limit = 30
 ): Promise<SafeFixRecord[]> {
   const { data } = await admin
     .from("safe_fix_records")
     .select("*")
-    .eq("project_id", projectId)
+    .eq("organization_id", scope.organizationId)
+    .eq("project_id", scope.projectId)
     .order("created_at", { ascending: false })
     .limit(limit);
   return (data ?? []).map(mapSafeFixRow);
 }
 
+/**
+ * Loads a Safe Fix inside an explicit organization + project scope. The service-role client bypasses
+ * RLS, so the scope is part of the query: a record of another organization or project is "not found".
+ */
 export async function getSafeFixById(
   admin: SupabaseClient,
-  safeFixId: string
+  safeFixId: string,
+  scope: SafeFixScope
 ): Promise<SafeFixRecord | null> {
-  const { data } = await admin.from("safe_fix_records").select("*").eq("id", safeFixId).maybeSingle();
+  const { data } = await admin
+    .from("safe_fix_records")
+    .select("*")
+    .eq("id", safeFixId)
+    .eq("organization_id", scope.organizationId)
+    .eq("project_id", scope.projectId)
+    .maybeSingle();
   return data ? mapSafeFixRow(data) : null;
 }
 
@@ -122,9 +140,10 @@ export async function storeSafeFixHistoryUpdate(
     lifecycleState: SafeFixLifecycleState;
     confidenceDelta: number | null;
     protectionDelta: string | null;
-  }>
+  }>,
+  scope: SafeFixScope
 ): Promise<void> {
-  await admin
+  const { data, error } = await admin
     .from("safe_fix_records")
     .update({
       ...(patch.lifecycleState ? { lifecycle_state: patch.lifecycleState } : {}),
@@ -132,5 +151,11 @@ export async function storeSafeFixHistoryUpdate(
       ...(patch.protectionDelta !== undefined ? { protection_delta: patch.protectionDelta } : {}),
       updated_at: new Date().toISOString(),
     })
-    .eq("id", safeFixId);
+    .eq("id", safeFixId)
+    .eq("organization_id", scope.organizationId)
+    .eq("project_id", scope.projectId)
+    .select("id");
+  if (error) throw error;
+  // Zero rows = not this scope's record: never a silent success.
+  if (!data || data.length === 0) throw new Error("safe_fix_not_found");
 }

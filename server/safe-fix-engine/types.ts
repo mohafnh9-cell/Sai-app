@@ -40,6 +40,9 @@ export type SafeFixPrDraft = {
   rollbackChecklist: string[];
 };
 
+/** Tenant scope every Safe Fix access must carry, including with a client that bypasses RLS. */
+export type SafeFixScope = { organizationId: string; projectId: string };
+
 export type SafeFixRecord = {
   id: string;
   organizationId: string;
@@ -52,6 +55,12 @@ export type SafeFixRecord = {
   confidenceScore: number;
   document: SafeFixDocumentV2;
   prDraft: SafeFixPrDraft;
+  /**
+   * Full SHA of the commit that CONTAINS the proposed change. Null for documentary proposals (the
+   * current flow), which have no commit of their own. Distinct from the base commit, which is the
+   * commit of the baseline scan (`reviewId`) the proposal was generated from.
+   */
+  proposalCommitSha: string | null;
   confidenceDelta: number | null;
   protectionDelta: string | null;
   createdAt: string;
@@ -66,6 +75,12 @@ export type SafeFixVerificationResult = {
   productionConfidenceImproved: boolean;
   protectionStatusImproved: boolean;
   newIssuesIntroduced: boolean;
+  /**
+   * exact_proposal_commit: the rescan was required to be exactly the proposal's commit.
+   * assisted_unbound: documentary proposal with no commit; "the finding is gone from a later scan",
+   * NOT a verified automatic patch.
+   */
+  binding: "exact_proposal_commit" | "assisted_unbound";
   details: Record<string, unknown>;
 };
 
