@@ -25,7 +25,6 @@ import {
   recordSafeFixMemory,
 } from "@/server/production-memory/record-writes";
 import { enrichMcpToolResultWithAlerts } from "@/server/security-alerts/mcp-enrichment";
-import { evaluateDeployCheckAlert } from "@/server/security-alerts/evaluate-project";
 import { enrichMcpToolResultWithReports } from "@/server/protection-reports/mcp-enrichment";
 
 function str(value: unknown): string | undefined {
@@ -235,23 +234,8 @@ async function dispatch(
         primaryBlockerPlain: result.topBlockers[0]?.title ?? null,
         source: "mcp",
       });
-      // The alert answers from the canonical decision can_i_deploy just
-      // produced (not a second status mapping), bound to its scan.
-      void evaluateDeployCheckAlert(ctx.admin, {
-        organizationId: ctx.organizationId,
-        projectId: result.project.id,
-        projectName: result.project.name,
-        decision: {
-          deploymentRecommendation: result.deploymentRecommendation,
-          verdictStatus: result.verdictStatus,
-          reviewInProgress: result.reviewInProgress,
-          reviewFailed: result.reviewFailed,
-          freshnessStatus: result.freshnessStatus,
-          hasActionableFinding: result.topBlockers.length > 0,
-          verdictScanId: result.verdictScanId,
-          primaryWorry: result.topBlockers[0]?.title ?? null,
-        },
-      });
+      // Reading the deploy answer creates NO visible alert. The "deploy check" alert is evaluated from the same canonical
+      // decision by the daily per-project evaluation (server/security-alerts/evaluate-deploy-decision.ts).
       return result;
     }
 
