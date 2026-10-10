@@ -20,6 +20,7 @@ import { buildFromPromptInput } from "./v2-document";
 import { preparePullRequestDraft } from "./pr-preparation";
 import {
   IN_FLIGHT_STATES,
+  getSafeFixById,
   isUniqueViolation,
   listOpenFixesForRecommendation,
   persistGeneratedSafeFix,
@@ -59,11 +60,27 @@ export async function generateSafeFix(
   admin: SupabaseClient,
   input: GenerateSafeFixInput
 ): Promise<GenerateSafeFixResult> {
-  return withOperationTiming(
+  const result = await withOperationTiming(
     "safe_fix.generate",
     () => generateSafeFixInner(admin, input),
     { projectId: input.projectId, organizationId: input.organizationId }
   );
+  return withPersistedRecord(admin, { organizationId: input.organizationId, projectId: input.projectId }, result);
+}
+
+/**
+ * Every result that carries a record reports what is PERSISTED now, not the object captured earlier in the call: a new
+ * record is inserted as PROPOSED and moved to READY right after, a reused or in-flight one may have changed state since it
+ * was listed. Reading it back is one scoped query; if it cannot be read the captured record is returned unchanged.
+ */
+async function withPersistedRecord(
+  admin: SupabaseClient,
+  scope: { organizationId: string; projectId: string },
+  result: GenerateSafeFixResult
+): Promise<GenerateSafeFixResult> {
+  if (result.status !== "ready" && result.status !== "in_flight") return result;
+  const persisted = await getSafeFixById(admin, result.record.id, scope).catch(() => null);
+  return persisted ? { ...result, record: persisted } : result;
 }
 
 async function generateSafeFixInner(
