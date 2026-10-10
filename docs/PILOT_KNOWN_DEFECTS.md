@@ -14,10 +14,10 @@ Cada uno con evidencia, estado y relación con el piloto. Ninguno se ha corregid
 - Estado: abierto; no bloquea; no hay que atribuirlo a un falso positivo.
 
 ## D3 — Redirección de error a un callback no validado
-- Corregido en #69 (abierta).
+- Corregido en #69, desplegado (`26b267b`), verificado en producción el 2026-10-10.
 
 ## D4 — `safe_fix` devolvía el estado capturado (`PROPOSED`) en lugar del persistido (`READY`)
-- Corregido en #70 (abierta).
+- Corregido en #70, desplegado (`85dd084`). Verificación en producción de un `safe_fix` real: pendiente (requiere una sesión MCP nueva).
 
 ## D5 — `can_i_deploy` creaba alertas
-- Corregido en #71 (abierta). La reparación de veredicto dentro de `resolveCanonicalDecisionState` (escritura al leer) sigue pendiente (mejora posterior).
+- Corregido en #71, desplegado (`7a6c821`). La ejecución real del lote con el paso nuevo: pendiente de observar. La reparación de veredicto dentro de `resolveCanonicalDecisionState` (escritura al leer) sigue pendiente (mejora posterior).

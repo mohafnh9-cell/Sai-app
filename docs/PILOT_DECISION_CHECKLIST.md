@@ -16,9 +16,9 @@ Estado a 2026-10-10. **El piloto no se declara completo mientras exista un bloqu
 - OAuth con permisos mínimos; nunca claves `seq_live_…`. Cliente MCP del cliente **por decidir** (A16): su redirect URI debe registrarse como cliente público propio; sin registro dinámico.
 - Los ids de recomendación son posicionales: confirmar el hallazgo antes de aplicar una propuesta (#64 añade la prueba que lo fija; abierta).
 - B1–B8 (GitHub App del cliente, repositorio, primer análisis, MCP en su entorno) se hacen con el cliente; no se accede a su instalación antes.
-- Antes de la sesión: despliegue de los cambios revisados (#69, #70, #71) **recomendado**, no bloqueante; sin ellos se mantiene el comportamiento actual documentado (§3).
+- #69, #70 y #71 fusionadas (squash `26b267b`, `85dd084`, `7a6c821`) tras `verify` en verde; sin migraciones, scans ni nuevas autorizaciones OAuth.
 
-## 3. Cambios preparados (no desplegados; CI en curso)
+## 3. Cambios desplegados el 2026-10-10 (producción sirve `7a6c821`, deployment 6977471896, `success`)
 | PR | Qué corrige | Riesgo si no se despliega |
 |---|---|---|
 | #69 | `/oauth/authorize` y consentimiento no redirigen a un callback no validado ni de un cliente deshabilitado | bajo: solo viajan parámetros de error a la dirección indicada |
@@ -32,3 +32,8 @@ Estado a 2026-10-10. **El piloto no se declara completo mientras exista un bloqu
 - Revocación de tokens por el usuario (no hay pantalla; hoy solo escritura en base de datos) y refresco real observado.
 - `resolveCanonicalDecisionState` escribe al leer (reparación del veredicto); texto de `can_i_deploy` mezcla idiomas con alertas históricas; `discover_application` persiste un informe.
 - Descripción del consentimiento: declarar los efectos secundarios que queden.
+
+## 5. Verificación posterior al despliegue (2026-10-10)
+- **OAuth (solo GET, sin sesión, sin tokens nuevos):** URI externo con cliente activo → 400 JSON `invalid_redirect_uri`, sin `Location`; localhost con otro puerto → ídem; cliente deshabilitado con su URI anterior → 401 JSON `invalid_client`, sin `Location`; cliente desconocido → 401 JSON. Controles: cliente activo + URI registrado → 302 a `/login`; ámbito inválido con URI registrado → 302 al callback validado con `invalid_scope`. Recuentos de `mcp_oauth_*`: sin cambios (acceso 1, refresco 1, solicitudes 0, códigos 1).
+- **Lote diario de alertas:** *comprobado:* ambas funciones (`alerts-daily-batch`, cron `30 7 * * *`, y `alerts-project-evaluate`) están registradas en `app/api/inngest/route.ts` del código desplegado; el lote creó alertas cada día a las ~07:30 UTC hasta el 8 de octubre (indirecto, por marcas de tiempo de `security_alerts`). *No comprobado:* el estado habilitado en el panel de Inngest (`/api/inngest` exige clave) ni **ninguna ejecución del paso nuevo** `evaluate-deploy-decision`; la próxima ejecución es hoy a las 07:30 UTC. Una ejecución no dejará fila nueva si la decisión ya tiene alerta (deduplicada); la evidencia es la salida del paso (`deployDecisionEvaluated`) en el historial de ejecuciones de Inngest.
+- **Prueba intermitente preexistente:** `server/security-jobs/__tests__/worker-run-job.perf.bench.test.ts` (umbral de latencia 300 ms) falla de forma intermitente también en `ee585c7`, sin cambios en `security-jobs`.
