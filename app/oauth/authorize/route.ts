@@ -31,6 +31,11 @@ export async function GET(request: Request) {
   const codeChallenge = url.searchParams.get("code_challenge")?.trim();
   const codeChallengeMethod = url.searchParams.get("code_challenge_method")?.trim();
 
+  // The callback is only ever used for an error once BOTH the client (active) and this exact redirect_uri (registered for it)
+  // have been validated. Until then every error is returned locally: an unknown/disabled client or an unregistered URI
+  // must never turn this endpoint into a redirector.
+  let trustedRedirectUri: string | undefined;
+
   try {
     if (!clientId) throw new OAuthError("invalid_request", "client_id is required");
     if (!redirectUri) throw new OAuthError("invalid_request", "redirect_uri is required");
@@ -45,6 +50,7 @@ export async function GET(request: Request) {
 
     const client = await assertActiveOAuthClient(clientId);
     assertClientRedirectUri(client, redirectUri);
+    trustedRedirectUri = redirectUri;
 
     const scopes = parseScopeString(scope);
     if (scopes.length === 0) {
@@ -93,8 +99,8 @@ export async function GET(request: Request) {
     return NextResponse.redirect(consentUrl.toString(), 302);
   } catch (error) {
     if (error instanceof OAuthError) {
-      if (redirectUri && state) {
-        return oauthErrorResponse(error, { redirectUri, state });
+      if (trustedRedirectUri && state) {
+        return oauthErrorResponse(error, { redirectUri: trustedRedirectUri, state });
       }
       return oauthErrorResponse(error);
     }
