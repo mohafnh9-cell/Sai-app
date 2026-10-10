@@ -17,7 +17,13 @@ vi.mock("@/lib/supabase/server", () => ({
     from: () => ({ select: () => ({ eq: (_c: string, id: string) => ({ maybeSingle: async () => ({ data: id === "org-sequrai" ? { name: "Sequrai" } : null }) }) }) }),
   }),
 }));
-vi.mock("@/server/mcp/oauth/clients", () => ({ getOAuthClient: async () => ({ client_name: "Claude Code" }) }));
+// The route re-validates client + callback before using them; this suite is about the granted scopes, so both pass here
+// (the rejection paths are covered in server/mcp/oauth/__tests__/untrusted-redirect.test.ts, against the real validators).
+vi.mock("@/server/mcp/oauth/clients", () => ({
+  getOAuthClient: async () => ({ client_name: "Claude Code" }),
+  assertActiveOAuthClient: async () => ({ client_name: "Claude Code" }),
+  assertClientRedirectUri: () => undefined,
+}));
 vi.mock("@/server/mcp/oauth/authorization-requests", () => ({
   getAuthorizationRequest: async () => ({
     id: "req-1", client_id: "client-1", user_id: "user-1", organization_id: "org-sequrai", redirect_uri: "http://127.0.0.1:1/cb", state: "st",

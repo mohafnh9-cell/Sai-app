@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getOAuthClient } from "@/server/mcp/oauth/clients";
+import { assertActiveOAuthClient, assertClientRedirectUri, getOAuthClient } from "@/server/mcp/oauth/clients";
 import {
   deleteAuthorizationRequest,
   getAuthorizationRequest,
@@ -100,6 +100,16 @@ export async function POST(request: Request) {
   const authRequest = await getAuthorizationRequest(requestId, user.id);
   if (!authRequest) {
     return NextResponse.json({ error: "Authorization request expired or not found" }, { status: 404 });
+  }
+
+  // The request was validated when it was created, but the client may have been disabled (or its URIs changed) since:
+  // never hand a code, or an error, to a callback that is no longer trusted. Answer locally instead.
+  try {
+    assertClientRedirectUri(await assertActiveOAuthClient(authRequest.client_id), authRequest.redirect_uri);
+  } catch (error) {
+    if (!(error instanceof OAuthError)) throw error;
+    await deleteAuthorizationRequest(requestId);
+    return NextResponse.json({ error: error.code, error_description: error.message }, { status: error.status });
   }
 
   const redirectBase = authRequest.redirect_uri;
