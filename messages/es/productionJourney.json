@@ -30,6 +30,8 @@
   "resolvedCount_other": "{count} resueltos",
   "introducedCount_one": "{count} introducido",
   "introducedCount_other": "{count} introducidos",
+  "milestoneCommit": "commit {sha}",
+  "milestoneHistorical": "Histórico: describe ese commit, no la decisión actual.",
   "scoreLabel": "Puntuación: {score}",
   "chartTooltipScore": "Puntuación: {score}",
   "chartSrSummary": "{date}: puntuación {score}, cambio {delta}, estado {status}",

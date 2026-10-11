@@ -1,6 +1,6 @@
 import type { ProductionJourneyPoint, JourneyTrend } from "./schema";
 import { JOURNEY_CONFIG } from "./config";
-import { isValidJourneyVerdict } from "./valid-verdict";
+import { isEvidenceBearingVerdict } from "./valid-verdict";
 
 function daysAgoMs(days: number): number {
   return days * 24 * 60 * 60 * 1000;
@@ -11,7 +11,7 @@ function scoreAtOrBefore(
   cutoff: Date
 ): number | null {
   const eligible = points
-    .filter((p) => isValidJourneyVerdict(p.status, p.score) && new Date(p.generatedAt) <= cutoff)
+    .filter((p) => isEvidenceBearingVerdict(p.status, p.score) && new Date(p.generatedAt) <= cutoff)
     .map((p) => p.score as number);
   return eligible.length > 0 ? eligible[eligible.length - 1] : null;
 }
@@ -20,7 +20,7 @@ export function calculateScoreChange(
   timeline: ProductionJourneyPoint[],
   days: number
 ): number | null {
-  const valid = timeline.filter((p) => isValidJourneyVerdict(p.status, p.score));
+  const valid = timeline.filter((p) => isEvidenceBearingVerdict(p.status, p.score));
   if (valid.length < 2) return null;
 
   const now = new Date(valid[valid.length - 1].generatedAt).getTime();
@@ -32,7 +32,7 @@ export function calculateScoreChange(
 }
 
 export function calculateTrend(timeline: ProductionJourneyPoint[]): JourneyTrend {
-  const valid = timeline.filter((p) => isValidJourneyVerdict(p.status, p.score));
+  const valid = timeline.filter((p) => isEvidenceBearingVerdict(p.status, p.score));
 
   if (valid.length < JOURNEY_CONFIG.minValidVerdictsForTrend) {
     return "insufficient_data";

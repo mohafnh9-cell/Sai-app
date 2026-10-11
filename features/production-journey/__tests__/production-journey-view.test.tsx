@@ -57,3 +57,26 @@ describe.each(["en", "es"] as const)("ProductionJourneyView renders the canonica
     expect(text(["ready_full", "ready_full"])).toMatch(/production maintained|producci[oó]n mantenida/i);
   });
 });
+
+describe.each(["en", "es"] as const)("Journey shows what a milestone is and when the current score means nothing [%s]", (l) => {
+  const text = (kinds: Parameters<typeof journeyOf>[0]) => { lang = l; return render(kinds); };
+
+  it("an approval milestone carries its date and commit and says it is historical", () => {
+    const t = text(["not_ready", "ready_full", "insufficient_scored"]);
+    expect(t).toMatch(l === "en" ? /commit c000001/ : /commit c000001/);
+    expect(t).toMatch(l === "en" ? /Historical: describes that commit, not the current decision/ : /Hist[oó]rico: describe ese commit, no la decisi[oó]n actual/);
+  });
+
+  it("current verdict with insufficient evidence: the current and previous score are not shown as 100", () => {
+    lang = l;
+    const html = renderToStaticMarkup(createElement(ProductionJourneyView, { journey: journeyOf(["ready_full", "insufficient_scored", "insufficient_scored"]), projectId: "p", reviewInProgress: false })).replace(/<!--.*?-->/g, "");
+    expect(html).toMatch(/<p class="text-3xl font-bold">—<\/p>/);
+    expect(html).toMatch(/<p class="text-2xl font-semibold">—<\/p>/);
+  });
+
+  it("a verdict with evidence keeps showing its score", () => {
+    lang = l;
+    const html = renderToStaticMarkup(createElement(ProductionJourneyView, { journey: journeyOf(["ready_full", "ready_full"]), projectId: "p", reviewInProgress: false })).replace(/<!--.*?-->/g, "");
+    expect(html).toMatch(/<p class="text-3xl font-bold">100<\/p>/);
+  });
+});

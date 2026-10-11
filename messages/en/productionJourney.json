@@ -30,6 +30,8 @@
   "resolvedLabel": "Resolved",
   "introducedCount_one": "{count} introduced",
   "introducedCount_other": "{count} introduced",
+  "milestoneCommit": "commit {sha}",
+  "milestoneHistorical": "Historical: describes that commit, not the current decision.",
   "scoreLabel": "Score: {score}",
   "chartTooltipScore": "Score: {score}",
   "chartSrSummary": "{date}: score {score}, delta {delta}, status {status}",
