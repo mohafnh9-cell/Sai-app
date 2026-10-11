@@ -71,6 +71,8 @@ export const ProductionMilestoneSchema = z.object({
   reachedAt: z.string().datetime({ offset: true }),
   score: z.number().min(0).max(100).nullable(),
   verdictId: z.string().uuid(),
+  /** Commit the milestone's verdict was produced for: a milestone is a historical fact about THAT commit. */
+  commitSha: z.string().nullable().optional(),
 });
 
 export type ProductionMilestone = z.infer<typeof ProductionMilestoneSchema>;

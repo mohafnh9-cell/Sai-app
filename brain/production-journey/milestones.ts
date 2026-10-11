@@ -1,6 +1,6 @@
 import type { ProductionJourneyPoint, ProductionMilestone } from "./schema";
 import { JOURNEY_CONFIG } from "./config";
-import { isValidJourneyVerdict } from "./valid-verdict";
+import { isEvidenceBearingVerdict, isValidJourneyVerdict } from "./valid-verdict";
 
 export function detectMilestones(timeline: ProductionJourneyPoint[]): ProductionMilestone[] {
   const milestones: ProductionMilestone[] = [];
@@ -17,6 +17,7 @@ export function detectMilestones(timeline: ProductionJourneyPoint[]): Production
         reachedAt: point.generatedAt,
         score: point.score,
         verdictId: point.verdictId,
+        commitSha: point.commitSha,
       });
     }
 
@@ -29,10 +30,11 @@ export function detectMilestones(timeline: ProductionJourneyPoint[]): Production
         reachedAt: point.generatedAt,
         score: point.score,
         verdictId: point.verdictId,
+        commitSha: point.commitSha,
       });
     }
 
-    if (point.score !== null && point.score >= JOURNEY_CONFIG.scoreMilestone50) {
+    if (isEvidenceBearingVerdict(point.status, point.score) && point.score !== null && point.score >= JOURNEY_CONFIG.scoreMilestone50) {
       const exists = milestones.some((m) => m.type === "score_50");
       if (!exists) {
         milestones.push({
@@ -42,11 +44,12 @@ export function detectMilestones(timeline: ProductionJourneyPoint[]): Production
           reachedAt: point.generatedAt,
           score: point.score,
           verdictId: point.verdictId,
+          commitSha: point.commitSha,
         });
       }
     }
 
-    if (point.score !== null && point.score >= JOURNEY_CONFIG.scoreMilestone70) {
+    if (isEvidenceBearingVerdict(point.status, point.score) && point.score !== null && point.score >= JOURNEY_CONFIG.scoreMilestone70) {
       const exists = milestones.some((m) => m.type === "score_70");
       if (!exists) {
         milestones.push({
@@ -56,6 +59,7 @@ export function detectMilestones(timeline: ProductionJourneyPoint[]): Production
           reachedAt: point.generatedAt,
           score: point.score,
           verdictId: point.verdictId,
+          commitSha: point.commitSha,
         });
       }
     }
@@ -70,6 +74,7 @@ export function detectMilestones(timeline: ProductionJourneyPoint[]): Production
           reachedAt: point.generatedAt,
           score: point.score,
           verdictId: point.verdictId,
+          commitSha: point.commitSha,
         });
       }
     }
@@ -88,6 +93,7 @@ export function detectMilestones(timeline: ProductionJourneyPoint[]): Production
           reachedAt: point.generatedAt,
           score: point.score,
           verdictId: point.verdictId,
+          commitSha: point.commitSha,
         });
       }
     }
@@ -111,18 +117,20 @@ export function detectMilestones(timeline: ProductionJourneyPoint[]): Production
           reachedAt: point.generatedAt,
           score: point.score,
           verdictId: point.verdictId,
+          commitSha: point.commitSha,
         });
         hadRegression = false;
       }
     }
 
-    if (point.score !== null && point.score > bestScore) {
+    if (isEvidenceBearingVerdict(point.status, point.score) && point.score !== null && point.score > bestScore) {
       bestScore = point.score;
       const existingBest = milestones.find((m) => m.type === "best_score");
       if (existingBest) {
         existingBest.reachedAt = point.generatedAt;
         existingBest.score = point.score;
         existingBest.verdictId = point.verdictId;
+        existingBest.commitSha = point.commitSha;
         existingBest.id = `${point.verdictId}-best_score`;
       } else {
         milestones.push({
@@ -132,6 +140,7 @@ export function detectMilestones(timeline: ProductionJourneyPoint[]): Production
           reachedAt: point.generatedAt,
           score: point.score,
           verdictId: point.verdictId,
+          commitSha: point.commitSha,
         });
       }
     }
@@ -150,6 +159,7 @@ export function detectMilestones(timeline: ProductionJourneyPoint[]): Production
             reachedAt: point.generatedAt,
             score: point.score,
             verdictId: point.verdictId,
+          commitSha: point.commitSha,
           });
         }
       }
@@ -169,6 +179,7 @@ export function detectMilestones(timeline: ProductionJourneyPoint[]): Production
         reachedAt: tenth.generatedAt,
         score: tenth.score,
         verdictId: tenth.verdictId,
+        commitSha: tenth.commitSha,
       });
     }
   }

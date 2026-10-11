@@ -7,7 +7,7 @@ import {
   ProductionJourneySchema,
   type JourneyHighlight,
 } from "./schema";
-import { isChartableVerdict, isValidJourneyVerdict } from "./valid-verdict";
+import { isChartableVerdict, isEvidenceBearingVerdict, isValidJourneyVerdict } from "./valid-verdict";
 import { calculateTrend, calculateScoreChange } from "./trend";
 import { calculateMaturity } from "./maturity";
 import { detectMilestones, nextMilestoneKey } from "./milestones";
@@ -127,7 +127,9 @@ export function buildProductionJourney(
   const previousValid =
     validTimeline.length > 1 ? validTimeline[validTimeline.length - 2] : null;
 
-  const scores = validTimeline
+  // Best/lowest score come from verdicts that carry evidence: an insufficient_data placeholder is not an achievement.
+  const evidenceTimeline = validTimeline.filter((p) => isEvidenceBearingVerdict(p.status, p.score));
+  const scores = evidenceTimeline
     .map((p) => p.score)
     .filter((s): s is number => s !== null);
 
@@ -153,7 +155,7 @@ export function buildProductionJourney(
 
   const bestScore = scores.length > 0 ? Math.max(...scores) : null;
   const lowestScore = scores.length > 0 ? Math.min(...scores) : null;
-  const bestPoint = validTimeline.find((p) => p.score === bestScore) ?? null;
+  const bestPoint = evidenceTimeline.find((p) => p.score === bestScore) ?? null;
 
   const latestVerdict = latestRecord?.verdict ?? null;
   const introducedTitles =

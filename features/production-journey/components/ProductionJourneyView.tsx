@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import Link from "next/link";
 import { ArrowRight, RefreshCw, TrendingDown, TrendingUp, Minus } from "lucide-react";
 import type { ProductionJourney } from "@/brain/production-journey/schema";
+import { shouldShowScore } from "@/brain/production-verdict/status-ui";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +13,9 @@ import { JourneyScoreChart } from "./JourneyScoreChart";
 import { useI18n } from "@/lib/i18n/client";
 import { trackEvent } from "@/lib/analytics/track";
 import { useDemoNavigation } from "@/features/demo/use-demo-navigation";
+
+/** Milestones phrased as a readiness conclusion: they describe THAT commit's verdict, never the current decision. */
+const HISTORICAL_DECISION_MILESTONES = new Set(["milestones.readyToShip", "milestones.recoveredAfterRegression"]);
 
 function TrendIcon({ trend }: { trend: ProductionJourney["trend"] }) {
   if (trend === "improving") return <TrendingUp className="h-4 w-4 text-success" aria-hidden />;
@@ -57,6 +61,11 @@ export function ProductionJourneyView({
   }
 
   const latest = journey.timeline[journey.timeline.length - 1];
+  // An insufficient_data verdict keeps a placeholder score; it is not shown as a result (same rule as the verdict page).
+  const showCurrentScore =
+    journey.currentStatus != null && shouldShowScore(journey.currentScore, journey.currentStatus);
+  const showPreviousScore =
+    journey.previousStatus != null && shouldShowScore(journey.previousScore, journey.previousStatus);
   const delta = latest?.scoreDelta ?? null;
   const deltaNarrative =
     delta != null && delta > 0
@@ -80,11 +89,11 @@ export function ProductionJourneyView({
         <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <p className="text-xs text-muted-foreground">{t("currentScore")}</p>
-            <p className="text-3xl font-bold">{journey.currentScore ?? "—"}</p>
+            <p className="text-3xl font-bold">{showCurrentScore ? journey.currentScore : "—"}</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">{t("previousScore")}</p>
-            <p className="text-2xl font-semibold">{journey.previousScore ?? "—"}</p>
+            <p className="text-2xl font-semibold">{showPreviousScore ? journey.previousScore : "—"}</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">{t("bestScore")}</p>
@@ -196,7 +205,13 @@ export function ProductionJourneyView({
                 <p className="font-medium text-sm">{t(milestone.titleKey)}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {milestone.score != null ? t("scoreLabel", { score: milestone.score }) : ""}
+                  {milestone.score != null ? " · " : ""}
+                  {new Date(milestone.reachedAt).toLocaleDateString()}
+                  {milestone.commitSha ? ` · ${t("milestoneCommit", { sha: milestone.commitSha.slice(0, 7) })}` : ""}
                 </p>
+                {HISTORICAL_DECISION_MILESTONES.has(milestone.titleKey) && (
+                  <p className="text-xs text-muted-foreground mt-0.5">{t("milestoneHistorical")}</p>
+                )}
               </li>
             ))}
           </ol>
