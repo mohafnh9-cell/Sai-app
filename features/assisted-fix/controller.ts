@@ -103,7 +103,8 @@ export function createAssistedFixController(options: ControllerOptions) {
       if (state.evidence !== "idle") set({ evidence: "idle" });
       return;
     }
-    if (state.evidence === "reloading") return;
+    // "failed" is final until the person asks again (Retry): a later refresh() must not silently start another round.
+    if (state.evidence === "reloading" || state.evidence === "failed") return;
     const mine = ++evidenceLoop;
     set({ evidence: "reloading" });
     void (async () => {

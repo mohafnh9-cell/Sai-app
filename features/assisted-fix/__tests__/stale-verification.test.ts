@@ -100,6 +100,12 @@ describe("a card that is contradictory from the start does not depend on one rou
     await vi.advanceTimersByTimeAsync(5000);
     expect(controller.getState().evidence).toBe("failed");
     expect(phaseOf(controller.getState().data.fixes[0])).toBe("updating");
+    // After the limit, an unrelated re-read must NOT start another round of reloads on its own.
+    await controller.refresh(); // (may ask the host for one render because the record changed: that is a single read, not a new round)
+    const afterLimit = onReload.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(20000);
+    expect(onReload.mock.calls.length).toBe(afterLimit);
+    expect(controller.getState().evidence).toBe("failed");
     const before = onReload.mock.calls.length;
     controller.retryEvidence();
     await vi.advanceTimersByTimeAsync(50);
