@@ -42,6 +42,7 @@ Estimaciones: rangos en días de trabajo restantes de una persona [E]; no incluy
 - **Dependencias:** Casos reales: cancelar, forzar fallo, reintento sin duplicar · **Responsable:** agente
 - **Estimación restante:** 3–6 d (verificación 2–3; investigación de `manual_scan` 1–2; contingencia de desarrollo 0–1)
 - **Bloquea V1:** sí
+- **Actualización 2026-10-13 (observado):** D9 desplegado (#76) y **observado en un análisis manual real** (`e5aaf268`): veredicto generado 1,0 s después del último motor y trabajo cerrado después del veredicto (ver sección «Resultados de la aceptación»). Quedan abiertos: falta `scans.metrics.verdictEvidence` (no se registró en ningún scan), dos eventos `job_completed` por trabajo, y la observación en pantalla durante el análisis no fue reportada. Una sola ejecución: no basta para cerrar el punto.
 
 ### 5. Veredictos respaldados
 - **Estado:** en curso
@@ -66,6 +67,7 @@ Estimaciones: rangos en días de trabajo restantes de una persona [E]; no incluy
 - **Dependencias:** Autorización de los commits; propietario preparado · **Responsable:** propietario + agente
 - **Estimación restante:** 0,5–1 d (verificación)
 - **Bloquea V1:** sí
+- **Actualización 2026-10-13 (observado):** tras los pushes por webhook (10:17, 11:12, 13:00 UTC) la pestaña de Inteligencia de producción en primer plano **no cambió sola** (minutos) y el panel tampoco; Proyectos mostró el estado nuevo **tras un clic**, no solo. **El sondeo no se comprobó.** Defecto de coherencia observado: dos veredictos en una página con `?run=` y «Última revisión: hace N h» incoherente (4 h, 5 h, 7 h con el último análisis de minutos).
 
 ### 8. MCP real
 - **Estado:** en curso
@@ -90,6 +92,7 @@ Estimaciones: rangos en días de trabajo restantes de una persona [E]; no incluy
 - **Dependencias:** Casos reales con segunda rama/proyecto · **Responsable:** agente
 - **Estimación restante:** 1–2 d (verificación)
 - **Bloquea V1:** sí
+- **Actualización 2026-10-13 (observado en producción, `sequrai-e2e-test`):** cambiar el commit informado de una propuesta APROBADA la devolvió a READY (`proposal_commit_changed`) y la confirmación falló con «acción no disponible» hasta aprobar de nuevo; verificación negativa (SHA sin análisis) = `partial`, `verification_scan_missing`, nunca verificada; verificación del SHA correcto = `passed`, `exact_proposal_commit`, `verificationScanId` del scan de ese commit. Siguen sin observarse el rechazo por otro proyecto/organización/rama.
 
 ### 11. Flujo asistido utilizable
 - **Estado:** en curso
@@ -98,6 +101,7 @@ Estimaciones: rangos en días de trabajo restantes de una persona [E]; no incluy
 - **Dependencias:** Diseño aprobado; #70 desplegada · **Responsable:** agente
 - **Estimación restante:** 1–2 d (revisión/CI de #75 0,5–1; aceptación real 0,5–1)
 - **Bloquea V1:** **sí**
+- **Actualización 2026-10-13:** #75 desplegada y usada por el propietario solo con la interfaz (sin consola): generar, repetir (reutiliza), aprobar (persistente tras recargar), 4 negativos del formulario, commit informado, verificar. Defecto real encontrado y corregido (#78, desplegada): la tarjeta mostraba «No verificada» con los motivos del intento anterior tras verificar. Detalle y estado de cada bloque en «Resultados de la aceptación».
 
 ### 12. Aislamiento entre clientes
 - **Estado:** pendiente
@@ -254,5 +258,47 @@ Recuperación: redesplegar el despliegue anterior de producción (sin base de da
 | 10 | Push del commit de restauración (árbol idéntico a la línea base `1eb0930`) | Árbol sin diferencias; scan limpio |
 Criterio de paso: los 10 pasos con la evidencia indicada, sin abrir la consola del navegador. Cualquier desviación se registra como defecto y detiene la aceptación. Los commits y el análisis manual no están autorizados todavía.
 
+## Resultados de la aceptación (2026-10-13, `sequrai-e2e-test`; observado, no propuesto)
+Entorno: producción (`a52ef51` hasta las 12:13 UTC; `1f10103` con #78 después). Ejecución: el propietario con su navegador (clics y capturas); la base de datos se leyó solo como evidencia adicional y **no demuestra** actualización automática. Tres commits autorizados y un análisis manual:
+
+| Commit | Hora UTC | SHA | Scan | Veredicto |
+|---|---|---|---|---|
+| 1 fixture inerte `algorithms: ["none"]` | 10:17:26 | `995837c` | `ac188ae1` (webhook) | `not_ready` 64, 1 crítico |
+| 2 corrección `["HS256"]` | 11:11:52 | `b98ed2c` | `72ff5344` (webhook) | `ready_to_ship` 100 |
+| 3 restauración (árbol = `1eb0930`) | 13:00:42 | `75197c5` | `adf4d63e` (webhook) | `ready_to_ship` 100 |
+| Análisis manual (D9) | 13:04:17 | `75197c5` | `e5aaf268` | `ready_to_ship` 100 |
+
+Registros de Safe Fix previos (3 VERIFIED + 1 READY): **hashes idénticos a los de antes de la aceptación**. La propuesta nueva `e2fa01eb` terminó VERIFIED (11:31:52).
+
+### A. Backend aprobado
+- Ciclo completo de la propuesta nueva: READY (10:35:36) → APPROVED → APPLIED → VERIFYING → FAILED (negativo, SHA `0123…` sin scan) → READY (reabrir) → APPROVED → APPLIED (`b98ed2c`) → VERIFYING → **VERIFIED** (11:31:52, `verification_passed`).
+- Verificación negativa: `outcome=partial`, `verification_scan_missing, findings_unavailable`, `verificationScanId=null`; 0 scans con ese SHA (inexistente, no error de consulta ni de acceso).
+- Verificación positiva: `exact_proposal_commit`, `proposalCommitSha = verifiedCommitSha = b98ed2c38b93a1539b880a7fa61fcd6cca76c4f8`, `verificationScanId=72ff5344` (scan completado, `main`, misma organización y proyecto).
+- Repetir «Generar» con una propuesta abierta: «Ya había una propuesta… no se ha duplicado»; 5 registros antes y después, 2 eventos de ciclo de vida.
+
+### B. Visualización actual comprobada
+- Tarjeta VERIFIED de `e2fa01eb` **tras desplegar #78**, sin tocarla: commit `b98ed2c…`, análisis `b98ed2c · 2026-10-13 11:12 UTC`, sin motivos del negativo anterior (captura del propietario).
+- Formulario de commit: campo vacío sin preselección, SHA corto, SHA del commit base, SHA sin análisis con advertencia «no hay análisis de este commit», confirmación con rama/SHA/análisis/base. Todo observado en producción.
+- **No observado:** consola (el propietario no reportó errores), Journey (hitos con fecha y commit, error de hidratación #418 sigue abierto), Centro de control y dashboard tras los commits, regreso desde otra pestaña, estados «actualizando»/fallo de recarga en producción (solo en entorno local controlado).
+
+### C. Transición negativo → VERIFIED: cubierta localmente, **no demostrada en producción**
+- En producción la tarjeta mostró «No verificada» con SHA correcto y motivos del intento anterior, 6 s después del VERIFIED persistido. Causa reproducida con una prueba: `refresh()` conservaba la verificación de la carga de la página y `phaseOf()` trata VERIFIED sin evidencia exacta como no verificada.
+- Corrección en #78 (desplegada): fase «actualizando» cuando estado y evidencia no coinciden (sin veredicto ni motivos antiguos), verificación devuelta por la ruta ligada al commit, recarga acotada (solo lecturas; «Reintentar» como único reinicio), descarte de respuestas fuera de orden, sin retroceso por props antiguas. 212 pruebas locales (estados, tarjeta contradictoria desde el inicio, fallo de recarga, respuestas tardías) y montaje real con jsdom.
+- Estados «actualizando» y fallo de recarga comprobados en navegador local con un arnés de datos en memoria; la recuperación salió intermitente en la pestaña oculta de esa herramienta y se comprobó con el montaje real. **Hasta observar otra ejecución autorizada, la transición negativa→VERIFIED en producción queda respaldada solo por las pruebas locales.**
+
+### D. D9 (veredicto prematuro): verificado en una ejecución real, con huecos
+Análisis manual `e5aaf268` (UTC): trabajo creado 13:04:17.7; scan `completed` 13:04:24.7; motores: opengrep 13:04:27.9→33.2, crypto 13:04:29.1→36.1, **trivy 13:04:28.4→40.2 (último, `COMPLETED`)**; `verdictEvidenceReadyAt` 13:04:31.2; **veredicto 13:04:41.2** (1,0 s después del último motor); `verdict_created` 13:04:41.6; trabajo `manual_scan` completado 13:04:42.3. Un veredicto, `recovery_attempts=0`, ningún motor fallido.
+Huecos: (1) **la observación en pantalla durante esos 25 s no fue reportada** (no se sabe si algo apareció antes de las 13:04:41); (2) `scans.metrics.verdictEvidence` **no existe en ningún scan** del proyecto (la función que lo escribe traga sus errores o lo pisa otra escritura; causa sin determinar); (3) dos eventos `job_completed` (13:04:26.5 sin tipo de trabajo y `pipelineStatus: completed`; 13:04:42.5 del trabajo); (4) `crypto` con `duration_ms=0` y registro de ejecución posterior a la finalización de su trabajo. **Estado: una ejecución sin anomalía en el orden; no cerrado.**
+
+### Defectos y observaciones nuevas (no corregidos salvo #78)
+1. `Reabrir` conserva el SHA anterior en la tarjeta READY; informar otro commit con la propuesta APROBADA la devuelve a READY sin avisar y la confirmación falla («acción no disponible»). Disparador del primer error rojo tras «Generar»/«Aprobar»: no determinado (orden de clics no recordado).
+2. El formulario de commit se abre al final del panel, lejos de su tarjeta y sin respuesta visible tras el clic; «Usar este commit» no marca nada.
+3. Con `?run=` la página muestra dos veredictos (protección: último; veredicto: el anclado) sin aviso; «Última revisión: hace N h» incoherente.
+4. Textos en inglés en la interfaz en español; hora local en la cronología frente a UTC en el panel; puntuación 100 con confianza «Baja» (valor marcador conocido).
+5. Sin actualización automática observada (punto 7); sondeo no comprobado.
+
+### Qué no se ha hecho / sigue pendiente
+Aislamiento entre clientes (sesión B), Journey y #418, MCP real de `authorize_dynamic_target`, observación de pantallas A/C en esta ejecución, sondeo, `verdictEvidence`. **No se declara V1 completo.**
+
 ## Decisión actual
-**V1 no está listo.** Bloqueos concretos: 11 (el panel existe en #75, sin desplegar ni aceptar sin consola), 12 (sesión B), 15 (restricción de Red Team desplegada y observada en tres rutas; falta MCP y UI de otra organización), 6/7 (verificación visual y de estados sin hacer), 4 (ejecución fiable sin observar y defecto D9 del reconciliador, que fija veredictos antes de tiempo), 18/19/20 (recuperación, onboarding y demostración final). Esta lista no se marca como verificada hasta que cada punto cumpla su evidencia; la decisión se repite al cerrar cada bloque.
+**V1 no está listo.** Bloqueos concretos: 11 (panel desplegado y usado sin consola en una ejecución; defectos abiertos y la transición negativa→VERIFIED sin observar en producción), 12 (sesión B), 15 (restricción de Red Team desplegada y observada en tres rutas; falta MCP y UI de otra organización), 6/7 (verificación visual y de estados sin hacer), 4 (ejecución fiable sin observar y defecto D9 del reconciliador, que fija veredictos antes de tiempo), 18/19/20 (recuperación, onboarding y demostración final). Esta lista no se marca como verificada hasta que cada punto cumpla su evidencia; la decisión se repite al cerrar cada bloque.
