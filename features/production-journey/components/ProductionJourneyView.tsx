@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { VerdictStatusBadge } from "@/features/production-verdict/components/VerdictStatusBadge";
 import { JourneyScoreChart } from "./JourneyScoreChart";
 import { useI18n } from "@/lib/i18n/client";
+import { formatStableDate } from "@/lib/format/stable-date";
 import { trackEvent } from "@/lib/analytics/track";
 import { useDemoNavigation } from "@/features/demo/use-demo-navigation";
 
@@ -206,7 +207,7 @@ export function ProductionJourneyView({
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {milestone.score != null ? t("scoreLabel", { score: milestone.score }) : ""}
                   {milestone.score != null ? " · " : ""}
-                  {new Date(milestone.reachedAt).toLocaleDateString()}
+                  {formatStableDate(milestone.reachedAt)}
                   {milestone.commitSha ? ` · ${t("milestoneCommit", { sha: milestone.commitSha.slice(0, 7) })}` : ""}
                 </p>
                 {HISTORICAL_DECISION_MILESTONES.has(milestone.titleKey) && (

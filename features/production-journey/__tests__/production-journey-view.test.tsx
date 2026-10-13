@@ -80,3 +80,12 @@ describe.each(["en", "es"] as const)("Journey shows what a milestone is and when
     expect(html).toMatch(/<p class="text-3xl font-bold">100<\/p>/);
   });
 });
+
+describe.each(["en", "es"] as const)("milestone dates are stable (server and browser render the same text) [%s]", (l) => {
+  it("dates are UTC ISO dates, never locale- or time-zone-dependent text", () => {
+    lang = l;
+    const t = render(["not_ready", "ready_full", "insufficient_scored"]);
+    expect(t).toMatch(/\d{4}-\d{2}-\d{2}/);
+    expect(t).not.toMatch(/\b\d{1,2}\/\d{1,2}\/\d{4}\b/);
+  });
+});
