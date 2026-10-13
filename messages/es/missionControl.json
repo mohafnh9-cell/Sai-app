@@ -298,5 +298,105 @@
     "verifying": "Verificando",
     "completed": "Completado",
     "failed": "Fallido"
+  },
+  "assistedFix": {
+    "title": "Corrección asistida",
+    "intro": "SequrAI prepara instrucciones para tu agente de código y verifica el commit que tú informes. SequrAI no modifica tu código ni escribe en GitHub.",
+    "generate": "Generar propuesta",
+    "generating": "Generando…",
+    "empty": "Todavía no hay propuestas para este proyecto.",
+    "history": "Historial ({count})",
+    "unknownBranch": "rama sin determinar",
+    "analysisLine": "{branch} · commit {sha} · {date}",
+    "analysisNone": "sin análisis de ese commit",
+    "baseAnalysis": "Análisis base de la propuesta:",
+    "reportedCommit": "Commit informado:",
+    "verifiedCommit": "Commit verificado:",
+    "verifiedAnalysis": "Análisis verificado:",
+    "technicalReasons": "Motivo técnico",
+    "instructions": "Ver instrucciones para tu agente",
+    "files": "Archivos a revisar",
+    "approve": "Aprobar propuesta",
+    "reportCommit": "Informar el commit de la corrección",
+    "verify": "Verificar",
+    "verifying": "Verificando…",
+    "reopen": "Reabrir",
+    "phase": {
+      "proposal": "Propuesta documental",
+      "approved": "Aprobada",
+      "applied": "Commit informado",
+      "verifying": "Verificando",
+      "verified": "Verificado en el commit",
+      "not_verified": "No verificada",
+      "historical": "Histórica"
+    },
+    "note": {
+      "proposal": "Instrucciones para tu agente. SequrAI no ha cambiado tu código ni ha escrito en GitHub, y todavía no hay nada verificado.",
+      "approved": "Aprobada. Falta que informes el commit que contiene la corrección. Aún no hay nada verificado.",
+      "applied": "Commit informado. Pendiente de verificación: todavía no se ha verificado nada.",
+      "verifying": "Verificando el commit informado… Esta página se actualiza sola.",
+      "verified": "Verificado: un reanálisis completo de ese commit no contiene el hallazgo.",
+      "not_verified": "Esta propuesta no está verificada. No la des por corregida.",
+      "historical": "Propuesta histórica: sustituida por otra posterior."
+    },
+    "statement": {
+      "exact_commit_rescan_clean": "Un reanálisis completo de exactamente ese commit ya no contiene el hallazgo.",
+      "later_analysis_clean_unbound": "Hay un análisis posterior sin el hallazgo, pero no está ligado al commit que informaste: no cuenta como verificación de tu commit.",
+      "not_verified": "No se pudo verificar el commit informado."
+    },
+    "notice": {
+      "no_blockers": "No hay bloqueos para los que generar una propuesta.",
+      "created": "Propuesta creada.",
+      "reused": "Ya había una propuesta para este hallazgo y este análisis: se muestra la existente, no se ha duplicado."
+    },
+    "choose": {
+      "title": "¿Para qué problema quieres la propuesta?",
+      "cancel": "Cancelar"
+    },
+    "commit": {
+      "title": "Informar el commit de la corrección",
+      "label": "Commit (SHA completo)",
+      "placeholder": "40 caracteres hexadecimales",
+      "help": "El campo no se rellena solo. Introduce el SHA completo del commit que contiene tu corrección.",
+      "review": "Revisar",
+      "cancel": "Cancelar",
+      "errors": {
+        "empty": "Introduce el SHA del commit.",
+        "not_full_sha": "El SHA debe tener exactamente 40 caracteres hexadecimales.",
+        "same_as_base": "Ese es el commit que originó el hallazgo: no puede contener la corrección."
+      }
+    },
+    "suggestion": {
+      "title": "Sugerencia: último commit detectado",
+      "branch": "Rama",
+      "analysis": "Análisis de ese commit:",
+      "notice": "Es solo una sugerencia: no se ha seleccionado. Revísala y confírmala tú.",
+      "use": "Usar este commit"
+    },
+    "confirm": {
+      "branch": "Rama",
+      "branchUnknown": "sin determinar (no hay análisis de este commit todavía)",
+      "sha": "Commit",
+      "commitAnalysis": "Análisis de ese commit:",
+      "noAnalysisWarning": "Aún no hay análisis de este commit. La verificación puede quedar «no verificada» hasta que SequrAI lo analice (ocurre al hacer push a la rama).",
+      "baseAnalysis": "Análisis base de la propuesta:",
+      "statement": "Vas a declarar que el commit {sha} contiene la corrección de «{title}». SequrAI lo reanalizará; hasta entonces no está verificado.",
+      "button": "Confirmar commit",
+      "back": "Volver"
+    },
+    "errors": {
+      "not_found": "No encontramos esta corrección en tu espacio de trabajo. Recarga la página.",
+      "open_fix_exists": "Ya hay una corrección abierta para este hallazgo. Continúa con esa.",
+      "in_flight": "Ya hay una corrección en curso para este hallazgo sobre otro análisis. Termínala o reábrela antes de generar otra.",
+      "invalid_state": "Esa acción no está disponible en el estado actual de la corrección. Hemos recargado el estado; vuelve a intentarlo si procede.",
+      "commit_is_base": "Ese es el commit que originó el hallazgo: no puede contener la corrección.",
+      "commit_locked": "El commit de esta corrección ya está fijado y no puede cambiarse en este estado. Reábrela para informar otro commit.",
+      "commit_conflict": "Ese commit ya está asociado a otra corrección.",
+      "unsupported": "Esta instalación todavía no admite informar un commit. Inténtalo más tarde.",
+      "invalid_commit": "Los datos enviados no son válidos. Revisa el SHA.",
+      "unavailable": "No pudimos completar la operación y no se ha cambiado nada. Inténtalo de nuevo.",
+      "forbidden": "No tienes permiso para esta acción.",
+      "unknown": "Algo falló. El estado mostrado es el guardado; inténtalo de nuevo."
+    }
   }
 }

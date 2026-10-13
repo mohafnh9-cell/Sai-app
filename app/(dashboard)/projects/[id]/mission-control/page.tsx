@@ -16,6 +16,8 @@ import { findNonSerializablePaths } from "@/lib/rsc/find-non-serializable-path";
 import { missionControlTrace, traceAwait } from "@/lib/debug/mission-control-trace";
 import { getProductionIntelligence } from "@/server/production-intelligence/get-production-intelligence";
 import { getProductionJourneyByProject } from "@/server/production-journey/get-production-journey";
+import { loadAssistedFixPanelData } from "@/server/safe-fix-engine/panel-data";
+import { AssistedFixPanel } from "@/features/assisted-fix/components/AssistedFixPanel";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -212,6 +214,14 @@ export default async function MissionControlPage({ params, searchParams }: PageP
 
   const showSecurityTest = shouldShowSecurityTestNav({ attackCenterEnabled });
 
+  // "Corrección asistida": proposals, analyses and the commit SUGGESTION, read with an explicit organization + project scope.
+  const assistedFixData = adminClient
+    ? await loadAssistedFixPanelData(adminClient, { organizationId, projectId }).catch((error) => {
+        console.error({ component: "mission-control-page", event: "assisted_fix_panel_failed", projectId, message: error instanceof Error ? error.message : String(error) });
+        return null;
+      })
+    : null;
+
   return (
     <div className="min-h-full">
       <div className="mx-auto max-w-6xl px-4 sm:px-8 pb-24 pt-6 sm:pt-8">
@@ -230,6 +240,8 @@ export default async function MissionControlPage({ params, searchParams }: PageP
           productionIntelligence={productionIntelligence}
           areasProgress={journey?.areasProgress ?? []}
         />
+
+        {assistedFixData && <AssistedFixPanel data={toRscSafe(assistedFixData)} />}
       </div>
     </div>
   );

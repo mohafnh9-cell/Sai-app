@@ -298,5 +298,105 @@
     "verifying": "Verifying",
     "completed": "Complete",
     "failed": "Failed"
+  },
+  "assistedFix": {
+    "title": "Assisted correction",
+    "intro": "SequrAI prepares instructions for your coding agent and verifies the commit you report. SequrAI does not change your code or write to GitHub.",
+    "generate": "Generate proposal",
+    "generating": "Generating…",
+    "empty": "There are no proposals for this project yet.",
+    "history": "History ({count})",
+    "unknownBranch": "branch not determined",
+    "analysisLine": "{branch} · commit {sha} · {date}",
+    "analysisNone": "no analysis of that commit",
+    "baseAnalysis": "Proposal's base analysis:",
+    "reportedCommit": "Reported commit:",
+    "verifiedCommit": "Verified commit:",
+    "verifiedAnalysis": "Verified analysis:",
+    "technicalReasons": "Technical reason",
+    "instructions": "View instructions for your agent",
+    "files": "Files to review",
+    "approve": "Approve proposal",
+    "reportCommit": "Report the correction commit",
+    "verify": "Verify",
+    "verifying": "Verifying…",
+    "reopen": "Reopen",
+    "phase": {
+      "proposal": "Documentary proposal",
+      "approved": "Approved",
+      "applied": "Commit reported",
+      "verifying": "Verifying",
+      "verified": "Verified in the commit",
+      "not_verified": "Not verified",
+      "historical": "Historical"
+    },
+    "note": {
+      "proposal": "Instructions for your agent. SequrAI has not changed your code or written to GitHub, and nothing has been verified yet.",
+      "approved": "Approved. You still need to report the commit that contains the correction. Nothing has been verified yet.",
+      "applied": "Commit reported. Pending verification: nothing has been verified yet.",
+      "verifying": "Verifying the reported commit… This page updates by itself.",
+      "verified": "Verified: a complete rescan of that commit does not contain the finding.",
+      "not_verified": "This proposal is not verified. Do not treat it as fixed.",
+      "historical": "Historical proposal: replaced by a later one."
+    },
+    "statement": {
+      "exact_commit_rescan_clean": "A complete rescan of exactly that commit no longer contains the finding.",
+      "later_analysis_clean_unbound": "A later analysis no longer contains the finding, but it is not tied to the commit you reported: it does not count as a verification of your commit.",
+      "not_verified": "The reported commit could not be verified."
+    },
+    "notice": {
+      "no_blockers": "There are no blockers to generate a proposal for.",
+      "created": "Proposal created.",
+      "reused": "A proposal already existed for this finding and analysis: the existing one is shown, nothing was duplicated."
+    },
+    "choose": {
+      "title": "Which problem do you want a proposal for?",
+      "cancel": "Cancel"
+    },
+    "commit": {
+      "title": "Report the correction commit",
+      "label": "Commit (full SHA)",
+      "placeholder": "40 hexadecimal characters",
+      "help": "The field is never filled in for you. Enter the full SHA of the commit that contains your correction.",
+      "review": "Review",
+      "cancel": "Cancel",
+      "errors": {
+        "empty": "Enter the commit SHA.",
+        "not_full_sha": "The SHA must be exactly 40 hexadecimal characters.",
+        "same_as_base": "That is the commit that originated the finding: it cannot contain the correction."
+      }
+    },
+    "suggestion": {
+      "title": "Suggestion: latest detected commit",
+      "branch": "Branch",
+      "analysis": "Analysis of that commit:",
+      "notice": "This is only a suggestion: it has not been selected. Review it and confirm it yourself.",
+      "use": "Use this commit"
+    },
+    "confirm": {
+      "branch": "Branch",
+      "branchUnknown": "not determined (no analysis of this commit yet)",
+      "sha": "Commit",
+      "commitAnalysis": "Analysis of that commit:",
+      "noAnalysisWarning": "There is no analysis of this commit yet. Verification may stay “not verified” until SequrAI analyzes it (it happens when the branch is pushed).",
+      "baseAnalysis": "Proposal's base analysis:",
+      "statement": "You are declaring that commit {sha} contains the correction for “{title}”. SequrAI will rescan it; until then it is not verified.",
+      "button": "Confirm commit",
+      "back": "Back"
+    },
+    "errors": {
+      "not_found": "We could not find this correction in your workspace. Reload the page.",
+      "open_fix_exists": "There is already an open correction for this finding. Continue with that one.",
+      "in_flight": "There is already a correction in progress for this finding on another analysis. Finish or reopen it before generating another.",
+      "invalid_state": "That action is not available in the correction's current state. The state was reloaded; try again if it applies.",
+      "commit_is_base": "That is the commit that originated the finding: it cannot contain the correction.",
+      "commit_locked": "This correction's commit is already fixed and cannot change in this state. Reopen it to report another commit.",
+      "commit_conflict": "That commit is already associated with another correction.",
+      "unsupported": "This installation does not support reporting a commit yet. Try again later.",
+      "invalid_commit": "The submitted data is not valid. Check the SHA.",
+      "unavailable": "We could not complete the operation and nothing was changed. Try again.",
+      "forbidden": "You do not have permission for this action.",
+      "unknown": "Something failed. The state shown is the saved one; try again."
+    }
   }
 }

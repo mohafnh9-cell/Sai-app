@@ -5,6 +5,18 @@ var __export = (target, all) => {
     __defProp(target, name, { get: all[name], enumerable: true });
 };
 
+// brain/production-verdict/config.ts
+var VERDICT_THRESHOLDS = {
+  readyToShipScore: 85,
+  almostReadyScore: 70,
+  needsImprovementScore: 25,
+  maxHighBlockersForAlmostReady: 2,
+  maxHighBlockersForReady: 0,
+  minCoverageRatio: 0.15,
+  minFilesAnalyzed: 3,
+  scoreDropSignificant: 5
+};
+
 // brain/production-verdict/coverage.ts
 var AREA_DEFINITIONS = {
   security: {
@@ -157,7 +169,7 @@ function areaScore(area, status, securityScore, findings) {
   return Math.max(0, Math.min(100, securityScore - penalty));
 }
 function assessCoverage(input) {
-  const { findings, securityScore, filesAnalyzed } = input;
+  const { findings, securityScore, filesAnalyzed, filesDiscovered } = input;
   const allAreas = Object.keys(AREA_DEFINITIONS);
   const assessments = allAreas.map((key) => {
     const def = AREA_DEFINITIONS[key];
@@ -182,7 +194,7 @@ function assessCoverage(input) {
   const evaluatedAreas = assessments.filter((a) => a.status === "evaluated");
   const partiallyEvaluatedAreas = assessments.filter((a) => a.status === "partial");
   const unevaluatedAreas = assessments.filter((a) => a.status === "not_evaluated");
-  const coverageRatio = filesAnalyzed > 0 ? Math.min(
+  const coverageRatio = filesDiscovered != null && filesDiscovered > 0 ? Math.min(1, filesAnalyzed / filesDiscovered) : filesAnalyzed > 0 ? Math.min(
     1,
     Math.max(
       filesAnalyzed >= 10 ? 0.2 : 0,
@@ -198,9 +210,10 @@ function assessCoverage(input) {
 }
 function hasSufficientCoverage(input) {
   if (input.scanStatus === "failed") return false;
-  if (input.filesAnalyzed < 3) return false;
-  if (input.filesAnalyzed >= 3) return true;
-  if (input.coverageRatio != null && input.coverageRatio < 0.15) return false;
+  if (input.filesAnalyzed < VERDICT_THRESHOLDS.minFilesAnalyzed) return false;
+  if (input.coverageRatio != null && input.coverageRatio < VERDICT_THRESHOLDS.minCoverageRatio) {
+    return false;
+  }
   return true;
 }
 
@@ -245,7 +258,7 @@ function totalEstimatedMinutes(priorities) {
   return priorities.reduce((sum, p2) => sum + p2.estimatedMinutes, 0);
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/classic/external.js
+// ../sequrai-app/node_modules/zod/v4/classic/external.js
 var external_exports = {};
 __export(external_exports, {
   $brand: () => $brand,
@@ -488,7 +501,7 @@ __export(external_exports, {
   xor: () => xor
 });
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/core/index.js
+// ../sequrai-app/node_modules/zod/v4/core/index.js
 var core_exports2 = {};
 __export(core_exports2, {
   $ZodAny: () => $ZodAny,
@@ -767,7 +780,7 @@ __export(core_exports2, {
   version: () => version
 });
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/core/core.js
+// ../sequrai-app/node_modules/zod/v4/core/core.js
 var _a;
 var NEVER = /* @__PURE__ */ Object.freeze({
   status: "aborted"
@@ -844,7 +857,7 @@ function config(newConfig) {
   return globalConfig;
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/core/util.js
+// ../sequrai-app/node_modules/zod/v4/core/util.js
 var util_exports = {};
 __export(util_exports, {
   BIGINT_FORMAT_RANGES: () => BIGINT_FORMAT_RANGES,
@@ -1540,7 +1553,7 @@ var Class = class {
   }
 };
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/core/errors.js
+// ../sequrai-app/node_modules/zod/v4/core/errors.js
 var initializer = (inst, def) => {
   inst.name = "$ZodError";
   Object.defineProperty(inst, "_zod", {
@@ -1679,7 +1692,7 @@ function prettifyError(error51) {
   return lines.join("\n");
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/core/parse.js
+// ../sequrai-app/node_modules/zod/v4/core/parse.js
 var _parse = (_Err) => (schema, value, _ctx, _params) => {
   const ctx = _ctx ? { ..._ctx, async: false } : { async: false };
   const result = schema._zod.run({ value, issues: [] }, ctx);
@@ -1767,7 +1780,7 @@ var _safeDecodeAsync = (_Err) => async (schema, value, _ctx) => {
 };
 var safeDecodeAsync = /* @__PURE__ */ _safeDecodeAsync($ZodRealError);
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/core/regexes.js
+// ../sequrai-app/node_modules/zod/v4/core/regexes.js
 var regexes_exports = {};
 __export(regexes_exports, {
   base64: () => base64,
@@ -1926,7 +1939,7 @@ var sha512_hex = /^[0-9a-fA-F]{128}$/;
 var sha512_base64 = /* @__PURE__ */ fixedBase64(86, "==");
 var sha512_base64url = /* @__PURE__ */ fixedBase64url(86);
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/core/checks.js
+// ../sequrai-app/node_modules/zod/v4/core/checks.js
 var $ZodCheck = /* @__PURE__ */ $constructor("$ZodCheck", (inst, def) => {
   var _a3;
   inst._zod ?? (inst._zod = {});
@@ -2474,7 +2487,7 @@ var $ZodCheckOverwrite = /* @__PURE__ */ $constructor("$ZodCheckOverwrite", (ins
   };
 });
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/core/doc.js
+// ../sequrai-app/node_modules/zod/v4/core/doc.js
 var Doc = class {
   constructor(args = []) {
     this.content = [];
@@ -2510,14 +2523,14 @@ var Doc = class {
   }
 };
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/core/versions.js
+// ../sequrai-app/node_modules/zod/v4/core/versions.js
 var version = {
   major: 4,
   minor: 4,
   patch: 3
 };
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/core/schemas.js
+// ../sequrai-app/node_modules/zod/v4/core/schemas.js
 var $ZodType = /* @__PURE__ */ $constructor("$ZodType", (inst, def) => {
   var _a3;
   inst ?? (inst = {});
@@ -4610,7 +4623,7 @@ function handleRefineResult(result, payload, input, inst) {
   }
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/index.js
+// ../sequrai-app/node_modules/zod/v4/locales/index.js
 var locales_exports = {};
 __export(locales_exports, {
   ar: () => ar_default,
@@ -4667,7 +4680,7 @@ __export(locales_exports, {
   zhTW: () => zh_TW_default
 });
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/ar.js
+// ../sequrai-app/node_modules/zod/v4/locales/ar.js
 var error = () => {
   const Sizable = {
     string: { unit: "\u062D\u0631\u0641", verb: "\u0623\u0646 \u064A\u062D\u0648\u064A" },
@@ -4774,7 +4787,7 @@ function ar_default() {
   };
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/az.js
+// ../sequrai-app/node_modules/zod/v4/locales/az.js
 var error2 = () => {
   const Sizable = {
     string: { unit: "simvol", verb: "olmal\u0131d\u0131r" },
@@ -4880,7 +4893,7 @@ function az_default() {
   };
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/be.js
+// ../sequrai-app/node_modules/zod/v4/locales/be.js
 function getBelarusianPlural(count, one, few, many) {
   const absCount = Math.abs(count);
   const lastDigit = absCount % 10;
@@ -5037,7 +5050,7 @@ function be_default() {
   };
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/bg.js
+// ../sequrai-app/node_modules/zod/v4/locales/bg.js
 var error4 = () => {
   const Sizable = {
     string: { unit: "\u0441\u0438\u043C\u0432\u043E\u043B\u0430", verb: "\u0434\u0430 \u0441\u044A\u0434\u044A\u0440\u0436\u0430" },
@@ -5158,7 +5171,7 @@ function bg_default() {
   };
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/ca.js
+// ../sequrai-app/node_modules/zod/v4/locales/ca.js
 var error5 = () => {
   const Sizable = {
     string: { unit: "car\xE0cters", verb: "contenir" },
@@ -5267,7 +5280,7 @@ function ca_default() {
   };
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/cs.js
+// ../sequrai-app/node_modules/zod/v4/locales/cs.js
 var error6 = () => {
   const Sizable = {
     string: { unit: "znak\u016F", verb: "m\xEDt" },
@@ -5379,7 +5392,7 @@ function cs_default() {
   };
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/da.js
+// ../sequrai-app/node_modules/zod/v4/locales/da.js
 var error7 = () => {
   const Sizable = {
     string: { unit: "tegn", verb: "havde" },
@@ -5495,7 +5508,7 @@ function da_default() {
   };
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/de.js
+// ../sequrai-app/node_modules/zod/v4/locales/de.js
 var error8 = () => {
   const Sizable = {
     string: { unit: "Zeichen", verb: "zu haben" },
@@ -5604,7 +5617,7 @@ function de_default() {
   };
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/el.js
+// ../sequrai-app/node_modules/zod/v4/locales/el.js
 var error9 = () => {
   const Sizable = {
     string: { unit: "\u03C7\u03B1\u03C1\u03B1\u03BA\u03C4\u03AE\u03C1\u03B5\u03C2", verb: "\u03BD\u03B1 \u03AD\u03C7\u03B5\u03B9" },
@@ -5714,7 +5727,7 @@ function el_default() {
   };
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/en.js
+// ../sequrai-app/node_modules/zod/v4/locales/en.js
 var error10 = () => {
   const Sizable = {
     string: { unit: "characters", verb: "to have" },
@@ -5827,7 +5840,7 @@ function en_default() {
   };
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/eo.js
+// ../sequrai-app/node_modules/zod/v4/locales/eo.js
 var error11 = () => {
   const Sizable = {
     string: { unit: "karaktrojn", verb: "havi" },
@@ -5937,7 +5950,7 @@ function eo_default() {
   };
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/es.js
+// ../sequrai-app/node_modules/zod/v4/locales/es.js
 var error12 = () => {
   const Sizable = {
     string: { unit: "caracteres", verb: "tener" },
@@ -6070,7 +6083,7 @@ function es_default() {
   };
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/fa.js
+// ../sequrai-app/node_modules/zod/v4/locales/fa.js
 var error13 = () => {
   const Sizable = {
     string: { unit: "\u06A9\u0627\u0631\u0627\u06A9\u062A\u0631", verb: "\u062F\u0627\u0634\u062A\u0647 \u0628\u0627\u0634\u062F" },
@@ -6185,7 +6198,7 @@ function fa_default() {
   };
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/fi.js
+// ../sequrai-app/node_modules/zod/v4/locales/fi.js
 var error14 = () => {
   const Sizable = {
     string: { unit: "merkki\xE4", subject: "merkkijonon" },
@@ -6298,7 +6311,7 @@ function fi_default() {
   };
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/fr.js
+// ../sequrai-app/node_modules/zod/v4/locales/fr.js
 var error15 = () => {
   const Sizable = {
     string: { unit: "caract\xE8res", verb: "avoir" },
@@ -6424,7 +6437,7 @@ function fr_default() {
   };
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/fr-CA.js
+// ../sequrai-app/node_modules/zod/v4/locales/fr-CA.js
 var error16 = () => {
   const Sizable = {
     string: { unit: "caract\xE8res", verb: "avoir" },
@@ -6532,7 +6545,7 @@ function fr_CA_default() {
   };
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/he.js
+// ../sequrai-app/node_modules/zod/v4/locales/he.js
 var error17 = () => {
   const TypeNames = {
     string: { label: "\u05DE\u05D7\u05E8\u05D5\u05D6\u05EA", gender: "f" },
@@ -6727,7 +6740,7 @@ function he_default() {
   };
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/hr.js
+// ../sequrai-app/node_modules/zod/v4/locales/hr.js
 var error18 = () => {
   const Sizable = {
     string: { unit: "znakova", verb: "imati" },
@@ -6850,7 +6863,7 @@ function hr_default() {
   };
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/hu.js
+// ../sequrai-app/node_modules/zod/v4/locales/hu.js
 var error19 = () => {
   const Sizable = {
     string: { unit: "karakter", verb: "legyen" },
@@ -6959,7 +6972,7 @@ function hu_default() {
   };
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/hy.js
+// ../sequrai-app/node_modules/zod/v4/locales/hy.js
 function getArmenianPlural(count, one, many) {
   return Math.abs(count) === 1 ? one : many;
 }
@@ -7107,7 +7120,7 @@ function hy_default() {
   };
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/id.js
+// ../sequrai-app/node_modules/zod/v4/locales/id.js
 var error21 = () => {
   const Sizable = {
     string: { unit: "karakter", verb: "memiliki" },
@@ -7214,7 +7227,7 @@ function id_default() {
   };
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/is.js
+// ../sequrai-app/node_modules/zod/v4/locales/is.js
 var error22 = () => {
   const Sizable = {
     string: { unit: "stafi", verb: "a\xF0 hafa" },
@@ -7324,7 +7337,7 @@ function is_default() {
   };
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/it.js
+// ../sequrai-app/node_modules/zod/v4/locales/it.js
 var error23 = () => {
   const Sizable = {
     string: { unit: "caratteri", verb: "avere" },
@@ -7433,7 +7446,7 @@ function it_default() {
   };
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/ja.js
+// ../sequrai-app/node_modules/zod/v4/locales/ja.js
 var error24 = () => {
   const Sizable = {
     string: { unit: "\u6587\u5B57", verb: "\u3067\u3042\u308B" },
@@ -7541,7 +7554,7 @@ function ja_default() {
   };
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/ka.js
+// ../sequrai-app/node_modules/zod/v4/locales/ka.js
 var error25 = () => {
   const Sizable = {
     string: { unit: "\u10E1\u10D8\u10DB\u10D1\u10DD\u10DA\u10DD", verb: "\u10E3\u10DC\u10D3\u10D0 \u10E8\u10D4\u10D8\u10EA\u10D0\u10D5\u10D3\u10D4\u10E1" },
@@ -7654,7 +7667,7 @@ function ka_default() {
   };
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/km.js
+// ../sequrai-app/node_modules/zod/v4/locales/km.js
 var error26 = () => {
   const Sizable = {
     string: { unit: "\u178F\u17BD\u17A2\u1780\u17D2\u179F\u179A", verb: "\u1782\u17BD\u179A\u1798\u17B6\u1793" },
@@ -7765,12 +7778,12 @@ function km_default() {
   };
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/kh.js
+// ../sequrai-app/node_modules/zod/v4/locales/kh.js
 function kh_default() {
   return km_default();
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/ko.js
+// ../sequrai-app/node_modules/zod/v4/locales/ko.js
 var error27 = () => {
   const Sizable = {
     string: { unit: "\uBB38\uC790", verb: "to have" },
@@ -7882,7 +7895,7 @@ function ko_default() {
   };
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/lt.js
+// ../sequrai-app/node_modules/zod/v4/locales/lt.js
 var capitalizeFirstCharacter = (text) => {
   return text.charAt(0).toUpperCase() + text.slice(1);
 };
@@ -8086,7 +8099,7 @@ function lt_default() {
   };
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/mk.js
+// ../sequrai-app/node_modules/zod/v4/locales/mk.js
 var error29 = () => {
   const Sizable = {
     string: { unit: "\u0437\u043D\u0430\u0446\u0438", verb: "\u0434\u0430 \u0438\u043C\u0430\u0430\u0442" },
@@ -8196,7 +8209,7 @@ function mk_default() {
   };
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/ms.js
+// ../sequrai-app/node_modules/zod/v4/locales/ms.js
 var error30 = () => {
   const Sizable = {
     string: { unit: "aksara", verb: "mempunyai" },
@@ -8304,7 +8317,7 @@ function ms_default() {
   };
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/nl.js
+// ../sequrai-app/node_modules/zod/v4/locales/nl.js
 var error31 = () => {
   const Sizable = {
     string: { unit: "tekens", verb: "heeft" },
@@ -8415,7 +8428,7 @@ function nl_default() {
   };
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/no.js
+// ../sequrai-app/node_modules/zod/v4/locales/no.js
 var error32 = () => {
   const Sizable = {
     string: { unit: "tegn", verb: "\xE5 ha" },
@@ -8524,7 +8537,7 @@ function no_default() {
   };
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/ota.js
+// ../sequrai-app/node_modules/zod/v4/locales/ota.js
 var error33 = () => {
   const Sizable = {
     string: { unit: "harf", verb: "olmal\u0131d\u0131r" },
@@ -8634,7 +8647,7 @@ function ota_default() {
   };
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/ps.js
+// ../sequrai-app/node_modules/zod/v4/locales/ps.js
 var error34 = () => {
   const Sizable = {
     string: { unit: "\u062A\u0648\u06A9\u064A", verb: "\u0648\u0644\u0631\u064A" },
@@ -8749,7 +8762,7 @@ function ps_default() {
   };
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/pl.js
+// ../sequrai-app/node_modules/zod/v4/locales/pl.js
 var error35 = () => {
   const Sizable = {
     string: { unit: "znak\xF3w", verb: "mie\u0107" },
@@ -8859,7 +8872,7 @@ function pl_default() {
   };
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/pt.js
+// ../sequrai-app/node_modules/zod/v4/locales/pt.js
 var error36 = () => {
   const Sizable = {
     string: { unit: "caracteres", verb: "ter" },
@@ -8968,7 +8981,7 @@ function pt_default() {
   };
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/ro.js
+// ../sequrai-app/node_modules/zod/v4/locales/ro.js
 var error37 = () => {
   const Sizable = {
     string: { unit: "caractere", verb: "s\u0103 aib\u0103" },
@@ -9088,7 +9101,7 @@ function ro_default() {
   };
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/ru.js
+// ../sequrai-app/node_modules/zod/v4/locales/ru.js
 function getRussianPlural(count, one, few, many) {
   const absCount = Math.abs(count);
   const lastDigit = absCount % 10;
@@ -9245,7 +9258,7 @@ function ru_default() {
   };
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/sl.js
+// ../sequrai-app/node_modules/zod/v4/locales/sl.js
 var error39 = () => {
   const Sizable = {
     string: { unit: "znakov", verb: "imeti" },
@@ -9355,7 +9368,7 @@ function sl_default() {
   };
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/sv.js
+// ../sequrai-app/node_modules/zod/v4/locales/sv.js
 var error40 = () => {
   const Sizable = {
     string: { unit: "tecken", verb: "att ha" },
@@ -9466,7 +9479,7 @@ function sv_default() {
   };
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/ta.js
+// ../sequrai-app/node_modules/zod/v4/locales/ta.js
 var error41 = () => {
   const Sizable = {
     string: { unit: "\u0B8E\u0BB4\u0BC1\u0BA4\u0BCD\u0BA4\u0BC1\u0B95\u0BCD\u0B95\u0BB3\u0BCD", verb: "\u0B95\u0BCA\u0BA3\u0BCD\u0B9F\u0BBF\u0BB0\u0BC1\u0B95\u0BCD\u0B95 \u0BB5\u0BC7\u0BA3\u0BCD\u0B9F\u0BC1\u0BAE\u0BCD" },
@@ -9577,7 +9590,7 @@ function ta_default() {
   };
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/th.js
+// ../sequrai-app/node_modules/zod/v4/locales/th.js
 var error42 = () => {
   const Sizable = {
     string: { unit: "\u0E15\u0E31\u0E27\u0E2D\u0E31\u0E01\u0E29\u0E23", verb: "\u0E04\u0E27\u0E23\u0E21\u0E35" },
@@ -9688,7 +9701,7 @@ function th_default() {
   };
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/tr.js
+// ../sequrai-app/node_modules/zod/v4/locales/tr.js
 var error43 = () => {
   const Sizable = {
     string: { unit: "karakter", verb: "olmal\u0131" },
@@ -9794,7 +9807,7 @@ function tr_default() {
   };
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/uk.js
+// ../sequrai-app/node_modules/zod/v4/locales/uk.js
 var error44 = () => {
   const Sizable = {
     string: { unit: "\u0441\u0438\u043C\u0432\u043E\u043B\u0456\u0432", verb: "\u043C\u0430\u0442\u0438\u043C\u0435" },
@@ -9903,12 +9916,12 @@ function uk_default() {
   };
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/ua.js
+// ../sequrai-app/node_modules/zod/v4/locales/ua.js
 function ua_default() {
   return uk_default();
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/ur.js
+// ../sequrai-app/node_modules/zod/v4/locales/ur.js
 var error45 = () => {
   const Sizable = {
     string: { unit: "\u062D\u0631\u0648\u0641", verb: "\u06C1\u0648\u0646\u0627" },
@@ -10019,7 +10032,7 @@ function ur_default() {
   };
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/uz.js
+// ../sequrai-app/node_modules/zod/v4/locales/uz.js
 var error46 = () => {
   const Sizable = {
     string: { unit: "belgi", verb: "bo\u2018lishi kerak" },
@@ -10130,7 +10143,7 @@ function uz_default() {
   };
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/vi.js
+// ../sequrai-app/node_modules/zod/v4/locales/vi.js
 var error47 = () => {
   const Sizable = {
     string: { unit: "k\xFD t\u1EF1", verb: "c\xF3" },
@@ -10239,7 +10252,7 @@ function vi_default() {
   };
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/zh-CN.js
+// ../sequrai-app/node_modules/zod/v4/locales/zh-CN.js
 var error48 = () => {
   const Sizable = {
     string: { unit: "\u5B57\u7B26", verb: "\u5305\u542B" },
@@ -10349,7 +10362,7 @@ function zh_CN_default() {
   };
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/zh-TW.js
+// ../sequrai-app/node_modules/zod/v4/locales/zh-TW.js
 var error49 = () => {
   const Sizable = {
     string: { unit: "\u5B57\u5143", verb: "\u64C1\u6709" },
@@ -10457,7 +10470,7 @@ function zh_TW_default() {
   };
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/locales/yo.js
+// ../sequrai-app/node_modules/zod/v4/locales/yo.js
 var error50 = () => {
   const Sizable = {
     string: { unit: "\xE0mi", verb: "n\xED" },
@@ -10565,7 +10578,7 @@ function yo_default() {
   };
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/core/registries.js
+// ../sequrai-app/node_modules/zod/v4/core/registries.js
 var _a2;
 var $output = Symbol("ZodOutput");
 var $input = Symbol("ZodInput");
@@ -10615,7 +10628,7 @@ function registry() {
 (_a2 = globalThis).__zod_globalRegistry ?? (_a2.__zod_globalRegistry = registry());
 var globalRegistry = globalThis.__zod_globalRegistry;
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/core/api.js
+// ../sequrai-app/node_modules/zod/v4/core/api.js
 // @__NO_SIDE_EFFECTS__
 function _string(Class2, params) {
   return new Class2({
@@ -11654,7 +11667,7 @@ function _stringFormat(Class2, format, fnOrRegex, _params = {}) {
   return inst;
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/core/to-json-schema.js
+// ../sequrai-app/node_modules/zod/v4/core/to-json-schema.js
 function initializeContext(params) {
   let target = params?.target ?? "draft-2020-12";
   if (target === "draft-4")
@@ -12013,7 +12026,7 @@ var createStandardJSONSchemaMethod = (schema, io, processors = {}) => (params) =
   return finalize(ctx, schema);
 };
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/core/json-schema-processors.js
+// ../sequrai-app/node_modules/zod/v4/core/json-schema-processors.js
 var formatMap = {
   guid: "uuid",
   url: "uri",
@@ -12557,7 +12570,7 @@ function toJSONSchema(input, params) {
   return finalize(ctx, input);
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/core/json-schema-generator.js
+// ../sequrai-app/node_modules/zod/v4/core/json-schema-generator.js
 var JSONSchemaGenerator = class {
   /** @deprecated Access via ctx instead */
   get metadataRegistry() {
@@ -12632,10 +12645,10 @@ var JSONSchemaGenerator = class {
   }
 };
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/core/json-schema.js
+// ../sequrai-app/node_modules/zod/v4/core/json-schema.js
 var json_schema_exports = {};
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/classic/schemas.js
+// ../sequrai-app/node_modules/zod/v4/classic/schemas.js
 var schemas_exports2 = {};
 __export(schemas_exports2, {
   ZodAny: () => ZodAny,
@@ -12806,7 +12819,7 @@ __export(schemas_exports2, {
   xor: () => xor
 });
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/classic/checks.js
+// ../sequrai-app/node_modules/zod/v4/classic/checks.js
 var checks_exports2 = {};
 __export(checks_exports2, {
   endsWith: () => _endsWith,
@@ -12840,7 +12853,7 @@ __export(checks_exports2, {
   uppercase: () => _uppercase
 });
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/classic/iso.js
+// ../sequrai-app/node_modules/zod/v4/classic/iso.js
 var iso_exports = {};
 __export(iso_exports, {
   ZodISODate: () => ZodISODate,
@@ -12881,7 +12894,7 @@ function duration2(params) {
   return _isoDuration(ZodISODuration, params);
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/classic/errors.js
+// ../sequrai-app/node_modules/zod/v4/classic/errors.js
 var initializer2 = (inst, issues) => {
   $ZodError.init(inst, issues);
   inst.name = "ZodError";
@@ -12921,7 +12934,7 @@ var ZodRealError = /* @__PURE__ */ $constructor("ZodError", initializer2, {
   Parent: Error
 });
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/classic/parse.js
+// ../sequrai-app/node_modules/zod/v4/classic/parse.js
 var parse2 = /* @__PURE__ */ _parse(ZodRealError);
 var parseAsync2 = /* @__PURE__ */ _parseAsync(ZodRealError);
 var safeParse2 = /* @__PURE__ */ _safeParse(ZodRealError);
@@ -12935,7 +12948,7 @@ var safeDecode2 = /* @__PURE__ */ _safeDecode(ZodRealError);
 var safeEncodeAsync2 = /* @__PURE__ */ _safeEncodeAsync(ZodRealError);
 var safeDecodeAsync2 = /* @__PURE__ */ _safeDecodeAsync(ZodRealError);
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/classic/schemas.js
+// ../sequrai-app/node_modules/zod/v4/classic/schemas.js
 var _installedGroups = /* @__PURE__ */ new WeakMap();
 function _installLazyMethods(inst, group, methods) {
   const proto = Object.getPrototypeOf(inst);
@@ -14225,7 +14238,7 @@ function preprocess(fn, schema) {
   });
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/classic/compat.js
+// ../sequrai-app/node_modules/zod/v4/classic/compat.js
 var ZodIssueCode = {
   invalid_type: "invalid_type",
   too_big: "too_big",
@@ -14251,7 +14264,7 @@ var ZodFirstPartyTypeKind;
 /* @__PURE__ */ (function(ZodFirstPartyTypeKind2) {
 })(ZodFirstPartyTypeKind || (ZodFirstPartyTypeKind = {}));
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/classic/from-json-schema.js
+// ../sequrai-app/node_modules/zod/v4/classic/from-json-schema.js
 var z = {
   ...schemas_exports2,
   ...checks_exports2,
@@ -14731,7 +14744,7 @@ function fromJSONSchema(schema, params) {
   return convertSchema(normalized, ctx);
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/classic/coerce.js
+// ../sequrai-app/node_modules/zod/v4/classic/coerce.js
 var coerce_exports = {};
 __export(coerce_exports, {
   bigint: () => bigint3,
@@ -14756,7 +14769,7 @@ function date4(params) {
   return _coercedDate(ZodDate, params);
 }
 
-// ../../../Users/mohamedfornah/Projects/sequrai-app/node_modules/zod/v4/classic/external.js
+// ../sequrai-app/node_modules/zod/v4/classic/external.js
 config(en_default());
 
 // brain/confidence/types.ts
@@ -15587,6 +15600,52 @@ function applyProjectedImpacts(priorities, impacts) {
   }));
 }
 
+// brain/production-verdict/narrative-guard.ts
+var APPROVAL_PATTERNS = [
+  /safe\s+(?:to|for)\s+(?:deploy|ship|production|release)/i,
+  /security\s+decision:\s*(?:safe|deploy\b)/i,
+  /\b(?:i|we)(?:'d|\s+would|'ll|\s+will)\s+(?:deploy|ship|release)\b/i,
+  /\bwould\s+(?:deploy|ship)\s+(?:this|it)\b/i,
+  /(?<!\b(?:not|n't)\s+(?:fully\s+)?)comfortable\s+(?:with\s+you\s+)?(?:shipping|deploying|protecting)/i,
+  /deploy\s+with\s+confidence/i,
+  /\b(?:fully|completely)\s+(?:secure|analy[sz]ed|verified)\b/i,
+  /\bproven\s+(?:secure|safe)\b/i,
+  /(?<!\bno\s+)me\s+siento\s+(?:del\s+todo\s+)?c[oó]modo/i,
+  /desplegar[ií]a\s+esto/i,
+  /(?:enviar[ií]a|lanzar[ií]a)\s+esto/i,
+  /(?:es\s+)?seguro\s+(?:para\s+)?(?:desplegar|producci[oó]n)/i,
+  /puedes\s+desplegar/i,
+  /despliega\s+cuando\s+est[eé]s\s+listo/i,
+  /ship\s+when\s+you'?re\s+ready/i,
+  /\bship\s+it\b/i,
+  /(?:sufficient|enough|high)\s+confidence\s+to\s+(?:deploy|ship|release)/i,
+  /(?<!\b(?:not|n't)\s+)\b(?:ok|okay|good|fine|clear)\s+to\s+(?:deploy|ship|go)\b/i,
+  /\bgreen[\s-]?light\b/i,
+  /meets\s+the\s+current\s+readiness\s+threshold/i,
+  /continue\s+to\s+production/i,
+  /deploy\s+when\s+your\s+release\s+process\s+is\s+ready/i,
+  /go\s+ahead\s+and\s+(?:deploy|ship|release)/i,
+  /\blo\s+desplegar[ií]a\b/i,
+  /suficiente\s+confianza\s+para\s+(?:desplegar|publicar)/i,
+  /desplegar\s+con\s+confianza/i
+];
+function containsApprovalLanguage(text) {
+  return APPROVAL_PATTERNS.some((pattern) => pattern.test(text));
+}
+var NEUTRAL_EXECUTIVE_SUMMARY = "Production review completed. The deployment answer states what the current evidence supports.";
+var NEUTRAL_RECOMMENDED_ACTION = "Review the Production Verdict details.";
+function narrativeMayApprove(v) {
+  return v.status === "ready_to_ship" && v.confidence === "high" && v.partiallyEvaluatedAreas.length === 0 && v.unevaluatedAreas.length === 0;
+}
+function applyNarrativeGuard(verdict) {
+  if (narrativeMayApprove(verdict)) return verdict;
+  return {
+    ...verdict,
+    executiveSummary: containsApprovalLanguage(verdict.executiveSummary) ? NEUTRAL_EXECUTIVE_SUMMARY : verdict.executiveSummary,
+    recommendedAction: containsApprovalLanguage(verdict.recommendedAction) ? NEUTRAL_RECOMMENDED_ACTION : verdict.recommendedAction
+  };
+}
+
 // brain/production-verdict/schema.ts
 var PRODUCTION_VERDICT_VERSION = "1.0.0";
 var VerdictStatusSchema = external_exports.enum([
@@ -15696,18 +15755,6 @@ var ProductionVerdictSchema = external_exports.object({
   }).optional()
 });
 
-// brain/production-verdict/config.ts
-var VERDICT_THRESHOLDS = {
-  readyToShipScore: 85,
-  almostReadyScore: 70,
-  needsImprovementScore: 25,
-  maxHighBlockersForAlmostReady: 2,
-  maxHighBlockersForReady: 0,
-  minCoverageRatio: 0.15,
-  minFilesAnalyzed: 3,
-  scoreDropSignificant: 5
-};
-
 // brain/production-verdict/status-rules.ts
 function determineVerdictStatus(input) {
   if (input.scanStatus === "failed") {
@@ -15759,9 +15806,14 @@ function verdictHeadline(status) {
       return "ANALYSIS FAILED";
   }
 }
-function recommendedAction(status, blockersCount) {
+var EVIDENCE_LIMITED_HEADLINE = "NO BLOCKERS FOUND \u2014 EVIDENCE LIMITED";
+var EVIDENCE_LIMITED_RECOMMENDED_ACTION = "No blockers were found, but evidence is limited. Review the Production Verdict coverage and close the gaps before relying on it.";
+function recommendedAction(status, blockersCount, evidenceSupportsApproval = true) {
   switch (status) {
     case "ready_to_ship":
+      if (!evidenceSupportsApproval) {
+        return EVIDENCE_LIMITED_RECOMMENDED_ACTION;
+      }
       return "Deploy when your release process is ready. SequrAI will review every subsequent push.";
     case "almost_ready":
       return "Resolve the remaining blockers on your fastest path forward, then re-run the analysis.";
@@ -15795,6 +15847,11 @@ function buildDeterministicSummary(verdict, blockerConfidence) {
     return `${label}. The scan did not complete successfully. Review the error and re-run the analysis.`;
   }
   if (verdict.status === "ready_to_ship") {
+    if (!narrativeMayApprove(verdict)) {
+      const gaps = verdict.unevaluatedAreas.length + verdict.partiallyEvaluatedAreas.length;
+      const gapPart = gaps > 0 ? ` ${gaps} area${gaps === 1 ? " is" : "s are"} not fully evaluated.` : "";
+      return `No blockers found in the evidence analyzed. ${scorePart} Evidence confidence is ${verdict.confidence}, so this is not a deployment approval.${gapPart}`;
+    }
     return `${label}. ${scorePart} No production blockers detected. Your application meets the current readiness threshold.`;
   }
   const blockerPart = verdict.blockersCount > 0 ? `${verdict.blockersCount} production blocker${verdict.blockersCount === 1 ? "" : "s"} (${verdict.criticalBlockersCount} critical, ${verdict.highBlockersCount} high) prevent safe deployment.${blockerConfidence && formatConfidenceDistribution(blockerConfidence) ? ` Evidence strength: ${formatConfidenceDistribution(blockerConfidence)}.` : ""}` : "No critical blockers, but improvements remain before shipping.";
@@ -15844,7 +15901,8 @@ function generateProductionVerdict(input) {
   const coverage = assessCoverage({
     findings: normalized,
     securityScore: input.securityScore,
-    filesAnalyzed
+    filesAnalyzed,
+    filesDiscovered: input.filesDiscovered
   });
   const sufficientCoverage = hasSufficientCoverage({
     filesAnalyzed,
@@ -15874,10 +15932,10 @@ function generateProductionVerdict(input) {
   });
   priorities = applyProjectedImpacts(priorities, projection.impacts);
   const scoreDelta = input.previousScore != null && score != null ? score - input.previousScore : null;
-  const { introduced, resolved } = blockerDelta(
-    blockers.blockersCount,
-    input.previousBlockersCount
-  );
+  const rawDelta = blockerDelta(blockers.blockersCount, input.previousBlockersCount);
+  const evidenceSupportsResolution = input.scanStatus === "completed" && !input.partialScanFailure && sufficientCoverage;
+  const introduced = rawDelta.introduced;
+  const resolved = evidenceSupportsResolution ? rawDelta.resolved : 0;
   const blockerConfidence = summarizeConfidenceDistribution(
     normalized.filter(
       (finding) => (finding.severity === "critical" || finding.severity === "high") && !isNonBlockingSecretClassification(finding.secretClassification)
@@ -15919,9 +15977,10 @@ function generateProductionVerdict(input) {
     methodologyNote: "",
     generatedAt: (/* @__PURE__ */ new Date()).toISOString()
   };
+  baseVerdict.recommendedAction = recommendedAction(status, blockers.blockersCount, narrativeMayApprove(baseVerdict));
   baseVerdict.executiveSummary = input.aiExecutiveSummary?.trim() || buildDeterministicSummary(baseVerdict, blockerConfidence);
   baseVerdict.methodologyNote = buildMethodologyNote(baseVerdict);
-  const verdict = ProductionVerdictSchema.parse(baseVerdict);
+  const verdict = applyNarrativeGuard(ProductionVerdictSchema.parse(baseVerdict));
   return {
     verdict,
     meta: {
@@ -15930,6 +15989,39 @@ function generateProductionVerdict(input) {
       normalizedFindingCount: normalized.length
     }
   };
+}
+
+// server/mcp/decision-mapping.ts
+function mapVerdictStatusToDecision(status) {
+  switch (status) {
+    case "ready_to_ship":
+      return "deploy";
+    case "almost_ready":
+    case "needs_improvement":
+    case "not_ready":
+      return "do_not_deploy";
+    case "insufficient_data":
+    case "analysis_failed":
+      return "more_analysis_required";
+  }
+}
+
+// brain/production-verdict/deployment-posture.ts
+function deploymentPostureOf(verdict) {
+  switch (mapVerdictStatusToDecision(verdict.status)) {
+    case "deploy":
+      if (!Array.isArray(verdict.unevaluatedAreas) || !Array.isArray(verdict.partiallyEvaluatedAreas)) {
+        return "ready_evidence_limited";
+      }
+      return narrativeMayApprove(verdict) ? "ready" : "ready_evidence_limited";
+    case "do_not_deploy":
+      return "not_ready";
+    case "more_analysis_required":
+      return "more_analysis_required";
+  }
+}
+function verdictAffirmsDeploy(verdict) {
+  return verdict != null && deploymentPostureOf(verdict) === "ready";
 }
 
 // lib/local-analysis/git-scope.ts
@@ -18801,6 +18893,26 @@ var DEPENDENCY_MANIFESTS = [
 var DOCKERFILE_PATTERN = /(^|\/)Dockerfile(\.[a-zA-Z0-9_-]+)?$/;
 var TERRAFORM_PATTERN = /\.tf$/;
 var K8S_HINT_PATTERN = /(^|\/)(k8s|kubernetes)\//i;
+var JSON_MANIFESTS = ["package.json", "package-lock.json", "composer.lock", "Pipfile.lock"];
+function findUnparsableManifests(files) {
+  const problems = [];
+  for (const file2 of files) {
+    const name = file2.path.slice(file2.path.lastIndexOf("/") + 1);
+    if (!DEPENDENCY_MANIFESTS.includes(name)) continue;
+    if (file2.content.includes("\0")) {
+      problems.push({ code: "manifest_unparsable", message: `${file2.path}: contains NUL bytes; dependencies were not analyzed` });
+      continue;
+    }
+    if (JSON_MANIFESTS.includes(name)) {
+      try {
+        JSON.parse(file2.content);
+      } catch {
+        problems.push({ code: "manifest_unparsable", message: `${file2.path}: not valid JSON; dependencies were not analyzed` });
+      }
+    }
+  }
+  return problems;
+}
 function resolveBinaryPath2() {
   return process.env.TRIVY_BINARY_PATH?.trim() || null;
 }
@@ -18889,6 +19001,8 @@ function createTrivyEngine() {
       }
       const cacheDir = resolveCacheDir();
       const errors = [];
+      const manifestProblems = findUnparsableManifests(input.files);
+      errors.push(...manifestProblems);
       if (input.signal?.aborted) {
         return {
           ...base,
@@ -18975,7 +19089,9 @@ function createTrivyEngine() {
         status,
         completedAt: (/* @__PURE__ */ new Date()).toISOString(),
         durationMs: Date.now() - started,
-        capabilitiesCompleted: report ? [...capabilitiesAttempted] : [],
+        capabilitiesCompleted: report ? capabilitiesAttempted.filter(
+          (c) => manifestProblems.length === 0 || c !== "dependencies" && c !== "sbom"
+        ) : [],
         findings,
         evidence,
         metrics: { vulnerabilitiesFound: findings.length },
@@ -27102,6 +27218,10 @@ async function runLocalProductionVerdict(input = {}) {
   });
   return buildLocalProductionVerdictResult(result);
 }
+function localVerdictHeadline(verdict) {
+  if (verdict.status === "ready_to_ship" && !verdictAffirmsDeploy(verdict)) return EVIDENCE_LIMITED_HEADLINE;
+  return verdictHeadline(verdict.status);
+}
 function buildLocalProductionVerdictResult(result) {
   const publicFindings = mapVerdictFindingsToPublic(result.findings);
   const actionableFindings = publicFindings.filter((finding) => !finding.safeToIgnore);
@@ -27153,7 +27273,7 @@ function buildLocalProductionVerdictResult(result) {
       verdictStatus: verdict.status,
       score: verdict.score,
       findings: actionableFindings,
-      headline: verdictHeadline(verdict.status),
+      headline: localVerdictHeadline(verdict),
       executiveSummary: verdict.executiveSummary,
       topPriorities: verdict.topPriorities.map((priority) => priority.title),
       reason: result.phase === "incomplete" || result.phase === "cancelled" ? engineErrorMessage : void 0,
