@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ScanJobPlatformMetadata } from "./types";
 import { flattenPlatformMetadataForScanJob } from "./build-scan-metadata";
 import { emitOperationalEvent } from "@/server/observability/operational-events";
+import { mergeScanMetrics } from "@/server/production-verdict/scan-metrics";
 
 export async function persistScanJobPlatformMetadata(
   admin: SupabaseClient,
@@ -65,26 +66,29 @@ export async function persistScanJobPlatformMetadata(
   });
 }
 
-/** Merge platform execution summary onto scan row metrics (read-only analytics). */
+/**
+ * Merge platform execution summary onto scan row metrics (read-only analytics). `scans.metrics` is one column shared with the evidence
+ * marker and the verdict evidence record: it goes through the conditional writer so none of them can overwrite the others.
+ */
 export async function attachPlatformSummaryToScan(
   admin: SupabaseClient,
-  input: { scanId: string; platform: ScanJobPlatformMetadata }
+  input: { scanId: string; organizationId: string; platform: ScanJobPlatformMetadata }
 ): Promise<void> {
-  const { data: scan } = await admin.from("scans").select("metrics").eq("id", input.scanId).maybeSingle();
-  const metrics = (scan?.metrics as Record<string, unknown> | null) ?? {};
-  await admin
-    .from("scans")
-    .update({
-      metrics: {
-        ...metrics,
-        platformExecution: {
-          correlationId: input.platform.ids.correlationId,
-          executionId: input.platform.ids.executionId,
-          decisionId: input.platform.ids.decisionId,
-          pipelineStatus: input.platform.pipelineStatus,
-          durationMs: input.platform.completedAt,
-        },
+  const result = await mergeScanMetrics(admin, {
+    scanId: input.scanId,
+    organizationId: input.organizationId,
+    patch: {
+      platformExecution: {
+        correlationId: input.platform.ids.correlationId,
+        executionId: input.platform.ids.executionId,
+        decisionId: input.platform.ids.decisionId,
+        pipelineStatus: input.platform.pipelineStatus,
+        durationMs: input.platform.completedAt,
       },
-    })
-    .eq("id", input.scanId);
+    },
+  });
+  // Analytics only: never fail the scan for it, but never hide that it was not stored.
+  if (!result.ok) {
+    console.warn({ component: "persist-scan-platform", event: "platform_summary_not_stored", scanId: input.scanId, reason: result.reason, message: result.message });
+  }
 }
