@@ -258,6 +258,21 @@ Recuperación: redesplegar el despliegue anterior de producción (sin base de da
 | 10 | Push del commit de restauración (árbol idéntico a la línea base `1eb0930`) | Árbol sin diferencias; scan limpio |
 Criterio de paso: los 10 pasos con la evidencia indicada, sin abrir la consola del navegador. Cualquier desviación se registra como defecto y detiene la aceptación. Los commits y el análisis manual no están autorizados todavía.
 
+## Recorrido funcional aprobado frente a aceptación de V1 pendiente (2026-10-13)
+**Recorrido funcional aprobado** (ocurrió de extremo a extremo en producción, con el propietario usando solo la interfaz, sobre `sequrai-e2e-test`): detección por webhook de un commit con hallazgo → veredicto `not_ready` → propuesta de corrección (generar, repetir sin duplicar, aprobar, persistente al recargar) → cuatro rechazos de formulario (vacío, SHA corto, SHA base, SHA sin análisis con advertencia) → verificación negativa honesta → reabrir → aprobar → informar el commit real → verificación exacta `VERIFIED` ligada al scan de ese commit → restauración del árbol → análisis manual con los tres motores sin veredicto prematuro. **Esto demuestra que el camino funciona; no es la aceptación de V1.**
+
+**Aceptación de V1 pendiente** (criterios abiertos; observación breve, con registro de tiempos y sin repetir el recorrido, en `V1_OBSERVATION_PROTOCOL.md`):
+1. Sesión B: aislamiento entre organizaciones con un usuario real de otra organización.
+2. Journey en la página real, con consola, tras #77 (#418).
+3. Transición negativo→VERIFIED en producción tras #78 (hoy solo pruebas locales).
+4. Observación en pantalla durante un análisis (D9) con registro de tiempos.
+5. Actualización: comportamiento definido en la PR #81 (aviso de análisis más reciente), sin desplegar; sondeo observado en un caso real.
+6. `verdictEvidence` persistido en un análisis real tras la PR #79 (sin desplegar).
+7. Usabilidad del panel observada tras la PR #80 (sin desplegar).
+8. Puntos 6, 18, 19 y 20 de la lista.
+
+**PR preparadas tras la aceptación (todas abiertas, sin fusionar ni desplegar):** #79 `verdictEvidence` en todas las rutas con escritura de `metrics` condicionada y comprobada; #80 formulario junto a su propuesta con foco, «Commit anterior (no verificado)» y aviso de invalidación; #81 contexto de análisis (fijado frente a más reciente) y detección en reposo de solo lectura.
+
 ## Resultados de la aceptación (2026-10-13, `sequrai-e2e-test`; observado, no propuesto)
 Entorno: producción (`a52ef51` hasta las 12:13 UTC; `1f10103` con #78 después). Ejecución: el propietario con su navegador (clics y capturas); la base de datos se leyó solo como evidencia adicional y **no demuestra** actualización automática. Tres commits autorizados y un análisis manual:
 
@@ -299,6 +314,11 @@ Huecos: (1) **la observación en pantalla durante esos 25 s no fue reportada** (
 
 ### Qué no se ha hecho / sigue pendiente
 Aislamiento entre clientes (sesión B), Journey y #418, MCP real de `authorize_dynamic_target`, observación de pantallas A/C en esta ejecución, sondeo, `verdictEvidence`. **No se declara V1 completo.**
+
+### Investigación posterior (2026-10-13, local; sin ejecuciones nuevas en producción)
+- **#418 de Journey:** el error se observó **antes** de desplegar #77. Reproducción local con el componente real: servidor en `en-US`/UTC (Vercel) e hidratación en `es-ES`/Madrid → la versión anterior a #77 falla la hidratación (`toLocaleDateString()` sin configuración: «10/9/2026» frente a «9/10/2026»); la versión actual no. El resto de componentes de Journey no formatea fechas con la configuración regional al renderizar (solo el tooltip del gráfico, tras pasar el ratón). **No confirma la página real**: falta que el propietario recargue Journey con la consola abierta tras #77. Latente: `McpApiKeysPanel` usa `toLocaleDateString(locale)` sin zona horaria (riesgo bajo, solo cerca de medianoche UTC).
+- **`verdictEvidence`:** `scans.updated_at` no muestra ninguna escritura tras el marcador; dos causas posibles y compatibles (la ruta del runner no lo registraba; la escritura no comprobaba su error y la llamada externa lo silenciaba). #79 cubre ambas y deja un aviso estructurado si vuelve a fallar. Sin migraciones: la protección contra escrituras concurrentes es optimista (condicionada a `updated_at`), no una fusión atómica.
+- **Actualización:** con `?run=` la página queda fijada y el aviso existente solo salía con una revisión en curso de otro scan. #81 define: fijada nunca cambia sola; sin `run` muestra el más reciente al cargar; en reposo una lectura de solo lectura cada 60 s (pestaña visible) avisa de un análisis más reciente sin sustituir la vista.
 
 ## Decisión actual
 **V1 no está listo.** Bloqueos concretos: 11 (panel desplegado y usado sin consola en una ejecución; defectos abiertos y la transición negativa→VERIFIED sin observar en producción), 12 (sesión B), 15 (restricción de Red Team desplegada y observada en tres rutas; falta MCP y UI de otra organización), 6/7 (verificación visual y de estados sin hacer), 4 (ejecución fiable sin observar y defecto D9 del reconciliador, que fija veredictos antes de tiempo), 18/19/20 (recuperación, onboarding y demostración final). Esta lista no se marca como verificada hasta que cada punto cumpla su evidencia; la decisión se repite al cerrar cada bloque.
