@@ -10,6 +10,7 @@ import {
 import { isTerminalScanJobStatus } from "./job-transitions";
 import { executeScanRunJob } from "./run-scan-job";
 import { ensureProductionVerdictForCompletedScan } from "@/server/production-verdict/ensure-verdict-for-scan";
+import { assessScanJobAbandonment } from "./orphan-policy";
 import { buildScanRunPayloadFromRow } from "./kick-stuck-scan-run";
 import type { ScanRunPayload } from "./types";
 
@@ -45,6 +46,21 @@ export async function reconcileOrphanScanJobWithTerminalScan(
   const job = await getScanJob(admin, input.jobId);
   if (!job || isTerminalScanJobStatus(job.status)) return false;
   if (job.status !== "queued" && job.status !== "running") return false;
+
+  // "Scan completed + job still running" is how a HEALTHY job looks while its platform stage and engines run. Only a
+  // verifiable absence of activity makes it an orphan (see orphan-policy.ts). A failed/cancelled scan is terminal either way.
+  if (scanStatus === "completed") {
+    const assessment = assessScanJobAbandonment(job as never);
+    if (!assessment.abandoned) {
+      log("orphan_candidate_still_active", {
+        scanJobId: job.id,
+        scanId: input.scan.id,
+        jobStatus: job.status,
+        lastActivityAt: assessment.lastActivityAt,
+      });
+      return false;
+    }
+  }
 
   log("orphan_detected", {
     scanJobId: job.id,
@@ -93,20 +109,34 @@ export async function reconcileOrphanScanJobWithTerminalScan(
     }
   }
 
+  const needsVerdict = job.job_type !== "automatic_review" && job.metadata?.persistMode !== "review_only";
+  if (needsVerdict) {
+    // The runner that would have finalized this scan is gone. Generate from the evidence that exists -- but only once every
+    // engine job is terminal (engines that outlived their own timeout are terminalized explicitly: TIMED_OUT / REJECTED, never
+    // success). While live engines are still within their budget the job is left as it is and the next pass decides.
+    const outcome = await ensureProductionVerdictForCompletedScan(admin, {
+      organizationId: job.organization_id,
+      projectId: job.project_id ?? (input.scan.repository_id as string),
+      scanId: input.scan.id as string,
+      scanJobId: job.id,
+      mode: "recovery",
+    }).catch((error) => {
+      log("orphan_verdict_recovery_failed", {
+        scanJobId: job.id,
+        scanId: input.scan.id,
+        message: error instanceof Error ? error.message : String(error),
+      });
+      return null;
+    });
+    if (!outcome || outcome.deferred) {
+      log("orphan_waiting_for_engines", { scanJobId: job.id, scanId: input.scan.id, deferred: Boolean(outcome?.deferred) });
+      return false;
+    }
+  }
+
   const transitioned = await markScanJobCompleted(admin, job.id);
   if (transitioned.updated) {
     log("orphan_marked_completed", { scanJobId: job.id, scanId: input.scan.id });
-    if (job.job_type !== "automatic_review" && job.metadata?.persistMode !== "review_only") {
-      await ensureProductionVerdictForCompletedScan(admin, {
-        organizationId: job.organization_id,
-        projectId: job.project_id ?? (input.scan.repository_id as string),
-        scanId: input.scan.id as string,
-        scanJobId: job.id,
-        // The runner that would have finalized this scan is gone: generate
-        // from whatever evidence exists rather than wait forever.
-        mode: "recovery",
-      }).catch(() => undefined);
-    }
   }
   return transitioned.updated;
 }

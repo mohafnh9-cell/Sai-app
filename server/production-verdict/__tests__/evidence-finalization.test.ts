@@ -272,9 +272,15 @@ describe("scans without engine jobs and crash recovery keep working", () => {
     expect((await finalize(admin)).status).toBe("generated");
   });
 
-  it("recovery mode generates from whatever evidence exists (the runner that would finalize is gone)", async () => {
-    const { admin } = world([job("j1", "trivy", "RUNNING")], { ready: false });
+  it("recovery mode generates from the evidence that exists once every engine is terminal (the runner is gone)", async () => {
+    const { admin } = world([job("j1", "trivy", "COMPLETED"), job("j2", "opengrep", "FAILED")], { ready: false });
     expect((await finalize(admin, SCAN_A, { mode: "recovery" })).status).toBe("generated");
+  });
+
+  it("recovery mode does NOT settle the verdict while a live engine is still within its budget", async () => {
+    const { admin } = world([job("j1", "trivy", "RUNNING")], { ready: false });
+    expect(await finalize(admin, SCAN_A, { mode: "recovery" })).toMatchObject({ status: "deferred", reason: "engines_pending" });
+    expect(calls.log).toEqual([]);
   });
 });
 
