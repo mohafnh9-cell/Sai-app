@@ -86,6 +86,7 @@ export async function loadAssistedFixPanelData(
           typeof details.verificationScanId === "string" ? analysisOf(scanById.get(details.verificationScanId) ?? null) : null,
         reasons: Array.isArray(details.reasons) ? (details.reasons as unknown[]).map(String) : [],
         verifiedAt: verificationRow.created_at as string,
+        commitSha: typeof details.proposalCommitSha === "string" ? details.proposalCommitSha : null,
       };
     }
     return {

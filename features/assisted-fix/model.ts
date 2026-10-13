@@ -35,6 +35,8 @@ export type PanelVerification = {
   verifiedAnalysis: PanelAnalysis | null;
   reasons: string[];
   verifiedAt: string;
+  /** The commit this verification was made for (the proposal's reported commit at the time); null for older rows that lack it. */
+  commitSha?: string | null;
 };
 
 export type PanelFix = {
@@ -78,6 +80,7 @@ export type PanelPhase =
   | "verifying"
   | "verified" // ONLY exact_commit_rescan_clean
   | "not_verified" // FAILED, or VERIFIED without an exact-commit statement
+  | "updating" // the state and the evidence shown disagree (e.g. VERIFIED but only an older failed verification is loaded): say nothing about the result yet
   | "historical"; // SUPERSEDED
 
 export function isFullSha(value: string): boolean {
@@ -88,7 +91,28 @@ export function shortSha(sha: string | null | undefined): string {
   return sha ? sha.slice(0, 7) : "—";
 }
 
-export function phaseOf(fix: Pick<PanelFix, "state" | "verification">): PanelPhase {
+/**
+ * Is the evidence we hold the evidence of the state we show? A card must never combine a state with another attempt's evidence:
+ *  - VERIFIED needs a PASSED verification; FAILED must not carry a passed one;
+ *  - the verification must belong to the commit currently reported (when the row says which commit it was made for).
+ */
+export function isEvidenceCoherent(fix: Pick<PanelFix, "state" | "verification" | "reportedCommitSha">): boolean {
+  const verification = fix.verification;
+  if (fix.state === "VERIFIED") {
+    if (!verification || verification.outcome !== "passed") return false;
+  } else if (fix.state === "FAILED") {
+    if (!verification) return true; // nothing to contradict: shown as not verified, without reasons
+    if (verification.outcome === "passed") return false;
+  } else {
+    return true;
+  }
+  if (verification && verification.commitSha && fix.reportedCommitSha) {
+    return verification.commitSha.toLowerCase() === fix.reportedCommitSha.toLowerCase();
+  }
+  return true;
+}
+
+export function phaseOf(fix: Pick<PanelFix, "state" | "verification" | "reportedCommitSha">): PanelPhase {
   switch (fix.state) {
     case "PROPOSED":
     case "READY":
@@ -100,10 +124,11 @@ export function phaseOf(fix: Pick<PanelFix, "state" | "verification">): PanelPha
     case "VERIFYING":
       return "verifying";
     case "VERIFIED":
+      if (!isEvidenceCoherent(fix)) return "updating";
       // A VERIFIED record without an exact-commit statement is never presented as a verified correction.
       return fix.verification?.statement === "exact_commit_rescan_clean" ? "verified" : "not_verified";
     case "FAILED":
-      return "not_verified";
+      return isEvidenceCoherent(fix) ? "not_verified" : "updating";
     case "SUPERSEDED":
       return "historical";
   }

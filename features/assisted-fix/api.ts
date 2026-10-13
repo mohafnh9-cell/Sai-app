@@ -16,7 +16,9 @@ export type PanelApi = {
   generate(input: { priorityId?: string }): Promise<ApiResult<{ result: GenerateResultBody }>>;
   approve(fixId: string): Promise<ApiResult<{ state: string }>>;
   applied(fixId: string, commitSha: string): Promise<ApiResult<{ state: string; binding: string }>>;
-  verify(fixId: string): Promise<ApiResult<{ verification: { statement: string; verifiedCommitSha: string | null } }>>;
+  verify(fixId: string): Promise<
+    ApiResult<{ verification: { statement: string; outcome?: string; verifiedCommitSha: string | null; details?: Record<string, unknown> } }>
+  >;
   reopen(fixId: string): Promise<ApiResult<{ state: string }>>;
 };
 

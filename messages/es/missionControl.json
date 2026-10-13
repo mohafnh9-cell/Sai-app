@@ -328,7 +328,8 @@
       "verifying": "Verificando",
       "verified": "Verificado en el commit",
       "not_verified": "No verificada",
-      "historical": "Histórica"
+      "historical": "Histórica",
+      "updating": "Actualizando evidencia"
     },
     "note": {
       "proposal": "Instrucciones para tu agente. SequrAI no ha cambiado tu código ni ha escrito en GitHub, y todavía no hay nada verificado.",
@@ -337,7 +338,8 @@
       "verifying": "Verificando el commit informado… Esta página se actualiza sola.",
       "verified": "Verificado: un reanálisis completo de ese commit no contiene el hallazgo.",
       "not_verified": "Esta propuesta no está verificada. No la des por corregida.",
-      "historical": "Propuesta histórica: sustituida por otra posterior."
+      "historical": "Propuesta histórica: sustituida por otra posterior.",
+      "updating": "Estamos actualizando la evidencia de esta corrección. Todavía no se puede afirmar que esté verificada ni que haya fallado."
     },
     "statement": {
       "exact_commit_rescan_clean": "Un reanálisis completo de exactamente ese commit ya no contiene el hallazgo.",
@@ -397,6 +399,8 @@
       "unavailable": "No pudimos completar la operación y no se ha cambiado nada. Inténtalo de nuevo.",
       "forbidden": "No tienes permiso para esta acción.",
       "unknown": "Algo falló. El estado mostrado es el guardado; inténtalo de nuevo."
-    }
+    },
+    "evidenceFailed": "No se pudo actualizar la evidencia de esta corrección. Todavía no se puede afirmar su resultado: recarga la página o reintenta.",
+    "retryEvidence": "Reintentar"
   }
 }
