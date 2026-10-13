@@ -9,6 +9,7 @@ import {
   getRecoveryMaxAttempts,
 } from "@/server/observability/types";
 import type { ScanJobStatus, ScanJobType } from "./types";
+import { isScanJobAbandoned } from "./orphan-policy";
 import {
   ALLOWED_SOURCE_STATUSES,
   canRecoverScanJobToQueued,
@@ -510,6 +511,9 @@ export async function findJobsNeedingFinalize(admin: SupabaseClient): Promise<Sc
   for (const job of (runningJobs as ScanJobRow[]) ?? []) {
     if (job.metadata?.finalizeCompleted === true) continue;
     if (!job.scan_id) continue;
+    // A running job whose scan is already completed is normal while its platform stage and engines run: only a job with no
+    // recent activity needs finalizing (same staleness window as findStuckScanJobs).
+    if (!isScanJobAbandoned(job)) continue;
     const { data: scan } = await admin.from("scans").select("status").eq("id", job.scan_id).maybeSingle();
     if (scan?.status === "completed") results.push(job);
   }

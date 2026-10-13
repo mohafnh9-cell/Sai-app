@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   markScanJobFailed: vi.fn(),
   markScanJobCancelled: vi.fn(),
   executeScanRunJob: vi.fn(),
+  ensureProductionVerdictForCompletedScan: vi.fn(),
 }));
 
 vi.mock("../scan-job-store", () => ({
@@ -18,19 +19,25 @@ vi.mock("../scan-job-store", () => ({
 vi.mock("../run-scan-job", () => ({
   executeScanRunJob: mocks.executeScanRunJob,
 }));
+vi.mock("@/server/production-verdict/ensure-verdict-for-scan", () => ({
+  ensureProductionVerdictForCompletedScan: mocks.ensureProductionVerdictForCompletedScan,
+}));
 
 import { reconcileOrphanScanJobWithTerminalScan } from "../reconcile-orphan-scan-job";
 
 describe("reconcileOrphanScanJobWithTerminalScan", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.ensureProductionVerdictForCompletedScan.mockResolvedValue({ productionVerdictId: "v-1" });
   });
 
-  it("marks a running job completed when its scan already completed", async () => {
+  it("marks an ABANDONED running job (no activity signal) completed when its scan already completed", async () => {
     mocks.getScanJob.mockResolvedValue({
       id: "job-1",
       status: "running",
       job_type: "manual_scan",
+      organization_id: "org",
+      project_id: "repo",
       metadata: {},
     });
     mocks.markScanJobCompleted.mockResolvedValue({ updated: true });

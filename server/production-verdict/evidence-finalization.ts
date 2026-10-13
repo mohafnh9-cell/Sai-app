@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ProductionVerdictV1 } from "@/brain/production-verdict/schema";
 import type { SecurityDecisionFinalizeInput } from "@/brain/production-verdict/finalize-verdict";
+import { assessEvidenceReadiness, PENDING_ENGINE_STATUSES } from "./evidence-readiness";
 
 /**
  * Verdict finalization: the Production Verdict for a scan is generated once,
@@ -38,7 +39,13 @@ import type { SecurityDecisionFinalizeInput } from "@/brain/production-verdict/f
 export const EVIDENCE_READY_KEY = "verdictEvidenceReadyAt";
 const STORED_DECISION_KEY = "verdictSecurityDecision";
 
-const PENDING_JOB_STATUSES = new Set(["QUEUED", "RUNNING"]);
+const PENDING_JOB_STATUSES = PENDING_ENGINE_STATUSES;
+
+/** Engine jobs have their own timeout; one that outlived it (plus this grace) is abandoned, not slow. */
+const DEFAULT_ENGINE_TIMEOUT_MS = 10 * 60_000;
+const ENGINE_ABANDON_GRACE_MS = 60_000;
+/** Deferred verdicts are only recovered for scans that finished at least this long ago (the runner's own tail is long over). */
+export const DEFERRED_VERDICT_MIN_AGE_MS = 5 * 60_000;
 
 export type FinalizeMode =
   /** Normal pipeline: wait for the evidence marker (when engine jobs exist) and for every engine job to be terminal. */
@@ -167,34 +174,37 @@ export async function finalizeVerdictWhenEvidenceComplete(
     .maybeSingle();
   if (existing) return { status: "already_exists" };
 
-  if (mode === "pipeline") {
-    const { data: jobs, error } = await admin
-      .from("security_jobs")
-      .select("id, engine, status")
-      .eq("scan_id", input.scanId)
-      .eq("organization_id", input.organizationId);
+  // Recovery: engines that outlived their own timeout are terminalized EXPLICITLY (TIMED_OUT / REJECTED) first.
+  if (mode === "recovery") {
+    await sweepAbandonedSecurityJobs(admin, { scanId: input.scanId, organizationId: input.organizationId });
+  }
 
-    // Unreadable job state must never look like "no engines pending".
-    if (error || !jobs) {
-      return { status: "deferred", reason: "engines_pending", pendingEngines: ["unknown"] };
-    }
+  const { data: jobs, error } = await admin
+    .from("security_jobs")
+    .select("id, engine, status")
+    .eq("scan_id", input.scanId)
+    .eq("organization_id", input.organizationId);
 
-    const jobRows = jobs as Row[];
-    const metrics = metricsOf(scan as Row);
-    const evidenceReady = typeof metrics[EVIDENCE_READY_KEY] === "string";
+  // Unreadable job state must never look like "no engines pending".
+  if (error || !jobs) {
+    return { status: "deferred", reason: "engines_pending", pendingEngines: ["unknown"] };
+  }
+  const jobRows = jobs as Row[];
 
-    // A scan with engine jobs is a full pipeline scan: its own stages (which
-    // create the jobs and contribute attack-simulation evidence) must be done.
-    if (jobRows.length > 0 && !evidenceReady) {
-      return { status: "deferred", reason: "evidence_not_ready", pendingEngines: [] };
-    }
+  const { data: scanJobs } = await admin
+    .from("scan_jobs")
+    .select("status, heartbeat_at, started_at, updated_at, scheduled_at, execution_deadline_at, metadata")
+    .eq("scan_id", input.scanId)
+    .in("status", ["queued", "running"]);
 
-    const pending = jobRows
-      .filter((job) => PENDING_JOB_STATUSES.has(String(job.status)))
-      .map((job) => String(job.engine));
-    if (pending.length > 0) {
-      return { status: "deferred", reason: "engines_pending", pendingEngines: pending };
-    }
+  const readiness = assessEvidenceReadiness({
+    mode,
+    jobs: jobRows.map((job) => ({ engine: String(job.engine), status: String(job.status) })),
+    evidenceMarkerPresent: typeof metricsOf(scan as Row)[EVIDENCE_READY_KEY] === "string",
+    liveScanJobs: (scanJobs ?? []) as Array<Record<string, unknown>> as never,
+  });
+  if (!readiness.ready) {
+    return { status: "deferred", reason: readiness.reason, pendingEngines: readiness.pendingEngines };
   }
 
   const generate =
@@ -210,7 +220,133 @@ export async function finalizeVerdictWhenEvidenceComplete(
       input.securityDecisionReport ?? (isStoredDecision(storedDecision) ? storedDecision : null),
   });
   if (!verdict) return { status: "skipped", reason: "verdict_not_generated" };
+  await recordVerdictEvidence(admin, {
+    scanId: input.scanId,
+    organizationId: input.organizationId,
+    mode,
+    hasSecurityDecision: Boolean(input.securityDecisionReport) || isStoredDecision(storedDecision),
+  }).catch(() => undefined);
   return { status: "generated", verdict };
+}
+
+/**
+ * Which engines contributed to a verdict, recorded next to the scan (scans.metrics.verdictEvidence) at the moment it is
+ * generated: engine, final status, whether the platform's security decision was available, and how it was finalized. Nothing
+ * here changes the verdict; it documents the evidence it was computed from (a failed or timed-out engine stays visible as such).
+ */
+export async function recordVerdictEvidence(
+  admin: SupabaseClient,
+  input: { scanId: string; organizationId: string; mode: FinalizeMode; hasSecurityDecision: boolean }
+): Promise<void> {
+  const { data: jobs } = await admin
+    .from("security_jobs")
+    .select("engine, status")
+    .eq("scan_id", input.scanId)
+    .eq("organization_id", input.organizationId);
+  const { data: scan } = await admin
+    .from("scans")
+    .select("id, metrics")
+    .eq("id", input.scanId)
+    .eq("organization_id", input.organizationId)
+    .maybeSingle();
+  if (!scan) return;
+  const engines = ((jobs ?? []) as Row[]).map((job) => ({ engine: String(job.engine), status: String(job.status) }));
+  await admin
+    .from("scans")
+    .update({
+      metrics: {
+        ...metricsOf(scan as Row),
+        verdictEvidence: {
+          finalizedAt: new Date().toISOString(),
+          finalizedBy: input.mode,
+          securityDecisionIncluded: input.hasSecurityDecision,
+          externalEngines: engines.length > 0 ? engines : "not_run",
+        },
+      },
+    })
+    .eq("id", input.scanId)
+    .eq("organization_id", input.organizationId);
+}
+
+/**
+ * Terminalizes engine jobs that outlived their own timeout (+ grace) so nothing blocks a verdict forever and nothing is turned
+ * into success: RUNNING -> TIMED_OUT, QUEUED -> REJECTED, both with an explicit error. Optimistic transitions: an engine that
+ * finishes meanwhile wins.
+ */
+export async function sweepAbandonedSecurityJobs(
+  admin: SupabaseClient,
+  input: { scanId: string; organizationId: string; nowMs?: number }
+): Promise<Array<{ engine: string; from: string; to: string }>> {
+  const nowMs = input.nowMs ?? Date.now();
+  const { data } = await admin
+    .from("security_jobs")
+    .select("id, engine, status, requested_at, started_at, timeout_ms")
+    .eq("scan_id", input.scanId)
+    .eq("organization_id", input.organizationId);
+  const swept: Array<{ engine: string; from: string; to: string }> = [];
+  const { transitionSecurityJob } = await import("@/server/security-jobs/service");
+  for (const job of ((data ?? []) as Row[]).filter((row) => PENDING_JOB_STATUSES.has(String(row.status)))) {
+    const since = Date.parse(String((job.started_at as string | null) ?? job.requested_at ?? ""));
+    if (!Number.isFinite(since)) continue;
+    const timeoutMs = Number(job.timeout_ms) > 0 ? Number(job.timeout_ms) : DEFAULT_ENGINE_TIMEOUT_MS;
+    if (nowMs - since <= timeoutMs + ENGINE_ABANDON_GRACE_MS) continue;
+    const from = String(job.status) as "QUEUED" | "RUNNING";
+    const to = from === "RUNNING" ? "TIMED_OUT" : "REJECTED";
+    try {
+      await transitionSecurityJob(admin, {
+        jobId: String(job.id),
+        from,
+        to,
+        error: {
+          code: to === "TIMED_OUT" ? "abandoned_timeout" : "queue_expired",
+          message: `Engine ${String(job.engine)} did not finish within its budget and was terminalized by verdict recovery`,
+        },
+      });
+      swept.push({ engine: String(job.engine), from, to });
+    } catch {
+      // another actor moved it first; the next pass re-reads the real state
+    }
+  }
+  return swept;
+}
+
+/**
+ * Recovery of verdicts that stayed deferred (the worker that would have finalized them never ran): completed scans older than
+ * DEFERRED_VERDICT_MIN_AGE_MS without a verdict are finalized in recovery mode (engines already terminal, or terminalized
+ * explicitly if abandoned). Bounded and idempotent; never touches a scan that already has a verdict.
+ */
+export async function recoverDeferredVerdicts(
+  admin: SupabaseClient,
+  input: { nowMs?: number; lookbackMs?: number; limit?: number } = {}
+): Promise<{ examined: number; generated: number; deferred: number }> {
+  const nowMs = input.nowMs ?? Date.now();
+  const { data: scans } = await admin
+    .from("scans")
+    .select("id, organization_id, project_id, completed_at")
+    .eq("status", "completed")
+    .gte("completed_at", new Date(nowMs - (input.lookbackMs ?? 24 * 60 * 60_000)).toISOString())
+    .lt("completed_at", new Date(nowMs - DEFERRED_VERDICT_MIN_AGE_MS).toISOString())
+    .order("completed_at", { ascending: false })
+    .limit(input.limit ?? 50);
+  const rows = (scans ?? []) as Row[];
+  if (rows.length === 0) return { examined: 0, generated: 0, deferred: 0 };
+  const { data: verdicts } = await admin.from("production_verdicts").select("scan_id").in("scan_id", rows.map((row) => row.id));
+  const have = new Set(((verdicts ?? []) as Row[]).map((row) => String(row.scan_id)));
+  let generated = 0;
+  let deferred = 0;
+  let examined = 0;
+  for (const row of rows.filter((candidate) => !have.has(String(candidate.id)))) {
+    examined += 1;
+    const outcome = await finalizeVerdictWhenEvidenceComplete(admin, {
+      organizationId: String(row.organization_id),
+      projectId: String(row.project_id),
+      scanId: String(row.id),
+      mode: "recovery",
+    }).catch(() => null);
+    if (outcome?.status === "generated") generated += 1;
+    else if (outcome?.status === "deferred") deferred += 1;
+  }
+  return { examined, generated, deferred };
 }
 
 /**

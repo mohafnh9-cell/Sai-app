@@ -16,6 +16,7 @@ import type { ScanRunPayload } from "./types";
 import { rehydrateWebhookProcessPayload } from "./inngest-payload";
 import { reenqueueExistingScanRunJob, ScanEnqueueError } from "./scan-execution/enqueue-scan-run";
 import { emitOperationalEvent } from "@/server/observability/operational-events";
+import { recoverDeferredVerdicts } from "@/server/production-verdict/evidence-finalization";
 import { buildJobsHealthSummary } from "@/server/observability/health-summary";
 import {
   evaluateOperationalAlerts,
@@ -179,9 +180,14 @@ export async function runScanJobRecovery(admin: SupabaseClient): Promise<Recover
     if (failed.updated) summary.failed += 1;
   }
 
+  // Verdicts that stayed deferred because the worker that would have finalized them never ran: finalized from the evidence
+  // that exists once every engine is terminal (abandoned engines are terminalized explicitly first). Never touches a scan that
+  // already has a verdict, and never a scan still within its runner's window.
+  const deferredVerdicts = await recoverDeferredVerdicts(admin).catch(() => null);
+
   await emitOperationalEvent(admin, {
     eventType: "job_recovered",
-    metadata: summary,
+    metadata: { ...summary, deferredVerdicts },
   });
 
   const healthSummary = await buildJobsHealthSummary(admin);
