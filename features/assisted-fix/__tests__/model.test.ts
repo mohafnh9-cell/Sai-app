@@ -25,8 +25,9 @@ describe("phases: a proposal is not a correction; only an exact-commit verificat
   it("VERIFIED is a verified correction ONLY with the exact-commit statement", () => {
     expect(phaseOf(fix("VERIFIED", { verification: verification("exact_commit_rescan_clean") }))).toBe("verified");
     expect(phaseOf(fix("VERIFIED", { verification: verification("later_analysis_clean_unbound") }))).toBe("not_verified");
-    expect(phaseOf(fix("VERIFIED", { verification: verification("not_verified") }))).toBe("not_verified");
-    expect(phaseOf(fix("VERIFIED", { verification: null }))).toBe("not_verified"); // unreadable verification: never optimistic
+    // A VERIFIED record whose evidence is a negative (or missing) is a contradiction: never optimistic, never the old reasons.
+    expect(phaseOf(fix("VERIFIED", { verification: verification("not_verified") }))).toBe("updating");
+    expect(phaseOf(fix("VERIFIED", { verification: null }))).toBe("updating");
   });
 
   it("the statement is derived from what is persisted (outcome + binding)", () => {

@@ -36,6 +36,7 @@ const PHASE_STYLE: Record<PanelPhase, string> = {
   verifying: "border-amber-500/40 bg-amber-500/10 text-foreground",
   verified: "border-emerald-500/40 bg-emerald-500/10 text-foreground",
   not_verified: "border-amber-500/40 bg-amber-500/10 text-foreground",
+  updating: "border-border bg-muted/40 text-foreground",
   historical: "border-border bg-transparent text-muted-foreground",
 };
 
@@ -44,10 +45,13 @@ export type AssistedFixViewProps = {
   controller: Pick<AssistedFixController, "approve" | "reopen" | "verify" | "startCommit">;
   busy: string | null;
   canAct: boolean;
+  /** The evidence could not be refreshed in time: say so and offer a retry instead of an endless spinner. */
+  evidenceFailed?: boolean;
+  onRetryEvidence?: () => void;
 };
 
 /** One correction, rendered for its phase. Static (no hooks beyond i18n) so every phase is testable by markup. */
-export function AssistedFixCard({ fix, controller, busy, canAct }: AssistedFixViewProps) {
+export function AssistedFixCard({ fix, controller, busy, canAct, evidenceFailed = false, onRetryEvidence }: AssistedFixViewProps) {
   const { t } = useI18n("missionControl");
   const phase = phaseOf(fix);
   const disabled = busy !== null || !canAct;
@@ -71,9 +75,14 @@ export function AssistedFixCard({ fix, controller, busy, canAct }: AssistedFixVi
         )}
       </div>
 
-      <p className="mt-3 text-sm" data-testid="assisted-fix-note">
-        {t(`assistedFix.note.${phase}`)}
+      <p className="mt-3 text-sm" data-testid="assisted-fix-note" role={phase === "updating" ? "status" : undefined}>
+        {phase === "updating" && evidenceFailed ? t("assistedFix.evidenceFailed") : t(`assistedFix.note.${phase}`)}
       </p>
+      {phase === "updating" && evidenceFailed && onRetryEvidence && (
+        <button type="button" className="mt-2 rounded-md border px-3 py-1.5 text-sm font-medium" onClick={onRetryEvidence}>
+          {t("assistedFix.retryEvidence")}
+        </button>
+      )}
 
       {phase === "proposal" || phase === "approved" ? (
         <details className="mt-3">
@@ -253,6 +262,11 @@ export function AssistedFixPanel({ data, api: injectedApi }: { data: PanelData; 
     controller.adopt(data);
   }, [data, controller]);
 
+  // A card whose state and evidence disagree (e.g. loaded mid-verification) must not wait on a single router.refresh().
+  useEffect(() => {
+    controller.ensureEvidence();
+  }, [controller]);
+
   const verifying = state.data.fixes.some((fix) => fix.state === "VERIFYING");
   useEffect(() => {
     if (!verifying) return;
@@ -308,7 +322,7 @@ export function AssistedFixPanel({ data, api: injectedApi }: { data: PanelData; 
       ) : (
         <ul className="mt-4 space-y-3">
           {live.map((fix) => (
-            <AssistedFixCard key={fix.id} fix={fix} controller={controller} busy={state.busy} canAct />
+            <AssistedFixCard key={fix.id} fix={fix} controller={controller} busy={state.busy} canAct evidenceFailed={state.evidence === "failed"} onRetryEvidence={() => controller.retryEvidence()} />
           ))}
         </ul>
       )}

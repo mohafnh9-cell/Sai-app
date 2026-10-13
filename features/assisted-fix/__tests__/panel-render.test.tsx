@@ -96,12 +96,36 @@ describe.each(["en", "es"] as const)("every phase is rendered for what it is [%s
   it.each([
     ["VERIFIED but only a later unbound analysis", fix("VERIFIED", { verification: { ...exact, statement: "later_analysis_clean_unbound" as const } })],
     ["FAILED", fix("FAILED", { verification: { ...exact, statement: "not_verified" as const, outcome: "failed" as const, reasons: ["target_still_present"] } })],
-    ["VERIFIED without a readable verification", fix("VERIFIED")],
   ])("%s is NEVER shown as a verified correction", (_name, f) => {
     const html = render(f);
     expect(html).toContain('data-phase="not_verified"');
     expect(text(html)).not.toMatch(VERIFIED_BADGE[l]);
     expect(text(html)).toMatch(l === "en" ? /Not verified/ : /No verificada/);
+  });
+
+  it("VERIFIED with no readable evidence yet is 'updating': no verdict, no old reasons, no actions", () => {
+    const html = render(fix("VERIFIED", { reportedCommitSha: FIX }));
+    expect(html).toContain('data-phase="updating"');
+    expect(text(html)).not.toMatch(VERIFIED_BADGE[l]);
+    expect(text(html)).not.toMatch(l === "en" ? /Not verified|Verify|Reopen/ : /No verificada|Verificar|Reabrir/);
+    expect(text(html)).toMatch(l === "en" ? /updating the evidence/ : /actualizando la evidencia/);
+  });
+
+  it("VERIFIED next to the evidence of an OLDER failed attempt is 'updating' and never repeats its reasons", () => {
+    const stale = { ...exact, statement: "not_verified" as const, outcome: "partial" as const, verifiedCommitSha: null, verifiedAnalysis: null, reasons: ["verification_scan_missing", "findings_unavailable"], commitSha: "0".repeat(40) };
+    const html = render(fix("VERIFIED", { reportedCommitSha: FIX, verification: stale }));
+    expect(html).toContain('data-phase="updating"');
+    expect(html).not.toContain("verification_scan_missing");
+    expect(text(html)).not.toMatch(VERIFIED_BADGE[l]);
+  });
+
+  it("when the evidence could not be refreshed it says so and offers a retry (still no verdict)", () => {
+    lang = l;
+    const html = renderToStaticMarkup(createElement(AssistedFixCard, { fix: fix("VERIFIED", { reportedCommitSha: FIX }), controller, busy: null, canAct: true, evidenceFailed: true, onRetryEvidence: noop }));
+    expect(html).toContain('data-phase="updating"');
+    expect(text(html)).toMatch(l === "en" ? /could not be updated/ : /No se pudo actualizar/);
+    expect(text(html)).toMatch(l === "en" ? /Retry/ : /Reintentar/);
+    expect(text(html)).not.toMatch(VERIFIED_BADGE[l]);
   });
 
   it("historical: marked as such and without actions", () => {

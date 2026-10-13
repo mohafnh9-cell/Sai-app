@@ -328,7 +328,8 @@
       "verifying": "Verifying",
       "verified": "Verified in the commit",
       "not_verified": "Not verified",
-      "historical": "Historical"
+      "historical": "Historical",
+      "updating": "Updating evidence"
     },
     "note": {
       "proposal": "Instructions for your agent. SequrAI has not changed your code or written to GitHub, and nothing has been verified yet.",
@@ -337,7 +338,8 @@
       "verifying": "Verifying the reported commit… This page updates by itself.",
       "verified": "Verified: a complete rescan of that commit does not contain the finding.",
       "not_verified": "This proposal is not verified. Do not treat it as fixed.",
-      "historical": "Historical proposal: replaced by a later one."
+      "historical": "Historical proposal: replaced by a later one.",
+      "updating": "We are updating the evidence for this correction. We cannot say yet whether it is verified or has failed."
     },
     "statement": {
       "exact_commit_rescan_clean": "A complete rescan of exactly that commit no longer contains the finding.",
@@ -397,6 +399,8 @@
       "unavailable": "We could not complete the operation and nothing was changed. Try again.",
       "forbidden": "You do not have permission for this action.",
       "unknown": "Something failed. The state shown is the saved one; try again."
-    }
+    },
+    "evidenceFailed": "The evidence for this correction could not be updated. Its result cannot be stated yet: reload the page or retry.",
+    "retryEvidence": "Retry"
   }
 }
