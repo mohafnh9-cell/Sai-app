@@ -17,6 +17,7 @@ import { ProjectOnboardedBanner } from "@/features/projects/components/ProjectOn
 import { McpPromoBanner } from "@/features/mcp/components/McpPromoBanner";
 import { MissionControlActivityBanner } from "./MissionControlActivityBanner";
 import { MissionControlProtectionStatus } from "./MissionControlProtectionStatus";
+import { AnalysisRunContextNotice } from "./AnalysisRunContextNotice";
 import { useProtectionCenter } from "@/features/continuous-protection/hooks/useProtectionCenter";
 
 export function MissionControlExperience({
@@ -84,6 +85,8 @@ export function MissionControlExperience({
 
   return (
     <div className="space-y-10 max-w-5xl mx-auto">
+      <AnalysisRunContextNotice state={state} />
+
       {state.ui.viewingHistoricalRun ? (
         <div
           className="rounded-xl border border-border/60 bg-muted/20 px-5 py-4 text-sm text-muted-foreground"
