@@ -100,6 +100,8 @@ export async function GET(
   const url = new URL(request.url);
   const limitParam = url.searchParams.get("limit");
   const limit = limitParam ? Math.min(Math.max(Number(limitParam) || 12, 1), 50) : 12;
+  // `verdicts=0`: the idle probe only needs which run is the newest; skip reading and parsing the full verdict JSON.
+  const includeVerdicts = url.searchParams.get("verdicts") !== "0";
 
   try {
     const admin = createAdminClient();
@@ -107,6 +109,7 @@ export async function GET(
       projectId,
       organizationId: access.project.organization_id,
       limit,
+      includeVerdicts,
     });
     return NextResponse.json({ ok: true, runs });
   } catch (error) {

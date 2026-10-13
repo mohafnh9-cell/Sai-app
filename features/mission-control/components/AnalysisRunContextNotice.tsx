@@ -25,7 +25,12 @@ export function AnalysisRunContextNotice({ state }: { state: MissionControlState
   const { t } = useI18n("missionControl");
   // The newest analysis as of the first render: what a page without `run` was showing, and the reference to detect a newer one.
   const [initialLatestRunId] = useState<string | null>(() => state.latestRun?.runId ?? null);
-  const probedLatest = useLatestRunProbe(state.projectId);
+  const probedLatest = useLatestRunProbe(
+    state.projectId,
+    state.latestRun
+      ? { runId: state.latestRun.runId, commitSha: state.latestRun.commitSha, createdAt: state.latestRun.createdAt, status: state.latestRun.status }
+      : null
+  );
   const notice = deriveRunContext({ state, initialLatestRunId, probedLatest });
   if (!notice) return null;
 

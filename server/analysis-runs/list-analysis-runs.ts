@@ -20,7 +20,7 @@ export type AnalysisRunListItem = {
 
 export async function listAnalysisRunsForProject(
   admin: SupabaseClient,
-  input: { projectId: string; organizationId: string; limit?: number }
+  input: { projectId: string; organizationId: string; limit?: number; /** false: do not read the verdicts (status/posture stay null). Used by the idle probe. */ includeVerdicts?: boolean }
 ): Promise<AnalysisRunListItem[]> {
   const limit = input.limit ?? 12;
 
@@ -39,7 +39,9 @@ export async function listAnalysisRunsForProject(
   const runIds = (scans ?? []).map((row) => row.id as string);
   if (runIds.length === 0) return [];
 
-  const { data: verdicts } = await admin
+  const { data: verdicts } = input.includeVerdicts === false
+    ? { data: [] as Array<Record<string, unknown>> }
+    : await admin
     .from("production_verdicts")
     .select("scan_id, status, verdict")
     .eq("organization_id", input.organizationId)
