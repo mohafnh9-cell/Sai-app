@@ -1,3 +1,4 @@
+import "@/test/enable-dynamic-testing";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { startDynamicSecurityLab, type DynamicSecurityLab } from "@/fixtures/dynamic-security-lab/server";
 import type { AuthorizedDynamicTarget } from "../dynamic/authorized-target";

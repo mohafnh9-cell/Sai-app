@@ -20,6 +20,11 @@ import {
   requestedAnalysisRunIdFromRequest,
   resolveAnalysisRunIdForIsolation,
 } from "@/server/analysis-runs/resolve-analysis-run-id-for-isolation";
+import {
+  DYNAMIC_TESTING_UNAVAILABLE_CODE,
+  DYNAMIC_TESTING_UNAVAILABLE_MESSAGE,
+  isDynamicSecurityTestingAvailable,
+} from "@/server/attack-simulation/availability";
 
 const paramsSchema = z.object({
   id: z.string().uuid(),
@@ -113,6 +118,14 @@ export async function POST(request: Request, { params }: RouteParams) {
           organizationId: access.project.organization_id,
         }),
       },
+      { status: 403 }
+    );
+  }
+
+  // V1: dynamic security testing is closed in the server (see server/attack-simulation/availability.ts).
+  if (!isDynamicSecurityTestingAvailable()) {
+    return NextResponse.json(
+      { ok: false, error: DYNAMIC_TESTING_UNAVAILABLE_MESSAGE, code: DYNAMIC_TESTING_UNAVAILABLE_CODE },
       { status: 403 }
     );
   }

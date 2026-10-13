@@ -1,3 +1,4 @@
+import "@/test/enable-dynamic-testing";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { startDynamicSecurityLab, type DynamicSecurityLab } from "@/fixtures/dynamic-security-lab/server";
 import { createSafeRuntimeSession, executeSafeRuntimeStep } from "@/server/attack-simulation/runtime/safe-runtime";

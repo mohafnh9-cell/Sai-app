@@ -5,6 +5,7 @@
  * triggerProductionReview (already_completed) → scan_findings → attack selection
  * → resolveDynamicTargetForAudit → startAttackCampaign → real HTTP → correlation → MCP format
  */
+import "@/test/enable-dynamic-testing";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/i18n/server", () => ({

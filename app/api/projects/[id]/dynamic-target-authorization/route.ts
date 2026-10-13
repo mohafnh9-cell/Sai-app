@@ -17,6 +17,11 @@ import { isDynamicTargetVerificationBypassEnabled } from "@/lib/security/dynamic
 import { normalizeHttpUrlInput } from "@/lib/url/normalize-http-url";
 import { reapproveExpandedDynamicTargetScope } from "@/server/ai-red-team/authorization/dynamic-scope-expansion";
 import { loadRequiredDynamicPathsForLatestScan } from "@/server/full-product-audit/load-required-dynamic-paths-for-project";
+import {
+  DYNAMIC_TESTING_UNAVAILABLE_CODE,
+  DYNAMIC_TESTING_UNAVAILABLE_MESSAGE,
+  isDynamicSecurityTestingAvailable,
+} from "@/server/attack-simulation/availability";
 
 const paramsSchema = z.object({ id: z.string().uuid() });
 
@@ -106,6 +111,14 @@ export async function POST(
 
   if (!isFeatureEnabled("attack_simulation", { organizationId: access.project.organization_id })) {
     return NextResponse.json({ error: "Attack Simulation is not enabled" }, { status: 404 });
+  }
+
+  // V1: dynamic security testing is closed in the server (see server/attack-simulation/availability.ts).
+  if (!isDynamicSecurityTestingAvailable()) {
+    return NextResponse.json(
+      { ok: false, error: DYNAMIC_TESTING_UNAVAILABLE_MESSAGE, code: DYNAMIC_TESTING_UNAVAILABLE_CODE },
+      { status: 403 }
+    );
   }
 
   const admin = createAdminClient();

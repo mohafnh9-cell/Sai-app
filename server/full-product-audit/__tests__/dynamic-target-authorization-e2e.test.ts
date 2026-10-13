@@ -1,3 +1,4 @@
+import "@/test/enable-dynamic-testing";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createFakeAdmin } from "@/server/mcp/__tests__/fake-admin";
 import { testMcpAuthContext } from "@/server/mcp/__tests__/test-context";

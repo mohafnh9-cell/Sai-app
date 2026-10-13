@@ -9,6 +9,7 @@ import {
   resolveSandboxLabOriginFromEnv,
 } from "@/server/attack-simulation/dynamic/authorized-target";
 import { validateProductionDynamicGate } from "@/server/attack-simulation/dynamic/production-gate";
+import { isDynamicSecurityTestingAvailable } from "@/server/attack-simulation/availability";
 
 function resolveInternalSandboxLabOrigin(): string | null {
   if (process.env.NODE_ENV === "test") {
@@ -28,6 +29,11 @@ export async function resolveDynamicTargetForAudit(
   admin: SupabaseClient,
   input: { organizationId: string; projectId: string }
 ): Promise<ResolvedDynamicAuditTarget> {
+  // V1: no dynamic target is ever resolved while dynamic testing is not available (static analysis only).
+  if (!isDynamicSecurityTestingAvailable()) {
+    return { targetUrl: null, runtimeMode: "mock", authorization: null, source: "none" };
+  }
+
   const labOrigin = resolveInternalSandboxLabOrigin();
   if (labOrigin) {
     return {
