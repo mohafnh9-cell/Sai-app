@@ -6,7 +6,7 @@ type Row = Record<string, unknown>;
 
 export type MergeScanMetricsResult =
   | { ok: true; attempts: number }
-  | { ok: false; reason: "scan_not_found" | "update_failed" | "conflict_exhausted" | "not_persisted"; attempts: number; message?: string };
+  | { ok: false; reason: "scan_not_found" | "status_not_allowed" | "update_failed" | "conflict_exhausted" | "not_persisted"; attempts: number; message?: string };
 
 const DEFAULT_ATTEMPTS = 4;
 
@@ -44,6 +44,13 @@ export async function mergeScanMetrics(
     organizationId: string;
     patch: Record<string, unknown> | ((current: Record<string, unknown>) => Record<string, unknown> | null);
     attempts?: number;
+    /**
+     * Only write while the scan has one of these statuses. The evidence writers pass ["completed"]: a completed scan is locked by
+     * `trg_scans_prevent_immutable_core` (nothing but `metrics`/`updated_at` can change, so its status can never go back to an active
+     * one), and the only two other writers that REPLACE `metrics` only match active statuses. Together: nothing can overwrite what
+     * these writers store, whatever the order of the calls.
+     */
+    requireStatus?: readonly string[];
   }
 ): Promise<MergeScanMetricsResult> {
   const attempts = Math.max(1, input.attempts ?? DEFAULT_ATTEMPTS);
@@ -51,7 +58,7 @@ export async function mergeScanMetrics(
   for (let attempt = 1; attempt <= attempts; attempt++) {
     const { data: scan, error: readError } = await admin
       .from("scans")
-      .select("id, metrics, updated_at")
+      .select("id, status, metrics, updated_at")
       .eq("id", input.scanId)
       .eq("organization_id", input.organizationId)
       .maybeSingle();
@@ -60,6 +67,9 @@ export async function mergeScanMetrics(
       continue;
     }
     if (!scan) return { ok: false, reason: "scan_not_found", attempts: attempt };
+    if (input.requireStatus && !input.requireStatus.includes(String((scan as Row).status))) {
+      return { ok: false, reason: "status_not_allowed", attempts: attempt, message: `scan status is ${String((scan as Row).status)}` };
+    }
 
     // Snapshot right after the read: the condition below must refer to the row AS WE READ IT.
     const stamp = (scan as Row).updated_at;
@@ -73,6 +83,7 @@ export async function mergeScanMetrics(
       .eq("id", input.scanId)
       .eq("organization_id", input.organizationId);
     if (typeof stamp === "string") query = query.eq("updated_at", stamp);
+    if (input.requireStatus) query = query.in("status", [...input.requireStatus]);
     const { data: written, error: writeError } = await query.select("id, metrics").maybeSingle();
     if (writeError) {
       lastMessage = writeError.message;

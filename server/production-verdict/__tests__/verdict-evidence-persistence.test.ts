@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import { createFakeAdmin, type FakeTables } from "@/server/mcp/__tests__/fake-admin";
 
@@ -262,24 +263,77 @@ describe("the platform summary writer uses the same conditional mechanism and ke
   });
 });
 
-describe("a verdict created moments ago without its record gets it; historical scans are never touched", () => {
-  const base = (generatedAt: string) => {
-    const t = tables();
+describe("late completion of the evidence record: opt-in, labelled as a reconstruction, never over existing evidence, never historical", () => {
+  const base = (generatedAt: string, metrics: Record<string, unknown> = baseMetrics) => {
+    const t = tables(metrics);
     t.production_verdicts = [{ id: "v1", organization_id: ORG_ID, scan_id: SCAN_ID, project_id: PROJECT_ID, generated_at: generatedAt }];
     return t;
   };
-  it("recent verdict, no record: completed", async () => {
+  const input = { organizationId: ORG_ID, projectId: PROJECT_ID, scanId: SCAN_ID };
+
+  it("normal finalization (backfillEvidence:true), recent verdict, no record: completed AND labelled as reconstructed (not as captured at generation)", async () => {
+    const { finalizeVerdictWhenEvidenceComplete } = await import("../evidence-finalization");
+    const generatedAt = new Date().toISOString();
+    const admin = freshAdmin(base(generatedAt));
+    expect(await finalizeVerdictWhenEvidenceComplete(admin as never, { ...input, backfillEvidence: true })).toEqual({ status: "already_exists" });
+    const record = metricsOf().verdictEvidence as Record<string, unknown>;
+    expect(record).toMatchObject({ capture: "reconstructed_after_verdict", verdictGeneratedAt: generatedAt, externalEngines: expect.any(Array) });
+    expect(record.reconstructedAt).toEqual(expect.any(String));
+    expect(record.finalizedAt).toBeUndefined(); // it does not claim to be the moment the verdict was generated
+  });
+
+  it("a record captured at generation says so", async () => {
+    const { generateAndPersistProductionVerdict } = await import("../core");
+    const admin = freshAdmin();
+    await generateAndPersistProductionVerdict(admin as never, { organizationId: ORG_ID, projectId: PROJECT_ID, scanId: SCAN_ID });
+    expect(metricsOf().verdictEvidence).toMatchObject({ capture: "at_verdict_generation", finalizedAt: expect.any(String) });
+  });
+
+  it("default (readers: HTTP GET, MCP read tools, the review-state read): NOTHING is written to the scan", async () => {
     const { finalizeVerdictWhenEvidenceComplete } = await import("../evidence-finalization");
     const admin = freshAdmin(base(new Date().toISOString()));
-    const outcome = await finalizeVerdictWhenEvidenceComplete(admin as never, { organizationId: ORG_ID, projectId: PROJECT_ID, scanId: SCAN_ID });
-    expect(outcome).toEqual({ status: "already_exists" });
-    expect(metricsOf().verdictEvidence).toMatchObject({ externalEngines: expect.any(Array) });
+    const before = JSON.stringify(scanOf());
+    expect(await finalizeVerdictWhenEvidenceComplete(admin as never, input)).toEqual({ status: "already_exists" });
+    expect(JSON.stringify(scanOf())).toBe(before);
   });
-  it("old verdict, no record: left exactly as it is", async () => {
+
+  it("existing evidence is never overwritten, not even with the opt-in", async () => {
+    const { finalizeVerdictWhenEvidenceComplete } = await import("../evidence-finalization");
+    const existing = { capture: "at_verdict_generation", finalizedAt: "2026-10-13T13:04:41.300Z", finalizedBy: "pipeline", externalEngines: [{ engine: "trivy", status: "COMPLETED" }] };
+    const admin = freshAdmin(base(new Date().toISOString(), { ...baseMetrics, verdictEvidence: existing }));
+    await finalizeVerdictWhenEvidenceComplete(admin as never, { ...input, backfillEvidence: true });
+    expect(metricsOf().verdictEvidence).toEqual(existing);
+  });
+
+  it("an old verdict is left exactly as it is, even with the opt-in", async () => {
     const { finalizeVerdictWhenEvidenceComplete } = await import("../evidence-finalization");
     const admin = freshAdmin(base(new Date(Date.now() - 3 * 24 * 3_600_000).toISOString()));
     const before = JSON.stringify(scanOf());
-    await finalizeVerdictWhenEvidenceComplete(admin as never, { organizationId: ORG_ID, projectId: PROJECT_ID, scanId: SCAN_ID });
+    await finalizeVerdictWhenEvidenceComplete(admin as never, { ...input, backfillEvidence: true });
+    expect(JSON.stringify(scanOf())).toBe(before);
+  });
+
+  it("which callers opt in is fixed in the source: only the runner's wait and the engine-terminal hook; no read path", () => {
+    const read = (p: string) => readFileSync(p, "utf8");
+    const finalization = read("server/production-verdict/evidence-finalization.ts");
+    expect((finalization.match(/backfillEvidence: true/g) ?? []).length).toBe(2);
+    for (const reader of ["server/mcp/canonical-decision-state.ts", "server/production-verdict/ensure-verdict-for-scan.ts", "server/jobs/reconcile-orphan-scan-job.ts"]) {
+      expect(read(reader)).not.toContain("backfillEvidence");
+    }
+  });
+});
+
+describe("evidence writers only write on a completed scan (the status is locked by the database trigger)", () => {
+  it("the marker and the record refuse to write while the scan is still active, and write nothing", async () => {
+    const { mergeScanMetrics } = await import("../scan-metrics");
+    const { markVerdictEvidenceReady, recordVerdictEvidence } = await import("../evidence-finalization");
+    const t = tables();
+    (t.scans as Array<Record<string, unknown>>)[0].status = "scanning";
+    const admin = freshAdmin(t);
+    const before = JSON.stringify(scanOf());
+    await expect(markVerdictEvidenceReady(admin as never, { scanId: SCAN_ID, organizationId: ORG_ID })).rejects.toThrow(/status_not_allowed/);
+    expect(await recordVerdictEvidence(admin as never, { scanId: SCAN_ID, organizationId: ORG_ID, mode: "pipeline", hasSecurityDecision: false })).toMatchObject({ recorded: false });
+    expect(await mergeScanMetrics(admin as never, { scanId: SCAN_ID, organizationId: ORG_ID, patch: { x: 1 }, requireStatus: ["completed"] })).toMatchObject({ ok: false, reason: "status_not_allowed" });
     expect(JSON.stringify(scanOf())).toBe(before);
   });
 });

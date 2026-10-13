@@ -116,6 +116,7 @@ export async function markVerdictEvidenceReady(
     scanId: input.scanId,
     organizationId: input.organizationId,
     patch: { [EVIDENCE_READY_KEY]: new Date().toISOString(), [STORED_DECISION_KEY]: stored },
+    requireStatus: ["completed"],
   });
   if (!result.ok) {
     if (result.reason === "scan_not_found") throw new Error(`Cannot mark evidence ready: scan ${input.scanId} not found`);
@@ -132,6 +133,12 @@ export async function finalizeVerdictWhenEvidenceComplete(
     scanJobId?: string | null;
     securityDecisionReport?: SecurityDecisionFinalizeInput | null;
     mode?: FinalizeMode;
+    /**
+     * Complete the evidence record of a verdict created in the last 10 minutes that lacks it (its creator was cut short). OFF by default:
+     * only the normal finalization callers (runner wait, engine-terminal hook) and the explicit recovery job turn it on. Never a read
+     * path (HTTP GET, MCP read tools, the review-state read).
+     */
+    backfillEvidence?: boolean;
     /** Injectable for tests; defaults to the canonical generator. */
     generate?: (
       admin: SupabaseClient,
@@ -172,15 +179,18 @@ export async function finalizeVerdictWhenEvidenceComplete(
     // wrote the evidence record. Complete it ONLY for a verdict created moments ago: historical scans are never rewritten.
     const generatedAt = Date.parse(String((existing as Row).generated_at ?? ""));
     if (
+      input.backfillEvidence === true &&
       Number.isFinite(generatedAt) &&
       Date.now() - generatedAt <= VERDICT_EVIDENCE_BACKFILL_WINDOW_MS &&
       !metricsOf(scan as Row)[VERDICT_EVIDENCE_KEY]
     ) {
+      // A reconstruction, labelled as one: never presented as what was captured when the verdict was generated.
       await recordVerdictEvidenceSafely(admin, {
         scanId: input.scanId,
         organizationId: input.organizationId,
         mode,
         hasSecurityDecision: isStoredDecision(metricsOf(scan as Row)[STORED_DECISION_KEY]),
+        reconstructedAfter: { verdictGeneratedAt: new Date(generatedAt).toISOString() },
       });
     }
     return { status: "already_exists" };
@@ -254,7 +264,14 @@ export type RecordVerdictEvidenceResult =
 
 export async function recordVerdictEvidence(
   admin: SupabaseClient,
-  input: { scanId: string; organizationId: string; mode: FinalizeMode; hasSecurityDecision: boolean }
+  input: {
+    scanId: string;
+    organizationId: string;
+    mode: FinalizeMode;
+    hasSecurityDecision: boolean;
+    /** Set ONLY when the record is written after the verdict was generated: it is then a reconstruction, and says so. */
+    reconstructedAfter?: { verdictGeneratedAt: string };
+  }
 ): Promise<RecordVerdictEvidenceResult> {
   const { data: jobs, error: jobsError } = await admin
     .from("security_jobs")
@@ -273,13 +290,25 @@ export async function recordVerdictEvidence(
       current[VERDICT_EVIDENCE_KEY]
         ? null
         : {
-            [VERDICT_EVIDENCE_KEY]: {
-              finalizedAt: new Date().toISOString(),
-              finalizedBy: input.mode,
-              securityDecisionIncluded: input.hasSecurityDecision,
-              externalEngines: engines.length > 0 ? engines : "not_run",
-            },
+            [VERDICT_EVIDENCE_KEY]: input.reconstructedAfter
+              ? {
+                  // NOT captured when the verdict was generated: rebuilt afterwards from the engine jobs as they are now.
+                  capture: "reconstructed_after_verdict",
+                  reconstructedAt: new Date().toISOString(),
+                  verdictGeneratedAt: input.reconstructedAfter.verdictGeneratedAt,
+                  finalizedBy: input.mode,
+                  securityDecisionIncluded: input.hasSecurityDecision,
+                  externalEngines: engines.length > 0 ? engines : "not_run",
+                }
+              : {
+                  capture: "at_verdict_generation",
+                  finalizedAt: new Date().toISOString(),
+                  finalizedBy: input.mode,
+                  securityDecisionIncluded: input.hasSecurityDecision,
+                  externalEngines: engines.length > 0 ? engines : "not_run",
+                },
           },
+    requireStatus: ["completed"],
   });
   if (!result.ok) {
     if (result.reason === "scan_not_found") return { recorded: false, reason: "scan_not_found" };
@@ -294,7 +323,7 @@ export async function recordVerdictEvidence(
  */
 export async function recordVerdictEvidenceSafely(
   admin: SupabaseClient,
-  input: { scanId: string; organizationId: string; mode: FinalizeMode; hasSecurityDecision: boolean }
+  input: Parameters<typeof recordVerdictEvidence>[1]
 ): Promise<RecordVerdictEvidenceResult> {
   try {
     const result = await recordVerdictEvidence(admin, input);
@@ -411,6 +440,7 @@ export async function finalizeVerdictForTerminalSecurityJob(
       projectId: job.project_id as string,
       scanId: job.scan_id as string,
       mode: "pipeline",
+      backfillEvidence: true, // normal finalization (the engine-terminal hook)
     });
     console.info({
       component: "evidence-finalization",
@@ -460,6 +490,7 @@ export async function waitForScanVerdict(
       projectId: input.projectId,
       scanId: input.scanId,
       mode: "pipeline",
+      backfillEvidence: true, // normal finalization (the runner's own wait)
     });
     if (outcome.status !== "deferred") return outcome;
     if (Date.now() + intervalMs >= deadline) return outcome;
