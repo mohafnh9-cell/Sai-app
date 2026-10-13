@@ -142,6 +142,8 @@ export async function generateAndPersistProductionVerdict(
     // Only the fields finalizeProductionVerdict reads (a full SecurityDecisionReport satisfies this).
     securityDecisionReport?: import("@/brain/production-verdict/finalize-verdict").SecurityDecisionFinalizeInput | null;
     verdictRowId?: string | null;
+    /** How the verdict was reached, for the evidence record (default "pipeline"). */
+    finalizedBy?: "pipeline" | "recovery";
   }
 ): Promise<ProductionVerdictV1 | null> {
   log("verdict_generation_started", { scanId: input.scanId, projectId: input.projectId });
@@ -443,6 +445,27 @@ export async function generateAndPersistProductionVerdict(
     projectId: input.projectId,
     organizationId: input.organizationId,
   });
+
+  // Every path (runner, engine-terminal worker, recovery, MCP) creates verdicts here, so this is the one place that can document
+  // which engines the verdict was computed from. It never throws; a failure is logged, never silent.
+  if (!verdictReused) {
+    try {
+      const { recordVerdictEvidenceSafely, VERDICT_EVIDENCE_STORED_DECISION_KEY } = await import("./evidence-finalization");
+      const scanMetrics =
+        scan.metrics && typeof scan.metrics === "object" && !Array.isArray(scan.metrics) ? (scan.metrics as Record<string, unknown>) : {};
+      await recordVerdictEvidenceSafely(admin, {
+        scanId: input.scanId,
+        organizationId: input.organizationId,
+        mode: input.finalizedBy ?? "pipeline",
+        hasSecurityDecision: Boolean(input.securityDecisionReport) || Boolean(scanMetrics[VERDICT_EVIDENCE_STORED_DECISION_KEY]),
+      });
+    } catch (recordError) {
+      log("verdict_evidence_record_unexpected_error", {
+        scanId: input.scanId,
+        error: recordError instanceof Error ? recordError.message : String(recordError),
+      });
+    }
+  }
 
   try {
     // Phase 30: selective AI reasoning overlay -- runs after the
