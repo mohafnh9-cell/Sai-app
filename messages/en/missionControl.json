@@ -380,7 +380,9 @@
       "branch": "Branch",
       "analysis": "Analysis of that commit:",
       "notice": "This is only a suggestion: it has not been selected. Review it and confirm it yourself.",
-      "use": "Use this commit"
+      "use": "Use this commit",
+      "selected": "Commit selected",
+      "selectedHint": "The field was filled with the suggestion. Review it and press “Review”: nothing has been sent."
     },
     "confirm": {
       "branch": "Branch",
@@ -391,7 +393,8 @@
       "baseAnalysis": "Proposal's base analysis:",
       "statement": "You are declaring that commit {sha} contains the correction for “{title}”. SequrAI will rescan it; until then it is not verified.",
       "button": "Confirm commit",
-      "back": "Back"
+      "back": "Back",
+      "invalidatesApproval": "A commit was already reported ({previous}). Reporting {sha} invalidates the approval: after confirming you will need to approve the proposal again before it can be verified."
     },
     "errors": {
       "not_found": "We could not find this correction in your workspace. Reload the page.",
@@ -408,6 +411,11 @@
       "unknown": "Something failed. The state shown is the saved one; try again."
     },
     "evidenceFailed": "The evidence for this correction could not be updated. Its result cannot be stated yet: reload the page or retry.",
-    "retryEvidence": "Retry"
+    "retryEvidence": "Retry",
+    "previousCommit": "Previous commit (not verified):",
+    "notePrevious": {
+      "proposal": "Instructions for your agent. This proposal was reopened: the commit below is from an earlier attempt and is not verified. SequrAI has not changed your code.",
+      "approved": "Approved. The commit below is from an earlier attempt and does not count. Report the commit that contains the fix. Nothing is verified yet."
+    }
   }
 }

@@ -380,7 +380,9 @@
       "branch": "Rama",
       "analysis": "Análisis de ese commit:",
       "notice": "Es solo una sugerencia: no se ha seleccionado. Revísala y confírmala tú.",
-      "use": "Usar este commit"
+      "use": "Usar este commit",
+      "selected": "Commit seleccionado",
+      "selectedHint": "El campo se ha rellenado con la sugerencia. Revísalo y pulsa «Revisar»: nada se ha enviado."
     },
     "confirm": {
       "branch": "Rama",
@@ -391,7 +393,8 @@
       "baseAnalysis": "Análisis base de la propuesta:",
       "statement": "Vas a declarar que el commit {sha} contiene la corrección de «{title}». SequrAI lo reanalizará; hasta entonces no está verificado.",
       "button": "Confirmar commit",
-      "back": "Volver"
+      "back": "Volver",
+      "invalidatesApproval": "Ya había un commit informado ({previous}). Informar {sha} invalida la aprobación: tras confirmar tendrás que aprobar la propuesta de nuevo antes de poder verificarla."
     },
     "errors": {
       "not_found": "No encontramos esta corrección en tu espacio de trabajo. Recarga la página.",
@@ -408,6 +411,11 @@
       "unknown": "Algo falló. El estado mostrado es el guardado; inténtalo de nuevo."
     },
     "evidenceFailed": "No se pudo actualizar la evidencia de esta corrección. Todavía no se puede afirmar su resultado: recarga la página o reintenta.",
-    "retryEvidence": "Reintentar"
+    "retryEvidence": "Reintentar",
+    "previousCommit": "Commit anterior (no verificado):",
+    "notePrevious": {
+      "proposal": "Instrucciones para tu agente. Esta propuesta se reabrió: el commit de abajo es el de un intento anterior y no está verificado. SequrAI no ha cambiado tu código.",
+      "approved": "Aprobada. El commit de abajo es el de un intento anterior, no cuenta. Informa el commit que contiene la corrección. Aún no hay nada verificado."
+    }
   }
 }

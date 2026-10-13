@@ -76,7 +76,7 @@ export async function executeUnifiedScanRedTeamPhase(
     scanId: input.scanId,
     platform: platformMetadata,
   });
-  await attachPlatformSummaryToScan(admin, { scanId: input.scanId, platform: platformMetadata });
+  await attachPlatformSummaryToScan(admin, { scanId: input.scanId, organizationId: input.organizationId, platform: platformMetadata });
 
   // Phase 34: expose the correlation/attack-chain intelligence that was just
   // computed (report.intelligence) as queryable rows, in addition to the
