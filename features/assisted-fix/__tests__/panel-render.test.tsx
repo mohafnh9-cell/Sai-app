@@ -54,10 +54,12 @@ describe.each(["en", "es"] as const)("every phase is rendered for what it is [%s
     expect(text(render(fix("READY")))).not.toMatch(l === "en" ? /Report the correction commit|Verify/ : /Informar el commit|Verificar/);
   });
 
-  it("base analysis (branch, commit, date) is always shown", () => {
+  it("base analysis (branch, commit, date) is always shown, with a stable UTC date (no locale/time-zone dependent text)", () => {
     const html = text(render(fix("READY")));
     expect(html).toContain("main");
     expect(html).toContain("aaaaaaa");
+    expect(html).toContain("2026-10-09 10:00 UTC");
+    expect(html).not.toMatch(/\d{1,2}\/\d{1,2}\/\d{4}/);
   });
 
   it("approved: asks for the commit, still not a correction", () => {

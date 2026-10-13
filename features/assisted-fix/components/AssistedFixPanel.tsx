@@ -3,17 +3,15 @@
 import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { useI18n } from "@/lib/i18n/client";
+import { formatStableDateTime } from "@/lib/format/stable-date";
 import { createPanelApi, type PanelApi } from "../api";
 import { createAssistedFixController, type AssistedFixController } from "../controller";
 import { phaseOf, shortSha, type PanelAnalysis, type PanelData, type PanelFix, type PanelPhase } from "../model";
 
 const POLL_MS = 4000;
 
-function formatDate(value: string | null | undefined): string {
-  if (!value) return "—";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString();
-}
+// Stable (UTC) text: the panel is server-rendered and hydrated, so it must not format with the runtime's locale/time zone.
+const formatDate = formatStableDateTime;
 
 function AnalysisLine({ analysis, label }: { analysis: PanelAnalysis | null; label: string }) {
   const { t } = useI18n("missionControl");
