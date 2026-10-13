@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ProductionVerdictV1 } from "@/brain/production-verdict/schema";
 import type { SecurityDecisionFinalizeInput } from "@/brain/production-verdict/finalize-verdict";
 import { assessEvidenceReadiness, PENDING_ENGINE_STATUSES } from "./evidence-readiness";
+import { mergeScanMetrics } from "./scan-metrics";
 
 /**
  * Verdict finalization: the Production Verdict for a scan is generated once,
@@ -38,6 +39,8 @@ import { assessEvidenceReadiness, PENDING_ENGINE_STATUSES } from "./evidence-rea
 
 export const EVIDENCE_READY_KEY = "verdictEvidenceReadyAt";
 const STORED_DECISION_KEY = "verdictSecurityDecision";
+export const VERDICT_EVIDENCE_STORED_DECISION_KEY = STORED_DECISION_KEY;
+export const VERDICT_EVIDENCE_KEY = "verdictEvidence";
 
 const PENDING_JOB_STATUSES = PENDING_ENGINE_STATUSES;
 
@@ -94,14 +97,6 @@ export async function markVerdictEvidenceReady(
     securityDecision?: SecurityDecisionFinalizeInput | null;
   }
 ): Promise<void> {
-  const { data: scan } = await admin
-    .from("scans")
-    .select("id, metrics")
-    .eq("id", input.scanId)
-    .eq("organization_id", input.organizationId)
-    .maybeSingle();
-  if (!scan) throw new Error(`Cannot mark evidence ready: scan ${input.scanId} not found`);
-
   const decision = input.securityDecision;
   const stored = decision
     ? {
@@ -115,18 +110,15 @@ export async function markVerdictEvidenceReady(
       }
     : null;
 
-  const { error } = await admin
-    .from("scans")
-    .update({
-      metrics: {
-        ...metricsOf(scan as Row),
-        [EVIDENCE_READY_KEY]: new Date().toISOString(),
-        [STORED_DECISION_KEY]: stored,
-      },
-    })
-    .eq("id", input.scanId)
-    .eq("organization_id", input.organizationId);
-  if (error) throw new Error(`Could not mark verdict evidence ready: ${error.message}`);
+  const result = await mergeScanMetrics(admin, {
+    scanId: input.scanId,
+    organizationId: input.organizationId,
+    patch: { [EVIDENCE_READY_KEY]: new Date().toISOString(), [STORED_DECISION_KEY]: stored },
+  });
+  if (!result.ok) {
+    if (result.reason === "scan_not_found") throw new Error(`Cannot mark evidence ready: scan ${input.scanId} not found`);
+    throw new Error(`Could not mark verdict evidence ready: ${result.reason}${result.message ? ` (${result.message})` : ""}`);
+  }
 }
 
 export async function finalizeVerdictWhenEvidenceComplete(
@@ -147,6 +139,7 @@ export async function finalizeVerdictWhenEvidenceComplete(
         scanId: string;
         scanJobId?: string | null;
         securityDecisionReport?: SecurityDecisionFinalizeInput | null;
+        finalizedBy?: FinalizeMode;
       }
     ) => Promise<ProductionVerdictV1 | null>;
   }
@@ -216,16 +209,18 @@ export async function finalizeVerdictWhenEvidenceComplete(
     projectId: input.projectId,
     scanId: input.scanId,
     scanJobId: input.scanJobId ?? null,
+    finalizedBy: mode,
     securityDecisionReport:
       input.securityDecisionReport ?? (isStoredDecision(storedDecision) ? storedDecision : null),
   });
   if (!verdict) return { status: "skipped", reason: "verdict_not_generated" };
-  await recordVerdictEvidence(admin, {
+  // The canonical generator records it already (every path creates verdicts through it); this covers an injected generator.
+  await recordVerdictEvidenceSafely(admin, {
     scanId: input.scanId,
     organizationId: input.organizationId,
     mode,
     hasSecurityDecision: Boolean(input.securityDecisionReport) || isStoredDecision(storedDecision),
-  }).catch(() => undefined);
+  });
   return { status: "generated", verdict };
 }
 
@@ -234,38 +229,65 @@ export async function finalizeVerdictWhenEvidenceComplete(
  * generated: engine, final status, whether the platform's security decision was available, and how it was finalized. Nothing
  * here changes the verdict; it documents the evidence it was computed from (a failed or timed-out engine stays visible as such).
  */
+export type RecordVerdictEvidenceResult =
+  | { recorded: true }
+  | { recorded: false; reason: "already_recorded" | "scan_not_found" | "write_failed"; message?: string };
+
 export async function recordVerdictEvidence(
   admin: SupabaseClient,
   input: { scanId: string; organizationId: string; mode: FinalizeMode; hasSecurityDecision: boolean }
-): Promise<void> {
-  const { data: jobs } = await admin
+): Promise<RecordVerdictEvidenceResult> {
+  const { data: jobs, error: jobsError } = await admin
     .from("security_jobs")
     .select("engine, status")
     .eq("scan_id", input.scanId)
     .eq("organization_id", input.organizationId);
-  const { data: scan } = await admin
-    .from("scans")
-    .select("id, metrics")
-    .eq("id", input.scanId)
-    .eq("organization_id", input.organizationId)
-    .maybeSingle();
-  if (!scan) return;
+  // Unreadable job state is not "no engines ran": say nothing rather than record "not_run".
+  if (jobsError) return { recorded: false, reason: "write_failed", message: jobsError.message };
   const engines = ((jobs ?? []) as Row[]).map((job) => ({ engine: String(job.engine), status: String(job.status) }));
-  await admin
-    .from("scans")
-    .update({
-      metrics: {
-        ...metricsOf(scan as Row),
-        verdictEvidence: {
-          finalizedAt: new Date().toISOString(),
-          finalizedBy: input.mode,
-          securityDecisionIncluded: input.hasSecurityDecision,
-          externalEngines: engines.length > 0 ? engines : "not_run",
-        },
-      },
-    })
-    .eq("id", input.scanId)
-    .eq("organization_id", input.organizationId);
+
+  const result = await mergeScanMetrics(admin, {
+    scanId: input.scanId,
+    organizationId: input.organizationId,
+    // First record wins: it describes the evidence the verdict was computed from; a later call must not rewrite it.
+    patch: (current) =>
+      current[VERDICT_EVIDENCE_KEY]
+        ? null
+        : {
+            [VERDICT_EVIDENCE_KEY]: {
+              finalizedAt: new Date().toISOString(),
+              finalizedBy: input.mode,
+              securityDecisionIncluded: input.hasSecurityDecision,
+              externalEngines: engines.length > 0 ? engines : "not_run",
+            },
+          },
+  });
+  if (!result.ok) {
+    if (result.reason === "scan_not_found") return { recorded: false, reason: "scan_not_found" };
+    return { recorded: false, reason: "write_failed", message: result.message ?? result.reason };
+  }
+  return { recorded: true };
+}
+
+/**
+ * Never throws and never stays silent: a verdict must not fail because its evidence record could not be written, but a missing
+ * record has to be visible (structured log), because it is the only place that says which engines the verdict was computed from.
+ */
+export async function recordVerdictEvidenceSafely(
+  admin: SupabaseClient,
+  input: { scanId: string; organizationId: string; mode: FinalizeMode; hasSecurityDecision: boolean }
+): Promise<RecordVerdictEvidenceResult> {
+  try {
+    const result = await recordVerdictEvidence(admin, input);
+    if (!result.recorded && result.reason !== "already_recorded") {
+      console.warn({ component: "evidence-finalization", event: "verdict_evidence_record_failed", scanId: input.scanId, reason: result.reason, message: result.message });
+    }
+    return result;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn({ component: "evidence-finalization", event: "verdict_evidence_record_failed", scanId: input.scanId, reason: "exception", message });
+    return { recorded: false, reason: "write_failed", message };
+  }
 }
 
 /**
