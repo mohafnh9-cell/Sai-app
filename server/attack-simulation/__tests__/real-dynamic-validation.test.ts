@@ -2,6 +2,7 @@
  * Real Dynamic Validation — proves network I/O, authorization gates, evidence,
  * correlation, and fix/re-test for the first three dynamic adapters.
  */
+import "@/test/enable-dynamic-testing";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { startDynamicSecurityLab, type DynamicSecurityLab } from "@/fixtures/dynamic-security-lab/server";
 import { createSafeRuntimeSession, executeSafeRuntimeStep } from "@/server/attack-simulation/runtime/safe-runtime";

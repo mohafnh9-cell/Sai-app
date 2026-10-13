@@ -5,6 +5,11 @@ import {
   type DynamicTargetFixtures,
 } from "./authorized-target";
 import { createDynamicHttpClient } from "./http-client";
+import {
+  DYNAMIC_TESTING_UNAVAILABLE_CODE,
+  DYNAMIC_TESTING_UNAVAILABLE_MESSAGE,
+  isDynamicSecurityTestingAvailable,
+} from "../availability";
 import { adapterSupportsDynamicExecution, executeDynamicAdapterProbe } from "./probes";
 
 function mapDynamicError(error: unknown): Pick<
@@ -44,6 +49,23 @@ export async function tryExecuteDynamicHttpStep(
 ): Promise<SafeRuntimeStepResult | null> {
   if (input.stepKind !== "execute_request") return null;
   if (!input.adapterId || !adapterSupportsDynamicExecution(input.adapterId)) return null;
+
+  // Last line of defence: whatever created the execution (API, MCP, scan pipeline, an old queued job), no HTTP request is
+  // sent while dynamic testing is not available. Fails closed and says why.
+  if (input.guard.mode !== "mock" && input.guard.mode !== "static" && !isDynamicSecurityTestingAvailable()) {
+    return {
+      outcome: "failed",
+      classification: input.guard.mode === "sandbox" ? "sandbox" : "authorized_staging",
+      expectedBehavior: "Dynamic probe completes within authorized scope",
+      observedBehavior: DYNAMIC_TESTING_UNAVAILABLE_MESSAGE,
+      statusCode: null,
+      sideEffects: { dynamicError: true, httpRequestsSent: 0 },
+      auditTrail: [`dynamic:blocked:${input.adapterId}`],
+      durationMs: 0,
+      failureCode: DYNAMIC_TESTING_UNAVAILABLE_CODE,
+      safeFailureMessage: DYNAMIC_TESTING_UNAVAILABLE_MESSAGE,
+    };
+  }
 
   const target = resolveAuthorizedDynamicTarget({
     guard: input.guard,

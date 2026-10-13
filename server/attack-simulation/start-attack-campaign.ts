@@ -4,16 +4,19 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import type { AttackAuthorizationRecord } from "@/server/ai-red-team/authorization/types";
 import type { AttackRuntimeMode } from "./contracts/enums";
-import {
-  attackHypothesisListSchema,
-  attackHypothesisFromRedTeamFinding,
-} from "./contracts/attack-hypothesis";
+import { attackHypothesisListSchema } from "./contracts/attack-hypothesis";
 import {
   createAttackCampaign,
   getAttackCampaignByScanId,
 } from "./persistence/campaign-repository";
 import { listAttackExecutionsForCampaign } from "./persistence/execution-repository";
 import { validateProductionDynamicGate } from "./dynamic/production-gate";
+import {
+  DYNAMIC_TESTING_UNAVAILABLE_CODE,
+  DYNAMIC_TESTING_UNAVAILABLE_MESSAGE,
+  isDynamicRuntimeModeName,
+  isDynamicSecurityTestingAvailable,
+} from "./availability";
 import { planAndPersistCampaignFromHypotheses } from "./planner/plan-and-persist-campaign";
 import { enqueueAttackExecutionRun } from "./executor/enqueue-attack-execution";
 
@@ -110,20 +113,23 @@ export async function startAttackCampaign(
     };
   }
 
-  const hypotheses =
-    parsed.data.hypotheses ??
-    [
-      attackHypothesisFromRedTeamFinding({
-        id: "demo-workflow-bypass",
-        title: "Workflow bypass in checkout",
-        description: "State transition may be skipped without payment confirmation.",
-        category: "business_logic",
-        severity: "high",
-        confidence: 0.75,
-        source: "attack_center.demo",
-        metadata: { adapterHint: "workflow-bypass" },
-      }),
-    ];
+  // Dynamic runtimes send real HTTP: closed in V1 whatever the caller, authorization or flag says.
+  if (isDynamicRuntimeModeName(parsed.data.runtimeMode) && !isDynamicSecurityTestingAvailable()) {
+    throw new StartAttackCampaignError(
+      DYNAMIC_TESTING_UNAVAILABLE_MESSAGE,
+      DYNAMIC_TESTING_UNAVAILABLE_CODE,
+      403
+    );
+  }
+
+  // No default hypothesis: a campaign only exists for hypotheses the caller supplies (derived from real findings).
+  const hypotheses = parsed.data.hypotheses;
+  if (!hypotheses || hypotheses.length === 0) {
+    throw new StartAttackCampaignError(
+      "A campaign requires hypotheses derived from analysis findings; none was provided",
+      "HYPOTHESES_REQUIRED"
+    );
+  }
 
   const campaign = await createAttackCampaign(admin, {
     scanId: parsed.data.scanId,

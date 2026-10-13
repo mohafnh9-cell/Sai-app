@@ -3,6 +3,7 @@
  *
  * Each adapter is validated through the complete orchestration chain with real HTTP.
  */
+import "@/test/enable-dynamic-testing";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/i18n/server", () => ({

@@ -1,3 +1,4 @@
+import "@/test/enable-dynamic-testing";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createFakeAdmin, type FakeTables } from "@/server/mcp/__tests__/fake-admin";
 

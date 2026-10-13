@@ -47,7 +47,8 @@ const DEFAULTS: Record<FeatureFlagKey, FeatureRollout> = {
   parallel_execution: "internal",
   adaptive_team_selection: "internal",
   mission_control: "ga",
-  attack_simulation: "ga",
+  // V1: the Attack Center / dynamic security testing is not offered to customers (see server/attack-simulation/availability.ts).
+  attack_simulation: "internal",
   analysis_run_isolation: "ga",
 };
 

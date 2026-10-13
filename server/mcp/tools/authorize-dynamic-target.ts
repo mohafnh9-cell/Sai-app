@@ -18,6 +18,10 @@ import {
 import { normalizeOrigin } from "@/server/ai-red-team/authorization/types";
 import { reapproveExpandedDynamicTargetScope } from "@/server/ai-red-team/authorization/dynamic-scope-expansion";
 import { isDynamicTargetAuthorizationRateLimited } from "@/server/ai-red-team/authorization/rate-limit";
+import {
+  DYNAMIC_TESTING_UNAVAILABLE_MESSAGE,
+  isDynamicSecurityTestingAvailable,
+} from "@/server/attack-simulation/availability";
 import { loadRequiredDynamicPathsForLatestScan } from "@/server/full-product-audit/load-required-dynamic-paths-for-project";
 
 /** Actions that trigger a real outbound HTTP/DNS check or a GitHub API call. */
@@ -113,6 +117,11 @@ export async function authorizeDynamicTarget(
   const userEmail = await resolveMcpUserEmail(ctx.admin, ctx.userId);
   const action = input.action ?? "status";
   const targetOrigin = resolveTargetOrigin(input);
+
+  // V1: nothing that starts an outbound check or creates an authorization for dynamic testing. Status and decline stay.
+  if (action !== "status" && action !== "decline" && !isDynamicSecurityTestingAvailable()) {
+    throw new McpError(403, "dynamic_testing_unavailable", DYNAMIC_TESTING_UNAVAILABLE_MESSAGE);
+  }
 
   if (
     RATE_LIMITED_ACTIONS.has(action) &&

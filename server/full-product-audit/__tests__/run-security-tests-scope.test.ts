@@ -1,3 +1,4 @@
+import "@/test/enable-dynamic-testing";
 import { describe, expect, it, vi } from "vitest";
 import { ensureSecurityTestsForAudit } from "../run-security-tests";
 import {

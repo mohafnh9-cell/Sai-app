@@ -2,6 +2,7 @@
  * Gate 3 — Production Safety + Operational Readiness
  * Validates authorization gates, scope, budgets, redaction, isolation, and MCP safety.
  */
+import "@/test/enable-dynamic-testing";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/i18n/server", () => ({
