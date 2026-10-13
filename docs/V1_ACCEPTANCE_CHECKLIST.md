@@ -37,7 +37,7 @@ Estimaciones: rangos en días de trabajo restantes de una persona [E]; no incluy
 
 ### 4. Ejecución fiable
 - **Estado:** pendiente
-- **Evidencia:** Estados y recuperación existen en código (`security-jobs/state-machine`, `scan-job-recovery`, `review-cancel`) con pruebas unitarias; **no se han observado en producción** cancelación, fallo, reintento ni recuperación tras caída. Hay una prueba de latencia intermitente preexistente (`worker-run-job.perf.bench`). **Hallazgo nuevo (datos existentes, 2026-10-10):** tres escaneos `manual_scan` sobre el commit `cd09ef6` (13 archivos, motores opengrep/trivy/crypto `COMPLETED`, cobertura 1) terminaron en `insufficient_data` ("did not analyze enough"), mientras que el `automatic_review` del mismo commit (`db96978f`) dio `ready_to_ship` con confianza media. La ruta manual y la automática no producen el mismo veredicto para el mismo commit: hay que explicar la diferencia antes de V1 (puntos 4 y 5).
+- **Evidencia:** Estados y recuperación existen en código (`security-jobs/state-machine`, `scan-job-recovery`, `review-cancel`) con pruebas unitarias; **no se han observado en producción** cancelación, fallo, reintento ni recuperación tras caída. Hay una prueba de latencia intermitente preexistente (`worker-run-job.perf.bench`). **Hallazgo (registros existentes, `INVESTIGATION_MANUAL_VS_AUTOMATIC_VERDICT_2026-10-13.md`):** en 7 de 8 escaneos manuales del 8–10 oct el veredicto se generó **antes** de que terminaran los motores externos y quedó fijado (3 `ready_to_ship`/media sin ver motores, 4 `insufficient_data`), mientras que los del 4–5 oct esperaron a los motores. Mismo commit `cd09ef6`: el `automatic_review` (sin motores externos) dio `ready_to_ship`/media; los 3 manuales, `insufficient_data`. Causa probable (hipótesis fuerte, sin confirmar con logs): `getProductionReviewState` (sondeo de la interfaz y página Journey) trata como huérfano un trabajo aún en curso cuyo scan ya está `completed` y fija el veredicto en modo `recovery`. Hasta corregirlo, las verificaciones reales deben dispararse por webhook (push).
 - **Entorno y fecha de verificación:** local
 - **Dependencias:** Casos reales: cancelar, forzar fallo, reintento sin duplicar · **Responsable:** agente
 - **Estimación restante:** 3–6 d (verificación 2–3; investigación de `manual_scan` 1–2; contingencia de desarrollo 0–1)
@@ -92,11 +92,11 @@ Estimaciones: rangos en días de trabajo restantes de una persona [E]; no incluy
 - **Bloquea V1:** sí
 
 ### 11. Flujo asistido utilizable
-- **Estado:** pendiente
-- **Evidencia:** **No existe superficie de producto**: la UI solo copia el prompt; aprobar/aplicado/verificar existen solo como API (`/api/projects/{id}/safe-fixes/{id}`), por eso las pruebas se hicieron con la consola del navegador. Mínimo: panel "Corrección asistida" en la página del proyecto; recorrido y criterios de aceptación en `V1_ASSISTED_FIX_PANEL_SPEC.md` (sin implementar).
+- **Estado:** en curso
+- **Evidencia:** **No existe superficie de producto**: la UI solo copia el prompt; aprobar/aplicado/verificar existen solo como API (`/api/projects/{id}/safe-fixes/{id}`), por eso las pruebas se hicieron con la consola del navegador. Panel "Corrección asistida" en la página del proyecto: especificación `V1_ASSISTED_FIX_PANEL_SPEC.md`, **implementado en la PR #75 (abierta, sin fusionar ni desplegar)** con 62 pruebas locales (recorrido completo sobre el motor real en memoria). Falta: CI de la PR, despliegue y aceptación real sin consola (criterio 13 de la especificación; requiere commits autorizados en `sequrai-e2e-test`).
 - **Entorno y fecha de verificación:** —
 - **Dependencias:** Diseño aprobado; #70 desplegada · **Responsable:** agente
-- **Estimación restante:** 4–7 d (**desarrollo**)
+- **Estimación restante:** 1–2 d (revisión/CI de #75 0,5–1; aceptación real 0,5–1)
 - **Bloquea V1:** **sí**
 
 ### 12. Aislamiento entre clientes
@@ -183,20 +183,39 @@ No incluye: generar parches, abrir PR, escribir en GitHub, cola de trabajos nuev
 ## Orden mínimo para cerrar V1 y estimación
 Camino crítico (cada paso habilita el siguiente):
 1. **Cerrar el alcance**: #74 (Red Team cerrado en servidor) **fusionada, desplegada (`5fe87e6`) y observada en tres rutas** el 2026-10-13; resta la comprobación por MCP (sesión nueva) — ≤ 0,5 d (puntos 1, 15).
-2. **Flujo asistido de producto** (punto 11) — 4–8 d; en paralelo, el propietario ejecuta los pendientes que no dependen de código: Journey/dashboard/proyectos (6), sesión B (12), observación de estados con commit documental (7), esperas de renovación OAuth (8).
+2. **Flujo asistido de producto** (punto 11): implementado en #75; falta revisión, despliegue y aceptación real (1–2 d). **Corregir D9 antes de las verificaciones reales con análisis manual.** En paralelo, el propietario ejecuta los pendientes que no dependen de código: Journey/dashboard/proyectos (6), sesión B (12), observación de estados con commit documental (7), esperas de renovación OAuth (8).
 3. **Verificaciones reales posteriores al flujo**: Safe Fix tras #70, verificación exacta con rechazos reales (9, 10), identidad con segunda rama/proyecto (3), instalación revocada/desconectada (2) — 5–10 d.
 4. **Fiabilidad y operación**: ejecución fiable con cancelación/fallo/reintento reales (4), ensayo de recuperación y limpieza (18), logs y OAuth (13), alertas observadas (14) — 6–12 d.
 5. **Documentación y calidad**: cobertura y defectos por impacto (16), triaje de typecheck/pruebas (17), onboarding con revocación (19) — 7–11 d.
 6. **Aceptación final** sobre un repositorio autorizado, con decisión explícita (20) — 1–2 d.
 
-**Estimación revisada [E] (2026-10-13), separando desarrollo de comprobación:**
-| Tipo de trabajo | Puntos | Rango |
+## Estimación revisada (2026-10-13): esfuerzo, dependencias y calendario por separado
+**Esfuerzo restante [E]**, desglosado y reutilizando lo ya hecho (el panel ya está implementado en #75; la documentación del piloto y la evidencia válida se reutilizan):
+| Categoría | Contenido | Días |
 |---|---|---|
-| Desarrollo nuevo | 11 (panel, 4–7 d); 5/6 (cambios pequeños D7/D6/D2, 2–5 d); contingencia en 2 y 4 (0–2 d) | **6–14 d** |
-| Comprobación / observación (sin código salvo que aparezca un defecto) | 2, 3, 7, 8, 9, 10, 12, 13, 14, 15, 18 (ensayo) | **8–14 d** |
-| Documentación | 1, 16, 17 (triaje), 19, 20 | **8–14 d** |
-| Investigación | `manual_scan` ≠ `automatic_review` (4/5) | 1–2 d |
-Total revisado **24,5–47 días de trabajo** (antes 30–58): la reducción viene de no contar como desarrollo completo lo que solo necesita una comprobación. Esperas externas (reautorización de cliente OAuth, caducidad de 1 h del acceso, sesión B, B1–B8 con el cliente, aprobaciones de fusión/despliegue) no suman esfuerzo pero alargan el calendario. Camino crítico: panel (4–7 d) → comprobaciones reales que lo usan → aceptación; el resto va en paralelo. **Calendario [E]: unas 5–8 semanas naturales** (V1 candidato entre finales de noviembre y mediados de diciembre). Esta cifra cambia si las comprobaciones destapan defectos; no se asume que no los haya.
+| Desarrollo | Panel: revisión/CI de #75 (0,5–1) · **corrección del reconciliador de veredictos** (D9, con pruebas de carrera) (1,5–3) · D7/D6/D2 (2–5) · contingencia por defectos hallados en las comprobaciones (2–5) | **6–14** |
+| Observación / verificación (sin código salvo defecto) | 2 (1–2) · 3 (1–2) · 4, casos reales de cancelar/fallar/reintentar (2–3) · 7 (0,5–1) · 8 (0,5–1,5) · 9 (0,25–0,5) · 10 (1–2) · 11, aceptación real (0,5–1) · 12 (0,5–1) · 13 (0,5–1) · 14 (0,25–0,5) · 15 (0,25–0,5) · 18, ensayo de recuperación (1–2) | **8–17** |
+| Documentación (reutiliza `PILOT_ONBOARDING`, `PILOT_RUNBOOK`, `PILOT_KNOWN_DEFECTS`, `MCP_OAUTH`) | 1 (0,25–0,5) · 16, cobertura (1–2) · 19, onboarding con panel y revocación (1,5–2,5) · 20 (0,5–1) | **3,25–6** |
+| Triaje de calidad | 17: 107 errores de `tsc`, 2 fallos preexistentes y la prueba intermitente (1,5–2,5) | **1,5–2,5** |
+| Confirmaciones | causa de D9 con logs (0,25–0,5) | **0,25–0,5** |
+| **Total** | | **≈ 19–40 días de trabajo** |
+La documentación pasa de 8–14 d a 3,25–6 d porque el onboarding, el runbook, los defectos y el OAuth ya están escritos y solo se actualizan; lo que antes se contaba como documentación y es comprobación (ensayo de recuperación, aceptación real) está ahora en observación. No se suman como desarrollo completo las capacidades que solo requieren comprobar (2, 3, 7–10, 12–15, 18), ni se marca como verificado nada que no se haya observado.
+
+**Dependencias (no suman esfuerzo):**
+- **D9 antes de las verificaciones reales con análisis manual** (puntos 3, 4, 5, 9, 10): mientras exista, un "analizar" manual con la interfaz abierta puede fijar `insufficient_data`; hasta corregirlo, se dispara por push (webhook).
+- #75 desplegada antes de la aceptación sin consola (11); commits autorizados en `sequrai-e2e-test` para esa aceptación y para el sondeo (7).
+- Sesión B (12) y comprobaciones visuales (6): acciones del propietario.
+- Reautorizar el cliente OAuth y la caducidad de 1 h del acceso (8, 9, 15); logs de ejecución para confirmar D9 y el lote diario (14); B1–B8 y el entorno del cliente (2, A16).
+
+**Calendario [E]** (una persona de desarrollo y el propietario disponible para sus acciones):
+| Semana | Foco |
+|---|---|
+| 13–19 oct | Revisión y CI de #75; corrección de D9; comprobaciones visuales y sesión B |
+| 20–26 oct | Despliegue de #75 y D9; aceptación sin consola; observación de estados; verificaciones 3, 9, 10 |
+| 27 oct–2 nov | Ejecución fiable real (4), OAuth/alertas (8, 13, 14), D7/D6/D2 |
+| 3–9 nov | Instalación revocada/desconectada (2), recuperación (18), documentación (16, 19) |
+| 10–16 nov | Triaje de calidad (17), contingencias, demostración final (20) y decisión |
+**Resultado:** candidato a V1 entre **mediados y finales de noviembre**, con el margen del ciclo (hasta el 13 de enero). Si las comprobaciones destapan defectos, lo que se mueve es la fecha.
 
 ## Mediciones de fluidez (nuevas; no sustituyen a ningún punto)
 Objetivo: saber dónde se pierde tiempo antes de optimizar. **Solo se optimiza un cuello de botella medido, conservando cobertura y controles** (ningún motor se omite ni se reduce el análisis por velocidad).
@@ -207,10 +226,11 @@ Objetivo: saber dónde se pierde tiempo antes de optimizar. **Solo se optimiza u
 | Motores | `engine_executions.duration_ms` (6 escaneos) | opengrep media 1,0 s (máx. 1,2); trivy media 2,2 s (máx. 5,7); crypto ≈ 0 s | observada |
 | Veredicto final (completado → veredicto) | `scans.completed_at → production_verdicts.generated_at` | 2,9–10,8 s, mediana 3,75 s | observada |
 | Total (creación → veredicto) | ídem | 9,2–24,5 s, mediana 11,6 s | observada |
-| Tiempo de respuesta de la interfaz | Navigation Timing del navegador en Mission Control, Journey, dashboard y Proyectos (3 cargas por página) | — | **sin medir**: requiere acciones concretas (abajo) |
+| Tiempo de respuesta de la interfaz — **navegación completa** (carga de documento, 3 cargas por página) | Navigation Timing en la pestaña Chrome del propietario, solo lectura | `dashboard`: DCL 5,75 / 2,29 / 2,92 s; `proyectos`: 1,81 / 2,72 / 1,83 s; `journey`: 2,79 / 4,36 / 2,74 s; `mission-control` (con redirección a `?run=`): 5,90 / 6,05 / 6,05 s. TTFB del documento 27–113 ms en todos | observada (12 muestras) |
+| Tiempo de respuesta de la interfaz — **navegación interna** (clic en la barra lateral, dashboard ↔ proyectos, 6 saltos) | mutaciones del DOM tras el clic | contenido estable 0,34–0,39 s en 5 saltos y 0,96 s en 1; el cambio de URL no es medible (granularidad de 1 s por temporizador) | observada (6 muestras) |
 | Repositorios de tamaño real | mismas fuentes con un repositorio mayor | — | **sin medir**; no extrapolar de 13 archivos |
 Límites: repositorio mínimo; los tiempos de motores externos (opengrep/trivy) crecerán con el tamaño; la ruta `manual_scan` muestra 14,0 s de espera en 1 de 16 casos (valor atípico, causa desconocida). Umbrales objetivo: **por acordar** tras medir un repositorio realista.
-**Acciones necesarias antes de medir la interfaz** (no ejecutadas): (1) tu sesión Sequrai con las 4 páginas; (2) yo leo `performance.getEntriesByType("navigation")` y los recursos tras 3 cargas por página en tu pestaña de Chrome — solo lectura, sin POST; (3) opcional: un repositorio mediano desechable propiedad de SequrAI para medir motores (requiere un commit/importación autorizados).
+**Cómo leer las muestras de interfaz:** son **12 cargas completas y 6 saltos internos** en una sola sesión, un solo usuario y una sola máquina, con la pestaña de automatización **oculta** (`document.hidden = true`, lo que puede inflar tiempos y fija a 1 s los temporizadores). El LCP no estuvo disponible. **No representan el rendimiento de clientes.** Observación útil: Mission Control tarda ~2–3 veces más que las otras páginas y pasa por una redirección adicional a `?run=<id>`; es el candidato a medir con más cuidado antes de optimizar. Pendiente (sin ejecutar): repetir con una pestaña visible y un repositorio mediano desechable propiedad de SequrAI.
 
 ## Decisión actual
-**V1 no está listo.** Bloqueos concretos: 11 (no existe flujo de producto), 12 (sesión B), 15 (restricción de Red Team desplegada y observada en tres rutas; falta MCP y UI de otra organización), 6/7 (verificación visual y de estados sin hacer), 4 (ejecución fiable sin observar), 18/19/20 (recuperación, onboarding y demostración final). Esta lista no se marca como verificada hasta que cada punto cumpla su evidencia; la decisión se repite al cerrar cada bloque.
+**V1 no está listo.** Bloqueos concretos: 11 (el panel existe en #75, sin desplegar ni aceptar sin consola), 12 (sesión B), 15 (restricción de Red Team desplegada y observada en tres rutas; falta MCP y UI de otra organización), 6/7 (verificación visual y de estados sin hacer), 4 (ejecución fiable sin observar y defecto D9 del reconciliador, que fija veredictos antes de tiempo), 18/19/20 (recuperación, onboarding y demostración final). Esta lista no se marca como verificada hasta que cada punto cumpla su evidencia; la decisión se repite al cerrar cada bloque.
