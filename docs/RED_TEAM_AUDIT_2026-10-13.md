@@ -74,3 +74,11 @@ Piloto actual: **solo usa el Red Team estático (dentro del scan) y el veredicto
 1. **Hipótesis enlatada** puede presentar un hallazgo no derivado del repositorio (campañas creadas desde la UI).
 2. **Producción dinámica** queda protegida solo por una variable de entorno global (`SEQURAI_PRODUCTION_DYNAMIC_ENABLED`) + la autorización; sin interruptor operativo.
 3. **Confusión de nombres**: "Red Team" estático (dentro de cada scan) y "Prueba de seguridad" dinámica son productos distintos.
+
+## 4. Accesibilidad actual de las campañas dinámicas y de la hipótesis predeterminada (main `3ea5dab`)
+Comprobado en código: **eran alcanzables** y la restricción es de servidor (#74):
+- **API:** `POST /api/projects/{id}/attack-campaigns` (flag `attack_simulation` en `"ga"`) aceptaba `runtimeMode: sandbox | authorized_staging` con `authorizationId` y `targetUrl`, y sin `hypotheses` creaba la hipótesis enlatada `demo-workflow-bypass`; `POST attack-authorizations` y `dynamic-target-authorization` creaban autorizaciones.
+- **UI:** pestaña/página "Attack Center" (flag GA) y la fase "Attack simulation" de Mission Control.
+- **MCP:** `authorize_dynamic_target` no comprobaba la flag (solo el ámbito `mcp:target:authorize`; las claves heredadas lo tienen); `full_product_audit` podía resolver un destino de staging.
+- **Pipeline de scan:** cada scan creaba una campaña *mock* a partir del informe del Red Team (sin red) cuando la flag era GA.
+Cierre en #74: variable de operador `SEQURAI_DYNAMIC_SECURITY_TESTING_ENABLED` (cerrada por defecto) comprobada en rutas, servicio, ejecutor, MCP y resolución del destino de auditoría; sin hipótesis predeterminada; rollout `internal`. No se leyó el entorno de producción: si existe un `SEQURAI_FEATURE_FLAGS_JSON` que reabre la flag, la UI lo seguiría, pero los cierres de servidor se mantienen.
