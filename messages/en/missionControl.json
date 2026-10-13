@@ -65,7 +65,14 @@
         "cancelled": "Cancelled",
         "unknown": "No verdict"
       }
-    }
+    },
+    "contextOlderTitle": "You are viewing an earlier analysis",
+    "contextNewerTitle": "There is a newer analysis than the one you are viewing",
+    "contextShowing": "Showing:",
+    "contextLatest": "Latest:",
+    "contextWarning": "The verdict, fixes and decisions on this page belong to the analysis shown, not to the latest one. Nothing changes by itself.",
+    "contextViewLatest": "View the latest analysis",
+    "contextUnknownRun": "analysis without data"
   },
   "header": {
     "mission": "Mission",

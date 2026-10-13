@@ -65,7 +65,14 @@
         "cancelled": "Cancelado",
         "unknown": "Sin veredicto"
       }
-    }
+    },
+    "contextOlderTitle": "Estás viendo un análisis anterior",
+    "contextNewerTitle": "Hay un análisis más reciente que el que estás viendo",
+    "contextShowing": "Mostrando:",
+    "contextLatest": "Más reciente:",
+    "contextWarning": "El veredicto, las correcciones y las decisiones de esta página corresponden al análisis mostrado, no al más reciente. No se cambia nada por sí solo.",
+    "contextViewLatest": "Ver el análisis más reciente",
+    "contextUnknownRun": "análisis sin datos"
   },
   "header": {
     "mission": "Misión",
