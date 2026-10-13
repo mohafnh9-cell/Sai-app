@@ -41,6 +41,8 @@ export const EVIDENCE_READY_KEY = "verdictEvidenceReadyAt";
 const STORED_DECISION_KEY = "verdictSecurityDecision";
 export const VERDICT_EVIDENCE_STORED_DECISION_KEY = STORED_DECISION_KEY;
 export const VERDICT_EVIDENCE_KEY = "verdictEvidence";
+/** A verdict younger than this and without its evidence record gets it completed; older verdicts are never touched. */
+export const VERDICT_EVIDENCE_BACKFILL_WINDOW_MS = 10 * 60_000;
 
 const PENDING_JOB_STATUSES = PENDING_ENGINE_STATUSES;
 
@@ -161,11 +163,28 @@ export async function finalizeVerdictWhenEvidenceComplete(
 
   const { data: existing } = await admin
     .from("production_verdicts")
-    .select("id")
+    .select("id, generated_at")
     .eq("organization_id", input.organizationId)
     .eq("scan_id", input.scanId)
     .maybeSingle();
-  if (existing) return { status: "already_exists" };
+  if (existing) {
+    // Another invocation (e.g. the worker that finished the last engine) may have created the verdict and been cut short before it
+    // wrote the evidence record. Complete it ONLY for a verdict created moments ago: historical scans are never rewritten.
+    const generatedAt = Date.parse(String((existing as Row).generated_at ?? ""));
+    if (
+      Number.isFinite(generatedAt) &&
+      Date.now() - generatedAt <= VERDICT_EVIDENCE_BACKFILL_WINDOW_MS &&
+      !metricsOf(scan as Row)[VERDICT_EVIDENCE_KEY]
+    ) {
+      await recordVerdictEvidenceSafely(admin, {
+        scanId: input.scanId,
+        organizationId: input.organizationId,
+        mode,
+        hasSecurityDecision: isStoredDecision(metricsOf(scan as Row)[STORED_DECISION_KEY]),
+      });
+    }
+    return { status: "already_exists" };
+  }
 
   // Recovery: engines that outlived their own timeout are terminalized EXPLICITLY (TIMED_OUT / REJECTED) first.
   if (mode === "recovery") {

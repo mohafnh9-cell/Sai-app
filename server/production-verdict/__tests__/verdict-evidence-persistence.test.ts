@@ -166,3 +166,120 @@ describe("recordVerdictEvidenceSafely: a failure is visible and never breaks the
     warn.mockRestore();
   });
 });
+
+describe("the record does not depend on what runs AFTER the verdict", () => {
+  it("is already stored when the slow post-verdict steps (AI reasoning, memory) start, and survives them failing or never finishing", async () => {
+    const { generateAndPersistProductionVerdict } = await import("../core");
+    const reasoning = await import("@/server/ai-reasoning/run-scan-reasoning");
+    const admin = freshAdmin();
+    let storedWhenReasoningStarted: unknown = "not called";
+    vi.mocked(reasoning.runScanAiReasoning).mockImplementationOnce(async () => {
+      storedWhenReasoningStarted = (scanOf().metrics as Record<string, unknown>).verdictEvidence;
+      throw new Error("function cut short after the verdict");
+    });
+    await generateAndPersistProductionVerdict(admin as never, { organizationId: ORG_ID, projectId: PROJECT_ID, scanId: SCAN_ID });
+    expect(storedWhenReasoningStarted).toMatchObject({ finalizedBy: "pipeline" });
+  });
+});
+
+describe("conflicts and exhausted retries", () => {
+  const withConstantlyChangingRow = (admin: ReturnType<typeof createFakeAdmin>) => {
+    const original = admin.from.bind(admin);
+    let bump = 0;
+    (admin as { from: unknown }).from = (table: string) => {
+      const builder = original(table) as unknown as { update: (v: unknown) => unknown };
+      if (table !== "scans") return builder;
+      const update = builder.update.bind(builder);
+      builder.update = (values: unknown) => {
+        // another writer lands between EVERY read and write
+        bump += 1;
+        const row = scanOf();
+        row.metrics = { ...(row.metrics as object), [`other${bump}`]: bump };
+        row.updated_at = `2026-10-13T13:05:${String(bump).padStart(2, "0")}.000Z`;
+        return update(values);
+      };
+      return builder;
+    };
+  };
+
+  it("never overwrites the other writer's keys, writes nothing of ours, and reports the exhaustion", async () => {
+    const { mergeScanMetrics } = await import("../scan-metrics");
+    const admin = freshAdmin();
+    withConstantlyChangingRow(admin);
+    const result = await mergeScanMetrics(admin as never, { scanId: SCAN_ID, organizationId: ORG_ID, patch: { mine: 1 }, attempts: 3 });
+    expect(result).toEqual({ ok: false, reason: "conflict_exhausted", attempts: 3, message: undefined });
+    const metrics = metricsOf();
+    expect(metrics.mine).toBeUndefined();               // nothing half-written
+    expect(metrics).toMatchObject({ other1: 1, other2: 2, other3: 3, rulesRun: 47 }); // everything the others stored is intact
+  });
+
+  it("the verdict evidence record reports the failure (recorded:false) instead of claiming success", async () => {
+    const { recordVerdictEvidence } = await import("../evidence-finalization");
+    const admin = freshAdmin();
+    withConstantlyChangingRow(admin);
+    const result = await recordVerdictEvidence(admin as never, { scanId: SCAN_ID, organizationId: ORG_ID, mode: "pipeline", hasSecurityDecision: false });
+    expect(result).toMatchObject({ recorded: false, reason: "write_failed" });
+    expect(metricsOf().verdictEvidence).toBeUndefined();
+  });
+
+  it("the evidence marker (read by the verdict) fails loudly instead of pretending it was stored", async () => {
+    const { markVerdictEvidenceReady } = await import("../evidence-finalization");
+    const admin = freshAdmin();
+    withConstantlyChangingRow(admin);
+    await expect(markVerdictEvidenceReady(admin as never, { scanId: SCAN_ID, organizationId: ORG_ID })).rejects.toThrow(/Could not mark verdict evidence ready/);
+  });
+
+  it("every successful write changes updated_at (the condition other writers rely on)", async () => {
+    const { mergeScanMetrics } = await import("../scan-metrics");
+    // In production the BEFORE UPDATE trigger public.set_updated_at() sets updated_at = now() on every update (microsecond
+    // resolution); the in-memory admin mimics it with millisecond resolution, so the clock is moved between the two writes.
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-10-13T13:10:00.000Z"));
+      const admin = freshAdmin();
+      const before = scanOf().updated_at;
+      await mergeScanMetrics(admin as never, { scanId: SCAN_ID, organizationId: ORG_ID, patch: { a: 1 } });
+      const afterFirst = scanOf().updated_at;
+      vi.setSystemTime(new Date("2026-10-13T13:10:01.000Z"));
+      await mergeScanMetrics(admin as never, { scanId: SCAN_ID, organizationId: ORG_ID, patch: { b: 2 } });
+      expect(afterFirst).not.toBe(before);
+      expect(scanOf().updated_at).not.toBe(afterFirst);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("the platform summary writer uses the same conditional mechanism and keeps other keys", () => {
+  it("adds platformExecution without dropping the evidence marker or the record", async () => {
+    const { attachPlatformSummaryToScan } = await import("@/server/platform-convergence/persist-scan-platform");
+    const admin = freshAdmin(tables({ ...baseMetrics, verdictEvidence: { finalizedBy: "pipeline" } }));
+    await attachPlatformSummaryToScan(admin as never, {
+      scanId: SCAN_ID, organizationId: ORG_ID,
+      platform: { ids: { correlationId: "c", executionId: "e", decisionId: "d" }, pipelineStatus: "completed", completedAt: 5 } as never,
+    });
+    expect(metricsOf()).toMatchObject({ platformExecution: { correlationId: "c", pipelineStatus: "completed" }, verdictEvidence: { finalizedBy: "pipeline" }, verdictEvidenceReadyAt: "2026-10-13T13:04:31.222Z", rulesRun: 47 });
+  });
+});
+
+describe("a verdict created moments ago without its record gets it; historical scans are never touched", () => {
+  const base = (generatedAt: string) => {
+    const t = tables();
+    t.production_verdicts = [{ id: "v1", organization_id: ORG_ID, scan_id: SCAN_ID, project_id: PROJECT_ID, generated_at: generatedAt }];
+    return t;
+  };
+  it("recent verdict, no record: completed", async () => {
+    const { finalizeVerdictWhenEvidenceComplete } = await import("../evidence-finalization");
+    const admin = freshAdmin(base(new Date().toISOString()));
+    const outcome = await finalizeVerdictWhenEvidenceComplete(admin as never, { organizationId: ORG_ID, projectId: PROJECT_ID, scanId: SCAN_ID });
+    expect(outcome).toEqual({ status: "already_exists" });
+    expect(metricsOf().verdictEvidence).toMatchObject({ externalEngines: expect.any(Array) });
+  });
+  it("old verdict, no record: left exactly as it is", async () => {
+    const { finalizeVerdictWhenEvidenceComplete } = await import("../evidence-finalization");
+    const admin = freshAdmin(base(new Date(Date.now() - 3 * 24 * 3_600_000).toISOString()));
+    const before = JSON.stringify(scanOf());
+    await finalizeVerdictWhenEvidenceComplete(admin as never, { organizationId: ORG_ID, projectId: PROJECT_ID, scanId: SCAN_ID });
+    expect(JSON.stringify(scanOf())).toBe(before);
+  });
+});
