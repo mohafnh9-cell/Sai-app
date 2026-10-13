@@ -39,8 +39,8 @@ Con la grabación y el reloj UTC, anotar la hora de cada cambio visible (progres
 **B2 · API con la sesión B (consola, una sola ejecución, 8 peticiones; las dos de escritura son inocuas: `verify` solo actúa sobre un registro APPLIED y ambos están en otro estado):**
 ```js
 (async()=>{
-  const P='2005075a-fc80-4bcc-a080-52bf8195cf2f', VER='e2fa01eb-ac10-476a-9f51-76a92c2e77a6', RDY='c439438e-0000-0000-0000-000000000000', SCAN='e5aaf268-5061-4132-91ef-925cd415c828';
-  // RDY: sustituir por el id completo del registro READY (el agente lo facilita; no se usa approve/reopen: cambiarían un registro si el aislamiento fallara).
+  const P='2005075a-fc80-4bcc-a080-52bf8195cf2f', VER='e2fa01eb-ac10-476a-9f51-76a92c2e77a6', RDY='c439438e-c947-4c42-bc89-2b80a8334860', SCAN='e5aaf268-5061-4132-91ef-925cd415c828';
+  // Solo `verify` en las escrituras: no se usa approve/reopen porque cambiarían un registro si el aislamiento fallara.
   const reqs=[['GET',`/api/projects/${P}/safe-fixes`],['GET',`/api/projects/${P}/safe-fixes/${VER}`],['POST',`/api/projects/${P}/safe-fixes/${VER}`,{action:'verify'}],
     ['POST',`/api/projects/${P}/safe-fixes/${RDY}`,{action:'verify'}],['GET',`/api/brain/project/${P}`],['GET',`/api/projects/${P}/mission-control`],
     ['GET',`/api/projects/${P}/analysis-runs`],['GET',`/api/repositories/${P}/scans/${SCAN}`]];
