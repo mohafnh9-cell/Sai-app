@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useSyncExternalStore, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useI18n } from "@/lib/i18n/client";
 import { formatStableDateTime } from "@/lib/format/stable-date";
@@ -48,13 +48,18 @@ export type AssistedFixViewProps = {
   /** The evidence could not be refreshed in time: say so and offer a retry instead of an endless spinner. */
   evidenceFailed?: boolean;
   onRetryEvidence?: () => void;
+  /** The commit form is rendered INSIDE the card it belongs to. */
+  children?: ReactNode;
 };
 
 /** One correction, rendered for its phase. Static (no hooks beyond i18n) so every phase is testable by markup. */
-export function AssistedFixCard({ fix, controller, busy, canAct, evidenceFailed = false, onRetryEvidence }: AssistedFixViewProps) {
+export function AssistedFixCard({ fix, controller, busy, canAct, evidenceFailed = false, onRetryEvidence, children }: AssistedFixViewProps) {
   const { t } = useI18n("missionControl");
   const phase = phaseOf(fix);
   const disabled = busy !== null || !canAct;
+  // A commit stored on a proposal that is not (or no longer) in the "commit reported" step is the PREVIOUS attempt's: it is kept
+  // (audit trail, and the server's rules compare against it) but must not read as "the commit you reported".
+  const previousCommit = Boolean(fix.reportedCommitSha) && (phase === "proposal" || phase === "approved");
 
   return (
     <li className={`rounded-lg border p-4 ${PHASE_STYLE[phase]}`} data-testid="assisted-fix-card" data-phase={phase}>
@@ -68,15 +73,19 @@ export function AssistedFixCard({ fix, controller, busy, canAct, evidenceFailed 
       <div className="mt-2 space-y-1">
         <AnalysisLine analysis={fix.baseAnalysis} label={t("assistedFix.baseAnalysis")} />
         {fix.reportedCommitSha && (
-          <p className="text-xs text-muted-foreground">
-            <span className="font-medium text-foreground">{t("assistedFix.reportedCommit")}</span>{" "}
+          <p className="text-xs text-muted-foreground" data-testid={previousCommit ? "assisted-fix-previous-commit" : undefined}>
+            <span className="font-medium text-foreground">{previousCommit ? t("assistedFix.previousCommit") : t("assistedFix.reportedCommit")}</span>{" "}
             <code>{fix.reportedCommitSha}</code>
           </p>
         )}
       </div>
 
       <p className="mt-3 text-sm" data-testid="assisted-fix-note" role={phase === "updating" ? "status" : undefined}>
-        {phase === "updating" && evidenceFailed ? t("assistedFix.evidenceFailed") : t(`assistedFix.note.${phase}`)}
+        {phase === "updating" && evidenceFailed
+          ? t("assistedFix.evidenceFailed")
+          : previousCommit
+            ? t(`assistedFix.notePrevious.${phase}`)
+            : t(`assistedFix.note.${phase}`)}
       </p>
       {phase === "updating" && evidenceFailed && onRetryEvidence && (
         <button type="button" className="mt-2 rounded-md border px-3 py-1.5 text-sm font-medium" onClick={onRetryEvidence}>
@@ -139,6 +148,7 @@ export function AssistedFixCard({ fix, controller, busy, canAct, evidenceFailed 
           </button>
         )}
       </div>
+      {children}
     </li>
   );
 }
@@ -154,12 +164,25 @@ export type CommitDialogProps = {
 export function CommitDialog({ data, controller, flow, busy }: CommitDialogProps) {
   const { t } = useI18n("missionControl");
   const fix = data.fixes.find((candidate) => candidate.id === flow.fixId);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  // Opening the form moves the person to it: scroll it into view and put the focus in the field (keyboard and screen readers too).
+  useEffect(() => {
+    dialogRef.current?.scrollIntoView?.({ block: "nearest" });
+    inputRef.current?.focus();
+  }, []);
+  const suggestionSelected =
+    Boolean(data.suggestion) && flow.input.trim().toLowerCase() === data.suggestion?.commitSha.toLowerCase();
   const suggestion = data.suggestion;
   const check = flow.check;
   const errorReason = check && !check.ok ? check.reason : null;
+  // The server drops the approval when the reported commit of an APPROVED proposal changes: say so BEFORE the person confirms.
+  const invalidatesApproval =
+    flow.step === "confirm" && check?.ok === true && fix?.state === "APPROVED" && Boolean(fix.reportedCommitSha) &&
+    (fix.reportedCommitSha as string).toLowerCase() !== check.commitSha.toLowerCase();
 
   return (
-    <div role="dialog" aria-modal="true" aria-labelledby="assisted-fix-commit-title" className="mt-4 rounded-lg border bg-background p-4" data-testid="assisted-fix-commit-dialog" data-step={flow.step}>
+    <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="assisted-fix-commit-title" className="mt-4 rounded-lg border bg-background p-4" data-testid="assisted-fix-commit-dialog" data-step={flow.step}>
       <h4 id="assisted-fix-commit-title" className="text-sm font-semibold">
         {t("assistedFix.commit.title")}
       </h4>
@@ -171,6 +194,7 @@ export function CommitDialog({ data, controller, flow, busy }: CommitDialogProps
           </label>
           <input
             id="assisted-fix-commit-input"
+            ref={inputRef}
             className="w-full rounded-md border bg-background px-3 py-2 font-mono text-xs"
             value={flow.input}
             placeholder={t("assistedFix.commit.placeholder")}
@@ -196,9 +220,14 @@ export function CommitDialog({ data, controller, flow, busy }: CommitDialogProps
               </p>
               <AnalysisLine analysis={suggestion.analysis} label={t("assistedFix.suggestion.analysis")} />
               <p className="mt-1 text-muted-foreground">{t("assistedFix.suggestion.notice")}</p>
-              <button type="button" className="mt-2 rounded-md border px-2 py-1" onClick={() => controller.useSuggestion()}>
-                {t("assistedFix.suggestion.use")}
+              <button type="button" className="mt-2 rounded-md border px-2 py-1 disabled:opacity-60" disabled={suggestionSelected} onClick={() => controller.useSuggestion()}>
+                {suggestionSelected ? t("assistedFix.suggestion.selected") : t("assistedFix.suggestion.use")}
               </button>
+              {suggestionSelected && (
+                <p role="status" className="mt-1 text-muted-foreground" data-testid="assisted-fix-suggestion-selected">
+                  {t("assistedFix.suggestion.selectedHint")}
+                </p>
+              )}
             </div>
           )}
 
@@ -224,6 +253,11 @@ export function CommitDialog({ data, controller, flow, busy }: CommitDialogProps
           <AnalysisLine analysis={check.analysis} label={t("assistedFix.confirm.commitAnalysis")} />
           {!check.analysis && <p className="text-muted-foreground">{t("assistedFix.confirm.noAnalysisWarning")}</p>}
           <AnalysisLine analysis={fix?.baseAnalysis ?? null} label={t("assistedFix.confirm.baseAnalysis")} />
+          {invalidatesApproval && (
+            <p role="alert" className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2" data-testid="assisted-fix-confirm-invalidates">
+              {t("assistedFix.confirm.invalidatesApproval", { previous: shortSha(fix?.reportedCommitSha ?? ""), sha: shortSha(check.commitSha) })}
+            </p>
+          )}
           <p className="font-medium" data-testid="assisted-fix-confirm-statement">
             {t("assistedFix.confirm.statement", { sha: shortSha(check.commitSha), title: fix?.title ?? "" })}
           </p>
@@ -322,12 +356,12 @@ export function AssistedFixPanel({ data, api: injectedApi }: { data: PanelData; 
       ) : (
         <ul className="mt-4 space-y-3">
           {live.map((fix) => (
-            <AssistedFixCard key={fix.id} fix={fix} controller={controller} busy={state.busy} canAct evidenceFailed={state.evidence === "failed"} onRetryEvidence={() => controller.retryEvidence()} />
+            <AssistedFixCard key={fix.id} fix={fix} controller={controller} busy={state.busy} canAct evidenceFailed={state.evidence === "failed"} onRetryEvidence={() => controller.retryEvidence()}>
+              {state.commitFlow?.fixId === fix.id && <CommitDialog data={state.data} controller={controller} flow={state.commitFlow} busy={state.busy} />}
+            </AssistedFixCard>
           ))}
         </ul>
       )}
-
-      {state.commitFlow && <CommitDialog data={state.data} controller={controller} flow={state.commitFlow} busy={state.busy} />}
 
       {historical.length > 0 && (
         <details className="mt-4">
