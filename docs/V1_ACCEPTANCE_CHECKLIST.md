@@ -263,7 +263,7 @@ Criterio de paso: los 10 pasos con la evidencia indicada, sin abrir la consola d
 
 **Aceptación de V1 pendiente** (criterios abiertos; observación breve, con registro de tiempos y sin repetir el recorrido, en `V1_OBSERVATION_PROTOCOL.md`):
 1. Sesión B: aislamiento entre organizaciones con un usuario real de otra organización.
-2. Journey en la página real, con consola, tras #77 (#418).
+2. Journey en la página real, con consola, en ventana normal y en privada (#418 observado **después** de #77; sin causa determinada).
 3. Transición negativo→VERIFIED en producción tras #78 (hoy solo pruebas locales).
 4. Observación en pantalla durante un análisis (D9) con registro de tiempos.
 5. Actualización: comportamiento definido en la PR #81 (aviso de análisis más reciente), sin desplegar; sondeo observado en un caso real.
@@ -313,10 +313,10 @@ Huecos: (1) **la observación en pantalla durante esos 25 s no fue reportada** (
 5. Sin actualización automática observada (punto 7); sondeo no comprobado.
 
 ### Qué no se ha hecho / sigue pendiente
-Aislamiento entre clientes (sesión B), Journey y #418, MCP real de `authorize_dynamic_target`, observación de pantallas A/C en esta ejecución, sondeo, `verdictEvidence`. **No se declara V1 completo.**
+Aislamiento entre clientes (sesión B), Journey y #418 (observado después de #77, sin causa determinada), MCP real de `authorize_dynamic_target`, observación de pantallas A/C en esta ejecución, sondeo, `verdictEvidence`. **No se declara V1 completo.**
 
 ### Investigación posterior (2026-10-13, local; sin ejecuciones nuevas en producción)
-- **#418 de Journey:** el error se observó **antes** de desplegar #77. Reproducción local con el componente real: servidor en `en-US`/UTC (Vercel) e hidratación en `es-ES`/Madrid → la versión anterior a #77 falla la hidratación (`toLocaleDateString()` sin configuración: «10/9/2026» frente a «9/10/2026»); la versión actual no. El resto de componentes de Journey no formatea fechas con la configuración regional al renderizar (solo el tooltip del gráfico, tras pasar el ratón). **No confirma la página real**: falta que el propietario recargue Journey con la consola abierta tras #77. Latente: `McpApiKeysPanel` usa `toLocaleDateString(locale)` sin zona horaria (riesgo bajo, solo cerca de medianoche UTC).
+- **#418 de Journey (corregido el 2026-10-13, tras revisar la cronología):** el error se observó **después** de desplegar #77 (primer registro a las 10:07 UTC; #76/#77 estaban en producción desde las 09:39–09:41). Una versión anterior de este documento lo daba por observado antes de #77 y por explicado: **era incorrecto**. Lo único comprobado en local: la versión anterior a #77 **sí** falla la hidratación con servidor `en-US`/UTC y navegador `es-ES`/Madrid, pero ese fallo es de **texto** (`server rendered text didn't match`), mientras que lo observado en producción fue `#418` con argumento **HTML**, es decir, de **estructura**. Por tanto esa reproducción explica un fallo distinto y **no resuelve** el observado. **Causa del observado: sin determinar.** No hay en el código de Journey ninguna otra fuente evidente de diferencia estructural entre servidor y cliente; una hipótesis sin confirmar es un cambio del DOM antes de la hidratación por una extensión del navegador (el perfil del propietario tiene varias, incluida una de scripts de usuario). **La recarga actual de Journey (O1, en ventana normal y en privada sin extensiones) es la comprobación pendiente; hasta entonces #418 sigue abierto.**
 - **`verdictEvidence`:** `scans.updated_at` no muestra ninguna escritura tras el marcador; dos causas posibles y compatibles (la ruta del runner no lo registraba; la escritura no comprobaba su error y la llamada externa lo silenciaba). #79 cubre ambas y deja un aviso estructurado si vuelve a fallar. Sin migraciones: la protección contra escrituras concurrentes es optimista (condicionada a `updated_at`), no una fusión atómica.
 - **Actualización:** con `?run=` la página queda fijada y el aviso existente solo salía con una revisión en curso de otro scan. #81 define: fijada nunca cambia sola; sin `run` muestra el más reciente al cargar; en reposo una lectura de solo lectura cada 60 s (pestaña visible) avisa de un análisis más reciente sin sustituir la vista.
 
