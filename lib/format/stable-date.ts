@@ -21,3 +21,9 @@ export function formatStableDateTime(value: string | number | Date | null | unde
   const date = toDate(value);
   return date ? `${date.toISOString().slice(0, 10)} ${date.toISOString().slice(11, 16)} UTC` : "—";
 }
+
+/** "10:17 UTC" or "—". */
+export function formatStableTime(value: string | number | Date | null | undefined): string {
+  const date = toDate(value);
+  return date ? `${date.toISOString().slice(11, 16)} UTC` : "—";
+}

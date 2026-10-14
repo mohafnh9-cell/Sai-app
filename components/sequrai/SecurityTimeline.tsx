@@ -2,6 +2,7 @@
 
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n/client";
+import { LocalTimeLabel } from "@/components/ui/local-time-label";
 
 export type SecurityTimelineEvent = {
   id: string;
@@ -29,10 +30,8 @@ export function SecurityTimeline({ events, className }: SecurityTimelineProps) {
 
   if (events.length === 0) return null;
 
-  const formatTime = (at: string) => {
-    const tag = locale === "es" ? "es-ES" : "en-US";
-    return new Intl.DateTimeFormat(tag, { hour: "2-digit", minute: "2-digit" }).format(new Date(at));
-  };
+  const tag = locale === "es" ? "es-ES" : "en-US";
+  const formatTime = (instant: Date) => new Intl.DateTimeFormat(tag, { hour: "2-digit", minute: "2-digit" }).format(instant);
 
   return (
     <section className={cn("space-y-4", className)} aria-labelledby="security-timeline-heading">
@@ -42,7 +41,6 @@ export function SecurityTimeline({ events, className }: SecurityTimelineProps) {
       <ol className="relative space-y-0 border-l border-border/50 ml-2">
         {events.map((event, index) => {
           const tone = event.tone ?? "neutral";
-          const time = formatTime(event.at);
           return (
             <li key={event.id} className="relative pl-6 pb-5 last:pb-0">
               <span
@@ -52,7 +50,9 @@ export function SecurityTimeline({ events, className }: SecurityTimelineProps) {
                 )}
                 aria-hidden
               />
-              <p className="text-xs text-muted-foreground tabular-nums">{time}</p>
+              <p className="text-xs text-muted-foreground tabular-nums">
+                <LocalTimeLabel iso={event.at} kind="time" format={formatTime} />
+              </p>
               <p className={cn("text-sm mt-0.5", index === events.length - 1 && "font-medium")}>
                 {event.label}
               </p>

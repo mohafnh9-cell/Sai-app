@@ -10,6 +10,7 @@ import { trackEvent } from "@/lib/analytics/track";
 import { useEffect } from "react";
 import { useI18n } from "@/lib/i18n/client";
 import { formatLocalizedDate } from "@/lib/i18n/format";
+import { LocalTimeLabel } from "@/components/ui/local-time-label";
 
 export function ReadyToShipMoment({
   view,
@@ -64,7 +65,7 @@ export function ReadyToShipMoment({
             )}
             <p className="flex items-center gap-2 text-muted-foreground">
               <Clock className="h-4 w-4" aria-hidden />
-              {formatLocalizedDate(locale, view.generatedAt)}
+              <LocalTimeLabel iso={view.generatedAt} kind="date" format={() => formatLocalizedDate(locale, view.generatedAt)} />
             </p>
             {view.resolvedBlockers > 0 && (
               <p className="text-success">
