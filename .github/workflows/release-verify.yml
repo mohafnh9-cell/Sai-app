@@ -12,6 +12,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # worker-impact diffs against the base / previous commit
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -20,6 +22,20 @@ jobs:
         run: npm ci
       - name: Release verify
         run: npm run release:verify
+      - name: Worker impact (informational, never fails the build)
+        # Merging to main deploys Vercel but NOT the Railway security worker (docs/WORKER_DELIVERY.md). Say so when a change touches
+        # a file that goes into the worker bundle, so the worker redeploy is decided at merge time and not discovered later.
+        if: always()
+        run: |
+          base="${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}"
+          set +e
+          out=$(node scripts/worker-impact.mjs "$base" HEAD 2>&1); code=$?
+          echo "$out"
+          if [ "$code" -eq 1 ]; then
+            echo "::warning title=Security worker redeploy needed after merge::$(echo "$out" | head -1) See docs/WORKER_DELIVERY.md"
+            { echo "### Worker redeploy needed (Railway)"; echo '```'; echo "$out"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit 0
       - name: Security Detection Benchmark
         # Already covered by release:verify's test:release run (not excluded there);
         # this step re-runs it in isolation to produce a machine-readable artifact,

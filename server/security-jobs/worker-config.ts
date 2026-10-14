@@ -5,6 +5,8 @@ import "server-only";
  * scattered across files.
  */
 
+import { WORKER_BUILD_COMMIT, workerIdFor } from "./worker-build";
+
 function intFromEnv(name: string, fallback: number): number {
   const raw = process.env[name]?.trim();
   if (!raw) return fallback;
@@ -21,6 +23,6 @@ export const WORKER_CONFIG = {
   maxConcurrentJobs: intFromEnv("SECURITY_WORKER_MAX_CONCURRENT_JOBS", 3),
   healthPort: intFromEnv("SECURITY_WORKER_HEALTH_PORT", 8080),
   /** Distinct id per worker PROCESS (not per job) -- used for claim fencing. */
-  workerId: process.env.SECURITY_WORKER_ID?.trim() || `worker-${process.pid}-${Date.now()}`,
+  workerId: workerIdFor({ explicit: process.env.SECURITY_WORKER_ID, commit: WORKER_BUILD_COMMIT, pid: process.pid, startedAtMs: Date.now() }),
   defaultOutputLimitBytes: intFromEnv("SECURITY_WORKER_MAX_OUTPUT_BYTES", 32 * 1024 * 1024),
 };
