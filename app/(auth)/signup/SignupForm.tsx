@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Shield, Eye, EyeOff, Loader2, CheckCircle2 } from "lucide-react";
+import { Shield, Eye, EyeOff, Loader2, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -58,18 +58,28 @@ export function SignupForm() {
   };
 
   if (success) {
+    // Deliberately ONE message for every non-error answer of signUp. Supabase answers an already-registered email like a new one (no
+    // error, no session) so that the form cannot be used to find out which emails have accounts; this screen must not undo that:
+    // it never branches on what signUp returned, and it never claims a message was sent or delivered.
     return (
-      <div className="w-full max-w-sm text-center">
+      <div className="w-full max-w-sm text-center" data-testid="signup-received">
         <div className="mb-6 flex justify-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-500/10">
-            <CheckCircle2 className="h-8 w-8 text-green-500" />
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+            <Mail className="h-8 w-8 text-muted-foreground" aria-hidden />
           </div>
         </div>
-        <h1 className="text-2xl font-bold tracking-tight">{t("checkEmailTitle")}</h1>
-        <p className="mt-3 text-sm text-muted-foreground">{t("checkEmailBody", { email })}</p>
-        <Button className="mt-6 w-full" variant="outline" asChild>
-          <Link href="/login">{t("backToSignIn")}</Link>
-        </Button>
+        <h1 className="text-2xl font-bold tracking-tight">{t("signupReceivedTitle")}</h1>
+        <p className="mt-3 text-sm text-muted-foreground">{t("signupReceivedBody", { email })}</p>
+        <p className="mt-2 text-sm text-muted-foreground">{t("signupReceivedCheck")}</p>
+        <p className="mt-6 text-sm text-muted-foreground">{t("signupReceivedHaveAccount")}</p>
+        <div className="mt-2 flex flex-col gap-2">
+          <Button className="w-full" asChild>
+            <Link href="/login">{t("signupReceivedSignIn")}</Link>
+          </Button>
+          <Button className="w-full" variant="outline" asChild>
+            <Link href="/forgot-password">{t("signupReceivedRecover")}</Link>
+          </Button>
+        </div>
       </div>
     );
   }
