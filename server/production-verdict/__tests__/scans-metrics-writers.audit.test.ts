@@ -78,7 +78,7 @@ describe("writers of the scans table", () => {
 
   it("the evidence writers require a completed scan", () => {
     const finalization = readFileSync("server/production-verdict/evidence-finalization.ts", "utf8");
-    expect((finalization.match(/requireStatus: \["completed"\]/g) ?? []).length).toBe(2); // marker + record
+    expect((finalization.match(/requireStatus: \["completed"\]/g) ?? []).length).toBe(3); // marker + record + snapshot persisted before the verdict
   });
 
   it("the database lock exists in the migrations (a terminal scan cannot change anything but metrics/updated_at)", () => {

@@ -121,6 +121,8 @@ export const ProductionVerdictSchema = z.object({
   correlationId: z.string().uuid().optional(),
   scanExecutionId: z.string().uuid().optional(),
   securityDecisionId: z.string().uuid().optional(),
+  /** Digest of the evidence snapshot the generator persisted BEFORE publishing this verdict (scans.metrics.verdictEvidence). Absent = no traceability is claimed. */
+  evidenceDigest: z.string().regex(/^[0-9a-f]{64}$/).optional(),
   securityDeploymentVerdict: z.string().optional(),
   attackSimulation: z
     .object({

@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import { createFakeAdmin, type FakeTables } from "@/server/mcp/__tests__/fake-admin";
 
@@ -275,7 +275,9 @@ describe("late completion of the evidence record: opt-in, labelled as a reconstr
     const { finalizeVerdictWhenEvidenceComplete } = await import("../evidence-finalization");
     const generatedAt = new Date().toISOString();
     const admin = freshAdmin(base(generatedAt));
-    expect(await finalizeVerdictWhenEvidenceComplete(admin as never, { ...input, backfillEvidence: true })).toEqual({ status: "already_exists" });
+    // the generator had its grace (the clock is past it) and never recorded: this is the cut-short case
+    const clock = { now: () => Date.parse(generatedAt) + 11_000, sleep: async () => undefined };
+    expect(await finalizeVerdictWhenEvidenceComplete(admin as never, { ...input, backfillEvidence: true, clock })).toEqual({ status: "already_exists" });
     const record = metricsOf().verdictEvidence as Record<string, unknown>;
     expect(record).toMatchObject({ capture: "reconstructed_after_verdict", verdictGeneratedAt: generatedAt, externalEngines: expect.any(Array) });
     expect(record.reconstructedAt).toEqual(expect.any(String));
@@ -335,5 +337,375 @@ describe("evidence writers only write on a completed scan (the status is locked 
     expect(await recordVerdictEvidence(admin as never, { scanId: SCAN_ID, organizationId: ORG_ID, mode: "pipeline", hasSecurityDecision: false })).toMatchObject({ recorded: false });
     expect(await mergeScanMetrics(admin as never, { scanId: SCAN_ID, organizationId: ORG_ID, patch: { x: 1 }, requireStatus: ["completed"] })).toMatchObject({ ok: false, reason: "status_not_allowed" });
     expect(JSON.stringify(scanOf())).toBe(before);
+  });
+});
+
+// 2026-10-14 T1: the evidence record of a real manual analysis was a "reconstruction" written 0.7 s after the verdict by a second
+// finalization, not the generator's own capture. The generator inserts the verdict and records the evidence a few awaits later; a
+// finalizer looking in between used to win. These tests pin the coordination down with a controllable clock (no real waiting).
+describe("coordination between inserting the verdict and persisting its evidence (slow generator, concurrent finalizations)", () => {
+  const T0 = Date.parse("2026-10-14T10:34:33.126Z");
+  const input = { organizationId: ORG_ID, projectId: PROJECT_ID, scanId: SCAN_ID };
+  const withVerdict = () => {
+    const t = tables();
+    t.production_verdicts = [{ id: "v1", organization_id: ORG_ID, scan_id: SCAN_ID, project_id: PROJECT_ID, generated_at: new Date(T0).toISOString() }];
+    return t;
+  };
+  /** Fake time; `onTick(now)` runs on every sleep so a test can say "at +700 ms the generator writes its record". */
+  const makeClock = (onTick: (now: number) => Promise<void> | void = () => undefined) => {
+    let now = T0 + 100;
+    const sleeps: number[] = [];
+    return { sleeps, clock: { now: () => now, sleep: async (ms: number) => { sleeps.push(ms); now += ms; await onTick(now); } } };
+  };
+  const generatorRecords = async (admin: unknown) => {
+    const { recordVerdictEvidence } = await import("../evidence-finalization");
+    return recordVerdictEvidence(admin as never, { ...input, mode: "pipeline", hasSecurityDecision: true });
+  };
+
+  it("slow generator that finishes within the grace: the finalizer does NOT reconstruct; the record is the generator's capture", async () => {
+    const { finalizeVerdictWhenEvidenceComplete } = await import("../evidence-finalization");
+    const admin = freshAdmin(withVerdict());
+    let recorded = false;
+    const { clock, sleeps } = makeClock(async (now) => {
+      if (!recorded && now >= T0 + 700) { recorded = true; await generatorRecords(admin); }
+    });
+    const outcome = await finalizeVerdictWhenEvidenceComplete(admin as never, { ...input, backfillEvidence: true, clock });
+    expect(outcome).toEqual({ status: "already_exists" });
+    expect(sleeps.length).toBeGreaterThan(0); // it did wait
+    expect(metricsOf().verdictEvidence).toMatchObject({ capture: "at_verdict_generation" });
+    expect((metricsOf().verdictEvidence as Record<string, unknown>).reconstructedAt).toBeUndefined();
+  });
+
+  it("generator cut short (never records): after the grace the finalizer reconstructs, labelled, and never waits past the grace", async () => {
+    const { finalizeVerdictWhenEvidenceComplete, VERDICT_EVIDENCE_GENERATOR_GRACE_MS } = await import("../evidence-finalization");
+    const admin = freshAdmin(withVerdict());
+    const { clock, sleeps } = makeClock();
+    await finalizeVerdictWhenEvidenceComplete(admin as never, { ...input, backfillEvidence: true, clock });
+    expect(metricsOf().verdictEvidence).toMatchObject({ capture: "reconstructed_after_verdict" });
+    expect(sleeps.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(VERDICT_EVIDENCE_GENERATOR_GRACE_MS);
+  });
+
+  it("generator slower than the grace: the reconstruction stands (consistency comes from first-record-wins, not from the grace); the late generator write changes nothing", async () => {
+    const { finalizeVerdictWhenEvidenceComplete } = await import("../evidence-finalization");
+    const admin = freshAdmin(withVerdict());
+    const { clock } = makeClock();
+    await finalizeVerdictWhenEvidenceComplete(admin as never, { ...input, backfillEvidence: true, clock });
+    const reconstruction = JSON.stringify(metricsOf().verdictEvidence);
+    const late = await generatorRecords(admin);
+    expect(late).toEqual({ recorded: true }); // a no-op reported as done: nothing to add
+    expect(JSON.stringify(metricsOf().verdictEvidence)).toBe(reconstruction);
+  });
+
+  it("two concurrent finalizations of a verdict whose generator was cut short: exactly one record, no duplicate, no overwrite, other metrics intact", async () => {
+    const { finalizeVerdictWhenEvidenceComplete } = await import("../evidence-finalization");
+    const admin = freshAdmin(withVerdict());
+    const a = makeClock(); const b = makeClock();
+    const [first, second] = await Promise.all([
+      finalizeVerdictWhenEvidenceComplete(admin as never, { ...input, backfillEvidence: true, clock: a.clock }),
+      finalizeVerdictWhenEvidenceComplete(admin as never, { ...input, backfillEvidence: true, clock: b.clock }),
+    ]);
+    expect(first).toEqual({ status: "already_exists" });
+    expect(second).toEqual({ status: "already_exists" });
+    const record = metricsOf().verdictEvidence as Record<string, unknown>;
+    expect(record.capture).toBe("reconstructed_after_verdict");
+    expect(metricsOf()).toMatchObject({ rulesRun: 47, platformExecution: { stage: "done" }, verdictEvidenceReadyAt: "2026-10-13T13:04:31.222Z" });
+    // the record is whichever writer won, intact: engines complete and one reconstructedAt
+    expect(record.externalEngines).toHaveLength(3);
+  });
+
+  it("limit, stated rather than assumed: a reconstruction is NOT guaranteed identical to the generator's capture (it re-reads engines now and only sees a STORED security decision)", async () => {
+    const { recordVerdictEvidence } = await import("../evidence-finalization");
+    // the generator was handed the decision report directly (not stored in metrics); a reconstruction cannot know that
+    const generated = freshAdmin();
+    await recordVerdictEvidence(generated as never, { ...input, mode: "pipeline", hasSecurityDecision: true });
+    const captured = metricsOf().verdictEvidence as Record<string, unknown>;
+    const rebuilt = freshAdmin();
+    await recordVerdictEvidence(rebuilt as never, { ...input, mode: "pipeline", hasSecurityDecision: false, reconstructedAfter: { verdictGeneratedAt: new Date(T0).toISOString() } });
+    const reconstructed = metricsOf().verdictEvidence as Record<string, unknown>;
+    expect(captured.securityDecisionIncluded).toBe(true);
+    expect(reconstructed.securityDecisionIncluded).toBe(false);
+    expect(captured.externalEngines).toEqual(reconstructed.externalEngines); // same engines when the jobs did not change in between
+  });
+});
+
+// 2026-10-14 review: "first record wins" decides who writes, not WHAT the verdict was computed from. The generator now persists the
+// snapshot of the evidence it read BEFORE publishing the verdict, and the verdict carries its digest, so the link is checkable.
+describe("the evidence snapshot is persisted before the verdict is published and bound to it by a verifiable digest", () => {
+  const input = { organizationId: ORG_ID, projectId: PROJECT_ID, scanId: SCAN_ID };
+  const verdictRow = () => (current.production_verdicts as Array<Record<string, unknown>>)[0];
+  const verdictJson = () => verdictRow()?.verdict as { evidenceDigest?: string; status?: string; score?: number; blockersCount?: number } | undefined;
+
+  it("the record already exists when the verdict row is inserted, and checkEvidenceBinding verifies the pair", async () => {
+    const { generateAndPersistProductionVerdict } = await import("../core");
+    const { checkEvidenceBinding, evidenceDigest } = await import("../evidence-snapshot");
+    const admin = freshAdmin();
+    // observe the instant of publication
+    let recordAtInsert: unknown = "not observed";
+    const original = admin.from.bind(admin);
+    (admin as { from: unknown }).from = (table: string) => {
+      const builder = original(table) as unknown as { insert: (...a: unknown[]) => unknown };
+      if (table !== "production_verdicts") return builder;
+      const insert = builder.insert.bind(builder);
+      builder.insert = (...args: unknown[]) => { recordAtInsert = metricsOf().verdictEvidence; return insert(...args); };
+      return builder;
+    };
+    await generateAndPersistProductionVerdict(admin as never, input);
+    expect(recordAtInsert).toMatchObject({ capture: "at_verdict_generation" }); // persisted BEFORE publishing
+    const record = metricsOf().verdictEvidence as { evidenceDigest: string; snapshot: Parameters<typeof evidenceDigest>[0] };
+    expect(verdictJson()?.evidenceDigest).toBe(record.evidenceDigest);
+    expect(evidenceDigest(record.snapshot)).toBe(record.evidenceDigest);
+    expect(checkEvidenceBinding(verdictJson(), record, { organizationId: ORG_ID })).toBe("verified_capture");
+  });
+
+  it("a concurrent finalizer never sees a verdict without its capture: it neither waits nor reconstructs", async () => {
+    const { generateAndPersistProductionVerdict } = await import("../core");
+    const { finalizeVerdictWhenEvidenceComplete } = await import("../evidence-finalization");
+    const { emitOperationalEvent } = await import("@/server/observability/operational-events");
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    (emitOperationalEvent as unknown as { mockImplementation: (f: (admin: unknown, e: { eventType: string }) => Promise<void>) => void }).mockImplementation(
+      async (_admin, event) => { if (event.eventType === "verdict_created") await gate; } // generator held right after the insert
+    );
+    try {
+      const admin = freshAdmin();
+      const generating = generateAndPersistProductionVerdict(admin as never, input);
+      for (let i = 0; i < 200 && (current.production_verdicts as unknown[]).length === 0; i++) await new Promise((r) => setTimeout(r, 0));
+      expect((current.production_verdicts as unknown[]).length).toBe(1);
+      const sleeps: number[] = [];
+      const clock = { now: () => Date.now(), sleep: async (ms: number) => { sleeps.push(ms); } };
+      expect(await finalizeVerdictWhenEvidenceComplete(admin as never, { ...input, backfillEvidence: true, clock })).toEqual({ status: "already_exists" });
+      expect(sleeps).toEqual([]);
+      expect(metricsOf().verdictEvidence).toMatchObject({ capture: "at_verdict_generation" });
+      release();
+      await generating;
+      expect(metricsOf().verdictEvidence).toMatchObject({ capture: "at_verdict_generation" });
+    } finally {
+      (emitOperationalEvent as unknown as { mockImplementation: (f: () => Promise<void>) => void }).mockImplementation(async () => undefined);
+    }
+  });
+
+  it("checkEvidenceBinding only vouches for a captured, matching pair; everything else is 'not traceable', never 'nothing found'", async () => {
+    const { generateAndPersistProductionVerdict } = await import("../core");
+    const { checkEvidenceBinding } = await import("../evidence-snapshot");
+    const admin = freshAdmin();
+    await generateAndPersistProductionVerdict(admin as never, input);
+    const record = JSON.parse(JSON.stringify(metricsOf().verdictEvidence)) as { snapshot: { externalEngines: Array<{ status: string }> } };
+    expect(checkEvidenceBinding(verdictJson(), record, { organizationId: ORG_ID })).toBe("verified_capture");
+    const tampered = JSON.parse(JSON.stringify(record)); tampered.snapshot.externalEngines[0].status = "FAILED";
+    expect(checkEvidenceBinding(verdictJson(), tampered, { organizationId: ORG_ID })).toBe("digest_mismatch");
+    expect(checkEvidenceBinding({ evidenceDigest: "a".repeat(64) }, record, { organizationId: ORG_ID })).toBe("digest_mismatch"); // another snapshot's digest
+    expect(checkEvidenceBinding({}, record, { organizationId: ORG_ID })).toBe("verdict_without_digest");
+    expect(checkEvidenceBinding(verdictJson(), { capture: "reconstructed_after_verdict" }, { organizationId: ORG_ID })).toBe("reconstruction_unverifiable");
+    expect(checkEvidenceBinding(verdictJson(), undefined, { organizationId: ORG_ID })).toBe("no_record");
+  });
+
+  it("if the snapshot cannot be persisted: the verdict is still published (same status, score, blockers) but WITHOUT a digest, and no record claims anything", async () => {
+    const { generateAndPersistProductionVerdict } = await import("../core");
+    const baseline = freshAdmin();
+    await generateAndPersistProductionVerdict(baseline as never, input);
+    const expected = { status: verdictJson()?.status, score: verdictJson()?.score, blockersCount: verdictJson()?.blockersCount };
+
+    const admin = freshAdmin();
+    const original = admin.from.bind(admin);
+    (admin as { from: unknown }).from = (table: string) => {
+      const builder = original(table) as unknown as Record<string, unknown>;
+      if (table !== "scans") return builder;
+      // every filter is accepted; the final read-back reports the database error
+      const failing: unknown = new Proxy({}, { get: (_t, prop) => (prop === "maybeSingle" ? async () => ({ data: null, error: { message: "boom" } }) : () => failing) });
+      builder.update = () => failing;
+      return builder;
+    };
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      const verdict = await generateAndPersistProductionVerdict(admin as never, input);
+      expect(verdict).not.toBeNull();
+      expect({ status: verdictJson()?.status, score: verdictJson()?.score, blockersCount: verdictJson()?.blockersCount }).toEqual(expected); // a bookkeeping failure changes nothing about the verdict
+      expect(verdictJson()?.evidenceDigest).toBeUndefined(); // no traceability claim it cannot back
+      expect(metricsOf().verdictEvidence).toBeUndefined(); // and nothing recorded as "no engines" / "not_run"
+      expect(warn.mock.calls.map((c) => (c[0] as { event?: string })?.event)).toContain("verdict_evidence_snapshot_not_persisted"); // visible, not silent
+    } finally { warn.mockRestore(); }
+  });
+
+  it("a different snapshot already stands for the scan (another generator): this verdict carries no digest and the standing record is untouched", async () => {
+    const { generateAndPersistProductionVerdict } = await import("../core");
+    const standing = { capture: "at_verdict_generation", evidenceDigest: "b".repeat(64), snapshot: { externalEngines: "not_run" }, finalizedBy: "pipeline" };
+    const admin = freshAdmin(tables({ ...baseMetrics, verdictEvidence: standing }));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      await generateAndPersistProductionVerdict(admin as never, input);
+      expect(verdictJson()?.evidenceDigest).toBeUndefined();
+      expect(metricsOf().verdictEvidence).toEqual(standing);
+    } finally { warn.mockRestore(); }
+  });
+
+  it("an unreadable external-findings table is not 'no findings': the verdict is computed as partial and the snapshot says 'unavailable'", async () => {
+    const { generateAndPersistProductionVerdict } = await import("../core");
+    const admin = freshAdmin();
+    const original = admin.from.bind(admin);
+    (admin as { from: unknown }).from = (table: string) => {
+      const builder = original(table) as unknown as Record<string, unknown>;
+      if (table !== "external_engine_findings") return builder;
+      builder.select = () => ({ eq: () => ({ eq: () => Promise.resolve({ data: null, error: { message: "boom" } }) }) });
+      return builder;
+    };
+    await generateAndPersistProductionVerdict(admin as never, input);
+    expect((metricsOf().verdictEvidence as { snapshot: { externalFindings: unknown } }).snapshot.externalFindings).toBe("unavailable");
+    expect(verdictJson()?.status).not.toBe("ready_to_ship"); // evidence missing never reads as clean
+  });
+});
+
+describe("digest determinism, what the snapshot identifies, failures between the two writes, and consumers", () => {
+  const input = { organizationId: ORG_ID, projectId: PROJECT_ID, scanId: SCAN_ID };
+  const verdictRow = () => (current.production_verdicts as Array<Record<string, unknown>>)[0];
+  const verdictJson = () => verdictRow()?.verdict as Record<string, unknown> & { evidenceDigest?: string };
+  const snap = async () => {
+    const { digestIds } = await import("../evidence-snapshot");
+    return {
+      subject: { organizationId: ORG_ID, projectId: PROJECT_ID, scanId: SCAN_ID, commitSha: "abc123" },
+      nativeFindings: { count: 2, idsDigest: digestIds(["n1", "n2"]) },
+      externalEngines: [{ engine: "trivy", status: "COMPLETED" }, { engine: "crypto", status: "COMPLETED" }] as Array<{ engine: string; status: string }>,
+      externalFindings: { count: 2, idsDigest: digestIds(["e1", "e2"]) },
+      securityDecisionId: "d1" as string | null,
+      securityDecisionIncluded: true,
+    };
+  };
+
+  it("the digest is deterministic: independent of key order, engine order and id order; sensitive to every identifying field", async () => {
+    const { evidenceDigest, digestIds } = await import("../evidence-snapshot");
+    const a = await snap();
+    const reordered = { securityDecisionIncluded: true, securityDecisionId: "d1", externalFindings: { idsDigest: digestIds(["e2", "e1", "e1"]), count: 2 }, externalEngines: [...a.externalEngines].reverse(),
+      nativeFindings: { idsDigest: digestIds(["n2", "n1"]), count: 2 }, subject: { commitSha: "abc123", scanId: SCAN_ID, projectId: PROJECT_ID, organizationId: ORG_ID } };
+    expect(evidenceDigest(reordered)).toBe(evidenceDigest(a));
+    expect(evidenceDigest(a)).toMatch(/^[0-9a-f]{64}$/);
+    expect(evidenceDigest(a)).toBe(evidenceDigest(JSON.parse(JSON.stringify(a)))); // survives a JSON round trip (jsonb)
+    const variants = [
+      { ...a, subject: { ...a.subject, organizationId: "other" } }, { ...a, subject: { ...a.subject, projectId: "other" } },
+      { ...a, subject: { ...a.subject, scanId: "other" } }, { ...a, subject: { ...a.subject, commitSha: "def456" } },
+      { ...a, externalEngines: [{ engine: "trivy", status: "FAILED" }, a.externalEngines[1]!] }, { ...a, externalEngines: "not_run" as const },
+      { ...a, externalFindings: "unavailable" as const }, { ...a, nativeFindings: { count: 2, idsDigest: digestIds(["n1", "n3"]) } },
+      { ...a, securityDecisionId: null, securityDecisionIncluded: false },
+    ];
+    for (const v of variants) expect(evidenceDigest(v)).not.toBe(evidenceDigest(a));
+    expect(new Set(variants.map((v) => evidenceDigest(v))).size).toBe(variants.length);
+  });
+
+  it("the stored snapshot identifies organization, project, scan, commit, engines and the evidence used", async () => {
+    const { generateAndPersistProductionVerdict } = await import("../core");
+    const admin = freshAdmin();
+    await generateAndPersistProductionVerdict(admin as never, input);
+    const record = metricsOf().verdictEvidence as { snapshot: Record<string, unknown> };
+    expect(record.snapshot).toMatchObject({
+      subject: { organizationId: ORG_ID, projectId: PROJECT_ID, scanId: SCAN_ID, commitSha: "abc123" },
+      nativeFindings: { count: expect.any(Number), idsDigest: expect.stringMatching(/^[0-9a-f]{64}$/) },
+      externalEngines: [{ engine: "opengrep", status: "COMPLETED" }, { engine: "trivy", status: "COMPLETED" }, { engine: "crypto", status: "COMPLETED" }],
+      externalFindings: { count: 0 },
+    });
+  });
+
+  it("the organization is validated too: a pair is not verified for another organization, nor without stating one", async () => {
+    const { generateAndPersistProductionVerdict } = await import("../core");
+    const { checkEvidenceBinding, evidenceDigest } = await import("../evidence-snapshot");
+    const admin = freshAdmin();
+    await generateAndPersistProductionVerdict(admin as never, input);
+    const record = JSON.parse(JSON.stringify(metricsOf().verdictEvidence)) as { evidenceDigest: string; snapshot: { subject: { organizationId: string } } };
+    expect(checkEvidenceBinding(verdictJson(), record, { organizationId: ORG_ID })).toBe("verified_capture");
+    expect(checkEvidenceBinding(verdictJson(), record, { organizationId: "44444444-4444-4444-8444-444444444444" })).toBe("digest_mismatch"); // the verdict row belongs to another organization
+    expect(checkEvidenceBinding(verdictJson(), record, {} as never)).toBe("digest_mismatch"); // not stating one verifies nothing
+    // a snapshot of another organization, forged to be self-consistent, is not this verdict's
+    record.snapshot.subject.organizationId = "44444444-4444-4444-8444-444444444444";
+    record.evidenceDigest = evidenceDigest(record.snapshot as never);
+    expect(checkEvidenceBinding({ ...verdictJson(), evidenceDigest: record.evidenceDigest }, record, { organizationId: ORG_ID })).toBe("digest_mismatch");
+  });
+
+  it("a snapshot moved to another scan (self-consistent but about something else) is not verified", async () => {
+    const { generateAndPersistProductionVerdict } = await import("../core");
+    const { checkEvidenceBinding, evidenceDigest } = await import("../evidence-snapshot");
+    const admin = freshAdmin();
+    await generateAndPersistProductionVerdict(admin as never, input);
+    const record = JSON.parse(JSON.stringify(metricsOf().verdictEvidence)) as { evidenceDigest: string; snapshot: { subject: { scanId: string } } };
+    expect(checkEvidenceBinding(verdictJson(), record, { organizationId: ORG_ID })).toBe("verified_capture");
+    record.snapshot.subject.scanId = "99999999-9999-4999-8999-999999999999";
+    record.evidenceDigest = evidenceDigest(record.snapshot as never); // forged to be self-consistent
+    expect(checkEvidenceBinding({ ...verdictJson(), evidenceDigest: record.evidenceDigest }, record, { organizationId: ORG_ID })).toBe("digest_mismatch"); // the verdict is about SCAN_ID
+  });
+
+  it("failure BETWEEN the two writes (snapshot stored, verdict insert fails): the retry with the same inputs binds; with changed inputs it is published without a digest and never verified", async () => {
+    const { generateAndPersistProductionVerdict } = await import("../core");
+    const { checkEvidenceBinding } = await import("../evidence-snapshot");
+    const admin = freshAdmin();
+    const original = admin.from.bind(admin);
+    let failInsert = true;
+    (admin as { from: unknown }).from = (table: string) => {
+      const builder = original(table) as unknown as { insert: (...a: unknown[]) => unknown };
+      if (table !== "production_verdicts") return builder;
+      const insert = builder.insert.bind(builder);
+      builder.insert = (...args: unknown[]) => (failInsert ? { select: () => ({ single: async () => ({ data: null, error: { message: "insert boom" } }) }) } : insert(...args));
+      return builder;
+    };
+    await expect(generateAndPersistProductionVerdict(admin as never, input)).rejects.toThrow();
+    expect(current.production_verdicts).toHaveLength(0); // nothing published
+    const orphan = metricsOf().verdictEvidence as { capture: string };
+    expect(orphan.capture).toBe("at_verdict_generation"); // the snapshot is there, but no verdict claims it
+
+    failInsert = false;
+    await generateAndPersistProductionVerdict(admin as never, input); // same evidence: same digest -> the standing snapshot is this verdict's
+    expect(checkEvidenceBinding(verdictJson(), metricsOf().verdictEvidence, { organizationId: ORG_ID })).toBe("verified_capture");
+
+    // changed inputs between the writes: a different snapshot stands, so the verdict must not vouch for it
+    const t = freshAdmin();
+    const orig2 = t.from.bind(t);
+    let fail2 = true;
+    (t as { from: unknown }).from = (table: string) => {
+      const builder = orig2(table) as unknown as { insert: (...a: unknown[]) => unknown };
+      if (table !== "production_verdicts") return builder;
+      const insert = builder.insert.bind(builder);
+      builder.insert = (...args: unknown[]) => (fail2 ? { select: () => ({ single: async () => ({ data: null, error: { message: "insert boom" } }) }) } : insert(...args));
+      return builder;
+    };
+    await expect(generateAndPersistProductionVerdict(t as never, input)).rejects.toThrow();
+    (current.security_jobs as Array<Record<string, unknown>>)[1].status = "FAILED"; // an engine result changed in between
+    fail2 = false;
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      await generateAndPersistProductionVerdict(t as never, input);
+      expect(verdictJson().evidenceDigest).toBeUndefined();
+      expect(checkEvidenceBinding(verdictJson(), metricsOf().verdictEvidence, { organizationId: ORG_ID })).not.toBe("verified_capture");
+    } finally { warn.mockRestore(); }
+  });
+
+  it("nothing but a captured, matching pair is ever 'verified_capture' (reconstruction, no digest, edited snapshot, edited digest, no record)", async () => {
+    const { generateAndPersistProductionVerdict } = await import("../core");
+    const { checkEvidenceBinding } = await import("../evidence-snapshot");
+    const admin = freshAdmin();
+    await generateAndPersistProductionVerdict(admin as never, input);
+    const good = JSON.parse(JSON.stringify(metricsOf().verdictEvidence)) as Record<string, unknown> & { snapshot: { securityDecisionIncluded: boolean } };
+    const verdict = verdictJson();
+    const attempts: Array<[string, unknown, ReturnType<typeof checkEvidenceBinding>]> = [
+      ["reconstruction", { ...good, capture: "reconstructed_after_verdict" }, "reconstruction_unverifiable"],
+      ["edited snapshot", { ...good, snapshot: { ...good.snapshot, securityDecisionIncluded: !good.snapshot.securityDecisionIncluded } }, "digest_mismatch"],
+      ["edited digest", { ...good, evidenceDigest: "c".repeat(64) }, "digest_mismatch"],
+      ["no snapshot", { capture: "at_verdict_generation", evidenceDigest: good.evidenceDigest }, "digest_mismatch"],
+      ["no record", null, "no_record"],
+    ];
+    for (const [, record, expected] of attempts) expect(checkEvidenceBinding(verdict as never, record, { organizationId: ORG_ID })).toBe(expected);
+    expect(checkEvidenceBinding({ ...(verdict as object), evidenceDigest: undefined } as never, good, { organizationId: ORG_ID })).toBe("verdict_without_digest");
+  });
+
+  it("consumers never read the evidence fields directly: only the evidence modules and the schema touch verdictEvidence/evidenceDigest (everything else must go through checkEvidenceBinding)", () => {
+    const allowed = new Set([
+      "server/production-verdict/evidence-finalization.ts", "server/production-verdict/evidence-snapshot.ts", "server/production-verdict/core.ts",
+      "brain/production-verdict/schema.ts",
+    ]);
+    const hits: string[] = [];
+    const walk = (dir: string) => {
+      for (const name of readdirSync(dir)) {
+        const path = `${dir}/${name}`;
+        if (name === "node_modules" || name === ".next" || name === "__tests__") continue;
+        if (statSync(path).isDirectory()) walk(path);
+        else if (/\.(ts|tsx)$/.test(name) && /verdictEvidence\b|evidenceDigest/.test(readFileSync(path, "utf8")) && !allowed.has(path)) hits.push(path);
+      }
+    };
+    for (const dir of ["app", "server", "lib", "features", "brain", "components", "inngest", "mcp"]) { try { walk(dir); } catch { /* absent */ } }
+    expect(hits).toEqual([]);
   });
 });
