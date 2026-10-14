@@ -19,6 +19,7 @@ import { MissionControlActivityBanner } from "./MissionControlActivityBanner";
 import { MissionControlProtectionStatus } from "./MissionControlProtectionStatus";
 import { AnalysisRunContextNotice } from "./AnalysisRunContextNotice";
 import { useProtectionCenter } from "@/features/continuous-protection/hooks/useProtectionCenter";
+import { LocalTimeLabel } from "@/components/ui/local-time-label";
 
 export function MissionControlExperience({
   initialState,
@@ -199,7 +200,13 @@ export function MissionControlExperience({
       {state.view.cancelledReview ? (
         <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
           <p className="font-medium text-foreground">{t("feed.reviewStopped")}</p>
-          <p className="mt-1">{formatLocalizedDate(locale, state.view.cancelledReview.cancelledAt)}</p>
+          <p className="mt-1">
+            <LocalTimeLabel
+              iso={state.view.cancelledReview.cancelledAt}
+              kind="date"
+              format={() => formatLocalizedDate(locale, state.view.cancelledReview?.cancelledAt ?? null)}
+            />
+          </p>
         </div>
       ) : null}
     </div>

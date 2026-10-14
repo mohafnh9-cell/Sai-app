@@ -27,6 +27,7 @@ import {
 } from "./types";
 import { trackEvent } from "@/lib/analytics/track";
 import { fixPromptContextFromScan } from "@/features/production-verdict/fix-prompt-context";
+import { LocalTimeLabel } from "@/components/ui/local-time-label";
 
 function statusIsActive(status?: string) {
   return [
@@ -155,7 +156,13 @@ export function ScanDetailView({
             <Badge variant="outline">{scan.status || "Unknown"}</Badge>
           </div>
           <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
-            <span>{formatScanDate(scanDate(scan))}</span>
+            <span>
+              {scanDate(scan) ? (
+                <LocalTimeLabel iso={scanDate(scan) as string} kind="datetime" format={() => formatScanDate(scanDate(scan))} />
+              ) : (
+                formatScanDate(scanDate(scan))
+              )}
+            </span>
             {scan.branch && (
               <span className="flex items-center gap-1">
                 <GitBranch className="h-3.5 w-3.5" aria-hidden /> {scan.branch}
