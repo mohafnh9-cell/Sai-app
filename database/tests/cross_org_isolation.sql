@@ -14,8 +14,8 @@ alter default privileges in schema public grant all on tables to authenticated, 
 
 create schema iso;
 grant usage on schema iso to authenticated, anon;
-create table iso.cases (tbl text primary key, scope_col text not null, seed_a text, seeded boolean not null default false, skip_reason text, rls_on boolean not null);
-grant all on iso.cases to authenticated, anon;
+create temp table iso_cases (tbl text primary key, scope_col text not null, seed_a text, seeded boolean not null default false, skip_reason text, rls_on boolean not null);
+grant all on iso_cases to authenticated, anon;
 
 insert into auth.users (id, email) values ('00000000-0000-4000-8000-0000000000a1','a@iso.test'), ('00000000-0000-4000-8000-0000000000b1','b@iso.test');
 insert into public.organizations (id, name, slug) values ('10000000-0000-4000-8000-0000000000a1','Org A','iso-a'), ('10000000-0000-4000-8000-0000000000b1','Org B','iso-b');
@@ -100,7 +100,7 @@ begin
         if r.tbl not in ('organization_members','projects') then   -- those two were seeded explicitly above
           execute sa; execute sb;
         end if;
-        insert into iso.cases values (r.tbl, scope, sa, true, null, r.rls);
+        insert into iso_cases values (r.tbl, scope, sa, true, null, r.rls);
         done := true; ok := ok + 1;
       exception
         when check_violation then
@@ -113,7 +113,7 @@ begin
           exit;
       end;
     end loop;
-    if not done then insert into iso.cases values (r.tbl, scope, sa, false, last_err, r.rls); end if;
+    if not done then insert into iso_cases values (r.tbl, scope, sa, false, last_err, r.rls); end if;
   end loop;
   raise notice 'NOTE seeded % of % tables that carry organization_id/project_id', ok, total;
 end $$;
@@ -123,7 +123,7 @@ reset session_replication_role;
 do $$
 declare r record; n bigint; empty int := 0;
 begin
-  for r in select * from iso.cases where seeded loop
+  for r in select * from iso_cases where seeded loop
     execute format('select count(*) from public.%I where %I = %L', r.tbl, r.scope_col, case when r.scope_col='organization_id' then '10000000-0000-4000-8000-0000000000a1' else '20000000-0000-4000-8000-0000000000a1' end) into n;
     if n = 0 then empty := empty + 1; raise notice 'FAIL seed: % has no organization A row (the test would be vacuous)', r.tbl; end if;
   end loop;
@@ -134,10 +134,10 @@ end $$;
 do $$
 declare r record;
 begin
-  for r in select * from iso.cases where not rls_on loop
+  for r in select * from iso_cases where not rls_on loop
     raise notice 'FAIL rls-off: public.% carries % and has ROW LEVEL SECURITY disabled', r.tbl, r.scope_col;
   end loop;
-  if not exists (select 1 from iso.cases where not rls_on) then raise notice 'PASS every table that carries organization_id/project_id has row level security enabled'; end if;
+  if not exists (select 1 from iso_cases where not rls_on) then raise notice 'PASS every table that carries organization_id/project_id has row level security enabled'; end if;
 end $$;
 
 -- ---------- act as outsiders ----------
@@ -145,7 +145,7 @@ create function iso.probe(actor text) returns void language plpgsql as $$
 declare r record; n bigint; v text; denied int := 0; sees int := 0; wrote int := 0; leaked int := 0; inserts_refused int := 0; inserts_inconclusive int := 0;
   a text; code text;
 begin
-  for r in select * from iso.cases where seeded order by tbl loop
+  for r in select * from iso_cases where seeded order by tbl loop
     a := case when r.scope_col = 'organization_id' then '10000000-0000-4000-8000-0000000000a1' else '20000000-0000-4000-8000-0000000000a1' end;
     -- read
     begin
@@ -174,8 +174,8 @@ begin
     end;
   end loop;
   raise notice 'SUMMARY %: tables probed=%; reads leaked=%; writes that changed organization A=%; inserts refused by RLS/privileges=%; inserts inconclusive=%; statements denied outright=%',
-    actor, (select count(*) from iso.cases where seeded), leaked, wrote, inserts_refused, inserts_inconclusive, denied;
-  if leaked = 0 and wrote = 0 then raise notice 'PASS % cannot read or change any organization A data in the % tables probed', actor, (select count(*) from iso.cases where seeded); end if;
+    actor, (select count(*) from iso_cases where seeded), leaked, wrote, inserts_refused, inserts_inconclusive, denied;
+  if leaked = 0 and wrote = 0 then raise notice 'PASS % cannot read or change any organization A data in the % tables probed', actor, (select count(*) from iso_cases where seeded); end if;
 end $$;
 grant execute on all functions in schema iso to authenticated, anon;
 
@@ -197,7 +197,7 @@ select set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-0000000000a1
 do $$
 declare mine bigint; tables_visible int := 0; r record; n bigint;
 begin
-  for r in select * from iso.cases where seeded loop
+  for r in select * from iso_cases where seeded loop
     begin
       execute format('select count(*) from public.%I where %I = %L', r.tbl, r.scope_col, case when r.scope_col='organization_id' then '10000000-0000-4000-8000-0000000000a1' else '20000000-0000-4000-8000-0000000000a1' end) into n;
       if n > 0 then tables_visible := tables_visible + 1;
@@ -216,7 +216,7 @@ rollback;
 do $$
 declare r record;
 begin
-  for r in select * from iso.cases where not seeded order by tbl loop
+  for r in select * from iso_cases where not seeded order by tbl loop
     raise notice 'NOTE NOT COVERED: public.% (could not be seeded generically: %)', r.tbl, left(r.skip_reason, 90);
   end loop;
 end $$;
