@@ -71,6 +71,14 @@ function WorkspaceRow({
   );
 }
 
+// A reload would discard what the person is typing: leave a text field with content alone and try again on the next event.
+function hasUnsavedTyping(): boolean {
+  const el = document.activeElement;
+  if (el instanceof HTMLTextAreaElement) return el.value.length > 0;
+  if (el instanceof HTMLInputElement) return !["checkbox", "radio", "button", "submit"].includes(el.type) && el.value.length > 0;
+  return el instanceof HTMLElement && el.isContentEditable && (el.textContent ?? "").length > 0;
+}
+
 // A reload per target workspace at most once a minute: if the layout and the API ever disagreed for a reason other than
 // a switch in another tab, this must not turn into a reload loop.
 function reloadedRecently(targetId: string): boolean {
@@ -159,7 +167,8 @@ export function WorkspaceSwitcher({
         if (!response.ok) return;
         const data = (await response.json().catch(() => null)) as WorkspacesResponse | null;
         if (cancelled || !data?.activeWorkspaceId) return;
-        if (data.activeWorkspaceId !== shownActiveId && !reloadedRecently(data.activeWorkspaceId)) window.location.reload();
+        if (data.activeWorkspaceId === shownActiveId || hasUnsavedTyping()) return; // retried on the next focus/visibility event
+        if (!reloadedRecently(data.activeWorkspaceId)) window.location.reload();
       } catch {
         // offline or transient: keep what is shown
       }

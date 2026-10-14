@@ -70,4 +70,17 @@ describe("WorkspaceSwitcher cross-tab sync", () => {
     expect(reload).not.toHaveBeenCalled();
     expect(container.textContent).toContain("Workspace B");
   });
+
+  it("does not reload over text the person is typing, and does once the field is empty", async () => {
+    serverActive("b");
+    const input = document.createElement("input"); input.type = "text"; document.body.append(input); input.focus(); input.value = "my notes";
+    await act(async () => { window.dispatchEvent(new Event("focus")); });
+    await flush();
+    expect(reload).not.toHaveBeenCalled();
+    input.value = "";
+    await act(async () => { window.dispatchEvent(new Event("focus")); });
+    await flush();
+    expect(reload).toHaveBeenCalledTimes(1);
+    input.remove();
+  });
 });
