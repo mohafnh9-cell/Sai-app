@@ -10,6 +10,8 @@ Two deployables, two pipelines:
 
 **Merging to `main` does not update the worker.** On 2026-10-14 the worker was still the 2026-10-05 build (`0a44ed2`), so verdict code merged after that (#76 D9, #79, #96) never ran where engine jobs finish.
 
+CI (`Release verify`) runs `scripts/worker-impact.mjs` against the PR base / previous commit and raises a **warning plus a job summary** when a change touches bundled files: the worker redeploy is then decided at merge time. It never fails the build.
+
 ## Which version is the worker running?
 - Database (read-only): `select claimed_by, max(claimed_at) from security_jobs group by 1 order by 2 desc limit 3;` — `claimed_by` is `worker-<commit7>-<pid>-<start>`.
 - Worker logs: the `starting` event prints `buildCommit` and `deploymentId`; `/health` and `/readiness` (inside the container) include `buildCommit`.
