@@ -454,7 +454,7 @@ describe("the evidence snapshot is persisted before the verdict is published and
     const record = metricsOf().verdictEvidence as { evidenceDigest: string; snapshot: Parameters<typeof evidenceDigest>[0] };
     expect(verdictJson()?.evidenceDigest).toBe(record.evidenceDigest);
     expect(evidenceDigest(record.snapshot)).toBe(record.evidenceDigest);
-    expect(checkEvidenceBinding(verdictJson(), record)).toBe("verified_capture");
+    expect(checkEvidenceBinding(verdictJson(), record, { organizationId: ORG_ID })).toBe("verified_capture");
   });
 
   it("a concurrent finalizer never sees a verdict without its capture: it neither waits nor reconstructs", async () => {
@@ -490,13 +490,13 @@ describe("the evidence snapshot is persisted before the verdict is published and
     const admin = freshAdmin();
     await generateAndPersistProductionVerdict(admin as never, input);
     const record = JSON.parse(JSON.stringify(metricsOf().verdictEvidence)) as { snapshot: { externalEngines: Array<{ status: string }> } };
-    expect(checkEvidenceBinding(verdictJson(), record)).toBe("verified_capture");
+    expect(checkEvidenceBinding(verdictJson(), record, { organizationId: ORG_ID })).toBe("verified_capture");
     const tampered = JSON.parse(JSON.stringify(record)); tampered.snapshot.externalEngines[0].status = "FAILED";
-    expect(checkEvidenceBinding(verdictJson(), tampered)).toBe("digest_mismatch");
-    expect(checkEvidenceBinding({ evidenceDigest: "a".repeat(64) }, record)).toBe("digest_mismatch"); // another snapshot's digest
-    expect(checkEvidenceBinding({}, record)).toBe("verdict_without_digest");
-    expect(checkEvidenceBinding(verdictJson(), { capture: "reconstructed_after_verdict" })).toBe("reconstruction_unverifiable");
-    expect(checkEvidenceBinding(verdictJson(), undefined)).toBe("no_record");
+    expect(checkEvidenceBinding(verdictJson(), tampered, { organizationId: ORG_ID })).toBe("digest_mismatch");
+    expect(checkEvidenceBinding({ evidenceDigest: "a".repeat(64) }, record, { organizationId: ORG_ID })).toBe("digest_mismatch"); // another snapshot's digest
+    expect(checkEvidenceBinding({}, record, { organizationId: ORG_ID })).toBe("verdict_without_digest");
+    expect(checkEvidenceBinding(verdictJson(), { capture: "reconstructed_after_verdict" }, { organizationId: ORG_ID })).toBe("reconstruction_unverifiable");
+    expect(checkEvidenceBinding(verdictJson(), undefined, { organizationId: ORG_ID })).toBe("no_record");
   });
 
   it("if the snapshot cannot be persisted: the verdict is still published (same status, score, blockers) but WITHOUT a digest, and no record claims anything", async () => {
@@ -602,16 +602,31 @@ describe("digest determinism, what the snapshot identifies, failures between the
     });
   });
 
+  it("the organization is validated too: a pair is not verified for another organization, nor without stating one", async () => {
+    const { generateAndPersistProductionVerdict } = await import("../core");
+    const { checkEvidenceBinding, evidenceDigest } = await import("../evidence-snapshot");
+    const admin = freshAdmin();
+    await generateAndPersistProductionVerdict(admin as never, input);
+    const record = JSON.parse(JSON.stringify(metricsOf().verdictEvidence)) as { evidenceDigest: string; snapshot: { subject: { organizationId: string } } };
+    expect(checkEvidenceBinding(verdictJson(), record, { organizationId: ORG_ID })).toBe("verified_capture");
+    expect(checkEvidenceBinding(verdictJson(), record, { organizationId: "44444444-4444-4444-8444-444444444444" })).toBe("digest_mismatch"); // the verdict row belongs to another organization
+    expect(checkEvidenceBinding(verdictJson(), record, {} as never)).toBe("digest_mismatch"); // not stating one verifies nothing
+    // a snapshot of another organization, forged to be self-consistent, is not this verdict's
+    record.snapshot.subject.organizationId = "44444444-4444-4444-8444-444444444444";
+    record.evidenceDigest = evidenceDigest(record.snapshot as never);
+    expect(checkEvidenceBinding({ ...verdictJson(), evidenceDigest: record.evidenceDigest }, record, { organizationId: ORG_ID })).toBe("digest_mismatch");
+  });
+
   it("a snapshot moved to another scan (self-consistent but about something else) is not verified", async () => {
     const { generateAndPersistProductionVerdict } = await import("../core");
     const { checkEvidenceBinding, evidenceDigest } = await import("../evidence-snapshot");
     const admin = freshAdmin();
     await generateAndPersistProductionVerdict(admin as never, input);
     const record = JSON.parse(JSON.stringify(metricsOf().verdictEvidence)) as { evidenceDigest: string; snapshot: { subject: { scanId: string } } };
-    expect(checkEvidenceBinding(verdictJson(), record)).toBe("verified_capture");
+    expect(checkEvidenceBinding(verdictJson(), record, { organizationId: ORG_ID })).toBe("verified_capture");
     record.snapshot.subject.scanId = "99999999-9999-4999-8999-999999999999";
     record.evidenceDigest = evidenceDigest(record.snapshot as never); // forged to be self-consistent
-    expect(checkEvidenceBinding({ ...verdictJson(), evidenceDigest: record.evidenceDigest }, record)).toBe("digest_mismatch"); // the verdict is about SCAN_ID
+    expect(checkEvidenceBinding({ ...verdictJson(), evidenceDigest: record.evidenceDigest }, record, { organizationId: ORG_ID })).toBe("digest_mismatch"); // the verdict is about SCAN_ID
   });
 
   it("failure BETWEEN the two writes (snapshot stored, verdict insert fails): the retry with the same inputs binds; with changed inputs it is published without a digest and never verified", async () => {
@@ -634,7 +649,7 @@ describe("digest determinism, what the snapshot identifies, failures between the
 
     failInsert = false;
     await generateAndPersistProductionVerdict(admin as never, input); // same evidence: same digest -> the standing snapshot is this verdict's
-    expect(checkEvidenceBinding(verdictJson(), metricsOf().verdictEvidence)).toBe("verified_capture");
+    expect(checkEvidenceBinding(verdictJson(), metricsOf().verdictEvidence, { organizationId: ORG_ID })).toBe("verified_capture");
 
     // changed inputs between the writes: a different snapshot stands, so the verdict must not vouch for it
     const t = freshAdmin();
@@ -654,7 +669,7 @@ describe("digest determinism, what the snapshot identifies, failures between the
     try {
       await generateAndPersistProductionVerdict(t as never, input);
       expect(verdictJson().evidenceDigest).toBeUndefined();
-      expect(checkEvidenceBinding(verdictJson(), metricsOf().verdictEvidence)).not.toBe("verified_capture");
+      expect(checkEvidenceBinding(verdictJson(), metricsOf().verdictEvidence, { organizationId: ORG_ID })).not.toBe("verified_capture");
     } finally { warn.mockRestore(); }
   });
 
@@ -672,8 +687,8 @@ describe("digest determinism, what the snapshot identifies, failures between the
       ["no snapshot", { capture: "at_verdict_generation", evidenceDigest: good.evidenceDigest }, "digest_mismatch"],
       ["no record", null, "no_record"],
     ];
-    for (const [, record, expected] of attempts) expect(checkEvidenceBinding(verdict as never, record)).toBe(expected);
-    expect(checkEvidenceBinding({ ...(verdict as object), evidenceDigest: undefined } as never, good)).toBe("verdict_without_digest");
+    for (const [, record, expected] of attempts) expect(checkEvidenceBinding(verdict as never, record, { organizationId: ORG_ID })).toBe(expected);
+    expect(checkEvidenceBinding({ ...(verdict as object), evidenceDigest: undefined } as never, good, { organizationId: ORG_ID })).toBe("verdict_without_digest");
   });
 
   it("consumers never read the evidence fields directly: only the evidence modules and the schema touch verdictEvidence/evidenceDigest (everything else must go through checkEvidenceBinding)", () => {

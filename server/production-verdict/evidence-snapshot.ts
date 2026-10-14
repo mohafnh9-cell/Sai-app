@@ -76,7 +76,9 @@ export type EvidenceBinding =
  */
 export function checkEvidenceBinding(
   verdict: { evidenceDigest?: string | null; scanId?: string; projectId?: string; commitSha?: string | null } | null | undefined,
-  record: unknown
+  record: unknown,
+  /** The organization the verdict row belongs to (production_verdicts.organization_id): required, a pair is never verified without it. */
+  expected: { organizationId: string }
 ): EvidenceBinding {
   if (!record || typeof record !== "object") return "no_record";
   const rec = record as Record<string, unknown>;
@@ -88,6 +90,8 @@ export function checkEvidenceBinding(
   if (rec.evidenceDigest !== claimed || evidenceDigest(snapshot) !== claimed) return "digest_mismatch";
   // the snapshot must be about THIS verdict's analysis, not just self-consistent
   const sameSubject =
+    !!expected?.organizationId &&
+    snapshot.subject?.organizationId === expected.organizationId &&
     (verdict?.scanId === undefined || snapshot.subject?.scanId === verdict.scanId) &&
     (verdict?.projectId === undefined || snapshot.subject?.projectId === verdict.projectId) &&
     (verdict?.commitSha === undefined || verdict.commitSha === null || snapshot.subject?.commitSha === verdict.commitSha);
