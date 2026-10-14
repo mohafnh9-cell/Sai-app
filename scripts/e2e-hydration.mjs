@@ -30,7 +30,7 @@ const ACME = "a1111111-1111-4111-8111-111111111111";
 const SCAN = "a3333333-3333-4333-8333-333333333333";
 const PAGES = list(args.pages, [
   "/", "/login", "/signup", "/privacy", "/terms",
-  "/demo", "/demo/dashboard", "/demo/projects", `/demo/projects/${ACME}`, `/demo/projects/${ACME}/journey`, `/demo/projects/${ACME}/scans/${SCAN}`,
+  "/demo", "/demo/dashboard", "/demo/projects", `/demo/projects/${ACME}`, `/demo/projects/${ACME}/journey`, `/demo/projects/${ACME}/scans/${SCAN}/report`,
   "/demo/integrations", "/demo/settings",
   `/demo/projects/${ACME}?scenario=not-ready`, `/demo/projects/${ACME}?scenario=first-verdict`, `/demo/projects/${ACME}/journey?scenario=not-ready`,
   `/demo/projects/${ACME}?scenario=review-in-progress`,
@@ -134,7 +134,7 @@ try {
 }
 
 const bad = results.filter((r) => r.hydration.length > 0);
-const failedStatus = results.filter((r) => r.status === null || r.status >= 500);
+const failedStatus = results.filter((r) => r.status === null || r.status >= 400);
 const byPage = new Map();
 for (const r of bad) {
   const entry = byPage.get(r.path) ?? { combos: new Set(), messages: new Set() };
@@ -142,7 +142,7 @@ for (const r of bad) {
   r.hydration.forEach((m) => entry.messages.add(m.slice(0, 400)));
   byPage.set(r.path, entry);
 }
-console.log(`\nloads: ${results.length}  with hydration errors: ${bad.length}  with HTTP 5xx/none: ${failedStatus.length}`);
+console.log(`\nloads: ${results.length}  with hydration errors: ${bad.length}  with HTTP >=400/none (a listed page must render, not 404): ${failedStatus.length}`);
 for (const [path, e] of byPage) {
   console.log(`\nHYDRATION  ${path}  (${e.combos.size} combinations)`);
   for (const m of e.messages) console.log(`   ${m.replace(/\n/g, " ⏎ ").slice(0, 380)}`);
