@@ -363,6 +363,13 @@ export async function generateAndPersistProductionVerdict(
   const { VERDICT_EVIDENCE_STORED_DECISION_KEY: storedDecisionKey } = await import("./evidence-finalization");
   const storedDecision = (scan.metrics as Record<string, unknown> | null | undefined)?.[storedDecisionKey];
   const snapshot: EvidenceSnapshot = {
+    subject: {
+      organizationId: input.organizationId,
+      projectId: input.projectId,
+      scanId: input.scanId,
+      commitSha: ((scan.commit_sha ?? scan.commit) as string | null | undefined) ?? null,
+    },
+    nativeFindings: { count: nativeFindings.length, idsDigest: digestIds(nativeFindings.map((finding) => String(finding.id))) },
     externalEngines: engineCoverageRead.ok ? engineCoverageRead.engines : "unavailable",
     externalFindings: externalFindingsRead.ok
       ? { count: externalFindings.length, idsDigest: digestIds(externalFindings.map((finding) => String(finding.id))) }

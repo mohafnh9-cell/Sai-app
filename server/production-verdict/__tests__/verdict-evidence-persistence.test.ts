@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import { createFakeAdmin, type FakeTables } from "@/server/mcp/__tests__/fake-admin";
 
@@ -551,5 +551,146 @@ describe("the evidence snapshot is persisted before the verdict is published and
     await generateAndPersistProductionVerdict(admin as never, input);
     expect((metricsOf().verdictEvidence as { snapshot: { externalFindings: unknown } }).snapshot.externalFindings).toBe("unavailable");
     expect(verdictJson()?.status).not.toBe("ready_to_ship"); // evidence missing never reads as clean
+  });
+});
+
+describe("digest determinism, what the snapshot identifies, failures between the two writes, and consumers", () => {
+  const input = { organizationId: ORG_ID, projectId: PROJECT_ID, scanId: SCAN_ID };
+  const verdictRow = () => (current.production_verdicts as Array<Record<string, unknown>>)[0];
+  const verdictJson = () => verdictRow()?.verdict as Record<string, unknown> & { evidenceDigest?: string };
+  const snap = async () => {
+    const { digestIds } = await import("../evidence-snapshot");
+    return {
+      subject: { organizationId: ORG_ID, projectId: PROJECT_ID, scanId: SCAN_ID, commitSha: "abc123" },
+      nativeFindings: { count: 2, idsDigest: digestIds(["n1", "n2"]) },
+      externalEngines: [{ engine: "trivy", status: "COMPLETED" }, { engine: "crypto", status: "COMPLETED" }] as Array<{ engine: string; status: string }>,
+      externalFindings: { count: 2, idsDigest: digestIds(["e1", "e2"]) },
+      securityDecisionId: "d1" as string | null,
+      securityDecisionIncluded: true,
+    };
+  };
+
+  it("the digest is deterministic: independent of key order, engine order and id order; sensitive to every identifying field", async () => {
+    const { evidenceDigest, digestIds } = await import("../evidence-snapshot");
+    const a = await snap();
+    const reordered = { securityDecisionIncluded: true, securityDecisionId: "d1", externalFindings: { idsDigest: digestIds(["e2", "e1", "e1"]), count: 2 }, externalEngines: [...a.externalEngines].reverse(),
+      nativeFindings: { idsDigest: digestIds(["n2", "n1"]), count: 2 }, subject: { commitSha: "abc123", scanId: SCAN_ID, projectId: PROJECT_ID, organizationId: ORG_ID } };
+    expect(evidenceDigest(reordered)).toBe(evidenceDigest(a));
+    expect(evidenceDigest(a)).toMatch(/^[0-9a-f]{64}$/);
+    expect(evidenceDigest(a)).toBe(evidenceDigest(JSON.parse(JSON.stringify(a)))); // survives a JSON round trip (jsonb)
+    const variants = [
+      { ...a, subject: { ...a.subject, organizationId: "other" } }, { ...a, subject: { ...a.subject, projectId: "other" } },
+      { ...a, subject: { ...a.subject, scanId: "other" } }, { ...a, subject: { ...a.subject, commitSha: "def456" } },
+      { ...a, externalEngines: [{ engine: "trivy", status: "FAILED" }, a.externalEngines[1]!] }, { ...a, externalEngines: "not_run" as const },
+      { ...a, externalFindings: "unavailable" as const }, { ...a, nativeFindings: { count: 2, idsDigest: digestIds(["n1", "n3"]) } },
+      { ...a, securityDecisionId: null, securityDecisionIncluded: false },
+    ];
+    for (const v of variants) expect(evidenceDigest(v)).not.toBe(evidenceDigest(a));
+    expect(new Set(variants.map((v) => evidenceDigest(v))).size).toBe(variants.length);
+  });
+
+  it("the stored snapshot identifies organization, project, scan, commit, engines and the evidence used", async () => {
+    const { generateAndPersistProductionVerdict } = await import("../core");
+    const admin = freshAdmin();
+    await generateAndPersistProductionVerdict(admin as never, input);
+    const record = metricsOf().verdictEvidence as { snapshot: Record<string, unknown> };
+    expect(record.snapshot).toMatchObject({
+      subject: { organizationId: ORG_ID, projectId: PROJECT_ID, scanId: SCAN_ID, commitSha: "abc123" },
+      nativeFindings: { count: expect.any(Number), idsDigest: expect.stringMatching(/^[0-9a-f]{64}$/) },
+      externalEngines: [{ engine: "opengrep", status: "COMPLETED" }, { engine: "trivy", status: "COMPLETED" }, { engine: "crypto", status: "COMPLETED" }],
+      externalFindings: { count: 0 },
+    });
+  });
+
+  it("a snapshot moved to another scan (self-consistent but about something else) is not verified", async () => {
+    const { generateAndPersistProductionVerdict } = await import("../core");
+    const { checkEvidenceBinding, evidenceDigest } = await import("../evidence-snapshot");
+    const admin = freshAdmin();
+    await generateAndPersistProductionVerdict(admin as never, input);
+    const record = JSON.parse(JSON.stringify(metricsOf().verdictEvidence)) as { evidenceDigest: string; snapshot: { subject: { scanId: string } } };
+    expect(checkEvidenceBinding(verdictJson(), record)).toBe("verified_capture");
+    record.snapshot.subject.scanId = "99999999-9999-4999-8999-999999999999";
+    record.evidenceDigest = evidenceDigest(record.snapshot as never); // forged to be self-consistent
+    expect(checkEvidenceBinding({ ...verdictJson(), evidenceDigest: record.evidenceDigest }, record)).toBe("digest_mismatch"); // the verdict is about SCAN_ID
+  });
+
+  it("failure BETWEEN the two writes (snapshot stored, verdict insert fails): the retry with the same inputs binds; with changed inputs it is published without a digest and never verified", async () => {
+    const { generateAndPersistProductionVerdict } = await import("../core");
+    const { checkEvidenceBinding } = await import("../evidence-snapshot");
+    const admin = freshAdmin();
+    const original = admin.from.bind(admin);
+    let failInsert = true;
+    (admin as { from: unknown }).from = (table: string) => {
+      const builder = original(table) as unknown as { insert: (...a: unknown[]) => unknown };
+      if (table !== "production_verdicts") return builder;
+      const insert = builder.insert.bind(builder);
+      builder.insert = (...args: unknown[]) => (failInsert ? { select: () => ({ single: async () => ({ data: null, error: { message: "insert boom" } }) }) } : insert(...args));
+      return builder;
+    };
+    await expect(generateAndPersistProductionVerdict(admin as never, input)).rejects.toThrow();
+    expect(current.production_verdicts).toHaveLength(0); // nothing published
+    const orphan = metricsOf().verdictEvidence as { capture: string };
+    expect(orphan.capture).toBe("at_verdict_generation"); // the snapshot is there, but no verdict claims it
+
+    failInsert = false;
+    await generateAndPersistProductionVerdict(admin as never, input); // same evidence: same digest -> the standing snapshot is this verdict's
+    expect(checkEvidenceBinding(verdictJson(), metricsOf().verdictEvidence)).toBe("verified_capture");
+
+    // changed inputs between the writes: a different snapshot stands, so the verdict must not vouch for it
+    const t = freshAdmin();
+    const orig2 = t.from.bind(t);
+    let fail2 = true;
+    (t as { from: unknown }).from = (table: string) => {
+      const builder = orig2(table) as unknown as { insert: (...a: unknown[]) => unknown };
+      if (table !== "production_verdicts") return builder;
+      const insert = builder.insert.bind(builder);
+      builder.insert = (...args: unknown[]) => (fail2 ? { select: () => ({ single: async () => ({ data: null, error: { message: "insert boom" } }) }) } : insert(...args));
+      return builder;
+    };
+    await expect(generateAndPersistProductionVerdict(t as never, input)).rejects.toThrow();
+    (current.security_jobs as Array<Record<string, unknown>>)[1].status = "FAILED"; // an engine result changed in between
+    fail2 = false;
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      await generateAndPersistProductionVerdict(t as never, input);
+      expect(verdictJson().evidenceDigest).toBeUndefined();
+      expect(checkEvidenceBinding(verdictJson(), metricsOf().verdictEvidence)).not.toBe("verified_capture");
+    } finally { warn.mockRestore(); }
+  });
+
+  it("nothing but a captured, matching pair is ever 'verified_capture' (reconstruction, no digest, edited snapshot, edited digest, no record)", async () => {
+    const { generateAndPersistProductionVerdict } = await import("../core");
+    const { checkEvidenceBinding } = await import("../evidence-snapshot");
+    const admin = freshAdmin();
+    await generateAndPersistProductionVerdict(admin as never, input);
+    const good = JSON.parse(JSON.stringify(metricsOf().verdictEvidence)) as Record<string, unknown> & { snapshot: { securityDecisionIncluded: boolean } };
+    const verdict = verdictJson();
+    const attempts: Array<[string, unknown, ReturnType<typeof checkEvidenceBinding>]> = [
+      ["reconstruction", { ...good, capture: "reconstructed_after_verdict" }, "reconstruction_unverifiable"],
+      ["edited snapshot", { ...good, snapshot: { ...good.snapshot, securityDecisionIncluded: !good.snapshot.securityDecisionIncluded } }, "digest_mismatch"],
+      ["edited digest", { ...good, evidenceDigest: "c".repeat(64) }, "digest_mismatch"],
+      ["no snapshot", { capture: "at_verdict_generation", evidenceDigest: good.evidenceDigest }, "digest_mismatch"],
+      ["no record", null, "no_record"],
+    ];
+    for (const [, record, expected] of attempts) expect(checkEvidenceBinding(verdict as never, record)).toBe(expected);
+    expect(checkEvidenceBinding({ ...(verdict as object), evidenceDigest: undefined } as never, good)).toBe("verdict_without_digest");
+  });
+
+  it("consumers never read the evidence fields directly: only the evidence modules and the schema touch verdictEvidence/evidenceDigest (everything else must go through checkEvidenceBinding)", () => {
+    const allowed = new Set([
+      "server/production-verdict/evidence-finalization.ts", "server/production-verdict/evidence-snapshot.ts", "server/production-verdict/core.ts",
+      "brain/production-verdict/schema.ts",
+    ]);
+    const hits: string[] = [];
+    const walk = (dir: string) => {
+      for (const name of readdirSync(dir)) {
+        const path = `${dir}/${name}`;
+        if (name === "node_modules" || name === ".next" || name === "__tests__") continue;
+        if (statSync(path).isDirectory()) walk(path);
+        else if (/\.(ts|tsx)$/.test(name) && /verdictEvidence\b|evidenceDigest/.test(readFileSync(path, "utf8")) && !allowed.has(path)) hits.push(path);
+      }
+    };
+    for (const dir of ["app", "server", "lib", "features", "brain", "components", "inngest", "mcp"]) { try { walk(dir); } catch { /* absent */ } }
+    expect(hits).toEqual([]);
   });
 });

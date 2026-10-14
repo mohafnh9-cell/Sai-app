@@ -14,6 +14,10 @@ import { createHash } from "node:crypto";
 export type EngineEvidence = { engine: string; status: string };
 
 export type EvidenceSnapshot = {
+  /** WHICH analysis this evidence belongs to: part of the digested content, so a snapshot cannot be moved to another scan/project/commit. */
+  subject: { organizationId: string; projectId: string; scanId: string; commitSha: string | null };
+  /** The native findings the verdict was scored on (ids digested, order-independent). */
+  nativeFindings: { count: number; idsDigest: string };
   /** Latest job per engine, exactly as the coverage check judged it; "not_run" = no external engine was planned; "unavailable" = unreadable. */
   externalEngines: EngineEvidence[] | "not_run" | "unavailable";
   /** The external findings that went into the verdict (after correlation suppression), or "unavailable" when they could not be read. */
@@ -71,7 +75,7 @@ export type EvidenceBinding =
  * Only `verified_capture` may. Everything else must be shown as "not traceable", never as "no engines" or "nothing found".
  */
 export function checkEvidenceBinding(
-  verdict: { evidenceDigest?: string | null } | null | undefined,
+  verdict: { evidenceDigest?: string | null; scanId?: string; projectId?: string; commitSha?: string | null } | null | undefined,
   record: unknown
 ): EvidenceBinding {
   if (!record || typeof record !== "object") return "no_record";
@@ -81,5 +85,11 @@ export function checkEvidenceBinding(
   if (!claimed) return "verdict_without_digest";
   const snapshot = rec.snapshot as EvidenceSnapshot | undefined;
   if (rec.capture !== "at_verdict_generation" || !snapshot) return "digest_mismatch";
-  return rec.evidenceDigest === claimed && evidenceDigest(snapshot) === claimed ? "verified_capture" : "digest_mismatch";
+  if (rec.evidenceDigest !== claimed || evidenceDigest(snapshot) !== claimed) return "digest_mismatch";
+  // the snapshot must be about THIS verdict's analysis, not just self-consistent
+  const sameSubject =
+    (verdict?.scanId === undefined || snapshot.subject?.scanId === verdict.scanId) &&
+    (verdict?.projectId === undefined || snapshot.subject?.projectId === verdict.projectId) &&
+    (verdict?.commitSha === undefined || verdict.commitSha === null || snapshot.subject?.commitSha === verdict.commitSha);
+  return sameSubject ? "verified_capture" : "digest_mismatch";
 }
