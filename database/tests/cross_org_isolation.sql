@@ -200,8 +200,12 @@ begin
   for r in select * from iso.cases where seeded loop
     begin
       execute format('select count(*) from public.%I where %I = %L', r.tbl, r.scope_col, case when r.scope_col='organization_id' then '10000000-0000-4000-8000-0000000000a1' else '20000000-0000-4000-8000-0000000000a1' end) into n;
-      if n > 0 then tables_visible := tables_visible + 1; end if;
-    exception when others then null; end;
+      if n > 0 then tables_visible := tables_visible + 1;
+      else
+        raise notice 'NOTE positive control: member of A sees none of the A rows in public.% -- policies: %', r.tbl,
+          coalesce((select string_agg(cmd || ' to ' || array_to_string(roles, ',') || ' using(' || coalesce(left(qual, 70), '-') || ')', '; ') from pg_policies where schemaname='public' and tablename=r.tbl), 'none (access only through service_role/SECURITY DEFINER)');
+      end if;
+    exception when others then raise notice 'NOTE positive control: select on public.% errored (%): privileges revoked from authenticated', r.tbl, sqlerrm; end;
   end loop;
   if tables_visible > 0 then raise notice 'PASS positive control: a member of organization A sees their own data in % tables (the policies are not just denying everything)', tables_visible;
   else raise notice 'FAIL positive control: a member of organization A sees nothing of their own'; end if;
