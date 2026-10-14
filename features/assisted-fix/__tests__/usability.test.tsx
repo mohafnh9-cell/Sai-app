@@ -40,6 +40,14 @@ const dialogController = { setCommitInput: noop, useSuggestion: noop, reviewComm
 const dialog = (f: PanelFix, flow: Parameters<typeof CommitDialog>[0]["flow"]) =>
   renderToStaticMarkup(createElement(CommitDialog, { data: data(f), controller: dialogController, flow, busy: null }));
 
+describe("Reabrir is offered only where the server accepts it", () => {
+  it.each([["READY", false], ["APPROVED", false], ["APPLIED", false], ["VERIFIED", false], ["FAILED", true]] as const)("%s -> %s", (state, shown) => {
+    lang = "en";
+    const html = card(fix(state, { reportedCommitSha: NEW, verification: { statement: "exact_commit_rescan_clean", reasons: [] } as never }));
+    expect(html.includes(">Reopen<")).toBe(shown); // the button label only, not explanatory text
+  });
+});
+
 describe.each(["en", "es"] as const)("assisted-fix usability [%s]", (l) => {
   it("a commit left by an earlier attempt is labelled as such (kept, not deleted) and does not read as 'the commit you reported'", () => {
     lang = l;

@@ -142,7 +142,8 @@ export function AssistedFixCard({ fix, controller, busy, canAct, evidenceFailed 
             {busy === "verify" ? t("assistedFix.verifying") : t("assistedFix.verify")}
           </button>
         )}
-        {(phase === "approved" || phase === "applied" || phase === "not_verified" || phase === "verified") && (
+        {/* The server only reopens a FAILED record (lifecycle.ts, reopenSafeFix); any other state answers invalid_transition. */}
+        {fix.state === "FAILED" && (
           <button type="button" className="rounded-md px-3 py-1.5 text-sm text-muted-foreground underline disabled:opacity-50" disabled={disabled} onClick={() => void controller.reopen(fix.id)}>
             {t("assistedFix.reopen")}
           </button>
