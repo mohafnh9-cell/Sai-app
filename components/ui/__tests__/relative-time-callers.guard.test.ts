@@ -1,12 +1,21 @@
-import { readFileSync } from "node:fs";
-import { execFileSync } from "node:child_process";
+import { readFileSync, readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 // Every client component that prints a time relative to now must do it through <RelativeTimeLabel> (deterministic first render): calling the
 // formatters while rendering, or hiding the mismatch with suppressHydrationWarning, brings back the intermittent #418 ("text").
-const callers = execFileSync("git", ["grep", "-l", "-E", "formatRelativeLocalized\\(|formatRelativeDate\\(", "--", "app", "components", "features"], { encoding: "utf8" })
-  .split("\n")
-  .filter((f) => f && !/__tests__|\.test\./.test(f));
+function* sources(dir: string): Generator<string> {
+  for (const name of readdirSync(dir)) {
+    if (name === "node_modules" || name === "__tests__" || name.startsWith(".")) continue;
+    const path = join(dir, name);
+    if (statSync(path).isDirectory()) yield* sources(path);
+    else if (/\.(ts|tsx)$/.test(name) && !/\.test\./.test(name)) yield path;
+  }
+}
+const callers = ["app", "components", "features"]
+  .flatMap((root) => Array.from(sources(root)))
+  .filter((file) => /\b(formatRelativeLocalized|formatRelativeDate)\(/.test(readFileSync(file, "utf8")))
+  .filter((file) => !file.startsWith("lib/"));
 
 describe("relative-time call sites", () => {
   it("are found (the guard is not vacuous)", () => {

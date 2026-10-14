@@ -49,7 +49,9 @@ async function serverThenHydrate(
   const html = renderToString(tree());
   vi.setSystemTime(new Date(clientAt));
   const container = document.createElement("div");
-  container.innerHTML = html;
+  // The server HTML is adopted node by node (no markup assignment): this is what a browser does with the document it received.
+  const parsed = new DOMParser().parseFromString(`<body>${html}</body>`, "text/html");
+  container.append(...Array.from(parsed.body.childNodes));
   document.body.appendChild(container);
   const recoverable: string[] = [];
   const consoleErrors: string[] = [];
