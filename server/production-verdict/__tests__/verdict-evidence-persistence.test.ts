@@ -413,35 +413,6 @@ describe("coordination between inserting the verdict and persisting its evidence
     expect(record.externalEngines).toHaveLength(3);
   });
 
-  it("end to end: the REAL generator held back after inserting the verdict + a concurrent finalizer: the generator's capture is what is stored", async () => {
-    const { generateAndPersistProductionVerdict } = await import("../core");
-    const { finalizeVerdictWhenEvidenceComplete } = await import("../evidence-finalization");
-    const { emitOperationalEvent } = await import("@/server/observability/operational-events");
-    let release!: () => void;
-    const gate = new Promise<void>((resolve) => { release = resolve; });
-    // `verdict_created` is emitted after the insert and BEFORE the evidence record: hold the generator exactly there.
-    (emitOperationalEvent as unknown as { mockImplementation: (f: (admin: unknown, e: { eventType: string }) => Promise<void>) => void }).mockImplementation(
-      async (_admin, event) => { if (event.eventType === "verdict_created") await gate; }
-    );
-    try {
-      const admin = freshAdmin();
-      const generating = generateAndPersistProductionVerdict(admin as never, input);
-      // wait (deterministically, by yielding) until the verdict row exists but no record does
-      for (let i = 0; i < 200 && (current.production_verdicts as unknown[]).length === 0; i++) await new Promise((r) => setTimeout(r, 0));
-      expect((current.production_verdicts as unknown[]).length).toBe(1);
-      expect(metricsOf().verdictEvidence).toBeUndefined();
-      const generatedAtMs = Date.parse(String((current.production_verdicts as Array<Record<string, unknown>>)[0].generated_at));
-      let now = generatedAtMs + 100;
-      const clock = { now: () => now, sleep: async (ms: number) => { now += ms; release(); await generating; } }; // the generator proceeds while the finalizer waits
-      const outcome = await finalizeVerdictWhenEvidenceComplete(admin as never, { ...input, backfillEvidence: true, clock });
-      expect(outcome).toEqual({ status: "already_exists" });
-      await generating;
-      expect(metricsOf().verdictEvidence).toMatchObject({ capture: "at_verdict_generation" });
-    } finally {
-      (emitOperationalEvent as unknown as { mockImplementation: (f: () => Promise<void>) => void }).mockImplementation(async () => undefined);
-    }
-  });
-
   it("limit, stated rather than assumed: a reconstruction is NOT guaranteed identical to the generator's capture (it re-reads engines now and only sees a STORED security decision)", async () => {
     const { recordVerdictEvidence } = await import("../evidence-finalization");
     // the generator was handed the decision report directly (not stored in metrics); a reconstruction cannot know that
@@ -454,5 +425,131 @@ describe("coordination between inserting the verdict and persisting its evidence
     expect(captured.securityDecisionIncluded).toBe(true);
     expect(reconstructed.securityDecisionIncluded).toBe(false);
     expect(captured.externalEngines).toEqual(reconstructed.externalEngines); // same engines when the jobs did not change in between
+  });
+});
+
+// 2026-10-14 review: "first record wins" decides who writes, not WHAT the verdict was computed from. The generator now persists the
+// snapshot of the evidence it read BEFORE publishing the verdict, and the verdict carries its digest, so the link is checkable.
+describe("the evidence snapshot is persisted before the verdict is published and bound to it by a verifiable digest", () => {
+  const input = { organizationId: ORG_ID, projectId: PROJECT_ID, scanId: SCAN_ID };
+  const verdictRow = () => (current.production_verdicts as Array<Record<string, unknown>>)[0];
+  const verdictJson = () => verdictRow()?.verdict as { evidenceDigest?: string; status?: string; score?: number; blockersCount?: number } | undefined;
+
+  it("the record already exists when the verdict row is inserted, and checkEvidenceBinding verifies the pair", async () => {
+    const { generateAndPersistProductionVerdict } = await import("../core");
+    const { checkEvidenceBinding, evidenceDigest } = await import("../evidence-snapshot");
+    const admin = freshAdmin();
+    // observe the instant of publication
+    let recordAtInsert: unknown = "not observed";
+    const original = admin.from.bind(admin);
+    (admin as { from: unknown }).from = (table: string) => {
+      const builder = original(table) as unknown as { insert: (...a: unknown[]) => unknown };
+      if (table !== "production_verdicts") return builder;
+      const insert = builder.insert.bind(builder);
+      builder.insert = (...args: unknown[]) => { recordAtInsert = metricsOf().verdictEvidence; return insert(...args); };
+      return builder;
+    };
+    await generateAndPersistProductionVerdict(admin as never, input);
+    expect(recordAtInsert).toMatchObject({ capture: "at_verdict_generation" }); // persisted BEFORE publishing
+    const record = metricsOf().verdictEvidence as { evidenceDigest: string; snapshot: Parameters<typeof evidenceDigest>[0] };
+    expect(verdictJson()?.evidenceDigest).toBe(record.evidenceDigest);
+    expect(evidenceDigest(record.snapshot)).toBe(record.evidenceDigest);
+    expect(checkEvidenceBinding(verdictJson(), record)).toBe("verified_capture");
+  });
+
+  it("a concurrent finalizer never sees a verdict without its capture: it neither waits nor reconstructs", async () => {
+    const { generateAndPersistProductionVerdict } = await import("../core");
+    const { finalizeVerdictWhenEvidenceComplete } = await import("../evidence-finalization");
+    const { emitOperationalEvent } = await import("@/server/observability/operational-events");
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    (emitOperationalEvent as unknown as { mockImplementation: (f: (admin: unknown, e: { eventType: string }) => Promise<void>) => void }).mockImplementation(
+      async (_admin, event) => { if (event.eventType === "verdict_created") await gate; } // generator held right after the insert
+    );
+    try {
+      const admin = freshAdmin();
+      const generating = generateAndPersistProductionVerdict(admin as never, input);
+      for (let i = 0; i < 200 && (current.production_verdicts as unknown[]).length === 0; i++) await new Promise((r) => setTimeout(r, 0));
+      expect((current.production_verdicts as unknown[]).length).toBe(1);
+      const sleeps: number[] = [];
+      const clock = { now: () => Date.now(), sleep: async (ms: number) => { sleeps.push(ms); } };
+      expect(await finalizeVerdictWhenEvidenceComplete(admin as never, { ...input, backfillEvidence: true, clock })).toEqual({ status: "already_exists" });
+      expect(sleeps).toEqual([]);
+      expect(metricsOf().verdictEvidence).toMatchObject({ capture: "at_verdict_generation" });
+      release();
+      await generating;
+      expect(metricsOf().verdictEvidence).toMatchObject({ capture: "at_verdict_generation" });
+    } finally {
+      (emitOperationalEvent as unknown as { mockImplementation: (f: () => Promise<void>) => void }).mockImplementation(async () => undefined);
+    }
+  });
+
+  it("checkEvidenceBinding only vouches for a captured, matching pair; everything else is 'not traceable', never 'nothing found'", async () => {
+    const { generateAndPersistProductionVerdict } = await import("../core");
+    const { checkEvidenceBinding } = await import("../evidence-snapshot");
+    const admin = freshAdmin();
+    await generateAndPersistProductionVerdict(admin as never, input);
+    const record = JSON.parse(JSON.stringify(metricsOf().verdictEvidence)) as { snapshot: { externalEngines: Array<{ status: string }> } };
+    expect(checkEvidenceBinding(verdictJson(), record)).toBe("verified_capture");
+    const tampered = JSON.parse(JSON.stringify(record)); tampered.snapshot.externalEngines[0].status = "FAILED";
+    expect(checkEvidenceBinding(verdictJson(), tampered)).toBe("digest_mismatch");
+    expect(checkEvidenceBinding({ evidenceDigest: "a".repeat(64) }, record)).toBe("digest_mismatch"); // another snapshot's digest
+    expect(checkEvidenceBinding({}, record)).toBe("verdict_without_digest");
+    expect(checkEvidenceBinding(verdictJson(), { capture: "reconstructed_after_verdict" })).toBe("reconstruction_unverifiable");
+    expect(checkEvidenceBinding(verdictJson(), undefined)).toBe("no_record");
+  });
+
+  it("if the snapshot cannot be persisted: the verdict is still published (same status, score, blockers) but WITHOUT a digest, and no record claims anything", async () => {
+    const { generateAndPersistProductionVerdict } = await import("../core");
+    const baseline = freshAdmin();
+    await generateAndPersistProductionVerdict(baseline as never, input);
+    const expected = { status: verdictJson()?.status, score: verdictJson()?.score, blockersCount: verdictJson()?.blockersCount };
+
+    const admin = freshAdmin();
+    const original = admin.from.bind(admin);
+    (admin as { from: unknown }).from = (table: string) => {
+      const builder = original(table) as unknown as Record<string, unknown>;
+      if (table !== "scans") return builder;
+      // every filter is accepted; the final read-back reports the database error
+      const failing: unknown = new Proxy({}, { get: (_t, prop) => (prop === "maybeSingle" ? async () => ({ data: null, error: { message: "boom" } }) : () => failing) });
+      builder.update = () => failing;
+      return builder;
+    };
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      const verdict = await generateAndPersistProductionVerdict(admin as never, input);
+      expect(verdict).not.toBeNull();
+      expect({ status: verdictJson()?.status, score: verdictJson()?.score, blockersCount: verdictJson()?.blockersCount }).toEqual(expected); // a bookkeeping failure changes nothing about the verdict
+      expect(verdictJson()?.evidenceDigest).toBeUndefined(); // no traceability claim it cannot back
+      expect(metricsOf().verdictEvidence).toBeUndefined(); // and nothing recorded as "no engines" / "not_run"
+      expect(warn.mock.calls.map((c) => (c[0] as { event?: string })?.event)).toContain("verdict_evidence_snapshot_not_persisted"); // visible, not silent
+    } finally { warn.mockRestore(); }
+  });
+
+  it("a different snapshot already stands for the scan (another generator): this verdict carries no digest and the standing record is untouched", async () => {
+    const { generateAndPersistProductionVerdict } = await import("../core");
+    const standing = { capture: "at_verdict_generation", evidenceDigest: "b".repeat(64), snapshot: { externalEngines: "not_run" }, finalizedBy: "pipeline" };
+    const admin = freshAdmin(tables({ ...baseMetrics, verdictEvidence: standing }));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      await generateAndPersistProductionVerdict(admin as never, input);
+      expect(verdictJson()?.evidenceDigest).toBeUndefined();
+      expect(metricsOf().verdictEvidence).toEqual(standing);
+    } finally { warn.mockRestore(); }
+  });
+
+  it("an unreadable external-findings table is not 'no findings': the verdict is computed as partial and the snapshot says 'unavailable'", async () => {
+    const { generateAndPersistProductionVerdict } = await import("../core");
+    const admin = freshAdmin();
+    const original = admin.from.bind(admin);
+    (admin as { from: unknown }).from = (table: string) => {
+      const builder = original(table) as unknown as Record<string, unknown>;
+      if (table !== "external_engine_findings") return builder;
+      builder.select = () => ({ eq: () => ({ eq: () => Promise.resolve({ data: null, error: { message: "boom" } }) }) });
+      return builder;
+    };
+    await generateAndPersistProductionVerdict(admin as never, input);
+    expect((metricsOf().verdictEvidence as { snapshot: { externalFindings: unknown } }).snapshot.externalFindings).toBe("unavailable");
+    expect(verdictJson()?.status).not.toBe("ready_to_ship"); // evidence missing never reads as clean
   });
 });

@@ -8,6 +8,7 @@ import { isAnalysisRunImmutable } from "@/server/analysis-runs/is-analysis-run-i
 import { generateProductionVerdict as runEngine } from "@/brain/production-verdict/engine";
 import { finalizeProductionVerdict } from "@/brain/production-verdict/finalize-verdict";
 import { writeScanStatePointer } from "./scan-state-writer";
+import { decisionIdOf, digestIds, evidenceDigest, type EvidenceSnapshot } from "./evidence-snapshot";
 import { hasIncompleteNativeRuleCoverage, isIncrementalScan } from "@/server/security-scanner/native-coverage";
 import { resolveScanCoverageForVerdict } from "@/brain/production-verdict/resolve-scan-coverage";
 import { loadPriorScanCoverage } from "@/server/production-verdict/load-prior-scan-coverage";
@@ -17,7 +18,7 @@ import {
 } from "@/server/attack-simulation/integration/build-verdict-overlay";
 import { emitOperationalEvent } from "@/server/observability/operational-events";
 import {
-  hasIncompleteExternalEngineCoverage,
+  readExternalEngineCoverage,
   loadExternalEngineFindingsForVerdict,
 } from "@/server/security-orchestrator/verdict-integration";
 import {
@@ -292,25 +293,27 @@ export async function generateAndPersistProductionVerdict(
   // generation from native findings alone.
   const nativeFindings = findings ?? [];
   const nativeFindingIds = new Set(nativeFindings.map((f) => f.id as string).filter(Boolean));
-  const [externalFindings, externalEngineCoverageIncomplete] = await Promise.all([
+  // What the generator reads here IS the evidence of the verdict: the same rows feed the scoring input and the evidence snapshot below.
+  // A failed read is carried as "unavailable" and makes the verdict partial; it never becomes "no findings" / "no engines".
+  const [externalFindingsRead, engineCoverageRead] = await Promise.all([
     loadExternalEngineFindingsForVerdict(admin, {
       scanId: input.scanId,
       organizationId: input.organizationId,
       nativeFindingIds,
-    }).catch((error) => {
-      log("external_findings_merge_failed", { scanId: input.scanId, message: error instanceof Error ? error.message : String(error) });
-      return [];
-    }),
-    // F10: a failed/incomplete external-engine job (opengrep/trivy/crypto)
-    // must make partialScanFailure true even when the native scan itself
-    // completed cleanly -- see hasIncompleteExternalEngineCoverage's own
-    // doc comment for the gap this closes. A read failure here defaults to
-    // true (assume incomplete) for the same honesty reason.
-    hasIncompleteExternalEngineCoverage(admin, {
-      scanId: input.scanId,
-      organizationId: input.organizationId,
-    }).catch(() => true),
+    }).then(
+      (findings) => ({ ok: true as const, findings }),
+      (error) => {
+        log("external_findings_merge_failed", { scanId: input.scanId, message: error instanceof Error ? error.message : String(error) });
+        return { ok: false as const };
+      }
+    ),
+    // F10: a failed/incomplete external-engine job (opengrep/trivy/crypto) must make partialScanFailure true even when the native
+    // scan itself completed cleanly. A read failure defaults to "incomplete" for the same honesty reason.
+    readExternalEngineCoverage(admin, { scanId: input.scanId, organizationId: input.organizationId }).catch(() => ({ ok: false as const })),
   ]);
+  const externalFindings = externalFindingsRead.ok ? externalFindingsRead.findings : [];
+  const externalEngineCoverageIncomplete = engineCoverageRead.ok ? engineCoverageRead.incomplete : true;
+  const externalEvidenceUnreadable = !externalFindingsRead.ok || !engineCoverageRead.ok;
   const mergedFindings = [...nativeFindings, ...externalFindings];
 
   const baseVerdict = runEngine({
@@ -331,6 +334,7 @@ export async function generateAndPersistProductionVerdict(
     partialScanFailure:
       scan.status !== "completed" ||
       externalEngineCoverageIncomplete ||
+      externalEvidenceUnreadable ||
       hasIncompleteNativeRuleCoverage({ metrics: scan.metrics, omissions: scan.omissions }),
     aiExecutiveSummary: aiReport?.executive_summary ?? null,
   }).verdict;
@@ -352,6 +356,31 @@ export async function generateAndPersistProductionVerdict(
     score: verdict.score,
     blockersCount: verdict.blockersCount,
   });
+
+  // The evidence snapshot is persisted BEFORE the verdict is published, and the verdict carries its digest. If the snapshot cannot be
+  // persisted (or a different snapshot already stands for this scan), the verdict is still published (its findings are real and a
+  // bookkeeping failure must not hide them or change its status) but WITHOUT a digest: it claims no traceability it cannot back.
+  const { VERDICT_EVIDENCE_STORED_DECISION_KEY: storedDecisionKey } = await import("./evidence-finalization");
+  const storedDecision = (scan.metrics as Record<string, unknown> | null | undefined)?.[storedDecisionKey];
+  const snapshot: EvidenceSnapshot = {
+    externalEngines: engineCoverageRead.ok ? engineCoverageRead.engines : "unavailable",
+    externalFindings: externalFindingsRead.ok
+      ? { count: externalFindings.length, idsDigest: digestIds(externalFindings.map((finding) => String(finding.id))) }
+      : "unavailable",
+    securityDecisionId: decisionIdOf(input.securityDecisionReport) ?? decisionIdOf(storedDecision),
+    securityDecisionIncluded: Boolean(input.securityDecisionReport) || Boolean(storedDecision),
+  };
+  const digest = evidenceDigest(snapshot);
+  const { persistEvidenceSnapshotSafely } = await import("./evidence-finalization");
+  const snapshotStored = await persistEvidenceSnapshotSafely(admin, {
+    scanId: input.scanId,
+    organizationId: input.organizationId,
+    mode: input.finalizedBy ?? "pipeline",
+    snapshot,
+    digest,
+  });
+  const verdictToPublish: ProductionVerdictV1 = snapshotStored ? { ...verdict, evidenceDigest: digest } : verdict;
+  verdict = verdictToPublish;
 
   const { data: persisted, error: persistError, reused: verdictReused } =
     await insertVerdictIfAbsent(admin, {
@@ -448,7 +477,8 @@ export async function generateAndPersistProductionVerdict(
 
   // Every path (runner, engine-terminal worker, recovery, MCP) creates verdicts here, so this is the one place that can document
   // which engines the verdict was computed from. It never throws; a failure is logged, never silent.
-  if (!verdictReused) {
+  if (!verdictReused && !snapshotStored) {
+    // The snapshot could not be stored before publishing: whatever is recorded now is a reconstruction and says so.
     try {
       const { recordVerdictEvidenceSafely, VERDICT_EVIDENCE_STORED_DECISION_KEY } = await import("./evidence-finalization");
       const scanMetrics =
@@ -458,6 +488,7 @@ export async function generateAndPersistProductionVerdict(
         organizationId: input.organizationId,
         mode: input.finalizedBy ?? "pipeline",
         hasSecurityDecision: Boolean(input.securityDecisionReport) || Boolean(scanMetrics[VERDICT_EVIDENCE_STORED_DECISION_KEY]),
+        reconstructedAfter: { verdictGeneratedAt: verdict.generatedAt },
       });
     } catch (recordError) {
       log("verdict_evidence_record_unexpected_error", {

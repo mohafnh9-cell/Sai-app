@@ -5,6 +5,7 @@ import type { ProductionVerdictV1 } from "@/brain/production-verdict/schema";
 import type { SecurityDecisionFinalizeInput } from "@/brain/production-verdict/finalize-verdict";
 import { assessEvidenceReadiness, PENDING_ENGINE_STATUSES } from "./evidence-readiness";
 import { mergeScanMetrics } from "./scan-metrics";
+import type { EvidenceSnapshot } from "./evidence-snapshot";
 
 /**
  * Verdict finalization: the Production Verdict for a scan is generated once,
@@ -294,6 +295,58 @@ export async function finalizeVerdictWhenEvidenceComplete(
     hasSecurityDecision: Boolean(input.securityDecisionReport) || isStoredDecision(storedDecision),
   });
   return { status: "generated", verdict };
+}
+
+
+/**
+ * Persists the evidence snapshot the generator used, BEFORE it publishes the verdict. Returns true only when the record that stands
+ * for this scan is THIS snapshot (stored now, or already stored with the same digest): only then may the verdict carry the digest.
+ * False (write failed, scan not completed, or another snapshot already stands) means: publish without a digest, claim nothing.
+ * Never throws; a failure is logged, never silent, and never turned into "no engines".
+ */
+export async function persistEvidenceSnapshotSafely(
+  admin: SupabaseClient,
+  input: { scanId: string; organizationId: string; mode: FinalizeMode; snapshot: EvidenceSnapshot; digest: string }
+): Promise<boolean> {
+  try {
+    let standingDigest: string | null = null;
+    const result = await mergeScanMetrics(admin, {
+      scanId: input.scanId,
+      organizationId: input.organizationId,
+      patch: (current) => {
+        const existing = current[VERDICT_EVIDENCE_KEY] as Record<string, unknown> | undefined;
+        if (existing) {
+          standingDigest = typeof existing.evidenceDigest === "string" ? existing.evidenceDigest : null;
+          return null; // first record wins: never rewritten
+        }
+        standingDigest = input.digest;
+        return {
+          [VERDICT_EVIDENCE_KEY]: {
+            capture: "at_verdict_generation",
+            finalizedAt: new Date().toISOString(),
+            finalizedBy: input.mode,
+            securityDecisionIncluded: input.snapshot.securityDecisionIncluded,
+            externalEngines: input.snapshot.externalEngines,
+            evidenceDigest: input.digest,
+            snapshot: input.snapshot,
+          },
+        };
+      },
+      requireStatus: ["completed"],
+    });
+    if (!result.ok) {
+      console.warn({ component: "evidence-finalization", event: "verdict_evidence_snapshot_not_persisted", scanId: input.scanId, reason: result.reason, message: result.message });
+      return false;
+    }
+    if (standingDigest !== input.digest) {
+      console.warn({ component: "evidence-finalization", event: "verdict_evidence_snapshot_differs", scanId: input.scanId });
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.warn({ component: "evidence-finalization", event: "verdict_evidence_snapshot_exception", scanId: input.scanId, message: error instanceof Error ? error.message : String(error) });
+    return false;
+  }
 }
 
 /**

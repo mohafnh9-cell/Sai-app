@@ -73,6 +73,7 @@ vi.mock("@/server/attack-simulation/integration/build-verdict-overlay", () => ({
 // native-rule signal is what drives partialScanFailure in these tests.
 vi.mock("@/server/security-orchestrator/verdict-integration", () => ({
   hasIncompleteExternalEngineCoverage: vi.fn(async () => false),
+  readExternalEngineCoverage: vi.fn(async () => ({ ok: true, incomplete: false, engines: "not_run" })),
   loadExternalEngineFindingsForVerdict: vi.fn(async () => []),
 }));
 

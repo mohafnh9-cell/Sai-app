@@ -33,7 +33,7 @@ export async function loadExternalEngineFindingsForVerdict(
   admin: SupabaseClient,
   input: { scanId: string; organizationId: string; nativeFindingIds: ReadonlySet<string> }
 ): Promise<VerdictFinding[]> {
-  const [{ data: externalRows }, { data: correlationRows }] = await Promise.all([
+  const [{ data: externalRows, error: externalError }, { data: correlationRows, error: correlationError }] = await Promise.all([
     admin
       .from("external_engine_findings")
       .select("finding_id, title, severity, category, engine, affected_files, remediation, confidence, evidence, cwe")
@@ -46,6 +46,11 @@ export async function loadExternalEngineFindingsForVerdict(
       .eq("organization_id", input.organizationId)
       .eq("kind", "same_issue"),
   ]);
+
+  // A failed read is NOT "no external findings": surface it so the caller treats the verdict as partial (and records the gap).
+  if (externalError || correlationError) {
+    throw new Error(`external_findings_unreadable: ${(externalError ?? correlationError)?.message ?? "unknown"}`);
+  }
 
   const rows = (externalRows ?? []) as Array<{
     finding_id: string;
@@ -126,10 +131,15 @@ export async function loadExternalEngineFindingsForVerdict(
  * for this scan, which is not a failure, just a native-only scan the
  * existing flow already represents honestly.
  */
-export async function hasIncompleteExternalEngineCoverage(
+export type EngineCoverageRead =
+  | { ok: true; incomplete: boolean; engines: Array<{ engine: string; status: string }> | "not_run" }
+  | { ok: false };
+
+/** The coverage judgement AND the rows it was based on (latest job per engine), so the evidence snapshot is what the verdict used. */
+export async function readExternalEngineCoverage(
   admin: SupabaseClient,
   input: { scanId: string; organizationId: string }
-): Promise<boolean> {
+): Promise<EngineCoverageRead> {
   const [jobsRes, executionsRes] = await Promise.all([
     admin
       .from("security_jobs")
@@ -143,16 +153,8 @@ export async function hasIncompleteExternalEngineCoverage(
       .eq("organization_id", input.organizationId),
   ]);
 
-  if (jobsRes.error || executionsRes.error || !jobsRes.data || !executionsRes.data) {
-    // A read failure here must never silently look like "full coverage" --
-    // the safer honest default is to assume coverage MIGHT be incomplete
-    // rather than assert it is complete without evidence.
-    return true;
-  }
+  if (jobsRes.error || executionsRes.error || !jobsRes.data || !executionsRes.data) return { ok: false };
 
-  // The LATEST attempt per engine decides: a retry that genuinely completes
-  // supersedes an earlier failed/partial run, and an earlier run can never
-  // make a later complete one look incomplete (or the reverse).
   const latestJob = new Map<string, { status: string; at: string }>();
   for (const row of jobsRes.data as Array<Record<string, unknown>>) {
     const engine = String(row.engine);
@@ -160,16 +162,6 @@ export async function hasIncompleteExternalEngineCoverage(
     const current = latestJob.get(engine);
     if (!current || at >= current.at) latestJob.set(engine, { status: String(row.status), at });
   }
-
-  // Evidence is complete only for COMPLETED. QUEUED, RUNNING, FAILED, TIMED_OUT,
-  // CANCELLED and REJECTED are all incomplete.
-  for (const job of latestJob.values()) {
-    if (job.status !== "COMPLETED") return true;
-  }
-
-  // Second, independent source: the engine's own persisted result. A PARTIAL
-  // (or otherwise non-COMPLETED) execution is incomplete evidence even if a job
-  // row says COMPLETED -- which is how PARTIAL results used to read as complete.
   const latestExecution = new Map<string, { status: string; at: string }>();
   for (const row of executionsRes.data as Array<Record<string, unknown>>) {
     const engine = String(row.engine);
@@ -177,10 +169,21 @@ export async function hasIncompleteExternalEngineCoverage(
     const current = latestExecution.get(engine);
     if (!current || at >= current.at) latestExecution.set(engine, { status: String(row.status), at });
   }
-  for (const [engine, execution] of latestExecution) {
-    // Only engines that had a job are external engines of this scan's plan.
-    if (latestJob.has(engine) && execution.status !== "COMPLETED") return true;
-  }
 
-  return false;
+  let incomplete = false;
+  for (const job of latestJob.values()) if (job.status !== "COMPLETED") incomplete = true;
+  for (const [engine, execution] of latestExecution) {
+    if (latestJob.has(engine) && execution.status !== "COMPLETED") incomplete = true;
+  }
+  const engines = [...latestJob.entries()].map(([engine, job]) => ({ engine, status: job.status }));
+  return { ok: true, incomplete, engines: engines.length > 0 ? engines : "not_run" };
+}
+
+export async function hasIncompleteExternalEngineCoverage(
+  admin: SupabaseClient,
+  input: { scanId: string; organizationId: string }
+): Promise<boolean> {
+  // A read failure must never silently look like "full coverage": assume it MIGHT be incomplete.
+  const read = await readExternalEngineCoverage(admin, input);
+  return read.ok ? read.incomplete : true;
 }
