@@ -131,6 +131,34 @@ export function WorkspaceSwitcher({
     };
   }, [initialWorkspaces, isDemo, t]);
 
+  // The active workspace lives in a cookie shared by every tab. When another tab switches it, this tab keeps
+  // showing (and has server-rendered data for) the old workspace. On return to the tab, compare with the server
+  // and realign the whole page, as a switch in this tab does.
+  const shownActiveId = active?.id ?? null;
+  useEffect(() => {
+    if (isDemo || !shownActiveId) return;
+    let cancelled = false;
+    const check = async () => {
+      if (document.visibilityState === "hidden") return;
+      try {
+        const response = await fetch("/api/workspaces", { cache: "no-store" });
+        if (!response.ok) return;
+        const data = (await response.json().catch(() => null)) as WorkspacesResponse | null;
+        if (cancelled || !data?.activeWorkspaceId) return;
+        if (data.activeWorkspaceId !== shownActiveId) window.location.reload();
+      } catch {
+        // offline or transient: keep what is shown
+      }
+    };
+    document.addEventListener("visibilitychange", check);
+    window.addEventListener("focus", check);
+    return () => {
+      cancelled = true;
+      document.removeEventListener("visibilitychange", check);
+      window.removeEventListener("focus", check);
+    };
+  }, [isDemo, shownActiveId]);
+
   const displayName = active?.name ?? fallbackName;
 
   const handleSwitch = async (workspaceId: string) => {
