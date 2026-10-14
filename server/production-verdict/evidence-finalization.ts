@@ -43,6 +43,36 @@ export const VERDICT_EVIDENCE_STORED_DECISION_KEY = STORED_DECISION_KEY;
 export const VERDICT_EVIDENCE_KEY = "verdictEvidence";
 /** A verdict younger than this and without its evidence record gets it completed; older verdicts are never touched. */
 export const VERDICT_EVIDENCE_BACKFILL_WINDOW_MS = 10 * 60_000;
+/**
+ * How long a finalizer that finds a just-inserted verdict without its evidence record gives the GENERATOR to write its own. The
+ * generator inserts the verdict and only then (side-effect marker, state pointer, event: ~0.7 s in production) records the evidence,
+ * so a second invocation looking in between used to win with a "reconstructed" record. The grace is a priority rule, NOT the
+ * consistency mechanism: that is the conditional first-record-wins write in `mergeScanMetrics`, which still decides every race.
+ */
+export const VERDICT_EVIDENCE_GENERATOR_GRACE_MS = 10_000;
+const GENERATOR_POLL_MS = 250;
+
+export type EvidenceClock = { now: () => number; sleep: (ms: number) => Promise<void> };
+const realClock: EvidenceClock = { now: () => Date.now(), sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)) };
+
+/** True when the generator's own record showed up within the grace; false when it did not (cut short or still too slow). */
+async function waitForGeneratorRecord(
+  admin: SupabaseClient,
+  input: { scanId: string; organizationId: string; generatedAtMs: number; clock: EvidenceClock }
+): Promise<boolean> {
+  for (;;) {
+    const { data } = await admin
+      .from("scans")
+      .select("metrics")
+      .eq("id", input.scanId)
+      .eq("organization_id", input.organizationId)
+      .maybeSingle();
+    if (metricsOf(data as Row | null)[VERDICT_EVIDENCE_KEY]) return true;
+    const remaining = input.generatedAtMs + VERDICT_EVIDENCE_GENERATOR_GRACE_MS - input.clock.now();
+    if (remaining <= 0) return false;
+    await input.clock.sleep(Math.min(GENERATOR_POLL_MS, remaining));
+  }
+}
 
 const PENDING_JOB_STATUSES = PENDING_ENGINE_STATUSES;
 
@@ -139,6 +169,8 @@ export async function finalizeVerdictWhenEvidenceComplete(
      * path (HTTP GET, MCP read tools, the review-state read).
      */
     backfillEvidence?: boolean;
+    /** Injectable for tests (deterministic waiting); defaults to real time. */
+    clock?: EvidenceClock;
     /** Injectable for tests; defaults to the canonical generator. */
     generate?: (
       admin: SupabaseClient,
@@ -178,20 +210,31 @@ export async function finalizeVerdictWhenEvidenceComplete(
     // Another invocation (e.g. the worker that finished the last engine) may have created the verdict and been cut short before it
     // wrote the evidence record. Complete it ONLY for a verdict created moments ago: historical scans are never rewritten.
     const generatedAt = Date.parse(String((existing as Row).generated_at ?? ""));
+    const clock = input.clock ?? realClock;
     if (
       input.backfillEvidence === true &&
       Number.isFinite(generatedAt) &&
-      Date.now() - generatedAt <= VERDICT_EVIDENCE_BACKFILL_WINDOW_MS &&
+      clock.now() - generatedAt <= VERDICT_EVIDENCE_BACKFILL_WINDOW_MS &&
       !metricsOf(scan as Row)[VERDICT_EVIDENCE_KEY]
     ) {
-      // A reconstruction, labelled as one: never presented as what was captured when the verdict was generated.
-      await recordVerdictEvidenceSafely(admin, {
+      // The generator is the only writer that can capture the evidence as part of generating the verdict: give it the first chance.
+      // Only if its record does not appear within the grace is this a reconstruction, labelled as one. If the generator finishes
+      // after that, its write is refused by the first-record-wins condition (nothing is overwritten, nothing is duplicated).
+      const generatorRecorded = await waitForGeneratorRecord(admin, {
         scanId: input.scanId,
         organizationId: input.organizationId,
-        mode,
-        hasSecurityDecision: isStoredDecision(metricsOf(scan as Row)[STORED_DECISION_KEY]),
-        reconstructedAfter: { verdictGeneratedAt: new Date(generatedAt).toISOString() },
+        generatedAtMs: generatedAt,
+        clock,
       });
+      if (!generatorRecorded) {
+        await recordVerdictEvidenceSafely(admin, {
+          scanId: input.scanId,
+          organizationId: input.organizationId,
+          mode,
+          hasSecurityDecision: isStoredDecision(metricsOf(scan as Row)[STORED_DECISION_KEY]),
+          reconstructedAfter: { verdictGeneratedAt: new Date(generatedAt).toISOString() },
+        });
+      }
     }
     return { status: "already_exists" };
   }

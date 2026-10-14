@@ -275,7 +275,9 @@ describe("late completion of the evidence record: opt-in, labelled as a reconstr
     const { finalizeVerdictWhenEvidenceComplete } = await import("../evidence-finalization");
     const generatedAt = new Date().toISOString();
     const admin = freshAdmin(base(generatedAt));
-    expect(await finalizeVerdictWhenEvidenceComplete(admin as never, { ...input, backfillEvidence: true })).toEqual({ status: "already_exists" });
+    // the generator had its grace (the clock is past it) and never recorded: this is the cut-short case
+    const clock = { now: () => Date.parse(generatedAt) + 11_000, sleep: async () => undefined };
+    expect(await finalizeVerdictWhenEvidenceComplete(admin as never, { ...input, backfillEvidence: true, clock })).toEqual({ status: "already_exists" });
     const record = metricsOf().verdictEvidence as Record<string, unknown>;
     expect(record).toMatchObject({ capture: "reconstructed_after_verdict", verdictGeneratedAt: generatedAt, externalEngines: expect.any(Array) });
     expect(record.reconstructedAt).toEqual(expect.any(String));
@@ -335,5 +337,122 @@ describe("evidence writers only write on a completed scan (the status is locked 
     expect(await recordVerdictEvidence(admin as never, { scanId: SCAN_ID, organizationId: ORG_ID, mode: "pipeline", hasSecurityDecision: false })).toMatchObject({ recorded: false });
     expect(await mergeScanMetrics(admin as never, { scanId: SCAN_ID, organizationId: ORG_ID, patch: { x: 1 }, requireStatus: ["completed"] })).toMatchObject({ ok: false, reason: "status_not_allowed" });
     expect(JSON.stringify(scanOf())).toBe(before);
+  });
+});
+
+// 2026-10-14 T1: the evidence record of a real manual analysis was a "reconstruction" written 0.7 s after the verdict by a second
+// finalization, not the generator's own capture. The generator inserts the verdict and records the evidence a few awaits later; a
+// finalizer looking in between used to win. These tests pin the coordination down with a controllable clock (no real waiting).
+describe("coordination between inserting the verdict and persisting its evidence (slow generator, concurrent finalizations)", () => {
+  const T0 = Date.parse("2026-10-14T10:34:33.126Z");
+  const input = { organizationId: ORG_ID, projectId: PROJECT_ID, scanId: SCAN_ID };
+  const withVerdict = () => {
+    const t = tables();
+    t.production_verdicts = [{ id: "v1", organization_id: ORG_ID, scan_id: SCAN_ID, project_id: PROJECT_ID, generated_at: new Date(T0).toISOString() }];
+    return t;
+  };
+  /** Fake time; `onTick(now)` runs on every sleep so a test can say "at +700 ms the generator writes its record". */
+  const makeClock = (onTick: (now: number) => Promise<void> | void = () => undefined) => {
+    let now = T0 + 100;
+    const sleeps: number[] = [];
+    return { sleeps, clock: { now: () => now, sleep: async (ms: number) => { sleeps.push(ms); now += ms; await onTick(now); } } };
+  };
+  const generatorRecords = async (admin: unknown) => {
+    const { recordVerdictEvidence } = await import("../evidence-finalization");
+    return recordVerdictEvidence(admin as never, { ...input, mode: "pipeline", hasSecurityDecision: true });
+  };
+
+  it("slow generator that finishes within the grace: the finalizer does NOT reconstruct; the record is the generator's capture", async () => {
+    const { finalizeVerdictWhenEvidenceComplete } = await import("../evidence-finalization");
+    const admin = freshAdmin(withVerdict());
+    let recorded = false;
+    const { clock, sleeps } = makeClock(async (now) => {
+      if (!recorded && now >= T0 + 700) { recorded = true; await generatorRecords(admin); }
+    });
+    const outcome = await finalizeVerdictWhenEvidenceComplete(admin as never, { ...input, backfillEvidence: true, clock });
+    expect(outcome).toEqual({ status: "already_exists" });
+    expect(sleeps.length).toBeGreaterThan(0); // it did wait
+    expect(metricsOf().verdictEvidence).toMatchObject({ capture: "at_verdict_generation" });
+    expect((metricsOf().verdictEvidence as Record<string, unknown>).reconstructedAt).toBeUndefined();
+  });
+
+  it("generator cut short (never records): after the grace the finalizer reconstructs, labelled, and never waits past the grace", async () => {
+    const { finalizeVerdictWhenEvidenceComplete, VERDICT_EVIDENCE_GENERATOR_GRACE_MS } = await import("../evidence-finalization");
+    const admin = freshAdmin(withVerdict());
+    const { clock, sleeps } = makeClock();
+    await finalizeVerdictWhenEvidenceComplete(admin as never, { ...input, backfillEvidence: true, clock });
+    expect(metricsOf().verdictEvidence).toMatchObject({ capture: "reconstructed_after_verdict" });
+    expect(sleeps.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(VERDICT_EVIDENCE_GENERATOR_GRACE_MS);
+  });
+
+  it("generator slower than the grace: the reconstruction stands (consistency comes from first-record-wins, not from the grace); the late generator write changes nothing", async () => {
+    const { finalizeVerdictWhenEvidenceComplete } = await import("../evidence-finalization");
+    const admin = freshAdmin(withVerdict());
+    const { clock } = makeClock();
+    await finalizeVerdictWhenEvidenceComplete(admin as never, { ...input, backfillEvidence: true, clock });
+    const reconstruction = JSON.stringify(metricsOf().verdictEvidence);
+    const late = await generatorRecords(admin);
+    expect(late).toEqual({ recorded: true }); // a no-op reported as done: nothing to add
+    expect(JSON.stringify(metricsOf().verdictEvidence)).toBe(reconstruction);
+  });
+
+  it("two concurrent finalizations of a verdict whose generator was cut short: exactly one record, no duplicate, no overwrite, other metrics intact", async () => {
+    const { finalizeVerdictWhenEvidenceComplete } = await import("../evidence-finalization");
+    const admin = freshAdmin(withVerdict());
+    const a = makeClock(); const b = makeClock();
+    const [first, second] = await Promise.all([
+      finalizeVerdictWhenEvidenceComplete(admin as never, { ...input, backfillEvidence: true, clock: a.clock }),
+      finalizeVerdictWhenEvidenceComplete(admin as never, { ...input, backfillEvidence: true, clock: b.clock }),
+    ]);
+    expect(first).toEqual({ status: "already_exists" });
+    expect(second).toEqual({ status: "already_exists" });
+    const record = metricsOf().verdictEvidence as Record<string, unknown>;
+    expect(record.capture).toBe("reconstructed_after_verdict");
+    expect(metricsOf()).toMatchObject({ rulesRun: 47, platformExecution: { stage: "done" }, verdictEvidenceReadyAt: "2026-10-13T13:04:31.222Z" });
+    // the record is whichever writer won, intact: engines complete and one reconstructedAt
+    expect(record.externalEngines).toHaveLength(3);
+  });
+
+  it("end to end: the REAL generator held back after inserting the verdict + a concurrent finalizer: the generator's capture is what is stored", async () => {
+    const { generateAndPersistProductionVerdict } = await import("../core");
+    const { finalizeVerdictWhenEvidenceComplete } = await import("../evidence-finalization");
+    const { emitOperationalEvent } = await import("@/server/observability/operational-events");
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    // `verdict_created` is emitted after the insert and BEFORE the evidence record: hold the generator exactly there.
+    (emitOperationalEvent as unknown as { mockImplementation: (f: (admin: unknown, e: { eventType: string }) => Promise<void>) => void }).mockImplementation(
+      async (_admin, event) => { if (event.eventType === "verdict_created") await gate; }
+    );
+    try {
+      const admin = freshAdmin();
+      const generating = generateAndPersistProductionVerdict(admin as never, input);
+      // wait (deterministically, by yielding) until the verdict row exists but no record does
+      for (let i = 0; i < 200 && (current.production_verdicts as unknown[]).length === 0; i++) await new Promise((r) => setTimeout(r, 0));
+      expect((current.production_verdicts as unknown[]).length).toBe(1);
+      expect(metricsOf().verdictEvidence).toBeUndefined();
+      const generatedAtMs = Date.parse(String((current.production_verdicts as Array<Record<string, unknown>>)[0].generated_at));
+      let now = generatedAtMs + 100;
+      const clock = { now: () => now, sleep: async (ms: number) => { now += ms; release(); await generating; } }; // the generator proceeds while the finalizer waits
+      const outcome = await finalizeVerdictWhenEvidenceComplete(admin as never, { ...input, backfillEvidence: true, clock });
+      expect(outcome).toEqual({ status: "already_exists" });
+      await generating;
+      expect(metricsOf().verdictEvidence).toMatchObject({ capture: "at_verdict_generation" });
+    } finally {
+      (emitOperationalEvent as unknown as { mockImplementation: (f: () => Promise<void>) => void }).mockImplementation(async () => undefined);
+    }
+  });
+
+  it("limit, stated rather than assumed: a reconstruction is NOT guaranteed identical to the generator's capture (it re-reads engines now and only sees a STORED security decision)", async () => {
+    const { recordVerdictEvidence } = await import("../evidence-finalization");
+    // the generator was handed the decision report directly (not stored in metrics); a reconstruction cannot know that
+    const generated = freshAdmin();
+    await recordVerdictEvidence(generated as never, { ...input, mode: "pipeline", hasSecurityDecision: true });
+    const captured = metricsOf().verdictEvidence as Record<string, unknown>;
+    const rebuilt = freshAdmin();
+    await recordVerdictEvidence(rebuilt as never, { ...input, mode: "pipeline", hasSecurityDecision: false, reconstructedAfter: { verdictGeneratedAt: new Date(T0).toISOString() } });
+    const reconstructed = metricsOf().verdictEvidence as Record<string, unknown>;
+    expect(captured.securityDecisionIncluded).toBe(true);
+    expect(reconstructed.securityDecisionIncluded).toBe(false);
+    expect(captured.externalEngines).toEqual(reconstructed.externalEngines); // same engines when the jobs did not change in between
   });
 });
