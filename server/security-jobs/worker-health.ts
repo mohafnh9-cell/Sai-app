@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createServer, type Server } from "node:http";
+import { WORKER_BUILD_COMMIT } from "./worker-build";
 import { listExternalAndNativeAdjacentEngines } from "@/server/security-engines/registry";
 import { WORKER_CONFIG } from "./worker-config";
 
@@ -31,13 +32,13 @@ export function startHealthServer(): Server {
   const server = createServer(async (req, res) => {
     if (req.url === "/health") {
       res.writeHead(200, { "content-type": "application/json" });
-      res.end(JSON.stringify({ status: "alive" }));
+      res.end(JSON.stringify({ status: "alive", buildCommit: WORKER_BUILD_COMMIT }));
       return;
     }
     if (req.url === "/readiness") {
       const readiness = await computeReadiness();
       res.writeHead(200, { "content-type": "application/json" });
-      res.end(JSON.stringify(readiness));
+      res.end(JSON.stringify({ ...readiness, buildCommit: WORKER_BUILD_COMMIT }));
       return;
     }
     res.writeHead(404);
