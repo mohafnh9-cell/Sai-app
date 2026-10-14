@@ -29,7 +29,7 @@ export async function requireExplicitWorkspace(
     return {
       ok: false,
       response: NextResponse.json(
-        { error: "The workspace this request is for was not stated", code: "workspace_context_required" },
+        { error: "This page is out of date. Reload it and try again; nothing was changed.", code: "workspace_context_required" },
         { status: 400 }
       ),
     };
