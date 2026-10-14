@@ -14,10 +14,9 @@ export function formatDate(date: Date | string | null): string {
   }).format(new Date(date));
 }
 
-export function formatRelativeDate(date: Date | string | null): string {
+export function formatRelativeDate(date: Date | string | null, now: Date = new Date()): string {
   if (!date) return "Never";
   const d = new Date(date);
-  const now = new Date();
   const diffMs = now.getTime() - d.getTime();
   const diffMins = Math.floor(diffMs / 60000);
   const diffHours = Math.floor(diffMins / 60);

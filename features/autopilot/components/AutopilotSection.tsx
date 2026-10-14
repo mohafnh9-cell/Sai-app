@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useI18n } from "@/lib/i18n/client";
 import { formatRelativeLocalized } from "@/lib/i18n/format";
+import { RelativeTimeLabel } from "@/components/ui/relative-time-label";
 
 function StateIconGlyph({
   state,
@@ -45,9 +46,10 @@ export function AutopilotSection({ view }: { view: AutopilotProjectView }) {
     daysAgo: t("relative.daysAgo"),
   };
 
-  const lastReviewLabel = view.lastAutomaticReviewAt
-    ? formatRelativeLocalized(locale, view.lastAutomaticReviewAt, relativeLabels)
-    : null;
+  const lastReviewAt = view.lastAutomaticReviewAt;
+  const lastReviewLabel = lastReviewAt ? (
+    <RelativeTimeLabel iso={lastReviewAt} format={(now) => formatRelativeLocalized(locale, lastReviewAt, relativeLabels, now)} />
+  ) : null;
 
   return (
     <Card className="border-border/50 bg-card/50">

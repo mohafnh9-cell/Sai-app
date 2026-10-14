@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatRelativeDate } from "@/lib/utils";
 import { normalizeTimelineTitle } from "@/brain";
 import { useEffect, useState } from "react";
+import { RelativeTimeLabel } from "@/components/ui/relative-time-label";
 
 type ActivityItem = {
   id: string;
@@ -75,7 +76,7 @@ export function ProductionTimelineFeed({ projectId }: { projectId?: string }) {
                     <p className="text-xs text-muted-foreground mt-0.5">{item.description}</p>
                   )}
                   <p className="text-[11px] text-muted-foreground mt-1">
-                    {formatRelativeDate(item.occurred_at)}
+                    <RelativeTimeLabel iso={item.occurred_at} format={(now) => formatRelativeDate(item.occurred_at, now)} />
                   </p>
                 </div>
               </div>

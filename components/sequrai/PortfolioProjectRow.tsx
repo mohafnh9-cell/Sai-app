@@ -11,6 +11,7 @@ import { formatRelativeLocalized } from "@/lib/i18n/format";
 import { verdictStatusMessage } from "@/lib/i18n/verdict-copy";
 import { cn } from "@/lib/utils";
 import { projectVerdictHref } from "@/lib/navigation/project-hrefs";
+import { RelativeTimeLabel } from "@/components/ui/relative-time-label";
 
 type PortfolioProjectRowProps = {
   projectId: string;
@@ -51,15 +52,21 @@ export function PortfolioProjectRow({
   const tone = needsAttention && !historical ? verdictSurfaceClass(status) : "";
 
   const lastAnalyzed = lastScanAt ?? summary?.generatedAt ?? null;
-  const lastLabel = lastAnalyzed
-    ? formatRelativeLocalized(locale, lastAnalyzed, {
-        never: tc("never"),
-        justNow: tc("justNow"),
-        minutesAgo: tc("minutesAgo"),
-        hoursAgo: tc("hoursAgo"),
-        daysAgo: tc("daysAgo"),
-      })
-    : tc("never");
+  const lastLabel = lastAnalyzed ? (
+    <RelativeTimeLabel
+      iso={lastAnalyzed}
+      format={(now) =>
+        formatRelativeLocalized(
+          locale,
+          lastAnalyzed,
+          { never: tc("never"), justNow: tc("justNow"), minutesAgo: tc("minutesAgo"), hoursAgo: tc("hoursAgo"), daysAgo: tc("daysAgo") },
+          now
+        )
+      }
+    />
+  ) : (
+    tc("never")
+  );
 
   return (
     <Link

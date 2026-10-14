@@ -22,11 +22,12 @@ export function formatRelativeLocalized(
     minutesAgo: string;
     hoursAgo: string;
     daysAgo: string;
-  }
+  },
+  /** The instant "now" is measured at. Defaults to the clock: pass it when the text takes part in hydration. */
+  now: Date = new Date()
 ): string {
   if (!date) return labels.never;
   const d = new Date(date);
-  const now = new Date();
   const diffMs = now.getTime() - d.getTime();
   const diffMins = Math.floor(diffMs / 60000);
   const diffHours = Math.floor(diffMins / 60);

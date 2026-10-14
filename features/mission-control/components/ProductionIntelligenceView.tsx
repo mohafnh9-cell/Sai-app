@@ -22,6 +22,7 @@ import { buildSecurityTimelineEvents } from "../lib/build-security-timeline";
 import { formatRelativeLocalized } from "@/lib/i18n/format";
 import { useI18n } from "@/lib/i18n/client";
 import { verdictStatusHeadline } from "@/lib/i18n/verdict-copy";
+import { RelativeTimeLabel } from "@/components/ui/relative-time-label";
 
 type ProductionIntelligenceViewProps = {
   state: MissionControlState;
@@ -80,15 +81,22 @@ export function ProductionIntelligenceView({
     verdictUpdated: (headline) => t("timeline.verdictUpdated", { headline }),
     verdictHeadline: (status, affirms) => verdictStatusHeadline(status, tAll, affirms),
   }, intelligence);
-  const lastAnalysis = state.status.lastAnalysisAt
-    ? formatRelativeLocalized(locale, state.status.lastAnalysisAt, {
-        never: tc("never"),
-        justNow: tc("justNow"),
-        minutesAgo: tc("minutesAgo"),
-        hoursAgo: tc("hoursAgo"),
-        daysAgo: tc("daysAgo"),
-      })
-    : tc("never");
+  const lastAnalysisAt = state.status.lastAnalysisAt;
+  const lastAnalysis = lastAnalysisAt ? (
+    <RelativeTimeLabel
+      iso={lastAnalysisAt}
+      format={(now) =>
+        formatRelativeLocalized(
+          locale,
+          lastAnalysisAt,
+          { never: tc("never"), justNow: tc("justNow"), minutesAgo: tc("minutesAgo"), hoursAgo: tc("hoursAgo"), daysAgo: tc("daysAgo") },
+          now
+        )
+      }
+    />
+  ) : (
+    tc("never")
+  );
 
   return (
     <div
