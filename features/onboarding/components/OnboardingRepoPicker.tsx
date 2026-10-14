@@ -9,6 +9,7 @@ import { startGitHubOAuth } from "@/lib/github/oauth-client";
 import { useI18n } from "@/lib/i18n/client";
 import { formatRelativeLocalized } from "@/lib/i18n/format";
 import type { GitHubRepo } from "@/lib/github";
+import { RelativeTimeLabel } from "@/components/ui/relative-time-label";
 
 type Step = "idle" | "loading" | "selecting" | "saving" | "error";
 
@@ -245,7 +246,7 @@ export function OnboardingRepoPicker({
                     <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                       <span>
                         {t("updated")}{" "}
-                        {formatRelativeLocalized(locale, repo.updated_at, dateLabels)}
+                        <RelativeTimeLabel iso={repo.updated_at} format={(now) => formatRelativeLocalized(locale, repo.updated_at, dateLabels, now)} />
                       </span>
                       <span className="flex items-center gap-1">
                         <GitBranch className="h-3 w-3" aria-hidden />

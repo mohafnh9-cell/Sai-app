@@ -8,6 +8,7 @@ import { useI18n } from "@/lib/i18n/client";
 import { formatRelativeLocalized } from "@/lib/i18n/format";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { RelativeTimeLabel } from "@/components/ui/relative-time-label";
 
 function ActionCard({
   icon,
@@ -78,9 +79,12 @@ export function ProjectHomeActions({
     daysAgo: tc("daysAgo"),
   };
 
-  const lastAnalysisLabel = state.status.lastAnalysisAt
-    ? formatRelativeLocalized(locale, state.status.lastAnalysisAt, relativeLabels)
-    : t("projectHome.lastAnalysisNever");
+  const lastAnalysisAt = state.status.lastAnalysisAt;
+  const lastAnalysisLabel = lastAnalysisAt ? (
+    <RelativeTimeLabel iso={lastAnalysisAt} format={(now) => formatRelativeLocalized(locale, lastAnalysisAt, relativeLabels, now)} />
+  ) : (
+    t("projectHome.lastAnalysisNever")
+  );
 
   /** Real signal: an existing verdict still has open blockers, so this is a "did the fix work?" rescan, not a first scan. */
   const isVerifyRescan =

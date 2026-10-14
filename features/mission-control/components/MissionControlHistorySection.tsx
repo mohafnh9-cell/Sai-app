@@ -5,6 +5,7 @@ import { ArrowRight, Clock } from "lucide-react";
 import { useI18n } from "@/lib/i18n/client";
 import { formatRelativeLocalized } from "@/lib/i18n/format";
 import { withAnalysisRunQuery } from "@/features/analysis-runs/lib/build-run-query";
+import { RelativeTimeLabel } from "@/components/ui/relative-time-label";
 
 export function MissionControlHistorySection({
   projectId,
@@ -29,9 +30,11 @@ export function MissionControlHistorySection({
     daysAgo: tc("daysAgo"),
   };
 
-  const lastReviewLabel = lastReviewAt
-    ? formatRelativeLocalized(locale, lastReviewAt, relativeLabels)
-    : null;
+  const lastReviewLabel = lastReviewAt ? (
+    <RelativeTimeLabel iso={lastReviewAt} format={(now) => formatRelativeLocalized(locale, lastReviewAt, relativeLabels, now)}>
+      {(label) => t("history.lastReview", { time: label })}
+    </RelativeTimeLabel>
+  ) : null;
 
   return (
     <section className="space-y-3" aria-labelledby="mission-control-history-heading">
@@ -47,7 +50,7 @@ export function MissionControlHistorySection({
           {lastReviewLabel && (
             <p className="flex items-center gap-2 text-muted-foreground">
               <Clock className="h-4 w-4 shrink-0" aria-hidden />
-              {t("history.lastReview", { time: lastReviewLabel })}
+              {lastReviewLabel}
             </p>
           )}
           {isVerdictStale && (

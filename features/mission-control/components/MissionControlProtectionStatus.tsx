@@ -9,6 +9,7 @@ import {
 import { useToggleContinuousProtection } from "@/features/continuous-protection/hooks/useToggleContinuousProtection";
 import { useI18n } from "@/lib/i18n/client";
 import { formatRelativeLocalized } from "@/lib/i18n/format";
+import { RelativeTimeLabel } from "@/components/ui/relative-time-label";
 
 export function MissionControlProtectionStatus({
   model,
@@ -28,9 +29,12 @@ export function MissionControlProtectionStatus({
     daysAgo: tc("daysAgo"),
   };
 
-  const lastChecked = model.lastCheckedAt
-    ? formatRelativeLocalized(locale, model.lastCheckedAt, relativeLabels)
-    : t("protection.lastCheckedNever");
+  const lastCheckedAt = model.lastCheckedAt;
+  const lastChecked = lastCheckedAt ? (
+    <RelativeTimeLabel iso={lastCheckedAt} format={(now) => formatRelativeLocalized(locale, lastCheckedAt, relativeLabels, now)} />
+  ) : (
+    t("protection.lastCheckedNever")
+  );
 
   // NOTE: despite the field names (kept for API compatibility) these are SCORES, not confidence:
   // productionConfidence = verdict.score, securityConfidence = scan security score

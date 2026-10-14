@@ -7,6 +7,7 @@ import { useI18n } from "@/lib/i18n/client";
 import { formatRelativeLocalized } from "@/lib/i18n/format";
 import { useDemoNavigation } from "@/features/demo/use-demo-navigation";
 import { Button } from "@/components/ui/button";
+import { RelativeTimeLabel } from "@/components/ui/relative-time-label";
 
 export function AutopilotDashboardSection({
   view,
@@ -27,9 +28,10 @@ export function AutopilotDashboardSection({
     return null;
   }
 
-  const latestReviewLabel = view.latestAutomaticReviewAt
-    ? formatRelativeLocalized(locale, view.latestAutomaticReviewAt, relativeLabels)
-    : null;
+  const latestReviewAt = view.latestAutomaticReviewAt;
+  const latestReviewLabel = latestReviewAt ? (
+    <RelativeTimeLabel iso={latestReviewAt} format={(now) => formatRelativeLocalized(locale, latestReviewAt, relativeLabels, now)} />
+  ) : null;
 
   return (
     <Card className="border-border/50">
