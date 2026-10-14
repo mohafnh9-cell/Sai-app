@@ -27,13 +27,23 @@ const STABLE: Record<LocalTimeKind, (value: Date) => string> = {
   datetime: formatStableDateTime,
 };
 
+/** "Europe/Madrid", or null when the runtime does not expose it. Only called after mount. */
+function viewerZone(): string | null {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || null;
+  } catch {
+    return null;
+  }
+}
+
 export function LocalTimeLabel({
   iso,
   kind,
   format,
   className,
 }: {
-  iso: string | Date;
+  /** An absent (null/undefined) or invalid instant renders "—": never "Invalid Date" or "NaN". */
+  iso: string | Date | null | undefined;
   /** What the deterministic first render shows: the time of day, the date, or both (always UTC). */
   kind: LocalTimeKind;
   /** The viewer-local text (called only after mount). */
@@ -41,11 +51,15 @@ export function LocalTimeLabel({
   className?: string;
 }) {
   const mounted = useIsMounted();
-  const instant = iso instanceof Date ? iso : new Date(iso);
-  const valid = !Number.isNaN(instant.getTime());
-  const label = !valid ? "—" : mounted ? format(instant) : STABLE[kind](instant);
+  const instant = iso == null || iso === "" ? null : iso instanceof Date ? iso : new Date(iso);
+  const valid = instant !== null && !Number.isNaN(instant.getTime());
+  if (!valid) return <span className={className}>—</span>;
+  const label = mounted ? format(instant) : STABLE[kind](instant);
+  // The title always carries the FULL instant in UTC; once mounted it also says which zone the shown local text is in.
+  const zone = mounted ? viewerZone() : null;
+  const title = zone ? `${formatStableDateTime(instant)} · ${label} (${zone})` : formatStableDateTime(instant);
   return (
-    <time className={className} dateTime={valid ? instant.toISOString() : undefined} title={valid ? formatStableDateTime(instant) : undefined}>
+    <time className={className} dateTime={instant.toISOString()} title={title}>
       {label}
     </time>
   );

@@ -62,7 +62,10 @@ describe("the security timeline hydrates across time zones", () => {
     expect(r.recoverable).toEqual([]);
     expect(r.consoleErrors).toEqual([]);
     expect(hm(r.container)).toEqual(["11:12", "12:17"]); // Madrid is UTC+2 in October
-    expect(r.container.querySelector("time[title='2026-10-13 10:17 UTC']")).not.toBeNull();
+    // before mount the title is the full UTC instant; after mount it also names the local text and the viewer's zone
+    expect(r.html).toContain('title="2026-10-13 10:17 UTC"');
+    const titles = Array.from(r.container.querySelectorAll("time")).map((t) => t.getAttribute("title"));
+    expect(titles).toEqual(["2026-10-13 09:12 UTC · 11:12 (Europe/Madrid)", "2026-10-13 10:17 UTC · 12:17 (Europe/Madrid)"]);
     expect(r.container.querySelector("time")!.getAttribute("datetime")).toBe("2026-10-13T09:12:00.000Z");
   });
 
@@ -100,7 +103,7 @@ describe("date-only labels near the UTC day boundary", () => {
     expect(r.recoverable).toEqual([]);
     expect(r.consoleErrors).toEqual([]);
     expect(r.container.querySelector("time")!.textContent).toMatch(/14/);
-    expect(r.container.querySelector("time")!.getAttribute("title")).toBe("2026-10-13 22:30 UTC");
+    expect(r.container.querySelector("time")!.getAttribute("title")).toBe(`2026-10-13 22:30 UTC · ${r.container.querySelector("time")!.textContent} (Europe/Madrid)`);
   });
 
   it("CONTROL: formatting the date while rendering breaks at the boundary", async () => {
@@ -109,8 +112,19 @@ describe("date-only labels near the UTC day boundary", () => {
     expect(r.recoverable.length + r.consoleErrors.length).toBeGreaterThan(0);
   });
 
-  it("an invalid instant prints a dash, never 'Invalid Date'", async () => {
-    const r = await serverInZoneThenHydrateInZone(() => createElement(LocalTimeLabel, { iso: "nope", kind: "datetime", format: () => "Invalid Date" }), "UTC", "UTC");
+  it.each([
+    ["an invalid string", "nope"],
+    ["an absent value (null)", null],
+    ["an absent value (undefined)", undefined],
+    ["an empty string", ""],
+    ["an invalid Date", new Date("x")],
+  ])("%s prints a dash, never 'Invalid Date' or 'NaN', hydrates without error and has no <time> element", async (_name, value) => {
+    const tree = () => createElement(LocalTimeLabel, { iso: value as never, kind: "datetime", format: () => "Invalid Date NaN" });
+    const r = await serverInZoneThenHydrateInZone(tree, "UTC", "Europe/Madrid");
     expect(r.container.textContent).toBe("—");
+    expect(r.recoverable).toEqual([]);
+    expect(r.consoleErrors).toEqual([]);
+    expect(r.container.querySelector("time")).toBeNull();
   });
+
 });
