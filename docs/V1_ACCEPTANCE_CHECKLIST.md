@@ -332,7 +332,7 @@ PR fusionadas y desplegadas con autorización expresa: #78, #79, #80, #81, #82, 
 | #79 `verdictEvidence` persistido | Pruebas de todas las rutas de escritura de `metrics`, `updated_at` como control optimista | **Ninguna**: no existe análisis real posterior al despliegue con `scans.metrics.verdictEvidence` | **Código aprobado en local; NO aceptado hasta observar `verdictEvidence` persistido en un análisis real** |
 | #80 usabilidad del panel (foco, «Commit anterior», aviso de invalidación) | Pruebas de render | No observado (requiere una propuesta APROBADA) | Pendiente |
 | #81 aviso «hay un análisis más reciente» + sondeo en reposo | Pruebas con react-query; la petición en reposo no genera alertas | Aviso e historial observados con captura; **intervalo de 60 s no medido** en producción | Parcial |
-| #82/#89 hidratación de horas | Pruebas de hidratación real con cambio de minuto/hora y de zona horaria | Cargas posteriores sin #418 reportadas; `#418 text` de mission-control **tras #89 no re-observado en una carga concreta** | Pendiente de una observación |
+| #82/#89 hidratación de horas | Pruebas de hidratación real con cambio de minuto/hora y de zona horaria | Tras #82 el `#418 text` de mission-control persistió (causa: zona horaria, corregida en #89); **tras #89 no hay observación** | Pendiente de una observación |
 | #88 Next 16.3.8 (avisos críticos) | Build y pruebas | Rutas públicas y sesión del propietario en solo lectura sin regresión | **Aprobado** |
 
 ### Pruebas locales de esta fase (PR abiertas, **sin fusionar ni desplegar**)
