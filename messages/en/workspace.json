@@ -25,5 +25,10 @@
   "deleteDescription": "Are you sure you want to delete \"{name}\"? All projects, scans, and data in this workspace will be permanently removed. This action cannot be undone.",
   "deleteConfirm": "Delete workspace",
   "deleteCancel": "Cancel",
-  "deleteFailed": "Workspace could not be deleted."
+  "deleteFailed": "Workspace could not be deleted.",
+  "contextChanged": {
+    "title": "The workspace changed in another tab",
+    "body": "Your text is kept, but sending is paused so nothing is saved in the wrong workspace. Reload to continue.",
+    "reload": "Reload"
+  }
 }

@@ -25,5 +25,10 @@
   "deleteDescription": "¿Seguro que quieres eliminar \"{name}\"? Se borrarán permanentemente todos los proyectos, escaneos y datos de este Workspace. Esta acción no se puede deshacer.",
   "deleteConfirm": "Eliminar Workspace",
   "deleteCancel": "Cancelar",
-  "deleteFailed": "No se pudo eliminar el Workspace."
+  "deleteFailed": "No se pudo eliminar el Workspace.",
+  "contextChanged": {
+    "title": "El workspace cambió en otra pestaña",
+    "body": "Tu texto se conserva, pero el envío está en pausa para no guardar nada en el workspace equivocado. Recarga para continuar.",
+    "reload": "Recargar"
+  }
 }

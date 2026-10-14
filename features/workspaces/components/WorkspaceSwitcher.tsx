@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { createClient } from "@/lib/supabase/client";
 import { useI18n } from "@/lib/i18n/client";
+import { reportWorkspaceConflict } from "@/lib/workspaces/workspace-context";
 import { useDemoNavigation } from "@/features/demo/use-demo-navigation";
 import { getWorkspaceDocumentationUrl } from "@/lib/workspaces/constants";
 import {
@@ -69,6 +70,28 @@ function WorkspaceRow({
       {active && <Check className="h-4 w-4 shrink-0 text-primary" aria-hidden />}
     </button>
   );
+}
+
+// A reload would discard what the person is typing.
+function hasUnsavedTyping(): boolean {
+  const el = document.activeElement;
+  if (el instanceof HTMLTextAreaElement) return el.value.length > 0;
+  if (el instanceof HTMLInputElement) return !["checkbox", "radio", "button", "submit"].includes(el.type) && el.value.length > 0;
+  return el instanceof HTMLElement && el.isContentEditable && (el.textContent ?? "").length > 0;
+}
+
+// A reload per target workspace at most once a minute: if the layout and the API ever disagreed for a reason other than
+// a switch in another tab, this must not turn into a reload loop.
+function reloadedRecently(targetId: string): boolean {
+  const key = `sequrai:ws-sync-reload:${targetId}`;
+  try {
+    const last = Number(window.sessionStorage.getItem(key) ?? 0);
+    if (Date.now() - last < 60_000) return true;
+    window.sessionStorage.setItem(key, String(Date.now()));
+  } catch {
+    // storage unavailable: allow the single reload, the event itself is rare
+  }
+  return false;
 }
 
 export function WorkspaceSwitcher({
@@ -130,6 +153,41 @@ export function WorkspaceSwitcher({
       cancelled = true;
     };
   }, [initialWorkspaces, isDemo, t]);
+
+  // The active workspace lives in a cookie shared by every tab. When another tab switches it, this tab keeps
+  // showing (and has server-rendered data for) the old workspace. On return to the tab, compare with the server
+  // and realign the whole page, as a switch in this tab does.
+  const shownActiveId = active?.id ?? null;
+  useEffect(() => {
+    if (isDemo || !shownActiveId) return;
+    let cancelled = false;
+    const check = async () => {
+      if (document.visibilityState === "hidden") return;
+      try {
+        const response = await fetch("/api/workspaces", { cache: "no-store" });
+        if (!response.ok) return;
+        const data = (await response.json().catch(() => null)) as WorkspacesResponse | null;
+        if (cancelled || !data?.activeWorkspaceId) return;
+        if (data.activeWorkspaceId === shownActiveId) return;
+        // Text typed here is never discarded by a reload, and a reload is not repeated: in both cases the tab is marked stale instead,
+        // which pauses workspace-scoped sends and shows the notice until the person reloads.
+        if (hasUnsavedTyping() || reloadedRecently(data.activeWorkspaceId)) {
+          reportWorkspaceConflict(data.activeWorkspaceId);
+          return;
+        }
+        window.location.reload();
+      } catch {
+        // offline or transient: keep what is shown
+      }
+    };
+    document.addEventListener("visibilitychange", check);
+    window.addEventListener("focus", check);
+    return () => {
+      cancelled = true;
+      document.removeEventListener("visibilitychange", check);
+      window.removeEventListener("focus", check);
+    };
+  }, [isDemo, shownActiveId]);
 
   const displayName = active?.name ?? fallbackName;
 

@@ -11,6 +11,7 @@ import {
 } from "@/server/github-automation/register-webhook";
 import { resolveUserOrganizationId } from "@/server/organizations/resolve-user-organization";
 import { resolveActiveWorkspaceIdForUser, assertWorkspaceMembership } from "@/server/workspaces/service";
+import { requireExplicitWorkspace } from "@/server/workspaces/explicit-context";
 import { switchActiveWorkspace } from "@/server/workspaces/mutations";
 import { resolveGitHubCredential } from "@/server/github-app/credential-provider";
 import { assertInstallationOwnsRepository } from "@/server/github-app/installation-events";
@@ -186,9 +187,23 @@ async function connectRepositories(request: Request) {
   } = await supabase.auth.getSession();
   void session;
 
-  const organizationId = parsed.data.organizationId
-    ? await resolveUserOrganizationId(supabase, user.id, parsed.data.organizationId)
-    : await resolveActiveWorkspaceIdForUser(supabase, user.id);
+  const activeWorkspaceId = await resolveActiveWorkspaceIdForUser(supabase, user.id);
+  if (!activeWorkspaceId) {
+    return NextResponse.json(
+      { error: "No active Workspace", code: "workspace_not_found" },
+      { status: 404 }
+    );
+  }
+  // The shown workspace (header) is the explicit context: it must be a workspace the user belongs to and still be the active one.
+  const context = await requireExplicitWorkspace(request, supabase, user.id, activeWorkspaceId);
+  if (!context.ok) return context.response;
+  if (parsed.data.organizationId && parsed.data.organizationId !== context.organizationId) {
+    return NextResponse.json(
+      { error: "The requested workspace is not the one shown", code: "workspace_context_mismatch", requestedWorkspaceId: parsed.data.organizationId, activeWorkspaceId },
+      { status: 409 }
+    );
+  }
+  const organizationId = await resolveUserOrganizationId(supabase, user.id, context.organizationId);
   if (!organizationId) {
     return NextResponse.json(
       { error: "No active Workspace", code: "workspace_not_found" },

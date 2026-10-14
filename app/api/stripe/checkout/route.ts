@@ -7,6 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { enforceRateLimit } from "@/server/http/rate-limit";
 import { ensureStripeCustomerForOrganization } from "@/server/billing/customer";
 import { organizationHasActiveSubscription } from "@/server/billing/subscription-status";
+import { guardShownWorkspace } from "@/server/workspaces/explicit-context";
 
 const bodySchema = z.object({
   returnTo: z.string().optional(),
@@ -28,6 +29,9 @@ export async function POST(request: Request) {
   if (!auth?.organizationId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const contextRejection = await guardShownWorkspace(request, auth);
+  if (contextRejection) return contextRejection;
 
   const { data: membership } = await auth.supabase
     .from("organization_members")

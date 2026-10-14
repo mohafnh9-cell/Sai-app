@@ -14,6 +14,7 @@ vi.mock("@/lib/supabase/admin", () => ({
 }));
 vi.mock("@/server/workspaces/service", () => ({
   resolveActiveWorkspaceIdForUser: vi.fn(async () => "org-1"),
+  assertWorkspaceMembership: vi.fn(async () => true),
 }));
 vi.mock("@/server/http/rate-limit", () => ({
   enforceRateLimit: vi.fn(() => null),
@@ -65,7 +66,7 @@ describe("MCP keys route", () => {
     const response = await POST(
       new Request("https://sequrai.example/api/mcp/keys", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", "x-sequrai-workspace-id": "org-1" },
         body: JSON.stringify({ name: "Cursor Connection" }),
       })
     );

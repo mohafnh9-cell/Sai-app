@@ -6,6 +6,7 @@
     "node": ">=22"
   },
   "scripts": {
+    "test:workspace-sync-e2e": "node scripts/e2e-workspace-sync.mjs",
     "dev": "next dev",
     "build": "node scripts/validate-env-on-deploy.mjs && prisma generate && node scripts/bundle-local-mcp.mjs && next build",
     "postinstall": "prisma generate",

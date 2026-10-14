@@ -23,6 +23,7 @@ function fakeRepo(id: number, name = `repo-${id}`) {
 const state = vi.hoisted(() => ({
   user: { id: "user-1" } as { id: string } | null,
   organizationId: "org-a" as string | null,
+  shownWorkspace: null as string | null,
   credential: { token: "gh-token", source: "oauth_legacy" as "oauth_legacy" | "github_app", connectionId: "conn-1", userId: "user-1" } as
     | { token: string; source: "oauth_legacy" | "github_app"; connectionId: string; userId: string }
     | null,
@@ -45,7 +46,8 @@ vi.mock("@/server/organizations/resolve-user-organization", () => ({
 }));
 vi.mock("@/server/workspaces/service", () => ({
   resolveActiveWorkspaceIdForUser: vi.fn(async () => state.organizationId),
-  assertWorkspaceMembership: vi.fn(async () => state.membershipAllowed),
+  // the shown (active) workspace is always the user's own; `membershipAllowed` governs the OTHER workspace a duplicate repo may live in
+  assertWorkspaceMembership: vi.fn(async (_s: unknown, _u: unknown, workspaceId: string) => workspaceId === state.organizationId || state.membershipAllowed),
 }));
 vi.mock("@/server/workspaces/mutations", () => ({
   switchActiveWorkspace: vi.fn(async () => ({ ok: state.switchOk })),
@@ -84,7 +86,7 @@ import { POST } from "@/app/api/github/connect/route";
 function postReq(body: unknown) {
   return new Request("https://example.com/api/github/connect", {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", "x-sequrai-workspace-id": state.shownWorkspace ?? state.organizationId ?? "" },
     body: JSON.stringify(body),
   });
 }
@@ -93,6 +95,7 @@ describe("POST /api/github/connect", () => {
   beforeEach(() => {
     state.user = { id: USER_1 };
     state.organizationId = ORG_A;
+    state.shownWorkspace = null;
     state.credential = { token: "gh-token", source: "oauth_legacy", connectionId: "conn-1", userId: USER_1 };
     state.installation = null;
     state.installationOwnsRepo = true;

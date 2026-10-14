@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generateMcpApiKey } from "@/server/mcp/auth";
 import { resolveActiveWorkspaceIdForUser } from "@/server/workspaces/service";
+import { requireExplicitWorkspace } from "@/server/workspaces/explicit-context";
 import { enforceRateLimit } from "@/server/http/rate-limit";
 
 const createKeySchema = z.object({
@@ -55,13 +56,15 @@ export async function POST(request: Request) {
   if (!organizationId) {
     return NextResponse.json({ error: "No organization" }, { status: 403 });
   }
+  const context = await requireExplicitWorkspace(request, supabase, user.id, organizationId);
+  if (!context.ok) return context.response;
 
   const { rawKey, prefix, hash } = generateMcpApiKey();
   const admin = createAdminClient();
   const { data: key, error } = await admin
     .from("mcp_api_keys")
     .insert({
-      organization_id: organizationId,
+      organization_id: context.organizationId,
       created_by_user_id: user.id,
       name: parsed.data.name,
       key_prefix: prefix,
@@ -103,12 +106,14 @@ export async function DELETE(request: Request) {
   if (!organizationId) {
     return NextResponse.json({ error: "No organization" }, { status: 403 });
   }
+  const context = await requireExplicitWorkspace(request, supabase, user.id, organizationId);
+  if (!context.ok) return context.response;
 
   const { error } = await supabase
     .from("mcp_api_keys")
     .update({ revoked_at: new Date().toISOString() })
     .eq("id", keyId)
-    .eq("organization_id", organizationId)
+    .eq("organization_id", context.organizationId)
     .is("revoked_at", null);
 
   if (error) {

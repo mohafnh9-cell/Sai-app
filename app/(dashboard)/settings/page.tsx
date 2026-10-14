@@ -38,7 +38,7 @@ export default async function SettingsPage() {
       {org ? (
         <SettingsSection title={ta("settings.title")} description={ta("settings.subtitle")}>
           <div className="space-y-3">
-            <VerdictAutopilotToggle enabled={autopilotEnabled} />
+            <VerdictAutopilotToggle enabled={autopilotEnabled} organizationId={org.id} />
             <p className="text-xs text-muted-foreground">
               {autopilotEnabled ? ta("settings.enabledHelp") : ta("settings.disabledHelp")}
             </p>

@@ -11,6 +11,7 @@ import {
   resolveGitHubProviderId,
   verifyInstallationOwnership,
 } from "@/server/github-app/installation-authorization";
+import { guardShownWorkspace } from "@/server/workspaces/explicit-context";
 
 export const runtime = "nodejs";
 
@@ -76,6 +77,9 @@ export async function POST(request: Request) {
   if (!auth?.organizationId) {
     return NextResponse.json({ error: "Unauthorized", code: "unauthorized" }, { status: 401 });
   }
+
+  const contextRejection = await guardShownWorkspace(request, auth);
+  if (contextRejection) return contextRejection;
 
   const allowed = await assertWorkspaceMembership(
     auth.supabase,
