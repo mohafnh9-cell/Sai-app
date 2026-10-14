@@ -279,7 +279,9 @@ export function ProductionJourneyView({
               className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/60 px-3 py-2 text-sm"
             >
               <div className="space-y-0.5">
-                <p className="font-medium">
+                {/* A div, not a paragraph: Badge renders a div, and a div inside a paragraph is invalid HTML (the browser closes the paragraph while
+                    parsing the server HTML, React's tree no longer matches and hydration fails: minified error 418, kind "HTML"). */}
+                <div className="font-medium">
                   {point.score != null ? `${point.score}/100` : "—"}{" "}
                   {point.scoreDelta != null && (
                     <Badge variant="outline" className="text-xs ml-1">
@@ -287,7 +289,7 @@ export function ProductionJourneyView({
                       {point.scoreDelta}
                     </Badge>
                   )}
-                </p>
+                </div>
                 <p className="text-xs text-muted-foreground">
                   {point.commitSha ? point.commitSha.slice(0, 12) : "—"}
                   {point.branch ? ` · ${point.branch}` : ""}
