@@ -71,6 +71,20 @@ function WorkspaceRow({
   );
 }
 
+// A reload per target workspace at most once a minute: if the layout and the API ever disagreed for a reason other than
+// a switch in another tab, this must not turn into a reload loop.
+function reloadedRecently(targetId: string): boolean {
+  const key = `sequrai:ws-sync-reload:${targetId}`;
+  try {
+    const last = Number(window.sessionStorage.getItem(key) ?? 0);
+    if (Date.now() - last < 60_000) return true;
+    window.sessionStorage.setItem(key, String(Date.now()));
+  } catch {
+    // storage unavailable: allow the single reload, the event itself is rare
+  }
+  return false;
+}
+
 export function WorkspaceSwitcher({
   initialWorkspaces,
   initialActiveWorkspaceId,
@@ -145,7 +159,7 @@ export function WorkspaceSwitcher({
         if (!response.ok) return;
         const data = (await response.json().catch(() => null)) as WorkspacesResponse | null;
         if (cancelled || !data?.activeWorkspaceId) return;
-        if (data.activeWorkspaceId !== shownActiveId) window.location.reload();
+        if (data.activeWorkspaceId !== shownActiveId && !reloadedRecently(data.activeWorkspaceId)) window.location.reload();
       } catch {
         // offline or transient: keep what is shown
       }

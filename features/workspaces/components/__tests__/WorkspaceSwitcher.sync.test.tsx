@@ -23,7 +23,7 @@ function serverActive(id: string) {
   vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({ workspaces: [A, B], activeWorkspaceId: id }) })));
 }
 beforeEach(() => {
-  reload.mockReset();
+  reload.mockReset(); window.sessionStorage.clear();
   Object.defineProperty(window, "location", { configurable: true, value: { ...window.location, reload, assign: vi.fn() } });
   container = document.createElement("div"); document.body.append(container); root = createRoot(container);
   act(() => root.render(createElement(WorkspaceSwitcher, { initialWorkspaces, initialActiveWorkspaceId: "a" })));
@@ -54,5 +54,20 @@ describe("WorkspaceSwitcher cross-tab sync", () => {
     await act(async () => { window.dispatchEvent(new Event("focus")); });
     await flush();
     expect(reload).not.toHaveBeenCalled();
+  });
+
+  it("does not reload repeatedly: a second focus right after the reload (layout still disagreeing) is ignored", async () => {
+    serverActive("b");
+    for (let i = 0; i < 4; i++) { await act(async () => { window.dispatchEvent(new Event("focus")); }); await flush(); }
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it("after the reload the tab is rendered for B and stays put", async () => {
+    serverActive("b");
+    act(() => root.render(createElement(WorkspaceSwitcher, { initialWorkspaces, initialActiveWorkspaceId: "b" })));
+    await act(async () => { window.dispatchEvent(new Event("focus")); });
+    await flush();
+    expect(reload).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("Workspace B");
   });
 });
