@@ -36,5 +36,7 @@
     "journey": "Historial",
     "billing": "Facturación",
     "project": "Proyecto"
-  }
+  },
+  "collapseSidebar": "Contraer barra lateral",
+  "expandSidebar": "Expandir barra lateral"
 }
