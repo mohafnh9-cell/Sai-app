@@ -7,6 +7,7 @@ import {
 } from "@/server/github/workspace-connection-service";
 import { assertWorkspaceMembership } from "@/server/workspaces/service";
 import { enforceRateLimit } from "@/server/http/rate-limit";
+import { guardShownWorkspace } from "@/server/workspaces/explicit-context";
 
 export const runtime = "nodejs";
 
@@ -76,6 +77,9 @@ export async function DELETE(request: Request) {
 
   const resolved = await resolveWorkspace(auth);
   if ("error" in resolved) return resolved.error;
+
+  const contextRejection = await guardShownWorkspace(request, auth);
+  if (contextRejection) return contextRejection;
 
   const body = await request.json().catch(() => ({}));
   const parsed = disconnectSchema.safeParse(body);

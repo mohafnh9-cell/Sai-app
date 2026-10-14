@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { createClient } from "@/lib/supabase/client";
 import { useI18n } from "@/lib/i18n/client";
+import { reportWorkspaceConflict } from "@/lib/workspaces/workspace-context";
 import { useDemoNavigation } from "@/features/demo/use-demo-navigation";
 import { getWorkspaceDocumentationUrl } from "@/lib/workspaces/constants";
 import {
@@ -71,7 +72,7 @@ function WorkspaceRow({
   );
 }
 
-// A reload would discard what the person is typing: leave a text field with content alone and try again on the next event.
+// A reload would discard what the person is typing.
 function hasUnsavedTyping(): boolean {
   const el = document.activeElement;
   if (el instanceof HTMLTextAreaElement) return el.value.length > 0;
@@ -167,8 +168,14 @@ export function WorkspaceSwitcher({
         if (!response.ok) return;
         const data = (await response.json().catch(() => null)) as WorkspacesResponse | null;
         if (cancelled || !data?.activeWorkspaceId) return;
-        if (data.activeWorkspaceId === shownActiveId || hasUnsavedTyping()) return; // retried on the next focus/visibility event
-        if (!reloadedRecently(data.activeWorkspaceId)) window.location.reload();
+        if (data.activeWorkspaceId === shownActiveId) return;
+        // Text typed here is never discarded by a reload, and a reload is not repeated: in both cases the tab is marked stale instead,
+        // which pauses workspace-scoped sends and shows the notice until the person reloads.
+        if (hasUnsavedTyping() || reloadedRecently(data.activeWorkspaceId)) {
+          reportWorkspaceConflict(data.activeWorkspaceId);
+          return;
+        }
+        window.location.reload();
       } catch {
         // offline or transient: keep what is shown
       }

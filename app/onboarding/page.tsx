@@ -6,6 +6,8 @@ import { OnboardingFlow } from "@/features/onboarding/components/OnboardingFlow"
 import { OnboardingPageHeader } from "@/features/onboarding/components/OnboardingPageHeader";
 import { getOnboardingContext } from "@/server/onboarding/get-onboarding-context";
 import { I18nShell } from "@/components/shared/I18nShell";
+import { WorkspaceContextProvider } from "@/lib/workspaces/workspace-context";
+import { resolveActiveWorkspaceIdForUser } from "@/server/workspaces/service";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Production Verdict | SequrAI" };
@@ -25,6 +27,7 @@ export default async function OnboardingPage({
   const params = await searchParams;
   const forcedStep = params.step != null;
   const context = await getOnboardingContext(supabase, user.id);
+  const activeWorkspaceId = await resolveActiveWorkspaceIdForUser(supabase, user.id);
 
   if (context.isComplete && !forcedStep) {
     redirect("/dashboard");
@@ -32,6 +35,7 @@ export default async function OnboardingPage({
 
   return (
     <I18nShell userId={user.id}>
+      <WorkspaceContextProvider workspaceId={activeWorkspaceId}>
       <div className="min-h-app bg-background bg-[radial-gradient(ellipse_at_top,rgba(var(--primary-rgb,99,102,241),0.08),transparent_50%)] safe-top safe-bottom">
         <div className="mx-auto flex min-h-app w-full max-w-6xl flex-col gap-10 px-4 py-8 md:flex-row md:items-start md:justify-center md:py-14">
           <OnboardingPageHeader />
@@ -40,6 +44,7 @@ export default async function OnboardingPage({
           </Suspense>
         </div>
       </div>
+      </WorkspaceContextProvider>
     </I18nShell>
   );
 }

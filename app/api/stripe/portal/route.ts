@@ -3,6 +3,7 @@ import { getServerAuthContext } from "@/lib/auth/dev-bypass";
 import { getStripe, isStripeConfigured } from "@/lib/stripe";
 import { enforceRateLimit } from "@/server/http/rate-limit";
 import { getOrganizationSubscription } from "@/server/billing/subscription-status";
+import { guardShownWorkspace } from "@/server/workspaces/explicit-context";
 
 function validateStripeCustomerId(value: string): boolean {
   return /^cus_[A-Za-z0-9]+$/.test(value);
@@ -24,6 +25,9 @@ export async function POST(request: Request) {
   if (!auth?.organizationId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const contextRejection = await guardShownWorkspace(request, auth);
+  if (contextRejection) return contextRejection;
 
   const { data: membership } = await auth.supabase
     .from("organization_members")

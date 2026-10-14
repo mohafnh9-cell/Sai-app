@@ -38,10 +38,10 @@ function authedContext(organizationId = ORG_SEQURAI) {
   } as unknown as Awaited<ReturnType<typeof getServerAuthContext>>;
 }
 
-function attachRequest(body: Record<string, unknown> = {}) {
+function attachRequest(body: Record<string, unknown> = {}, shownWorkspace = ORG_SEQURAI) {
   return new Request("https://app.example.com/api/github/app/attach", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "x-sequrai-workspace-id": shownWorkspace },
     body: JSON.stringify(body),
   });
 }

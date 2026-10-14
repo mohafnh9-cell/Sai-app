@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { buildBreadcrumbsFromPathname } from "@/lib/navigation/breadcrumbs";
 import type { WorkspacePresentation } from "@/lib/workspaces/presentation";
 import { useI18n } from "@/lib/i18n/client";
+import { WorkspaceContextProvider } from "@/lib/workspaces/workspace-context";
 
 type DashboardUser = {
   id: string;
@@ -126,6 +127,7 @@ export function DashboardShell({
   });
 
   return (
+    <WorkspaceContextProvider workspaceId={activeWorkspaceId ?? null}>
     <div className="app-shell flex h-app max-h-app overflow-hidden app-shell-bg">
       <CommandPalette />
 
@@ -210,5 +212,6 @@ export function DashboardShell({
 
       <Toaster />
     </div>
+    </WorkspaceContextProvider>
   );
 }

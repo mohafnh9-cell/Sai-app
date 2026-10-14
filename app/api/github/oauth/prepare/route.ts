@@ -5,6 +5,7 @@ import { getServerAuthContext } from "@/lib/auth/dev-bypass";
 import { createGitHubOAuthState, githubOAuthStateCookieName } from "@/lib/github/oauth-state";
 import { assertWorkspaceMembership } from "@/server/workspaces/service";
 import { enforceRateLimit } from "@/server/http/rate-limit";
+import { guardShownWorkspace } from "@/server/workspaces/explicit-context";
 
 export const runtime = "nodejs";
 
@@ -25,6 +26,16 @@ export async function POST(request: Request) {
   const parsed = prepareSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid request body", code: "validation" }, { status: 422 });
+  }
+
+  const contextRejection = await guardShownWorkspace(request, auth);
+  if (contextRejection) return contextRejection;
+  if (auth.organizationId && parsed.data.workspaceId && parsed.data.workspaceId !== auth.organizationId) {
+    // the body names a different workspace than the one shown (and active): reject, do not follow either silently
+    return NextResponse.json(
+      { error: "The requested workspace is not the one shown", code: "workspace_context_mismatch", requestedWorkspaceId: parsed.data.workspaceId, activeWorkspaceId: auth.organizationId },
+      { status: 409 }
+    );
   }
 
   const workspaceId = parsed.data.workspaceId ?? auth.organizationId;

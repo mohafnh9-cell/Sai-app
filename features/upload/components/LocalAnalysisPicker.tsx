@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { projectVerdictHref } from "@/lib/navigation/project-hrefs";
 import { checkLocalSelectionPreflight } from "@/lib/upload/local-preflight";
 import { SOURCE_ANALYSIS_LIMITS, LOCAL_ANALYSIS_TRANSPORT_MAX_BYTES } from "@/lib/upload/source-limits";
+import { applyWorkspaceContextToXhr } from "@/lib/workspaces/workspace-context";
 
 type Phase = "idle" | "selected" | "uploading" | "analyzing" | "success" | "error";
 
@@ -91,6 +92,12 @@ export function LocalAnalysisPicker() {
 
     const xhr = new XMLHttpRequest();
     xhr.open("POST", "/api/uploads/analyze");
+    if (!applyWorkspaceContextToXhr(xhr)) {
+      // the shown workspace is stale (changed in another tab): nothing is sent; the page-level notice explains how to continue
+      setPhase("error");
+      setErrorMessage(t("errors.generic"));
+      return;
+    }
 
     xhr.upload.onprogress = (event) => {
       if (!event.lengthComputable) return;

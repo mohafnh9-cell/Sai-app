@@ -9,6 +9,7 @@ import { buildUploadSnapshot } from "@/lib/upload/build-upload-snapshot";
 import { runUploadScan, UploadScanError } from "@/server/uploads/run-upload-scan";
 import { SOURCE_ANALYSIS_LIMITS, LOCAL_ANALYSIS_TRANSPORT_MAX_BYTES } from "@/lib/upload/source-limits";
 import { ScanRequestError } from "@/server/security-scanner/request-context";
+import { guardShownWorkspace } from "@/server/workspaces/explicit-context";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -99,6 +100,8 @@ async function handleUpload(request: Request) {
       { status: 404 }
     );
   }
+  const contextRejection = await guardShownWorkspace(request, auth);
+  if (contextRejection) return contextRejection;
 
   // The request could be either a compressed ZIP (tight MAX_ARCHIVE_BYTES
   // transport budget) or already-expanded Local Analysis files (the larger

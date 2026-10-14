@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { useI18n } from "@/lib/i18n/client";
 import { cn } from "@/lib/utils";
 import { projectVerdictHref } from "@/lib/navigation/project-hrefs";
+import { applyWorkspaceContextToXhr } from "@/lib/workspaces/workspace-context";
 
 const MAX_ARCHIVE_BYTES = 8 * 1024 * 1024;
 
@@ -107,6 +108,12 @@ export function UploadDropzone() {
     // percentage.
     const xhr = new XMLHttpRequest();
     xhr.open("POST", "/api/uploads/analyze");
+    if (!applyWorkspaceContextToXhr(xhr)) {
+      // the shown workspace is stale (changed in another tab): nothing is sent; the page-level notice explains how to continue
+      setPhase("error");
+      setErrorMessage(t("errors.generic"));
+      return;
+    }
 
     xhr.upload.onprogress = (event) => {
       if (!event.lengthComputable) return;
