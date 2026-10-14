@@ -77,4 +77,35 @@ describe("WorkspaceContextProvider fetch guard", () => {
     await act(async () => { reportWorkspaceConflict("ws-b"); });
     expect(applyWorkspaceContextToXhr({ setRequestHeader: vi.fn() } as unknown as XMLHttpRequest)).toBe(false);
   });
+
+  it("never touches requests that are not SequrAI's own scoped writes: external origins, other paths, near-miss paths, reads", async () => {
+    await mount("ws-a");
+    await act(async () => { reportWorkspaceConflict("ws-b"); }); // even while stale, only the scoped same-origin writes are held back
+    network.mockClear();
+    const init = { method: "POST", body: "{}", headers: { authorization: "Bearer third-party" } };
+    const cases: Array<[string, RequestInit | undefined]> = [
+      ["https://api.stripe.com/api/stripe/checkout", init],            // external origin with a look-alike path
+      ["https://example.com/api/mcp/keys", init],                       // external origin, exactly our path
+      ["//cdn.example.com/api/uploads/analyze", init],                  // protocol-relative external
+      ["/api/mcp/keys-export", init],                                   // near-miss path on our origin
+      ["/api/github/connected", init],                                  // near-miss
+      ["/api/projects/p1/analyze", init],                               // another SequrAI write, explicit by URL
+      ["/api/mcp/keys", { method: "GET" }],                             // read on a scoped path
+    ];
+    for (const [url, i] of cases) await window.fetch(url, i);
+    expect(network).toHaveBeenCalledTimes(cases.length); // every one went out (nothing blocked)
+    network.mock.calls.forEach((call, idx) => {
+      expect(call[1]).toBe(cases[idx]![1]);                              // same init object: not rewritten
+      expect(new Headers((call[1] as RequestInit | undefined)?.headers).get("x-sequrai-workspace-id")).toBeNull();
+    });
+  });
+
+  it("keeps a Request object's own headers and adds the workspace only on a scoped same-origin write", async () => {
+    await mount("ws-a");
+    network.mockClear();
+    await window.fetch(new Request(`${window.location.origin}/api/stripe/portal`, { method: "POST", headers: { "x-keep": "1" } }));
+    const sent = network.mock.calls[0]![0] as Request;
+    expect(sent.headers.get("x-keep")).toBe("1");
+    expect(sent.headers.get("x-sequrai-workspace-id")).toBe("ws-a");
+  });
 });

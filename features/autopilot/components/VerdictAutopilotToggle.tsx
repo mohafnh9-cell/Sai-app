@@ -2,8 +2,9 @@
 
 import { useTransition } from "react";
 import { useI18n } from "@/lib/i18n/client";
+import { reportWorkspaceConflict } from "@/lib/workspaces/workspace-context";
 
-export function VerdictAutopilotToggle({ enabled }: { enabled: boolean }) {
+export function VerdictAutopilotToggle({ enabled, organizationId }: { enabled: boolean; organizationId: string }) {
   const { t } = useI18n("autopilotExperience");
   const [pending, startTransition] = useTransition();
 
@@ -19,7 +20,8 @@ export function VerdictAutopilotToggle({ enabled }: { enabled: boolean }) {
             const { setVerdictAutopilotEnabledAction } = await import(
               "@/server/actions/autopilot"
             );
-            await setVerdictAutopilotEnabledAction(true);
+            const result = await setVerdictAutopilotEnabledAction(organizationId, true);
+            if (result.code === "workspace_context_mismatch") reportWorkspaceConflict(result.activeWorkspaceId ?? null);
           });
         }}
         className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
@@ -40,7 +42,8 @@ export function VerdictAutopilotToggle({ enabled }: { enabled: boolean }) {
             const { setVerdictAutopilotEnabledAction } = await import(
               "@/server/actions/autopilot"
             );
-            await setVerdictAutopilotEnabledAction(false);
+            const result = await setVerdictAutopilotEnabledAction(organizationId, false);
+            if (result.code === "workspace_context_mismatch") reportWorkspaceConflict(result.activeWorkspaceId ?? null);
           });
         }}
         className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${

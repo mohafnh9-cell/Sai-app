@@ -19,5 +19,8 @@ export const WORKSPACE_SCOPED_WRITE_PREFIXES = [
 export function isWorkspaceScopedWrite(pathname: string, method: string): boolean {
   const m = method.toUpperCase();
   if (m === "GET" || m === "HEAD" || m === "OPTIONS") return false;
-  return WORKSPACE_SCOPED_WRITE_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+  return WORKSPACE_SCOPED_WRITE_PREFIXES.some((prefix) => {
+    const base = prefix.endsWith("/") ? prefix.slice(0, -1) : prefix;
+    return pathname === base || pathname.startsWith(`${base}/`);
+  });
 }
