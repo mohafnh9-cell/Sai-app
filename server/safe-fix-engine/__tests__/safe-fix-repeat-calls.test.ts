@@ -226,3 +226,69 @@ describe("MCP safe_fix enrichment surfaces the outcome explicitly", () => {
     expect(tables.safe_fix_records![0].lifecycle_state).toBe("APPROVED");
   });
 });
+
+describe("positional recommendation ids: the same id on another analysis may be a DIFFERENT finding", () => {
+  // priority-1 is "Missing ownership check" on analysis A but "Hardcoded secret" on analysis B (same positional id).
+  const priorityOn = (title: string, findingId: string, files: string[]) => ({ ...priority, title, findingIds: [findingId], affectedFiles: files, recommendedAction: `Fix: ${title}. Make the change in a single file and add a regression test.` });
+  function positionalWorld() {
+    const verdict = (scanId: string, generatedAt: string, n: number, p: typeof priority) =>
+      verdictRow(PROJECT, buildVerdictFixture({
+        projectId: PROJECT, repositoryId: PROJECT, scanId, commitSha: scanId[0].repeat(40), status: "not_ready", score: 50, blockersCount: 1, generatedAt, topPriorities: [p] as never,
+      } as never), `d0000000-0000-4000-8000-00000000000${n}`, ORG);
+    const tables = {
+      production_verdicts: [
+        verdict(SCAN_A, "2026-03-01T00:00:00.000Z", 1, priorityOn("Missing ownership check", "f1", ["app/api/orders/route.ts"])),
+        verdict(SCAN_B, "2026-03-02T00:00:00.000Z", 2, priorityOn("Hardcoded secret", "f9", ["src/config.ts"])),
+      ],
+      repository_scan_state: [{ repository_id: PROJECT, organization_id: ORG, current_verdict_id: "d0000000-0000-4000-8000-000000000002" }],
+      scans: [{ id: SCAN_A, detected_stack: {} }, { id: SCAN_B, detected_stack: {} }],
+      scan_findings: [], external_engine_findings: [], safe_fix_records: [], safe_fix_lifecycle_events: [], safe_fix_verifications: [],
+    } as unknown as FakeTables;
+    return { tables, admin: createFakeAdmin(tables) as never };
+  }
+  const title = (r: unknown) => (r as { record: { prDraft: { prTitle: string } } }).record.prDraft.prTitle;
+
+  it("same id, SAME analysis -> the same finding: reused", async () => {
+    const { admin } = positionalWorld();
+    const first = await call(admin, SCAN_A);
+    const again = await call(admin, SCAN_A);
+    expect(again).toMatchObject({ status: "ready", reused: true });
+    expect(title(again)).toBe(title(first));
+    expect(title(again)).toContain("Missing ownership check");
+  });
+
+  it("same id, DIFFERENT analysis, never approved -> NOT reused: a fresh proposal for the new finding replaces it", async () => {
+    const { tables, admin } = positionalWorld();
+    await call(admin, SCAN_A);
+    const next = await call(admin, SCAN_B);
+    expect(next).toMatchObject({ status: "ready" });
+    expect((next as { reused?: boolean }).reused).toBeUndefined();
+    expect(title(next)).toContain("Hardcoded secret");
+    expect(title(next)).not.toContain("Missing ownership check");
+    expect(tables.safe_fix_records!.map((r) => r.lifecycle_state)).toEqual(["SUPERSEDED", "READY"]);
+  });
+
+  it("same id, DIFFERENT analysis, an earlier one is in flight -> conservative in_flight, never a proposal presented as the new blocker's", async () => {
+    const { tables, admin } = positionalWorld();
+    await call(admin, SCAN_A);
+    tables.safe_fix_records![0].lifecycle_state = "APPROVED";
+    const blocked = await call(admin, SCAN_B);
+    expect(blocked).toMatchObject({ status: "in_flight" });
+    expect((blocked as { reused?: boolean }).reused).toBeUndefined();
+    expect(title(blocked)).toContain("Missing ownership check"); // identifies the OTHER finding explicitly
+    expect(tables.safe_fix_records).toHaveLength(1);
+    expect(tables.safe_fix_records![0].lifecycle_state).toBe("APPROVED");
+  });
+
+  it("the MCP note names the in-flight correction by id, title and analysis and says it may not be this blocker", async () => {
+    const { tables, admin } = positionalWorld();
+    await call(admin, SCAN_A);
+    tables.safe_fix_records![0].lifecycle_state = "APPROVED";
+    const result = await enrichMcpSafeFixWithV2(admin, ORG, { status: "prompt_ready", project: { id: PROJECT, name: "demo" }, blocker: { id: PRIORITY, title: "Hardcoded secret", severity: "high", category: "secrets" }, summary: "instructions" });
+    expect(result.safeFixStatus).toBe("in_flight");
+    expect(result.safeFixNote).toContain("Missing ownership check");
+    expect(result.safeFixNote).toContain(SCAN_A);
+    expect(result.safeFixNote).toContain("not necessarily this blocker");
+    expect(result.safeFixNote).toContain("positional");
+  });
+});
