@@ -36,5 +36,7 @@
     "journey": "History",
     "billing": "Billing",
     "project": "Project"
-  }
+  },
+  "collapseSidebar": "Collapse sidebar",
+  "expandSidebar": "Expand sidebar"
 }
